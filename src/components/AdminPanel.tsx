@@ -353,7 +353,7 @@ export default function AdminPanel({
       setCompanyPhone(db.settings.companyPhone || '');
       setCompanyAddress(db.settings.companyAddress || '');
       setPickupHours(db.settings.pickupHours || '');
-      import('../utils/storage').then(mod => mod.getLogo().then(logo => { if (logo) setStoreLogo(logo); }));
+      setStoreLogo(db.settings.storeLogo || '');
     }
     setClients(db.clients || []);
     setMemberships(db.membership_tiers || []);

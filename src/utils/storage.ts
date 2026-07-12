@@ -123,6 +123,25 @@ function diffArrays(oldArr: any[], newArr: any[], key = 'id') {
   return { added, modified, deleted };
 }
 
+function cleanObject(obj: any): any {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    return obj.map(cleanObject);
+  }
+  const clean: any = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const val = obj[key];
+      if (val !== undefined) {
+        clean[key] = cleanObject(val);
+      }
+    }
+  }
+  return clean;
+}
+
 export function saveDB(newDb: Database) {
   const oldDb = localCache || getDefaultDB();
   
@@ -151,22 +170,36 @@ export function saveDB(newDb: Database) {
     
     // We run async, don't block
     const syncToFirebase = async () => {
-      // Very crude batching for simplicity
-      for (const item of added) {
-        if (item[idKey || 'id']) await setDoc(doc(db, colName, item[idKey || 'id']), item);
-      }
-      for (const item of modified) {
-        if (item[idKey || 'id']) await setDoc(doc(db, colName, item[idKey || 'id']), item, { merge: true });
-      }
-      for (const item of deleted) {
-        if (item[idKey || 'id']) await deleteDoc(doc(db, colName, item[idKey || 'id']));
+      try {
+        for (const item of added) {
+          const cleanItem = cleanObject(item);
+          if (cleanItem[idKey || 'id']) {
+            await setDoc(doc(db, colName, cleanItem[idKey || 'id']), cleanItem);
+          }
+        }
+        for (const item of modified) {
+          const cleanItem = cleanObject(item);
+          if (cleanItem[idKey || 'id']) {
+            await setDoc(doc(db, colName, cleanItem[idKey || 'id']), cleanItem, { merge: true });
+          }
+        }
+        for (const item of deleted) {
+          const cleanItem = cleanObject(item);
+          if (cleanItem[idKey || 'id']) {
+            await deleteDoc(doc(db, colName, cleanItem[idKey || 'id']));
+          }
+        }
+      } catch (err) {
+        console.error(`[Firebase Sync Error] Error syncing ${colName}:`, err);
       }
     };
     syncToFirebase();
   });
   
   if (JSON.stringify(oldDb.settings) !== JSON.stringify(newDb.settings)) {
-    setDoc(doc(db, 'globals', 'settings'), newDb.settings || {});
+    const cleanSettings = cleanObject(newDb.settings || {});
+    setDoc(doc(db, 'globals', 'settings'), cleanSettings)
+      .catch(err => console.error("[Firebase Sync Error] Error saving settings:", err));
   }
   
   localCache = newDb;

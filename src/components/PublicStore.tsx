@@ -436,6 +436,9 @@ export default function PublicStore({
   const loadStoreProducts = () => {
     const db = getDB();
     setDbInstance(db);
+    if (db.settings?.storeLogo) {
+      setStoreLogo(db.settings.storeLogo);
+    }
     // Filter out spare part categories from public store
     const SPARE_PART_CATEGORIES = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
     setProducts((db.products || []).filter(p => p.active !== false && p.stock > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
