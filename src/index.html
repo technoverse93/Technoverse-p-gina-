@@ -1,0 +1,144 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="description"
+      content="A small launch page for a project built with Google AI Studio."
+    />
+    <title>Built with AI Studio</title>
+    <style>
+      :root {
+        color-scheme: light;
+        font-family: Georgia, "Times New Roman", serif;
+        background: #f2ecdf;
+        color: #25231f;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        min-height: 100vh;
+        margin: 0;
+        overflow-x: hidden;
+      }
+
+      body::before {
+        position: fixed;
+        inset: 0;
+        z-index: -1;
+        background:
+          radial-gradient(circle at 82% 16%, rgb(198 86 54 / 26%), transparent 29rem),
+          linear-gradient(115deg, transparent 0 58%, rgb(37 35 31 / 7%) 58% 58.2%, transparent 58.2%);
+        content: "";
+      }
+
+      main {
+        display: grid;
+        min-height: 100vh;
+        grid-template-columns: minmax(0, 1.4fr) minmax(16rem, 0.6fr);
+        align-items: end;
+        gap: clamp(3rem, 8vw, 9rem);
+        padding: clamp(2rem, 6vw, 6rem);
+      }
+
+      .eyebrow {
+        margin: 0 0 1.5rem;
+        font-family: "Courier New", monospace;
+        font-size: 0.78rem;
+        font-weight: 700;
+        letter-spacing: 0.16em;
+        text-transform: uppercase;
+      }
+
+      h1 {
+        max-width: 10ch;
+        margin: 0;
+        font-size: clamp(4rem, 12vw, 11rem);
+        font-weight: 400;
+        letter-spacing: -0.075em;
+        line-height: 0.78;
+      }
+
+      h1 span {
+        display: block;
+        color: #a33d25;
+        font-style: italic;
+        transform: translateX(clamp(1rem, 7vw, 8rem));
+      }
+
+      .details {
+        padding-bottom: 0.8rem;
+        border-top: 1px solid #25231f;
+      }
+
+      .details p {
+        margin: 1.4rem 0 2.2rem;
+        font-family: "Courier New", monospace;
+        font-size: clamp(0.95rem, 1.5vw, 1.1rem);
+        line-height: 1.7;
+      }
+
+      a {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.8rem;
+        padding: 0.9rem 1.1rem;
+        border: 1px solid #25231f;
+        color: inherit;
+        font-family: "Courier New", monospace;
+        font-size: 0.82rem;
+        font-weight: 700;
+        letter-spacing: 0.08em;
+        text-decoration: none;
+        text-transform: uppercase;
+        transition: color 180ms ease, background-color 180ms ease, transform 180ms ease;
+      }
+
+      a::after {
+        content: "↗";
+      }
+
+      a:hover,
+      a:focus-visible {
+        background: #25231f;
+        color: #f2ecdf;
+        transform: translate(-0.2rem, -0.2rem);
+      }
+
+      @media (max-width: 720px) {
+        main {
+          grid-template-columns: 1fr;
+          align-items: center;
+        }
+
+        h1 {
+          font-size: clamp(4rem, 22vw, 7rem);
+        }
+
+        .details {
+          max-width: 28rem;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section aria-labelledby="page-title">
+        <p class="eyebrow">A small beginning · 2026</p>
+        <h1 id="page-title">Built with <span>AI Studio.</span></h1>
+      </section>
+
+      <aside class="details">
+        <p>
+          Turn an idea into a working prototype with Gemini, then shape it into
+          something distinctly yours.
+        </p>
+        <a href="https://aistudio.google.com/apps">Start building</a>
+      </aside>
+    </main>
+  </body>
+</html>
