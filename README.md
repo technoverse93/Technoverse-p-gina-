@@ -9,3 +9,12 @@
   <a href="https://aistudio.google.com/apps">Start building</a>
 
 </div>
+
+## Development
+
+The site is a dependency-free static project. Source files live in `src`, and
+the build script copies them to Netlify's `dist` publish directory.
+
+```bash
+npm run build
+```
