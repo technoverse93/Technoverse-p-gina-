@@ -230,24 +230,54 @@ export default function PublicStore({
     e.preventDefault();
     const cleanEmail = loginEmail.trim().toLowerCase();
     
-    try {
-      await signInWithEmailAndPassword(auth, cleanEmail, loginPassword);
-    } catch (err) {
-      console.error(err);
-      alert('Credenciales inválidas en el servidor. Por favor verifique el correo y contraseña.');
-      return;
-    }
-
+    
     const db = getDB();
     
-    // 1. Admin/Dueño check
+    // Auto-create Admin in Firebase Auth if needed
     if (cleanEmail === 'admin@technoverse.com' && loginPassword === ADMIN_PASSWORD) {
+      try {
+        await signInWithEmailAndPassword(auth, cleanEmail, loginPassword);
+      } catch (err: any) {
+        if (err.code === 'auth/operation-not-allowed') {
+          alert('¡ATENCIÓN! Debes habilitar "Correo/Contraseña" en Firebase Console -> Authentication -> Sign-in method.');
+          return;
+        }
+        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') {
+          try {
+            await createUserWithEmailAndPassword(auth, cleanEmail, loginPassword);
+          } catch (createErr: any) {
+            console.error(createErr);
+            alert('Error creando el administrador en Firebase: ' + createErr.message);
+            return;
+          }
+        } else {
+          console.error(err);
+          alert('Error de autenticación: ' + err.message);
+          return;
+        }
+      }
+      
       const adminUser: User = { id: 'admin-id', email: 'admin@technoverse.com', role: 'Dueño', name: 'Administrador Technoverse' };
       onLogin(adminUser);
-      setIsLoginModalOpen(false); setLoginEmail(''); setLoginPassword('');
+      setIsLoginModalOpen(false);
+      setLoginEmail(''); setLoginPassword('');
       alert('Sesión iniciada con éxito como Administrador.');
       return;
     }
+
+    // Normal user login
+    try {
+      await signInWithEmailAndPassword(auth, cleanEmail, loginPassword);
+    } catch (err: any) {
+      console.error(err);
+      if (err.code === 'auth/operation-not-allowed') {
+        alert('El administrador debe habilitar la autenticación por correo/contraseña en Firebase Console.');
+      } else {
+        alert('Credenciales inválidas en el servidor. Por favor verifique el correo y contraseña.');
+      }
+      return;
+    }
+  
     
     // 2. Employee check
     const emp = db.employees?.find(e => e.email.toLowerCase() === cleanEmail && e.password === loginPassword && e.active);

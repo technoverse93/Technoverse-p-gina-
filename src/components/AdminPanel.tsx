@@ -328,16 +328,8 @@ export default function AdminPanel({
         }
       };
     } catch (e) {
-      // Ignored if BroadcastChannel is not supported
+      // Ignored
     }
-
-    handleResize(); // Initial check
-    setIsMounted(true);
-    
-    // 1-second interval checks to guarantee real-time updates inside nested frames
-    const interval = setInterval(() => {
-      loadAllAdminData();
-    }, 1000);
 
     return () => {
       window.removeEventListener('resize', handleResize);
@@ -346,7 +338,6 @@ export default function AdminPanel({
       if (channel) {
         channel.close();
       }
-      clearInterval(interval);
     };
   }, []);
 
@@ -390,33 +381,57 @@ export default function AdminPanel({
   const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = loginEmail.trim().toLowerCase();
+
+    const db = getDB();
     
+    // Auto-create Admin in Firebase Auth if needed
+    if (cleanEmail === 'admin@technoverse.com' && loginPassword === ADMIN_PASSWORD) {
+      try {
+        await signInWithEmailAndPassword(auth, cleanEmail, loginPassword);
+      } catch (err: any) {
+        if (err.code === 'auth/operation-not-allowed') {
+          alert('¡ATENCIÓN! Debes habilitar "Correo/Contraseña" en Firebase Console -> Authentication -> Sign-in method.');
+          return;
+        }
+        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') {
+          try {
+            await createUserWithEmailAndPassword(auth, cleanEmail, loginPassword);
+          } catch (createErr: any) {
+            console.error(createErr);
+            alert('Error creando el administrador en Firebase: ' + createErr.message);
+            return;
+          }
+        } else {
+          console.error(err);
+          alert('Error de autenticación: ' + err.message);
+          return;
+        }
+      }
+      
+      const adminUser: User = { id: 'admin-id', email: 'admin@technoverse.com', role: 'Dueño', name: 'Administrador Technoverse' };
+      onLogin(adminUser);
+      setLoginEmail(''); setLoginPassword('');
+      alert('Sesión iniciada con éxito como Administrador.');
+      return;
+    }
+
+    // Normal user login
     try {
       await signInWithEmailAndPassword(auth, cleanEmail, loginPassword);
-    } catch (err) {
+    } catch (err: any) {
       console.error(err);
-      alert('Credenciales inválidas en el servidor. Por favor verifique el correo y contraseña.');
-      addAuditLog(cleanEmail || 'anonimo', 'Seguridad', 'Intento Fallido', 'Intento de login con credenciales incorrectas.');
+      if (err.code === 'auth/operation-not-allowed') {
+        alert('El administrador debe habilitar la autenticación por correo/contraseña en Firebase Console.');
+      } else {
+        alert('Credenciales inválidas en el servidor. Por favor verifique el correo y contraseña.');
+      }
       return;
     }
+  
 
-    // 1. Check Pre-defined admin
-    if (cleanEmail === 'admin@technoverse.com' && loginPassword === ADMIN_PASSWORD) {
-      const db = getDB();
-      const adminUser: User = {
-        id: 'admin-id',
-        email: 'admin@technoverse.com',
-        role: 'Dueño',
-        name: 'Administrador Technoverse'
-      };
-      onLogin(adminUser);
-      setActiveTab('dashboard');
-      addAuditLog('admin@technoverse.com', 'Seguridad', 'Login Exitoso', 'Sesión de administrador iniciada por el Dueño.');
-      return;
-    }
+    
 
     // 2. Check created employees
-    const db = getDB();
     const emp = db.employees.find(e => e.email.toLowerCase() === cleanEmail && e.password === loginPassword && e.active);
     if (emp) {
       const empUser: User = {
