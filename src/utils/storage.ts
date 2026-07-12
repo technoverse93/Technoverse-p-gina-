@@ -102,7 +102,7 @@ export function getDB(): Database {
     }
     if (!localCache) localCache = getDefaultDB();
   }
-  return localCache;
+  return JSON.parse(JSON.stringify(localCache));
 }
 
 function diffArrays(oldArr: any[], newArr: any[], key = 'id') {

@@ -467,7 +467,7 @@ export default function AdminPanel({
     db.settings.companyPhone = companyPhone;
     db.settings.companyAddress = companyAddress;
     db.settings.pickupHours = pickupHours;
-    if (storeLogoPreview) { import('../utils/storage').then(mod => mod.saveLogo(storeLogoPreview)); } db.settings.storeLogo = undefined;
+    if (storeLogoPreview) { import('../utils/storage').then(mod => mod.saveLogo(storeLogoPreview)); }
     addAuditLog(currentUser?.email || 'admin', 'Configuración', 'Actualizar Ajustes', 'Ajustes fiscales, operativos y logo actualizados', db);
     saveDB(db);
     alert('Parámetros de facturación fiscal y de operación residencial guardados con éxito.');
