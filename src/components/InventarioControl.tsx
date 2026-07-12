@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from 'react';
 import { Product, InventoryMovement } from '../types';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
+import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { 
   Package, Plus, Edit, Trash2, Search, Filter, History, MapPin, 
   Box, FileText, AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronRight, X, Image as ImageIcon, Save, Download,
@@ -517,22 +519,24 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     }
   };
 
-  const handleRowImageUpload = (index: number, file: File) => {
-    const reader = new FileReader();
-    reader.onload = (e) => {
-      if (e.target?.result) {
-        setExtractedProducts(prev => {
-          const copy = [...prev];
-          copy[index] = {
-            ...copy[index],
-            imageUrl: e.target!.result as string
-          };
-          return copy;
-        });
-        showToast("Imagen cargada con éxito para la fila.", "success");
-      }
-    };
-    reader.readAsDataURL(file);
+  const handleRowImageUpload = async (index: number, file: File) => {
+    try {
+      const storageRef = ref(storage, 'products/' + Date.now() + '_' + file.name);
+      await uploadBytes(storageRef, file);
+      const downloadURL = await getDownloadURL(storageRef);
+      setExtractedProducts(prev => {
+        const copy = [...prev];
+        copy[index] = {
+          ...copy[index],
+          imageUrl: downloadURL
+        };
+        return copy;
+      });
+      showToast("Imagen cargada con éxito para la fila.", "success");
+    } catch (e) {
+      console.error(e);
+      showToast("Error al subir imagen a Firebase", "error");
+    }
   };
 
   const handleSkuChange = (index: number, val: string) => {

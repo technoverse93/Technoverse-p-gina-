@@ -11,6 +11,8 @@ import { ProductCard } from './ProductCard';
 import { MarketingRow } from './MarketingRow';
 import { FeaturedCategoriesCarousel } from './FeaturedCategoriesCarousel';
 import { Product, Order, OrderItem, RepairOrder } from '../types';
+import { auth } from '../firebase';
+import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD } from '../utils/storage';
 import LiveChat from './LiveChat';
 
@@ -224,27 +226,29 @@ export default function PublicStore({
     }
   }, [autoOpenLogin]);
 
-  const handleClientLoginSubmit = (e: React.FormEvent) => {
+  const handleClientLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = loginEmail.trim().toLowerCase();
-    const db = getDB();
-
-    // 1. Admin/Dueño check
-    if (cleanEmail === 'admin@technoverse.com' && loginPassword === ADMIN_PASSWORD) {
-      const adminUser: User = {
-        id: 'admin-id',
-        email: 'admin@technoverse.com',
-        role: 'Dueño',
-        name: 'Administrador Technoverse'
-      };
-      onLogin(adminUser);
-      setIsLoginModalOpen(false);
-      setLoginEmail('');
-      setLoginPassword('');
-      alert('Sesión iniciada con éxito como Administrador. El menú de cuenta se ha actualizado.');
+    
+    try {
+      await signInWithEmailAndPassword(auth, cleanEmail, loginPassword);
+    } catch (err) {
+      console.error(err);
+      alert('Credenciales inválidas en el servidor. Por favor verifique el correo y contraseña.');
       return;
     }
 
+    const db = getDB();
+    
+    // 1. Admin/Dueño check
+    if (cleanEmail === 'admin@technoverse.com' && loginPassword === ADMIN_PASSWORD) {
+      const adminUser: User = { id: 'admin-id', email: 'admin@technoverse.com', role: 'Dueño', name: 'Administrador Technoverse' };
+      onLogin(adminUser);
+      setIsLoginModalOpen(false); setLoginEmail(''); setLoginPassword('');
+      alert('Sesión iniciada con éxito como Administrador.');
+      return;
+    }
+    
     // 2. Employee check
     const emp = db.employees?.find(e => e.email.toLowerCase() === cleanEmail && e.password === loginPassword && e.active);
     if (emp) {
@@ -291,19 +295,27 @@ export default function PublicStore({
     }
   };
 
-  const handleClientRegisterSubmit = (e: React.FormEvent) => {
+  const handleClientRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!regName.trim() || !regEmail.trim() || !regPhone.trim() || !regAddress.trim() || !regPassword.trim()) {
       alert('Por favor complete todos los datos.');
       return;
     }
-
+    
+    try {
+      await createUserWithEmailAndPassword(auth, regEmail.trim(), regPassword.trim());
+    } catch (err) {
+      console.error(err);
+      alert('Error creando cuenta en el servidor. Puede que el correo ya esté registrado.');
+      return;
+    }
+    
     const db = getDB();
-    const exists = db.clients?.some(c => c.email.toLowerCase() === regEmail.trim().toLowerCase()) ||
-                   db.employees?.some(e => e.email.toLowerCase() === regEmail.trim().toLowerCase()) ||
+    const exists = db.clients?.some(c => c.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
+                   db.employees?.some(emp => emp.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
                    regEmail.trim().toLowerCase() === 'admin@technoverse.com';
     if (exists) {
-      alert('El correo electrónico ya se encuentra registrado.');
+      alert('El correo electrónico ya se encuentra registrado localmente.');
       return;
     }
 

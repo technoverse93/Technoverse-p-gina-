@@ -7,7 +7,13 @@ import {
   Menu, X, Plus, Trash2, Edit, Save, RefreshCw, Key, ArrowRightLeft, Eye, Download, DollarSign, BookOpen, ChevronDown, ChevronRight, ShoppingBag,
   Home, Sparkles, UserPlus, TrendingUp, BarChart3, Activity
 } from 'lucide-react';
+import { auth, app as firebaseApp } from '../firebase';
+import { initializeApp } from 'firebase/app';
+import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword } from 'firebase/auth';
+import { signInWithEmailAndPassword } from 'firebase/auth';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD } from '../utils/storage';
+import { storage } from '../firebase';
+import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
 import { User, Product, Employee, Payroll, Order, RepairOrder, ClientProfile, MembershipTier, LogisticsDelivery, MarketingCampaign, AuditLog, Banner } from '../types';
@@ -381,9 +387,18 @@ export default function AdminPanel({
     }
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = loginEmail.trim().toLowerCase();
+    
+    try {
+      await signInWithEmailAndPassword(auth, cleanEmail, loginPassword);
+    } catch (err) {
+      console.error(err);
+      alert('Credenciales inválidas en el servidor. Por favor verifique el correo y contraseña.');
+      addAuditLog(cleanEmail || 'anonimo', 'Seguridad', 'Intento Fallido', 'Intento de login con credenciales incorrectas.');
+      return;
+    }
 
     // 1. Check Pre-defined admin
     if (cleanEmail === 'admin@technoverse.com' && loginPassword === ADMIN_PASSWORD) {
@@ -619,32 +634,24 @@ export default function AdminPanel({
   };
 
   // Employee creation / editing
-  const handleEmployeeSubmit = (e: React.FormEvent) => {
+  const handleEmployeeSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!empName.trim()) {
-      alert('El nombre del colaborador es obligatorio.');
-      return;
-    }
-    if (!empEmail.trim()) {
-      alert('El correo electrónico es obligatorio.');
-      return;
-    }
-    if (empSalary < 350000) {
-      alert('El salario base no puede ser inferior al mínimo legal establecido (₡350,000).');
-      return;
-    }
-    if (empRemoteBonus < 0) {
-      alert('El subsidio remoto no puede ser negativo.');
-      return;
-    }
-
+    if (!empName.trim() || !empEmail.trim() || empSalary < 350000 || empRemoteBonus < 0) return;
     const db = getDB();
+    let finalPass = empPassword.trim() || `Emp-${Math.floor(100000 + Math.random() * 900000).toString()}`;
     
-    // Determine the password to use
-    let finalPass = empPassword.trim();
-    if (!finalPass) {
-      const passHex = Math.floor(100000 + Math.random() * 900000).toString();
-      finalPass = `Emp-${passHex}`;
+    // Create auth account using a secondary instance to prevent logout
+    if (!editingEmployeeId) {
+      try {
+        const secondaryApp = initializeApp(firebaseApp.options, 'SecondaryApp');
+        const secondaryAuth = getSecondaryAuth(secondaryApp);
+        await createUserWithEmailAndPassword(secondaryAuth, empEmail.trim(), finalPass);
+        await secondaryAuth.signOut();
+      } catch (err) {
+        console.error(err);
+        alert('Error creando credenciales en el servidor.');
+        return;
+      }
     }
 
     if (editingEmployeeId) {
