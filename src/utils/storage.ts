@@ -142,6 +142,44 @@ function cleanObject(obj: any): any {
   return clean;
 }
 
+async function uploadEmbeddedImages(obj: any, pathPrefix: string): Promise<any> {
+  if (obj === null || typeof obj !== 'object') {
+    return obj;
+  }
+  if (Array.isArray(obj)) {
+    const promises = obj.map(item => uploadEmbeddedImages(item, pathPrefix));
+    return Promise.all(promises);
+  }
+  const result: any = {};
+  for (const key in obj) {
+    if (Object.prototype.hasOwnProperty.call(obj, key)) {
+      const val = obj[key];
+      if (typeof val === 'string' && val.startsWith('data:') && val.includes(';base64,')) {
+        try {
+          const mimeType = val.split(';')[0].split(':')[1] || '';
+          let extension = 'bin';
+          if (mimeType) {
+            const parts = mimeType.split('/');
+            if (parts.length > 1) {
+              extension = parts[1];
+            }
+          }
+          const fileRef = ref(storage, `${pathPrefix}/${Date.now()}_${Math.floor(Math.random() * 100000)}.${extension}`);
+          await uploadString(fileRef, val, 'data_url');
+          const downloadUrl = await getDownloadURL(fileRef);
+          result[key] = downloadUrl;
+        } catch (err) {
+          console.error('[Firebase Storage Upload Error] Failed to upload image:', err);
+          result[key] = val;
+        }
+      } else {
+        result[key] = await uploadEmbeddedImages(val, pathPrefix);
+      }
+    }
+  }
+  return result;
+}
+
 export function saveDB(newDb: Database) {
   const oldDb = localCache || getDefaultDB();
   
@@ -173,14 +211,16 @@ export function saveDB(newDb: Database) {
       try {
         for (const item of added) {
           const cleanItem = cleanObject(item);
-          if (cleanItem[idKey || 'id']) {
-            await setDoc(doc(db, colName, cleanItem[idKey || 'id']), cleanItem);
+          const uploadedItem = await uploadEmbeddedImages(cleanItem, colName);
+          if (uploadedItem[idKey || 'id']) {
+            await setDoc(doc(db, colName, uploadedItem[idKey || 'id']), uploadedItem);
           }
         }
         for (const item of modified) {
           const cleanItem = cleanObject(item);
-          if (cleanItem[idKey || 'id']) {
-            await setDoc(doc(db, colName, cleanItem[idKey || 'id']), cleanItem, { merge: true });
+          const uploadedItem = await uploadEmbeddedImages(cleanItem, colName);
+          if (uploadedItem[idKey || 'id']) {
+            await setDoc(doc(db, colName, uploadedItem[idKey || 'id']), uploadedItem, { merge: true });
           }
         }
         for (const item of deleted) {
@@ -197,9 +237,16 @@ export function saveDB(newDb: Database) {
   });
   
   if (JSON.stringify(oldDb.settings) !== JSON.stringify(newDb.settings)) {
-    const cleanSettings = cleanObject(newDb.settings || {});
-    setDoc(doc(db, 'globals', 'settings'), cleanSettings)
-      .catch(err => console.error("[Firebase Sync Error] Error saving settings:", err));
+    const syncSettings = async () => {
+      try {
+        const cleanSettings = cleanObject(newDb.settings || {});
+        const uploadedSettings = await uploadEmbeddedImages(cleanSettings, 'settings');
+        await setDoc(doc(db, 'globals', 'settings'), uploadedSettings);
+      } catch (err) {
+        console.error("[Firebase Sync Error] Error saving settings:", err);
+      }
+    };
+    syncSettings();
   }
   
   localCache = newDb;
