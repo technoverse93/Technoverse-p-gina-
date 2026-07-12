@@ -1,0 +1,6 @@
+{
+  "name": "Technoverse",
+  "description": "Plataforma de e-commerce de élite y taller de reparaciones de alta tecnología para Costa Rica, cumpliendo con la legislación de Hacienda, CCSS y la Ley de Protección de Datos.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

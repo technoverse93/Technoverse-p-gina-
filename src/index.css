@@ -1,0 +1,273 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-display: "Space Grotesk", sans-serif;
+  --font-mono: "JetBrains Mono", ui-monospace, SFMono-Regular, monospace;
+
+  --color-bg-base: var(--bg-base);
+  --color-bg-surface: var(--bg-surface);
+  --color-text-primary: var(--text-primary);
+  --color-text-secondary: var(--text-secondary);
+  --color-text-muted: var(--text-muted);
+  --color-border-color: var(--border-color);
+  
+  --color-brand-navy: var(--brand-navy);
+  --color-brand-gold-dark: var(--brand-gold-dark);
+  --color-brand-gold-mid: var(--brand-gold-mid);
+  --color-brand-gold-light: var(--brand-gold-light);
+
+  --font-size-xs: clamp(0.72rem, 0.7rem + 0.1vw, 0.75rem);
+  --font-size-sm: clamp(0.8rem, 0.78rem + 0.15vw, 0.875rem);
+  --font-size-base: clamp(0.9rem, 0.85rem + 0.25vw, 1rem);
+  --font-size-lg: clamp(1rem, 0.95rem + 0.3vw, 1.125rem);
+  --font-size-xl: clamp(1.15rem, 1.05rem + 0.5vw, 1.375rem);
+  --font-size-2xl: clamp(1.35rem, 1.2rem + 0.75vw, 1.75rem);
+  --font-size-3xl: clamp(1.6rem, 1.4rem + 1vw, 2.25rem);
+  --font-size-4xl: clamp(1.6rem, 1.4rem + 1vw, 2.25rem);
+  --font-size-5xl: clamp(1.6rem, 1.4rem + 1vw, 2.25rem);
+}
+
+@layer base {
+  :root {
+    --bg-base: #F8F9FA;
+    --bg-surface: #ffffff;
+    --text-primary: #1F2937;
+    --text-secondary: #4B5563;
+    --text-muted: #9CA3AF;
+    --border-color: #E5E7EB;
+    
+    --brand-navy: #031837;
+    --brand-gold-dark: #8f7a5a;
+    --brand-gold-mid: #c9b57e;
+    --brand-gold-light: #e3d386;
+  }
+  
+  .dark {
+    --bg-base: #031837;
+    --bg-surface: #0a2144;
+    --text-primary: #F3F4F6;
+    --text-secondary: #9CA3AF;
+    --text-muted: #6B7280;
+    --border-color: #1e3a63;
+  }
+}
+
+body {
+  background-color: var(--bg-base);
+  color: var(--text-primary);
+  font-family: var(--font-sans);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+/* Custom scrollbars */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: var(--brand-gold-dark);
+  border-radius: 9999px;
+  opacity: 0.5;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: var(--brand-gold-mid);
+}
+
+/* Glass panels */
+.glass-panel {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255, 255, 255, 0.4);
+}
+.dark .glass-panel {
+  background: rgba(10, 33, 68, 0.7);
+  border: 1px solid rgba(143, 122, 90, 0.2);
+}
+
+.glass-gold {
+  background: rgba(255, 255, 255, 0.75);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(201, 181, 126, 0.2);
+}
+.dark .glass-gold {
+  background: rgba(10, 33, 68, 0.75);
+  border: 1px solid rgba(201, 181, 126, 0.2);
+}
+
+/* Smooth keyframe for bouncing cart */
+@keyframes cartBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+
+.animate-cart-bounce {
+  animation: cartBounce 200ms ease-in-out;
+}
+.hide-scrollbar::-webkit-scrollbar {
+  display: none;
+}
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+}
+
+/* Responsive Headings & Standard Sizes */
+h1, .text-4xl, .text-5xl {
+  font-size: clamp(1.6rem, 1.4rem + 1vw, 2.25rem) !important; /* text-3xl token */
+  line-height: 1.1;
+}
+
+h2, .text-3xl {
+  font-size: clamp(1.6rem, 1.4rem + 1vw, 2.25rem) !important; /* text-3xl token */
+  line-height: 1.2;
+}
+
+h3, .text-2xl {
+  font-size: clamp(1.35rem, 1.2rem + 0.75vw, 1.75rem) !important; /* text-2xl token */
+  line-height: 1.3;
+}
+
+h4, .text-xl {
+  font-size: clamp(1.15rem, 1.05rem + 0.5vw, 1.375rem) !important; /* text-xl token */
+  line-height: 1.3;
+}
+
+h5, .text-lg {
+  font-size: clamp(1rem, 0.95rem + 0.3vw, 1.125rem) !important; /* text-lg token */
+  line-height: 1.4;
+}
+
+/* Token replacements for custom pixel size classes */
+.text-\[8px\],
+.text-\[9px\],
+.text-\[10px\],
+.text-\[10px\]\/*,
+[class*="text-[10px]"] */ {
+  font-size: clamp(0.72rem, 0.7rem + 0.1vw, 0.75rem) !important;
+}
+
+.text-\[11px\] {
+  font-size: clamp(0.8rem, 0.78rem + 0.15vw, 0.875rem) !important;
+}
+
+/* FORCE ALL INTERACTIVE/NON-INTERACTIVE ICONS TO BE EITHER 20px OR 24px GLYPH SIZE */
+svg.lucide {
+  width: 20px !important;
+  height: 20px !important;
+}
+
+/* Unless they are explicitly defined with w-6/h-6 or are larger, which maps to 24px */
+svg.lucide.w-6,
+svg.lucide.h-6,
+svg.lucide-lg {
+  width: 24px !important;
+  height: 24px !important;
+}
+
+/* Force standard touch target of 40px - 44px for icon buttons and interactive elements */
+button:has(> svg.lucide),
+.icon-button,
+[role="button"]:has(> svg.lucide) {
+  min-width: 40px !important;
+  min-height: 40px !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center;
+}
+
+/* ==========================================================================
+   Elevación de tema oscuro — Tanda 1: Login y Tienda únicamente
+   ========================================================================== */
+
+.dark #store-page-root {
+  --bg-base: #031837 !important;       /* surface-0 */
+  --bg-surface: #04214d !important;    /* surface-1 */
+  --text-primary: #F2EDE3 !important;  /* principal blanco cálido */
+  --text-secondary: #A39E93 !important;/* secundario gris-dorado apagado */
+  --border-color: rgba(255, 255, 255, 0.08) !important; /* Borde de 1px con opacidad al 8% */
+  
+  background-color: #031837 !important;
+  color: #F2EDE3 !important;
+}
+
+/* Modals and Dropdowns (Elevated Surfaces - surface-2) */
+.dark #store-page-root #catalog-dropdown,
+.dark #store-page-root #search-suggestions-dropdown,
+.dark #store-page-root #account-dropdown,
+.dark #store-page-root #cart-dropdown,
+.dark #store-page-root #login-register-modal,
+.dark #store-page-root #product-detail-modal,
+.dark #store-page-root #checkout-cart-modal-container,
+.dark #store-page-root #floating-chat-window {
+  --bg-surface: #052a60 !important; /* so nested bg-[var(--bg-surface)] uses surface-2 */
+  --bg-base: #052a60 !important;
+  background-color: #052a60 !important; /* surface-2 */
+  border: 1px solid rgba(255, 255, 255, 0.09) !important; /* 1px border con opacidad al 9% */
+  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5) !important;
+  color: #F2EDE3 !important;
+}
+
+/* Ensure secondary text elements inside elevated components use the correct color variables */
+.dark #store-page-root #catalog-dropdown *,
+.dark #store-page-root #search-suggestions-dropdown *,
+.dark #store-page-root #account-dropdown *,
+.dark #store-page-root #cart-dropdown *,
+.dark #store-page-root #login-register-modal *,
+.dark #store-page-root #product-detail-modal *,
+.dark #store-page-root #checkout-cart-modal-container *,
+.dark #store-page-root #floating-chat-window * {
+  --text-primary: #F2EDE3 !important;
+  --text-secondary: #A39E93 !important;
+}
+
+/* Active elements, input fields, and hover states inside Elevated Surfaces (surface-3 - #063273) */
+.dark #store-page-root #catalog-dropdown a:hover,
+.dark #store-page-root #catalog-dropdown button:hover,
+.dark #store-page-root #search-suggestions-dropdown button:hover,
+.dark #store-page-root #account-dropdown button:hover,
+.dark #store-page-root #account-dropdown a:hover,
+.dark #store-page-root #cart-dropdown button:hover,
+.dark #store-page-root #cart-dropdown a:hover,
+.dark #store-page-root #checkout-cart-modal-container button:hover,
+.dark #store-page-root #checkout-cart-modal-container a:hover,
+.dark #store-page-root #product-detail-modal button:hover {
+  background-color: #063273 !important; /* surface-3 */
+  color: #F2EDE3 !important;
+}
+
+/* Inputs, Textareas, and Selects in Elevated Surfaces */
+.dark #store-page-root #account-dropdown input,
+.dark #store-page-root #account-dropdown select,
+.dark #store-page-root #login-register-modal input,
+.dark #store-page-root #login-register-modal select,
+.dark #store-page-root #product-detail-modal input,
+.dark #store-page-root #product-detail-modal select,
+.dark #store-page-root #checkout-cart-modal-container input,
+.dark #store-page-root #checkout-cart-modal-container select {
+  background-color: #063273 !important; /* surface-3 */
+  border: 1px solid rgba(255, 255, 255, 0.12) !important;
+  color: #F2EDE3 !important;
+}
+
+/* Handle specific buttons and badges inside these modules to use warm white text and appropriate borders */
+.dark #store-page-root .hover\:bg-slate-50:hover {
+  background-color: #052a60 !important; /* surface-2 as hover */
+}
+
+.dark #store-page-root .bg-slate-200,
+.dark #store-page-root .disabled\:bg-slate-200:disabled {
+  background-color: #063273 !important; /* surface-3 */
+  color: #F2EDE3 !important;
+}
+
+.dark #store-page-root .hover\:bg-slate-200:hover {
+  background-color: #063273 !important; /* surface-3 */
+}
+
