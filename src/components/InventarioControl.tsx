@@ -1151,7 +1151,7 @@ if (!m) return null;
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {paginatedProducts.map((p, pIndex) => (
-                        <tr key={p.id} className={`hover:bg-[var(--bg-surface)] transition ${p.active === false ? 'opacity-50' : ''}`}>
+                        <tr key={p.id || `prod-${pIndex}`} className={`hover:bg-[var(--bg-surface)] transition ${p.active === false ? 'opacity-50' : ''}`}>
                           {activeSubTab === 'repuestos' ? (
                             <>
                               <td className="p-4">
@@ -1314,7 +1314,7 @@ if (!m) return null;
                         </tr>
                       ))}
                       {filteredProducts.length === 0 && (
-                        <tr>
+                        <tr key="empty-products-row">
                           <td colSpan={8} className="p-8 text-center text-slate-400 text-xs italic font-medium">
                             {categoryFilter !== 'Todas' 
                               ? 'No hay productos en esta categoría.' 
@@ -1665,8 +1665,8 @@ if (!m) return null;
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {movements.map(m => m && (
-                    <tr key={m.id} className="hover:bg-[var(--bg-surface)] transition font-mono text-[11px]">
+                  {movements.filter(Boolean).map((m, mIdx) => (
+                    <tr key={m.id || `mov-${mIdx}`} className="hover:bg-[var(--bg-surface)] transition font-mono text-[11px]">
                       <td className="p-3 text-[var(--text-secondary)]">{new Date(m.timestamp).toLocaleString()}</td>
                       <td className="p-3 text-[var(--text-primary)] truncate max-w-[200px]" title={m.productName}>{m.productName}</td>
                       <td className="p-3">
@@ -1685,7 +1685,7 @@ if (!m) return null;
                     </tr>
                   ))}
                   {movements.length === 0 && (
-                    <tr><td colSpan={6} className="p-8 text-center text-[var(--text-secondary)] italic">No hay movimientos registrados.</td></tr>
+                    <tr key="empty-movements-row"><td colSpan={6} className="p-8 text-center text-[var(--text-secondary)] italic">No hay movimientos registrados.</td></tr>
                   )}
                 </tbody>
               </table>
@@ -1736,8 +1736,8 @@ if (!m) return null;
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {movements.filter(m => m && m.productId === traceProductModal.id).map(m => (
-                    <tr key={m.id} className="hover:bg-[var(--bg-surface)] transition">
+                  {movements.filter(m => m && m.productId === traceProductModal.id).map((m, mIdx) => (
+                    <tr key={m.id || `trace-${mIdx}`} className="hover:bg-[var(--bg-surface)] transition">
                       <td className="p-2 text-[var(--text-secondary)]">{new Date(m.timestamp).toLocaleString()}</td>
                       <td className="p-2 text-sky-400 dark:text-[var(--brand-gold-light)]">{m.type}</td>
                       <td className={`p-2 text-right font-bold ${m.quantityChange > 0 ? 'text-emerald-400 dark:text-[var(--brand-gold-light)]' : 'text-rose-400'}`}>
@@ -1748,7 +1748,7 @@ if (!m) return null;
                     </tr>
                   ))}
                   {movements.filter(m => m && m.productId === traceProductModal.id).length === 0 && (
-                    <tr><td colSpan={5} className="p-4 text-center text-[var(--text-secondary)] italic">No hay historial para este producto.</td></tr>
+                    <tr key="empty-trace-row"><td colSpan={5} className="p-4 text-center text-[var(--text-secondary)] italic">No hay historial para este producto.</td></tr>
                   )}
                 </tbody>
               </table>
