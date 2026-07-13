@@ -280,7 +280,8 @@ export async function saveDB(newDb: Database) {
   // 4. Wait for auth to initialize before attempting writes
   await new Promise<void>((resolve) => {
     let isResolved = false;
-    const unsubscribe = auth.onAuthStateChanged(() => {
+    let unsubscribe: (() => void) | undefined = undefined;
+    unsubscribe = auth.onAuthStateChanged(() => {
       if (!isResolved) {
         isResolved = true;
         if (typeof unsubscribe === 'function') {
@@ -347,8 +348,11 @@ export async function saveDB(newDb: Database) {
 export async function saveLogo(base64: string) {
   // Wait for auth to initialize before attempting writes
   await new Promise<void>((resolve) => {
-    const unsubscribe = auth.onAuthStateChanged(() => {
-      unsubscribe();
+    let unsubscribe: (() => void) | undefined = undefined;
+    unsubscribe = auth.onAuthStateChanged(() => {
+      if (typeof unsubscribe === 'function') {
+        unsubscribe();
+      }
       resolve();
     });
   });

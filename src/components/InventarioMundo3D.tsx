@@ -48,7 +48,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
 
   const loadHomeInventoryData = () => {
     const db = getDB();
-    const activeProducts = (db.products || []).filter(p => p.active !== false && p.stock > 0);
+    const activeProducts = (db.products || []).filter(p => p && p.active !== false && p.stock > 0);
     setProducts(activeProducts);
     setMovements(db.inventory_movements || []);
     setMaxStockLimit(db.settings?.maxStockLimit ?? 50);
@@ -57,20 +57,23 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
     const initialQuantities: { [productId: string]: number } = {};
     const initialReasons: { [productId: string]: string } = {};
     activeProducts.forEach(p => {
-      initialQuantities[p.id] = p.stock;
-      initialReasons[p.id] = '';
+      if (p) {
+        initialQuantities[p.id] = p.stock || 0;
+        initialReasons[p.id] = '';
+      }
     });
     setAuditQuantities(initialQuantities);
     setAuditReasons(initialReasons);
   };
 
   // Calculate stats
-  const totalStock = products.reduce((acc, p) => acc + p.stock, 0);
+  const totalStock = products.reduce((acc, p) => acc + (p ? (p.stock || 0) : 0), 0);
   const occupancyPercentage = Math.min(100, Math.round((totalStock / maxStockLimit) * 100));
 
   // Group products by physical location
   const groupedProducts: { [location: string]: Product[] } = {};
   products.forEach(p => {
+    if (!p) return;
     const loc = p.physicalLocation?.trim() || 'Sin ubicación (Por asignar)';
     if (!groupedProducts[loc]) {
       groupedProducts[loc] = [];

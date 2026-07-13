@@ -1799,15 +1799,15 @@ if (!m) return null;
               <div className="space-y-3">
                 <div className="flex justify-between items-center pb-2 border-b border-[var(--border-color)]/50">
                   <span className="text-xs text-[var(--text-secondary)]">Total Artículos</span>
-                  <span className="font-mono text-[var(--text-primary)] font-bold">{products.reduce((a, b) => a + b.stock, 0)} u.</span>
+                  <span className="font-mono text-[var(--text-primary)] font-bold">{products.reduce((a, b) => a + (b ? (b.stock || 0) : 0), 0)} u.</span>
                 </div>
                 <div className="flex justify-between items-center pb-2 border-b border-[var(--border-color)]/50">
                   <span className="text-xs text-[var(--text-secondary)]">Valor a Costo</span>
-                  <span className="font-mono text-sky-400 dark:text-[var(--brand-gold-light)] font-bold">₡{products.reduce((a, b) => a + ((b.cost || 0) * b.stock), 0).toLocaleString()}</span>
+                  <span className="font-mono text-sky-400 dark:text-[var(--brand-gold-light)] font-bold">₡{products.reduce((a, b) => a + (b ? ((b.cost || 0) * (b.stock || 0)) : 0), 0).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-[var(--text-secondary)]">Valor a Precio Venta</span>
-                  <span className="font-mono text-emerald-400 dark:text-[var(--brand-gold-light)] font-bold">₡{products.reduce((a, b) => a + (b.price * b.stock), 0).toLocaleString()}</span>
+                  <span className="font-mono text-emerald-400 dark:text-[var(--brand-gold-light)] font-bold">₡{products.reduce((a, b) => a + (b ? ((b.price || 0) * (b.stock || 0)) : 0), 0).toLocaleString()}</span>
                 </div>
               </div>
             </div>

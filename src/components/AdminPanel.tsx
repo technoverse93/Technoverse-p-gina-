@@ -1025,7 +1025,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
   const clientsCount = clients.length;
   const lowStockProductsCount = products.filter(p => p && p.stock <= 3).length;
   const repairsAwaitingParts = repairs.filter(r => r && r.status === 'Esperando repuestos').length;
-  const totalStockItems = products.reduce((sum, p) => sum + p.stock, 0);
+  const totalStockItems = products.reduce((sum, p) => sum + (p ? (p.stock || 0) : 0), 0);
   const estimatedFreeSpace = Math.max(0, 100 - Math.min(100, Math.round((totalStockItems / 300) * 100)));
 
   // Real data for charts
@@ -2530,7 +2530,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
 if (!del) return null;
                     const addrLower = del.addressDetail.toLowerCase();
                     const isPickup = addrLower.includes('retiro') || addrLower.includes('residencia') || addrLower.includes('oficina') || addrLower.includes('casa');
-                    const isGAM = ['san jose', 'sanjose', 'heredia', 'alajuela', 'cartago'].includes(del.province.toLowerCase().trim());
+                    const isGAM = del.province ? ['san jose', 'sanjose', 'heredia', 'alajuela', 'cartago'].includes(del.province.toLowerCase().trim()) : false;
                     
                     let channelLabel = "Correos de Costa Rica (Socio Nacional)";
                     let channelColor = "bg-[var(--brand-gold-mid)]/10 text-sky-400 dark:text-[var(--brand-gold-light)] border-sky-500 dark:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/20";

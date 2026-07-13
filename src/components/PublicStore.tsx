@@ -445,9 +445,7 @@ export default function PublicStore({
   const loadStoreProducts = () => {
     const db = getDB();
     setDbInstance(db);
-    if (db.settings?.storeLogo) {
-      setStoreLogo(db.settings.storeLogo || null);
-    }
+    setStoreLogo(db.settings?.storeLogo || null);
     // Filter out spare part categories from public store
     const SPARE_PART_CATEGORIES = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
     setProducts((db.products || []).filter(p => p && p.active !== false && p.stock > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
@@ -464,11 +462,11 @@ export default function PublicStore({
       return;
     }
 
-    const matched = products.filter(p => p && 
-      p.name.toLowerCase().includes(val.toLowerCase()) ||
-      p.category.toLowerCase().includes(val.toLowerCase()) ||
-      p.sku.toLowerCase().includes(val.toLowerCase())
-    );
+    const matched = products.filter(p => p && (
+      (p.name && p.name.toLowerCase().includes(val.toLowerCase())) ||
+      (p.category && p.category.toLowerCase().includes(val.toLowerCase())) ||
+      (p.sku && p.sku.toLowerCase().includes(val.toLowerCase()))
+    ));
     setSearchResults(matched);
     setShowSearchDropdown(true);
   };
@@ -827,6 +825,7 @@ export default function PublicStore({
   const CATEGORIES = ['Todos', 'Dispositivos', 'Estuches', 'Cargadores', 'Audio'];
 
   const checkCategoryMatch = (prodCat: string, storeCat: string) => {
+    if (!prodCat || !storeCat) return false;
     const pc = prodCat.toLowerCase();
     const sc = storeCat.toLowerCase();
     if (sc === 'todos') return true;
@@ -861,9 +860,9 @@ export default function PublicStore({
       if (p.id !== selectedSearchProductId) return false;
     } else if (searchQuery.trim()) {
       const query = searchQuery.toLowerCase().trim();
-      const match = p.name.toLowerCase().includes(query) ||
-                    p.category.toLowerCase().includes(query) ||
-                    p.sku.toLowerCase().includes(query);
+      const match = (p.name && p.name.toLowerCase().includes(query)) ||
+                    (p.category && p.category.toLowerCase().includes(query)) ||
+                    (p.sku && p.sku.toLowerCase().includes(query));
       if (!match) return false;
     }
     return true;
