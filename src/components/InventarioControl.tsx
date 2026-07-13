@@ -1570,8 +1570,16 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
                               const file = e.target.files?.[0];
                               if (file) {
                                 const reader = new FileReader();
-                                reader.onloadend = () => {
-                                  setProdImage(reader.result as string);
+                                reader.onloadend = async () => {
+                                  const rawBase64 = reader.result as string;
+                                  try {
+                                    const { compressImage } = await import('../utils/storage');
+                                    const compressed = await compressImage(rawBase64, 500, 500, 0.7);
+                                    setProdImage(compressed);
+                                  } catch (err) {
+                                    console.error('Error compressing product image:', err);
+                                    setProdImage(rawBase64);
+                                  }
                                 };
                                 reader.readAsDataURL(file);
                               }

@@ -371,8 +371,16 @@ export default function AdminPanel({
     const file = e.target.files?.[0];
     if (file) {
       const reader = new FileReader();
-      reader.onloadend = () => {
-        setStoreLogoPreview(reader.result as string);
+      reader.onloadend = async () => {
+        const rawBase64 = reader.result as string;
+        try {
+          const { compressImage } = await import('../utils/storage');
+          const compressed = await compressImage(rawBase64, 400, 400, 0.7);
+          setStoreLogoPreview(compressed);
+        } catch (err) {
+          console.error('Error compressing logo:', err);
+          setStoreLogoPreview(rawBase64);
+        }
       };
       reader.readAsDataURL(file);
     }

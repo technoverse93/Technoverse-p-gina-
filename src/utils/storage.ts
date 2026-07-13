@@ -142,6 +142,49 @@ function cleanObject(obj: any): any {
   return clean;
 }
 
+export function compressImage(dataUrl: string, maxWidth = 500, maxHeight = 500, quality = 0.7): Promise<string> {
+  return new Promise((resolve) => {
+    if (!dataUrl || !dataUrl.startsWith('data:')) {
+      resolve(dataUrl);
+      return;
+    }
+    const img = new Image();
+    img.onload = () => {
+      let width = img.width;
+      let height = img.height;
+      if (width > height) {
+        if (width > maxWidth) {
+          height = Math.round((height * maxWidth) / width);
+          width = maxWidth;
+        }
+      } else {
+        if (height > maxHeight) {
+          width = Math.round((width * maxHeight) / height);
+          height = maxHeight;
+        }
+      }
+      const canvas = document.createElement('canvas');
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) {
+        resolve(dataUrl);
+        return;
+      }
+      ctx.drawImage(img, 0, 0, width, height);
+      try {
+        resolve(canvas.toDataURL('image/jpeg', quality));
+      } catch (err) {
+        resolve(dataUrl);
+      }
+    };
+    img.onerror = () => {
+      resolve(dataUrl);
+    };
+    img.src = dataUrl;
+  });
+}
+
 async function uploadEmbeddedImages(obj: any, pathPrefix: string): Promise<any> {
   if (obj === null || typeof obj !== 'object') {
     return obj;
@@ -156,21 +199,21 @@ async function uploadEmbeddedImages(obj: any, pathPrefix: string): Promise<any> 
       const val = obj[key];
       if (typeof val === 'string' && val.startsWith('data:') && val.includes(';base64,')) {
         try {
-          const mimeType = val.split(';')[0].split(':')[1] || '';
-          let extension = 'bin';
-          if (mimeType) {
-            const parts = mimeType.split('/');
-            if (parts.length > 1) {
-              extension = parts[1];
-            }
-          }
-          const fileRef = ref(storage, `${pathPrefix}/${Date.now()}_${Math.floor(Math.random() * 100000)}.${extension}`);
-          await uploadString(fileRef, val, 'data_url');
+          // Client-side compress before upload to keep it lightweight (600x600, 0.75 quality)
+          const compressedVal = await compressImage(val, 600, 600, 0.75);
+          const fileRef = ref(storage, `${pathPrefix}/${Date.now()}_${Math.floor(Math.random() * 100000)}.jpg`);
+          await uploadString(fileRef, compressedVal, 'data_url');
           const downloadUrl = await getDownloadURL(fileRef);
           result[key] = downloadUrl;
         } catch (err) {
-          console.error('[Firebase Storage Upload Error] Failed to upload image:', err);
-          result[key] = val;
+          console.error('[Firebase Storage Upload Error] Failed to upload image, falling back to super compressed base64:', err);
+          // Fallback: compress even further (300x300, 0.6 quality) to fit easily in Firestore 1MB document size limit
+          try {
+            const lowResVal = await compressImage(val, 300, 300, 0.6);
+            result[key] = lowResVal;
+          } catch (compressErr) {
+            result[key] = val; // ultimate fallback
+          }
         }
       } else {
         result[key] = await uploadEmbeddedImages(val, pathPrefix);
