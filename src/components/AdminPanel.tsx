@@ -435,6 +435,14 @@ export default function AdminPanel({
       }
       return;
     }
+
+    if (cleanEmail === 'technoverse.admin@gmail.com') {
+      const adminUser: User = { id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' };
+      onLogin(adminUser);
+      setLoginEmail(''); setLoginPassword('');
+      alert('Sesión iniciada con éxito como Administrador.');
+      return;
+    }
   
 
     

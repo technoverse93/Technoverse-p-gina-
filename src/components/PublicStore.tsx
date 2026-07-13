@@ -277,6 +277,15 @@ export default function PublicStore({
       }
       return;
     }
+
+    if (cleanEmail === 'technoverse.admin@gmail.com') {
+      const adminUser: User = { id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' };
+      onLogin(adminUser);
+      setIsLoginModalOpen(false);
+      setLoginEmail(''); setLoginPassword('');
+      alert('Sesión iniciada con éxito como Administrador.');
+      return;
+    }
   
     
     // 2. Employee check
