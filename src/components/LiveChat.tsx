@@ -41,11 +41,9 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
 
   useEffect(() => {
     loadConversations();
-    // Refresh interval for live chat simulation
-    const interval = setInterval(() => {
-      loadConversations();
-    }, 4000);
-    return () => clearInterval(interval);
+    const handleUpdate = () => loadConversations();
+    window.addEventListener('technoverse_db_updated', handleUpdate);
+    return () => window.removeEventListener('technoverse_db_updated', handleUpdate);
   }, []);
 
   const loadConversations = () => {

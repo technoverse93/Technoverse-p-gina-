@@ -36,6 +36,9 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
 
   useEffect(() => {
     loadComplianceData();
+    const handleUpdate = () => loadComplianceData();
+    window.addEventListener('technoverse_db_updated', handleUpdate);
+    return () => window.removeEventListener('technoverse_db_updated', handleUpdate);
   }, []);
 
   const loadComplianceData = () => {

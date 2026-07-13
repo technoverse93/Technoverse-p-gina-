@@ -75,6 +75,9 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
   useEffect(() => {
     loadTallerData();
+    const handleUpdate = () => loadTallerData();
+    window.addEventListener('technoverse_db_updated', handleUpdate);
+    return () => window.removeEventListener('technoverse_db_updated', handleUpdate);
   }, []);
 
   const loadTallerData = () => {
