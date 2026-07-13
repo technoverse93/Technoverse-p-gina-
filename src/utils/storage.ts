@@ -77,6 +77,8 @@ export function initFirebaseSync() {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
       }
+    }, (error) => {
+      console.error(`[Firebase Sync Error] Error in onSnapshot for collection '${colName}':`, error);
     });
   });
   
@@ -86,6 +88,8 @@ export function initFirebaseSync() {
       localStorage.setItem('technoverse_db', JSON.stringify(localCache));
       if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
     }
+  }, (error) => {
+    console.error(`[Firebase Sync Error] Error in onSnapshot for document 'globals/settings':`, error);
   });
 }
 
@@ -223,10 +227,17 @@ async function uploadEmbeddedImages(obj: any, pathPrefix: string): Promise<any> 
   return result;
 }
 
-export function saveDB(newDb: Database) {
-  const oldDb = localCache || getDefaultDB();
-  
-  // Sync arrays to Firestore
+export async function saveDB(newDb: Database) {
+  // 1. Capture old state synchronously BEFORE any awaits, to correctly determine what the user changed.
+  const oldDb = localCache ? JSON.parse(JSON.stringify(localCache)) : getDefaultDB();
+
+  // 2. Optimistically update localCache IMMEDIATELY so the UI reflects changes instantly without flickering.
+  localCache = newDb;
+  localStorage.setItem('technoverse_db', JSON.stringify(localCache));
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
+  }
+
   const collectionsToSync = [
     { key: 'products', colName: 'products' },
     { key: 'inventory_movements', colName: 'inventory_movements' },
@@ -243,80 +254,116 @@ export function saveDB(newDb: Database) {
     { key: 'banners', colName: 'banners' },
     { key: 'historical_skus', colName: 'historical_skus', idKey: 'sku' }
   ];
-  
-  collectionsToSync.forEach(({ key, colName, idKey }) => {
+
+  // 3. Pre-calculate diffs synchronously
+  const diffs = collectionsToSync.map(({ key, colName, idKey }) => {
     const oldArr = (oldDb as any)[key] || [];
     const newArr = (newDb as any)[key] || [];
-    const { added, modified, deleted } = diffArrays(oldArr, newArr, idKey || 'id');
-    
-    // We run async, don't block
-    const syncToFirebase = async () => {
-      try {
-        for (const item of added) {
-          const cleanItem = cleanObject(item);
-          const uploadedItem = await uploadEmbeddedImages(cleanItem, colName);
-          if (uploadedItem[idKey || 'id']) {
-            await setDoc(doc(db, colName, uploadedItem[idKey || 'id']), uploadedItem);
-          }
-        }
-        for (const item of modified) {
-          const cleanItem = cleanObject(item);
-          const uploadedItem = await uploadEmbeddedImages(cleanItem, colName);
-          if (uploadedItem[idKey || 'id']) {
-            await setDoc(doc(db, colName, uploadedItem[idKey || 'id']), uploadedItem, { merge: true });
-          }
-        }
-        for (const item of deleted) {
-          const cleanItem = cleanObject(item);
-          if (cleanItem[idKey || 'id']) {
-            await deleteDoc(doc(db, colName, cleanItem[idKey || 'id']));
-          }
-        }
-      } catch (err) {
-        console.error(`[Firebase Sync Error] Error syncing ${colName}:`, err);
-      }
-    };
-    syncToFirebase();
+    const diff = diffArrays(oldArr, newArr, idKey || 'id');
+    return { key, colName, idKey: idKey || 'id', ...diff };
   });
-  
-  if (JSON.stringify(oldDb.settings) !== JSON.stringify(newDb.settings)) {
-    const syncSettings = async () => {
-      try {
-        const cleanSettings = cleanObject(newDb.settings || {});
-        const uploadedSettings = await uploadEmbeddedImages(cleanSettings, 'settings');
-        await setDoc(doc(db, 'globals', 'settings'), uploadedSettings);
-      } catch (err) {
-        console.error("[Firebase Sync Error] Error saving settings:", err);
+
+  const settingsChanged = JSON.stringify(oldDb.settings) !== JSON.stringify(newDb.settings);
+
+  // 4. Wait for auth to initialize before attempting writes
+  await new Promise<void>((resolve) => {
+    let isResolved = false;
+    const unsubscribe = auth.onAuthStateChanged(() => {
+      if (!isResolved) {
+        isResolved = true;
+        if (typeof unsubscribe === 'function') {
+          unsubscribe();
+        } else {
+          setTimeout(() => { if (typeof unsubscribe === 'function') unsubscribe(); }, 0);
+        }
+        resolve();
+      }
+    });
+  });
+
+  const syncPromises: Promise<void>[] = [];
+
+  // 5. Build sync promises
+  diffs.forEach(({ colName, idKey, added, modified, deleted }) => {
+    if (added.length === 0 && modified.length === 0 && deleted.length === 0) return;
+
+    const syncToFirebase = async () => {
+      for (const item of added) {
+        const cleanItem = cleanObject(item);
+        const uploadedItem = await uploadEmbeddedImages(cleanItem, colName);
+        if (uploadedItem[idKey]) {
+          await setDoc(doc(db, colName, uploadedItem[idKey]), uploadedItem);
+        }
+      }
+      for (const item of modified) {
+        const cleanItem = cleanObject(item);
+        const uploadedItem = await uploadEmbeddedImages(cleanItem, colName);
+        if (uploadedItem[idKey]) {
+          await setDoc(doc(db, colName, uploadedItem[idKey]), uploadedItem, { merge: true });
+        }
+      }
+      for (const item of deleted) {
+        const cleanItem = cleanObject(item);
+        if (cleanItem[idKey]) {
+          await deleteDoc(doc(db, colName, cleanItem[idKey]));
+        }
       }
     };
-    syncSettings();
+    syncPromises.push(syncToFirebase());
+  });
+
+  if (settingsChanged) {
+    const syncSettings = async () => {
+      const cleanSettings = cleanObject(newDb.settings || {});
+      const uploadedSettings = await uploadEmbeddedImages(cleanSettings, 'settings');
+      await setDoc(doc(db, 'globals', 'settings'), uploadedSettings);
+    };
+    syncPromises.push(syncSettings());
   }
-  
-  localCache = newDb;
-  localStorage.setItem('technoverse_db', JSON.stringify(newDb));
-  
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: newDb }));
+
+  // 6. Execute background sync safely
+  try {
+    await Promise.all(syncPromises);
+  } catch (err) {
+    console.error("[Firebase Sync Error] Error syncing data:", err);
+    if (typeof window !== 'undefined') {
+      alert("Error de red o permisos al guardar en el servidor. Tus cambios no se aplicaron. " + (err as any).message);
+    }
   }
 }
 
 export async function saveLogo(base64: string) {
-  if (base64.startsWith('data:')) {
-    const storageRef = ref(storage, 'settings/logo_' + Date.now());
-    await uploadString(storageRef, base64, 'data_url');
-    const url = await getDownloadURL(storageRef);
-    const dbInst = getDB();
-    if (!dbInst.settings) dbInst.settings = DEFAULT_SETTINGS;
-    dbInst.settings.storeLogo = url;
-    saveDB(dbInst);
-  } else {
-    const dbInst = getDB();
-    if (!dbInst.settings) dbInst.settings = DEFAULT_SETTINGS;
-    dbInst.settings.storeLogo = base64;
-    saveDB(dbInst);
-  }
-  if (typeof window !== 'undefined') {
-    window.dispatchEvent(new Event('store_logo_updated'));
+  // Wait for auth to initialize before attempting writes
+  await new Promise<void>((resolve) => {
+    const unsubscribe = auth.onAuthStateChanged(() => {
+      unsubscribe();
+      resolve();
+    });
+  });
+
+  try {
+    if (base64.startsWith('data:')) {
+      const storageRef = ref(storage, 'settings/logo_' + Date.now());
+      await uploadString(storageRef, base64, 'data_url');
+      const url = await getDownloadURL(storageRef);
+      const dbInst = getDB();
+      if (!dbInst.settings) dbInst.settings = DEFAULT_SETTINGS;
+      dbInst.settings.storeLogo = url;
+      await saveDB(dbInst);
+    } else {
+      const dbInst = getDB();
+      if (!dbInst.settings) dbInst.settings = DEFAULT_SETTINGS;
+      dbInst.settings.storeLogo = base64;
+      await saveDB(dbInst);
+    }
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('store_logo_updated'));
+    }
+  } catch (err) {
+    console.error("[Firebase Storage Error] Error saving logo:", err);
+    if (typeof window !== 'undefined') {
+      alert('Error de red o permisos al subir el logo. Por favor verifica tu conexión y recarga la página antes de reintentar.');
+    }
   }
 }
 

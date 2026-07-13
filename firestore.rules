@@ -8,27 +8,12 @@ service cloud.firestore {
     
     // Check if user is admin (Dueño)
     function isAdmin() {
-      return isSignedIn() && request.auth.token.email == 'admin@technoverse.com';
+      return isSignedIn() && request.auth.token.email == 'technoverse.admin@gmail.com';
     }
     
     match /{document=**} {
-      // By default, allow read for all (public store)
-      // but write is restricted to authenticated users
       allow read: if true;
       allow write: if isSignedIn();
-    }
-    
-    // specific collections could be locked down further
-    match /payroll/{docId} {
-      allow read, write: if isAdmin();
-    }
-    
-    match /audit_log/{docId} {
-      allow read, write: if isAdmin();
-    }
-    
-    match /clients/{docId} {
-      allow read, write: if isSignedIn();
     }
   }
 }
