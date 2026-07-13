@@ -440,7 +440,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       selectedRows.forEach(row => {
         const trimmedSku = row.sku.trim();
         
-        const activeDuplicate = db.products.some(p => p.sku && p.sku.toLowerCase() === trimmedSku.toLowerCase() && p.active !== false);
+        const activeDuplicate = db.products.some(p => p && p.sku && p.sku.toLowerCase() === trimmedSku.toLowerCase() && p.active !== false);
         if (activeDuplicate) {
           omittedCount++;
           return;
@@ -544,7 +544,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       const copy = [...prev];
       const db = getDB();
       const trimmedVal = val.trim().toUpperCase();
-      const activeDuplicate = db.products.some(p => p.sku && p.sku.toLowerCase() === trimmedVal.toLowerCase() && p.active !== false);
+      const activeDuplicate = db.products.some(p => p && p.sku && p.sku.toLowerCase() === trimmedVal.toLowerCase() && p.active !== false);
       const histData = (db.historical_skus || []).find(h => h && h.sku && h.sku.toLowerCase() === trimmedVal.toLowerCase());
 
       copy[index] = {
@@ -649,6 +649,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   const currentDb = getDB();
   const historicalSkus = (currentDb.historical_skus || []).filter(h => h && h.sku);
   const skuSuggestions = historicalSkus.filter(h => {
+    if (!h) return false;
     const isSpare = h.category === 'Repuestos' || sparePartCategories.includes(h.category);
     if (activeSubTab === 'repuestos' && !isSpare) return false;
     if (activeSubTab === 'productos' && isSpare) return false;
@@ -757,6 +758,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
           if (isSparePart && oldStock !== finalStock) {
             const newStock = finalStock;
             db.products.forEach((p, pIdx) => {
+              if (!p) return;
               if (p.linkedSparePartSku === prodSku.trim()) {
                 db.products[pIdx].stock = newStock;
                 // If stock reaches 0, deactivate. If > 0, reactivate.
@@ -786,7 +788,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         const newSku = prodSku.trim() || `${prodCategory.substring(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
         
         // Prevent active SKU duplicate conflicts
-        const duplicate = db.products.find(p => p.active !== false && p.sku && p.sku.toLowerCase() === newSku.toLowerCase().trim());
+        const duplicate = db.products.find(p => p && p.active !== false && p.sku && p.sku.toLowerCase() === newSku.toLowerCase().trim());
         if (duplicate) {
           setFormError(`El SKU "${newSku}" ya está siendo utilizado por otro producto activo ("${duplicate.name}").`);
           return;
@@ -851,14 +853,14 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
 
   const confirmDeleteProduct = (p: Product) => {
     const db = getDB();
-    const idx = db.products.findIndex(x => x.id === p.id);
+    const idx = db.products.findIndex(x => x && x.id === p.id);
     if (idx !== -1) {
       db.products[idx].active = false;
       addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Desactivar Producto', `Producto desactivado por eliminación: ${p.name}`, db);
 
       // Cascading deletion for linked products if this is a spare part
       if (sparePartCategories.includes(p.category)) {
-        const linkedProducts = db.products.filter(x => x.linkedSparePartSku === p.sku);
+        const linkedProducts = db.products.filter(x => x && x.linkedSparePartSku === p.sku);
         linkedProducts.forEach(lp => {
           lp.active = false;
           addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Desactivar Producto', `Producto vinculado (${lp.name}) desactivado por eliminación de repuesto: ${p.sku}`, db);
@@ -876,6 +878,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     setIsCountingMode(true);
     const initialCount: Record<string, number> = {};
     products.forEach(p => {
+    if (!p) return;
       initialCount[p.id] = p.stock;
     });
     setCountData(initialCount);
@@ -934,7 +937,8 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     // Columns: Fecha, Producto, Tipo, Cantidad, Stock resultante, Usuario, Referencia
     const headers = ["Fecha", "Producto", "Tipo", "Cantidad", "Stock resultante", "Usuario", "Referencia"];
     
-    const rows = movements.map(m => {
+    const rows = movements.map(m => { 
+if (!m) return null;
       const fecha = new Date(m.timestamp).toLocaleString();
       const producto = m.productName.replace(/"/g, '""');
       const tipo = m.type;
@@ -966,6 +970,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   };
 
   const filteredProducts = products.filter(p => {
+    if (!p) return false;
     if (p.active === false) return false;
     
     // Sub-tab logic
@@ -1444,7 +1449,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
                               const sku = e.target.value;
                               setProdLinkedSparePartSku(sku);
                               if (sku) {
-                                const spare = products.find(p => p.sku === sku && (sparePartCategories.includes(p.category) || p.category === 'Repuestos'));
+                                const spare = products.find(p => p && p.sku === sku && (sparePartCategories.includes(p.category) || p.category === 'Repuestos'));
                                 if (spare) {
                                   setProdStock(spare.stock);
                                   setProdCost(spare.cost);
@@ -1457,7 +1462,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
                             className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl pl-9 pr-4 py-2 text-xs text-[var(--text-primary)]"
                           >
                             <option value="">-- Sin vinculación --</option>
-                            {products.filter(p => (sparePartCategories.includes(p.category) || p.category === 'Repuestos') && p.active !== false).map(p => (
+                            {products.filter(p => p && (sparePartCategories.includes(p.category) || p.category === 'Repuestos') && p.active !== false).map(p => (
                               <option key={p.sku} value={p.sku}>{p.sku} - {p.name} (Stock: {p.stock})</option>
                             ))}
                           </select>
@@ -1660,7 +1665,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {movements.map(m => (
+                  {movements.map(m => m && (
                     <tr key={m.id} className="hover:bg-[var(--bg-surface)] transition font-mono text-[11px]">
                       <td className="p-3 text-[var(--text-secondary)]">{new Date(m.timestamp).toLocaleString()}</td>
                       <td className="p-3 text-[var(--text-primary)] truncate max-w-[200px]" title={m.productName}>{m.productName}</td>
@@ -1731,7 +1736,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {movements.filter(m => m.productId === traceProductModal.id).map(m => (
+                  {movements.filter(m => m && m.productId === traceProductModal.id).map(m => (
                     <tr key={m.id} className="hover:bg-[var(--bg-surface)] transition">
                       <td className="p-2 text-[var(--text-secondary)]">{new Date(m.timestamp).toLocaleString()}</td>
                       <td className="p-2 text-sky-400 dark:text-[var(--brand-gold-light)]">{m.type}</td>
@@ -1742,7 +1747,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
                       <td className="p-2 text-[var(--text-secondary)] truncate max-w-[150px]">{m.notes}</td>
                     </tr>
                   ))}
-                  {movements.filter(m => m.productId === traceProductModal.id).length === 0 && (
+                  {movements.filter(m => m && m.productId === traceProductModal.id).length === 0 && (
                     <tr><td colSpan={5} className="p-4 text-center text-[var(--text-secondary)] italic">No hay historial para este producto.</td></tr>
                   )}
                 </tbody>
@@ -1811,7 +1816,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
               <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Rotación de Productos</h4>
               <p className="text-[10px] text-[var(--text-secondary)] mb-2">Simulación de movimiento basado en stock.</p>
               <div className="space-y-2">
-                {products.filter(p => p.stock > 0).slice(0, 4).map(p => (
+                {products.filter(p => p && p.stock > 0).slice(0, 4).map(p => (
                   <div key={p.id} className="bg-[var(--bg-surface)] border border-[var(--border-color)]/50 p-2 rounded-lg flex justify-between items-center">
                     <span className="text-[10px] text-[var(--text-primary)] truncate max-w-[150px]">{p.name}</span>
                     <span className="text-[9px] font-mono text-emerald-400 dark:text-[var(--brand-gold-light)]">{p.stock} en stock</span>

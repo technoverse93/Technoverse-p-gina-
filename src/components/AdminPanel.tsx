@@ -104,6 +104,7 @@ export default function AdminPanel({
       if (!activeDropdown) return;
       const dropdowns = document.querySelectorAll('.dynamic-dropdown');
       dropdowns.forEach(dropdown => {
+    if (!dropdown) return;
         const el = dropdown as HTMLElement;
         // Reset to default left-0 first
         el.style.left = '0';
@@ -230,7 +231,7 @@ export default function AdminPanel({
     if (!bannerForm.title) return;
     const db = getDB();
     if (bannerForm.id) {
-      const idx = db.banners.findIndex(b => b.id === bannerForm.id);
+      const idx = db.banners.findIndex(b => b && b.id === bannerForm.id);
       if (idx !== -1) {
         db.banners[idx] = bannerForm as Banner;
       }
@@ -278,7 +279,7 @@ export default function AdminPanel({
 
     const db = getDB();
     if (editingClient) {
-      const idx = db.clients.findIndex(c => c.id === editingClient.id);
+      const idx = db.clients.findIndex(c => c && c.id === editingClient.id);
       if (idx !== -1) {
         db.clients[idx] = { ...db.clients[idx], ...clientForm } as ClientProfile;
         addAuditLog(currentUser?.email || 'admin', 'CRM', 'Editar Cliente', `Cliente actualizado: ${clientForm.name} (Membresía: ${clientForm.membershipTier})`, db);
@@ -448,7 +449,7 @@ export default function AdminPanel({
     
 
     // 2. Check created employees
-    const emp = db.employees.find(e => e.email.toLowerCase() === cleanEmail && e.password === loginPassword && e.active);
+    const emp = db.employees.find(e => e && e.email.toLowerCase() === cleanEmail && e.password === loginPassword && e.active);
     if (emp) {
       const empUser: User = {
         id: emp.id,
@@ -575,7 +576,7 @@ export default function AdminPanel({
 
     if (editingProductId) {
       // Edit product
-      const idx = db.products.findIndex(p => p.id === editingProductId);
+      const idx = db.products.findIndex(p => p && p.id === editingProductId);
       if (idx !== -1) {
         const oldProd = db.products[idx];
         const locationChanged = oldProd.physicalLocation !== prodPhysicalLocation;
@@ -659,7 +660,7 @@ export default function AdminPanel({
   const handleDeleteProduct = (prodId: string, name: string) => {
     if (!window.confirm(`¿Seguro que desea eliminar el producto ${name}?`)) return;
     const db = getDB();
-    db.products = db.products.filter(p => p.id !== prodId);
+    db.products = db.products.filter(p => p && p.id !== prodId);
     saveDB(db);
     addAuditLog(currentUser?.email || 'admin', 'Inventario', 'Eliminar Producto', `Artículo eliminado: ${name}`);
     loadAllAdminData();
@@ -689,13 +690,13 @@ export default function AdminPanel({
 
     if (editingEmployeeId) {
       // Editing Mode
-      const empIndex = db.employees.findIndex(em => em.id === editingEmployeeId);
+      const empIndex = db.employees.findIndex(em => em && em.id === editingEmployeeId);
       if (empIndex === -1) {
         alert('Empleado no encontrado.');
         return;
       }
       
-      const emailExists = db.employees.some(em => em.id !== editingEmployeeId && em.email.toLowerCase() === empEmail.trim().toLowerCase());
+      const emailExists = db.employees.some(em => em && em.id !== editingEmployeeId && em.email.toLowerCase() === empEmail.trim().toLowerCase());
       if (emailExists) {
         alert('Ya existe otro empleado registrado con ese correo electrónico.');
         return;
@@ -720,7 +721,7 @@ export default function AdminPanel({
       setEditingEmployeeId(null);
     } else {
       // Creation Mode
-      const exists = db.employees.some(em => em.email.toLowerCase() === empEmail.trim().toLowerCase());
+      const exists = db.employees.some(em => em && em.email.toLowerCase() === empEmail.trim().toLowerCase());
       if (exists) {
         alert('Ya existe un empleado registrado con ese correo electrónico.');
         return;
@@ -819,7 +820,7 @@ export default function AdminPanel({
               </tr>
             </thead>
             <tbody>
-              ${order.items.map(it => `
+              ${order.items.map(it => it && `
                 <tr>
                   <td>${it.productName}</td>
                   <td>${it.quantity}</td>
@@ -847,7 +848,7 @@ export default function AdminPanel({
   };
 const handleToggleEmployeeState = (empId: string, name: string, currentState: boolean) => {
     const db = getDB();
-    const idx = db.employees.findIndex(e => e.id === empId);
+    const idx = db.employees.findIndex(e => e && e.id === empId);
     if (idx !== -1) {
       db.employees[idx].active = !currentState;
       addAuditLog(currentUser?.email || 'admin', 'Recursos Humanos', 'Editar Empleado', `Estado de empleado ${name} cambiado a ${!currentState ? 'Activo' : 'Inactivo'}`, db);
@@ -865,15 +866,16 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
 
     const db = getDB();
     const currentMonth = payrollMonth;
-    let empsToProcess = db.employees.filter(e => e.active);
+    let empsToProcess = db.employees.filter(e => e && e.active);
     if (payrollEmployeeId !== 'all') {
-      empsToProcess = empsToProcess.filter(e => e.id === payrollEmployeeId);
+      empsToProcess = empsToProcess.filter(e => e && e.id === payrollEmployeeId);
     }
 
     let generatedCount = 0;
 
     empsToProcess.forEach(emp => {
-      const exists = db.payroll.some(p => p.employeeId === emp.id && p.month === currentMonth);
+    if (!emp) return;
+      const exists = db.payroll.some(p => p && p.employeeId === emp.id && p.month === currentMonth);
       if (exists) return;
 
       const salary = emp.baseSalary;
@@ -941,7 +943,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
     }
 
     const db = getDB();
-    const oIdx = db.orders.findIndex(o => o.id === orderId);
+    const oIdx = db.orders.findIndex(o => o && o.id === orderId);
     if (oIdx === -1) return;
 
     const ord = db.orders[oIdx];
@@ -949,7 +951,8 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
 
     // Reintegrate stock
     ord.items.forEach(it => {
-      const pIdx = db.products.findIndex(p => p.id === it.productId);
+    if (!it) return;
+      const pIdx = db.products.findIndex(p => p && p.id === it.productId);
       if (pIdx !== -1) {
         db.products[pIdx].stock += it.quantity;
         db.inventory_movements.unshift({
@@ -996,7 +999,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
   // Membership modifications
   const handleUpdateMembership = (id: 'Plata' | 'Oro' | 'Platino', field: keyof MembershipTier, value: any) => {
     const db = getDB();
-    const idx = db.membership_tiers.findIndex(m => m.id === id);
+    const idx = db.membership_tiers.findIndex(m => m && m.id === id);
     if (idx !== -1) {
       db.membership_tiers[idx] = { ...db.membership_tiers[idx], [field]: value };
       saveDB(db);
@@ -1017,11 +1020,11 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
   };
 
   // KPI calculations
-  const totalSalesRevenue = orders.filter(o => o.status === 'Completado').reduce((sum, o) => sum + o.total, 0);
-  const activeRepairsCount = repairs.filter(r => r.status !== 'Entregada' && r.status !== 'Cancelada').length;
+  const totalSalesRevenue = orders.filter(o => o && o.status === 'Completado').reduce((sum, o) => sum + o.total, 0);
+  const activeRepairsCount = repairs.filter(r => r && r.status !== 'Entregada' && r.status !== 'Cancelada').length;
   const clientsCount = clients.length;
-  const lowStockProductsCount = products.filter(p => p.stock <= 3).length;
-  const repairsAwaitingParts = repairs.filter(r => r.status === 'Esperando repuestos').length;
+  const lowStockProductsCount = products.filter(p => p && p.stock <= 3).length;
+  const repairsAwaitingParts = repairs.filter(r => r && r.status === 'Esperando repuestos').length;
   const totalStockItems = products.reduce((sum, p) => sum + p.stock, 0);
   const estimatedFreeSpace = Math.max(0, 100 - Math.min(100, Math.round((totalStockItems / 300) * 100)));
 
@@ -1037,9 +1040,10 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
       };
     });
 
-    orders.filter(o => o.status === 'Completado').forEach(o => {
+    orders.filter(o => o && o.status === 'Completado').forEach(o => {
+    if (!o) return;
       const orderDate = o.timestamp.split('T')[0];
-      const day = last5Days.find(d => d.dateStr === orderDate);
+      const day = last5Days.find(d => d && d.dateStr === orderDate);
       if (day) {
         day.ventas += o.total;
       }
@@ -1050,11 +1054,11 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
 
   const inventoryDistData = React.useMemo(() => {
     const categories = ['Pantallas', 'Baterías', 'Cámaras', 'Tarjetas Lógicas', 'Fundas'];
-    const data = categories.map(cat => ({
+    const data = categories.map(cat => cat && ({
       name: cat,
-      stock: products.filter(p => p.category === cat).length
+      stock: products.filter(p => p && p.category === cat).length
     }));
-    return data.some(d => d.stock > 0) ? data : [];
+    return data.some(d => d && d.stock > 0) ? data : [];
   }, [products]);
 
   const handleExportCSV = (data: any[], fileName: string) => {
@@ -1065,7 +1069,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
     const headers = Object.keys(data[0]);
     const csvRows = [
       headers.join(','),
-      ...data.map(row => headers.map(header => JSON.stringify(row[header] ?? '')).join(','))
+      ...data.map(row => row && headers.map(header => header && JSON.stringify(row[header] ?? '')).join(','))
     ].join('\n');
     
     const blob = new Blob([csvRows], { type: 'text/csv;charset=utf-8;' });
@@ -1101,7 +1105,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
         { id: 'inventario_reportes', label: 'Reportes de Stock', icon: FileSpreadsheet },
       ];
       // Dueño sees everything, as requested to restore visibility in both panels.
-      return items.filter(it => isOwner || hasPermission(it.id));
+      return items.filter(it => it && isOwner || hasPermission(it.id));
     } else {
       const items = [
         { id: 'empleados', label: 'Personal y Nómina', icon: Users },
@@ -1112,7 +1116,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
         { id: 'bitacora', label: 'Bitácora de Auditoría', icon: BookOpen },
         { id: 'configuracion', label: 'Configuración General', icon: Settings },
       ];
-      return items.filter(it => isOwner || hasPermission(it.id));
+      return items.filter(it => it && isOwner || hasPermission(it.id));
     }
   };
 
@@ -1216,7 +1220,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                           <div className="text-[9px] uppercase font-bold text-[var(--text-secondary)] px-3 py-1 tracking-wider border-b border-[var(--border-color)] mb-1 mt-2 first:mt-0">
                             Control Inventario
                           </div>
-                          {getPermittedSubItems('inventario').map(sub => (
+                          {getPermittedSubItems('inventario').map(sub => sub && (
                             <button
                               key={sub.id}
                               onClick={() => {
@@ -1283,7 +1287,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                           <div className="text-[9px] uppercase font-bold text-[var(--text-secondary)] px-3 py-1 tracking-wider border-b border-[var(--border-color)] mb-1 mt-2">
                             Servicios & Finanzas
                           </div>
-                          {getPermittedSubItems('administracion').map(sub => (
+                          {getPermittedSubItems('administracion').map(sub => sub && (
                             <button
                               key={sub.id}
                               onClick={() => {
@@ -1471,7 +1475,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                         <BarChart3 className="w-4 h-4 text-blue-500 dark:text-[var(--brand-gold-light)]" />
                       </div>
                       <div className="flex-1 w-full min-h-[260px]">
-                        {orders.filter(o => o.status === 'Completado').length === 0 ? (
+                        {orders.filter(o => o && o.status === 'Completado').length === 0 ? (
                           <div className="flex flex-col items-center justify-center h-full text-slate-400">
                             <TrendingUp className="w-12 h-12 mb-2 opacity-10" />
                             <p className="text-xs font-bold uppercase tracking-widest">Aún no hay ventas registradas</p>
@@ -2073,7 +2077,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                     <div>
                       <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Provincia</label>
                       <select required value={clientForm.province} onChange={e => setClientForm({...clientForm, province: e.target.value as any})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)]">
-                        {['San José', 'Alajuela', 'Cartago', 'Heredia', 'Guanacaste', 'Puntarenas', 'Limón'].map(p => (
+                        {['San José', 'Alajuela', 'Cartago', 'Heredia', 'Guanacaste', 'Puntarenas', 'Limón'].map(p => p && (
                           <option key={p} value={p}>{p}</option>
                         ))}
                       </select>
@@ -2082,7 +2086,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                       <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Nivel de Membresía</label>
                       <select required value={clientForm.membershipTier} onChange={e => setClientForm({...clientForm, membershipTier: e.target.value as any})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)]">
                         <option value="Normal">Normal</option>
-                        {memberships.filter(m => m.active).map(m => (
+                        {memberships.filter(m => m && m.active).map(m => m && (
                           <option key={m.id} value={m.id}>{m.name}</option>
                         ))}
                       </select>
@@ -2167,7 +2171,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
               <div className="flex justify-between items-center border-b border-[var(--border-color)]/50 pb-2.5">
                 <span className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] block">Comprobantes de Ingresos</span>
                 <button
-                  onClick={() => handleExportCSV(orders.map(o => ({ 
+                  onClick={() => handleExportCSV(orders.map(o => o && ({ 
                     Consecutivo: o.id, 
                     Fecha: o.timestamp, 
                     Cliente: o.customerName, 
@@ -2248,7 +2252,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
             </h3>
 
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {memberships.map(tier => (
+              {memberships.map(tier => tier && (
                 <div key={tier.id} className={`bg-[var(--bg-surface)]  border ${tier.active ? 'border-sky-500 dark:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50' : 'border-[var(--border-color)]/80 opacity-50'} rounded-2xl p-6 space-y-4 flex flex-col justify-between`}>
                   <div className="space-y-2">
                     <div className="flex justify-between items-center">
@@ -2388,7 +2392,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                           <td className="py-2 text-center">
                             <button onClick={() => {
                               const db = getDB();
-                              const idx = db.marketing_campaigns.findIndex(mc => mc.id === c.id);
+                              const idx = db.marketing_campaigns.findIndex(mc => mc && mc.id === c.id);
                               if (idx !== -1) {
                                 db.marketing_campaigns[idx].active = !c.active;
                                 saveDB(db);
@@ -2446,7 +2450,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
               )}
 
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {banners.map(b => (
+                {banners.map(b => b && (
                   <div key={b.id} className={`p-4 rounded-xl border flex flex-col justify-between space-y-3 ${b.active ? 'bg-[var(--bg-surface)]  border-[var(--border-color)]/80' : 'bg-[var(--bg-surface)]   border-[var(--border-color)]/50 opacity-50'}`}>
                     <div className="space-y-2">
                       <span className="bg-[var(--brand-gold-mid)]/10 text-sky-400 dark:text-[var(--brand-gold-light)] border border-sky-500 dark:border-[var(--brand-gold-mid)]/20 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider">
@@ -2463,7 +2467,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                       </span>
                       <button onClick={() => {
                         const db = getDB();
-                        const idx = db.banners.findIndex(ban => ban.id === b.id);
+                        const idx = db.banners.findIndex(ban => ban && ban.id === b.id);
                         if (idx !== -1) {
                           db.banners[idx].active = !b.active;
                           saveDB(db);
@@ -2522,6 +2526,8 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                   <div className="text-center py-6 text-sm text-[var(--text-secondary)] italic">No hay pedidos pendientes de entrega física de mensajería en Costa Rica en este momento.</div>
                 ) : (
                   deliveries.map(del => {
+                      if (!del || !del.addressDetail) return null; 
+if (!del) return null;
                     const addrLower = del.addressDetail.toLowerCase();
                     const isPickup = addrLower.includes('retiro') || addrLower.includes('residencia') || addrLower.includes('oficina') || addrLower.includes('casa');
                     const isGAM = ['san jose', 'sanjose', 'heredia', 'alajuela', 'cartago'].includes(del.province.toLowerCase().trim());
@@ -2559,7 +2565,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                           <button
                             onClick={() => {
                               const db = getDB();
-                              const idx = db.deliveries.findIndex(d => d.id === del.id);
+                              const idx = db.deliveries.findIndex(d => d && d.id === del.id);
                               if (idx !== -1) {
                                 db.deliveries[idx].status = 'Entregado';
                                 db.deliveries[idx].digitalSignature = 'Firma-Confirmada-Mensajero';

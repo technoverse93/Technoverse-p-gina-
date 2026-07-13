@@ -350,8 +350,8 @@ export default function PublicStore({
     }
     
     const db = getDB();
-    const exists = db.clients?.some(c => c.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
-                   db.employees?.some(emp => emp.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
+    const exists = db.clients?.some(c => c && c.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
+                   db.employees?.some(emp => emp && emp.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
                    regEmail.trim().toLowerCase() === 'technoverse.admin@gmail.com';
     if (exists) {
       alert('El correo electrónico ya se encuentra registrado localmente.');
@@ -446,12 +446,12 @@ export default function PublicStore({
     const db = getDB();
     setDbInstance(db);
     if (db.settings?.storeLogo) {
-      setStoreLogo(db.settings.storeLogo);
+      setStoreLogo(db.settings.storeLogo || null);
     }
     // Filter out spare part categories from public store
     const SPARE_PART_CATEGORIES = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
-    setProducts((db.products || []).filter(p => p.active !== false && p.stock > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
-    setBanners(db.banners ? db.banners.filter(b => b.active) : []);
+    setProducts((db.products || []).filter(p => p && p.active !== false && p.stock > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
+    setBanners(db.banners ? db.banners.filter(b => b && b.active) : []);
   };
 
   // Search input autocompletion logic in Spanish
@@ -464,7 +464,7 @@ export default function PublicStore({
       return;
     }
 
-    const matched = products.filter(p => 
+    const matched = products.filter(p => p && 
       p.name.toLowerCase().includes(val.toLowerCase()) ||
       p.category.toLowerCase().includes(val.toLowerCase()) ||
       p.sku.toLowerCase().includes(val.toLowerCase())
@@ -703,7 +703,7 @@ export default function PublicStore({
       customerId: `CRM-${Math.floor(1000 + Math.random() * 9000)}`,
       customerName: recipientName.trim(),
       customerEmail: 'cliente@technoverse.com',
-      items: cart.map(it => ({
+      items: cart.map(it => it && ({
         productId: it.product.id,
         productName: it.product.name,
         quantity: it.quantity,
@@ -845,7 +845,7 @@ export default function PublicStore({
     return pc.includes(sc) || sc.includes(pc);
   };
 
-  const filteredProducts = products.filter(p => {
+  const filteredProducts = products.filter(p => { if (!p) return false;
     // 0. Hidden/Inactive filter
     if (p.active === false) return false;
     if (SPARE_PART_CATEGORIES.includes(p.category)) return false;
@@ -918,7 +918,7 @@ export default function PublicStore({
                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Explorar Categorías</span>
                 </div>
                 <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                  {CATEGORIES.map(cat => (
+                  {CATEGORIES.map(cat => cat && (
                     <button
                       key={cat}
                       onClick={() => {
@@ -975,7 +975,7 @@ export default function PublicStore({
                 className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden max-h-[400px] overflow-y-auto z-50 py-2"
                 id="search-suggestions-dropdown"
               >
-                {searchResults.map(p => (
+                {searchResults.map(p => p && (
                   <button
                     key={p.id}
                     onClick={() => handleSelectSearchProduct(p)}
@@ -1306,7 +1306,7 @@ export default function PublicStore({
                   
                   <div className="p-2 space-y-1">
                     <div className="text-[10px] uppercase font-bold text-slate-400 px-2 pt-2 pb-1">Catálogo</div>
-                    {CATEGORIES.map(cat => (
+                    {CATEGORIES.map(cat => cat && (
                       <button
                         key={cat}
                         onClick={() => {
@@ -1409,7 +1409,7 @@ export default function PublicStore({
                 </div>
               ) : (
                 <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-                  {paginatedProducts.map(prod => (
+                  {paginatedProducts.map(prod => prod && (
                     <ProductCard
                       key={prod.id}
                       prod={prod}
@@ -1656,7 +1656,7 @@ export default function PublicStore({
                         onChange={(e) => setShippingProvince(e.target.value)}
                         className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition cursor-pointer"
                       >
-                        {COSTA_RICA_PROVINCES.map(prov => (
+                        {COSTA_RICA_PROVINCES.map(prov => prov && (
                           <option key={prov} value={prov}>{prov}</option>
                         ))}
                       </select>
@@ -1988,7 +1988,7 @@ export default function PublicStore({
                       onChange={(e) => setRegProvince(e.target.value)}
                       className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition cursor-pointer"
                     >
-                      {COSTA_RICA_PROVINCES.map(prov => (
+                      {COSTA_RICA_PROVINCES.map(prov => prov && (
                         <option key={prov} value={prov}>{prov}</option>
                       ))}
                     </select>

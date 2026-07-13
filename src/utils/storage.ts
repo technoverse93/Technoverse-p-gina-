@@ -73,7 +73,11 @@ export function initFirebaseSync() {
       snapshot.forEach(doc => items.push(doc.data()));
       (localCache as any)[colName] = items;
       
-      localStorage.setItem('technoverse_db', JSON.stringify(localCache));
+      try {
+        localStorage.setItem('technoverse_db', JSON.stringify(localCache));
+      } catch (e) {
+        console.warn('localStorage quota exceeded or unavailable', e);
+      }
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
       }
@@ -85,7 +89,11 @@ export function initFirebaseSync() {
   onSnapshot(doc(db, 'globals', 'settings'), (docSnap) => {
     if (docSnap.exists() && localCache) {
       localCache.settings = docSnap.data() as AppSettings;
-      localStorage.setItem('technoverse_db', JSON.stringify(localCache));
+      try {
+        localStorage.setItem('technoverse_db', JSON.stringify(localCache));
+      } catch (e) {
+        console.warn('localStorage quota exceeded or unavailable', e);
+      }
       if (typeof window !== 'undefined') window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
     }
   }, (error) => {
@@ -233,7 +241,11 @@ export async function saveDB(newDb: Database) {
 
   // 2. Optimistically update localCache IMMEDIATELY so the UI reflects changes instantly without flickering.
   localCache = newDb;
-  localStorage.setItem('technoverse_db', JSON.stringify(localCache));
+  try {
+        localStorage.setItem('technoverse_db', JSON.stringify(localCache));
+      } catch (e) {
+        console.warn('localStorage quota exceeded or unavailable', e);
+      }
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
   }
