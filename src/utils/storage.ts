@@ -35,11 +35,11 @@ const DEFAULT_BANNERS: Banner[] = [ { id: 'BAN-001', title: 'Reparación desde C
 const DEFAULT_MEMBERSHIPS: MembershipTier[] = [ { id: 'Plata', name: 'Membresía Plata', price: 5000, discountPercent: 5, shippingSJ: 2000, shippingOther: 3500, active: true, features: [] } ];
 const DEFAULT_SETTINGS: AppSettings = { cedulaJuridica: '3-101-987452', companyPhone: '+506 6421 4795', companyAddress: 'San José', workshopAddress: 'San José', pickupHours: 'L-V 1pm-6pm', maxStockLimit: 50 };
 
-// Memory cache
-let localCache: Database | null = null;
+let localCache: Database = getDefaultDB();
 let isSyncing = false;
 let isQuotaExceeded = false;
 let activeListeners: (() => void)[] = [];
+let saveTimeout: any = null;
 
 export function checkQuotaError(err: any) {
   if (!err) return;
@@ -52,20 +52,13 @@ export function checkQuotaError(err: any) {
   if (isQuota) {
     if (!isQuotaExceeded) {
       isQuotaExceeded = true;
-      console.warn("[Sistema] Cuota de base de datos alcanzada. El sistema operará en modo local seguro para evitar errores.");
-      // Limpiar listeners activos inmediatamente para detener peticiones
-      activeListeners.forEach(unsub => {
-        try { unsub(); } catch (e) {}
-      });
-      activeListeners = [];
+      console.warn("[Sistema] Advertencia de cuota: La sincronización podría verse afectada por límites de Google, pero el sistema seguirá intentando conectar.");
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('firebase_quota_exceeded', { detail: { message } }));
       }
     }
-    return; // Silenciar completamente el error en la consola
+    return;
   }
-  
-  // Si no es un error de cuota, lo reportamos normalmente
   console.error("[Firebase Error]", err);
 }
 
@@ -83,52 +76,14 @@ function getDefaultDB(): Database {
   };
 }
 
-interface SyncState {
-  products?: number;
-  inventory_movements?: number;
-  repair_orders?: number;
-  orders?: number;
-  membership_tiers?: number;
-  chat_conversations?: number;
-  employees?: number;
-  payroll?: number;
-  audit_log?: number;
-  clients?: number;
-  deliveries?: number;
-  marketing_campaigns?: number;
-  banners?: number;
-  settings?: number;
-  historical_skus?: number;
-}
-
-function getLocalSyncTimestamps(): Record<string, number> {
-  if (typeof window === 'undefined') return {};
-  const saved = localStorage.getItem('technoverse_sync_timestamps');
-  if (saved) {
-    try {
-      return JSON.parse(saved);
-    } catch (e) {}
-  }
-  return {};
-}
-
-function saveLocalSyncTimestamps(timestamps: Record<string, number>) {
-  if (typeof window === 'undefined') return;
+async function startCollectionListener(key: string, colName: string) {
   try {
-    localStorage.setItem('technoverse_sync_timestamps', JSON.stringify(timestamps));
-  } catch (e) {}
-}
-
-async function fetchCollection(key: string, colName: string) {
-  if (isQuotaExceeded) return;
-  try {
-    const querySnapshot = await getDocs(collection(db, colName));
-    const items: any[] = [];
-    querySnapshot.forEach((doc) => {
-      items.push(doc.data());
-    });
-    
-    if (localCache) {
+    const unsub = onSnapshot(collection(db, colName), (querySnapshot) => {
+      const items: any[] = [];
+      querySnapshot.forEach((doc) => {
+        items.push(doc.data());
+      });
+      
       (localCache as any)[key] = items;
       try {
         localStorage.setItem('technoverse_db', JSON.stringify(localCache));
@@ -136,7 +91,10 @@ async function fetchCollection(key: string, colName: string) {
       if (typeof window !== 'undefined') {
         window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
       }
-    }
+    }, (err) => {
+      checkQuotaError(err);
+    });
+    activeListeners.push(unsub);
   } catch (err) {
     checkQuotaError(err);
   }
@@ -146,14 +104,12 @@ export function initFirebaseSync() {
   if (isSyncing) return;
   isSyncing = true;
   
-  // Confirmación de auditoría para el usuario
-  console.log("[Sistema] Iniciando sincronización auditada y robusta...");
+  console.log("[Sistema] Sincronización Real-Time Activada.");
   
   const saved = localStorage.getItem('technoverse_db');
   if (saved) {
     try { localCache = JSON.parse(saved); } catch(e) {}
   }
-  if (!localCache) localCache = getDefaultDB();
 
   const collectionsToSync = [
     { key: 'products', colName: 'products' },
@@ -172,49 +128,22 @@ export function initFirebaseSync() {
     { key: 'historical_skus', colName: 'historical_skus' }
   ];
 
-  // REAL-TIME SIGNAL PATTERN
+  collectionsToSync.forEach(({ key, colName }) => {
+    startCollectionListener(key, colName);
+  });
+
   try {
-    const unsub = onSnapshot(doc(db, 'globals', 'sync_state'), async (docSnap) => {
-      const serverState = docSnap.exists() ? (docSnap.data() as SyncState) : {};
-      const localTimestamps = getLocalSyncTimestamps();
-      let changed = false;
-
-      for (const { key, colName } of collectionsToSync) {
-        const serverTime = (serverState as any)[key] || 0;
-        const localTime = localTimestamps[key] || 0;
-
-        if (serverTime > localTime || localTime === 0) {
-          await fetchCollection(key, colName);
-          localTimestamps[key] = serverTime || Date.now();
-          changed = true;
+    const unsubSettings = onSnapshot(doc(db, 'globals', 'settings'), (docSnap) => {
+      if (docSnap.exists()) {
+        localCache.settings = docSnap.data() as AppSettings;
+        localStorage.setItem('technoverse_db', JSON.stringify(localCache));
+        if (typeof window !== 'undefined') {
+          window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
         }
       }
-
-      const serverSettingsTime = serverState.settings || 0;
-      const localSettingsTime = localTimestamps.settings || 0;
-      if (serverSettingsTime > localSettingsTime || localSettingsTime === 0) {
-        try {
-          const settingsSnap = await getDoc(doc(db, 'globals', 'settings'));
-          if (settingsSnap.exists() && localCache) {
-            localCache.settings = settingsSnap.data() as AppSettings;
-            localStorage.setItem('technoverse_db', JSON.stringify(localCache));
-            if (typeof window !== 'undefined') {
-              window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
-            }
-          }
-          localTimestamps.settings = serverSettingsTime || Date.now();
-          changed = true;
-        } catch (e) { checkQuotaError(e); }
-      }
-
-      if (changed) saveLocalSyncTimestamps(localTimestamps);
-    }, (err) => {
-      checkQuotaError(err);
-    });
-    activeListeners.push(unsub);
-  } catch (err) {
-    checkQuotaError(err);
-  }
+    }, (err) => checkQuotaError(err));
+    activeListeners.push(unsubSettings);
+  } catch (e) { checkQuotaError(e); }
 }
 
 // Ensure it starts
@@ -444,18 +373,6 @@ async function performSync(oldDb: Database, newDb: Database) {
 
   try {
     await Promise.all(syncPromises);
-
-    // Actualizar el documento de señal para notificar a otros clientes
-    const syncUpdate: any = {};
-    const updateTime = Date.now();
-    diffs.forEach(({ key, added, modified, deleted }) => {
-      if (added.length > 0 || modified.length > 0 || deleted.length > 0) syncUpdate[key] = updateTime;
-    });
-    if (settingsChanged) syncUpdate.settings = updateTime;
-
-    if (Object.keys(syncUpdate).length > 0) {
-      await setDoc(doc(db, 'globals', 'sync_state'), syncUpdate, { merge: true });
-    }
   } catch (err) {
     checkQuotaError(err);
   }
