@@ -41,7 +41,7 @@ let isSyncing = false;
 
 function getDefaultDB(): Database {
   return {
-    users: [{ id: 'admin-id', email: 'admin@technoverse.com', role: 'Dueño', name: 'Administrador Technoverse' }],
+    users: [{ id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' }],
     products: [], inventory_movements: [], repair_orders: [], orders: [],
     membership_tiers: DEFAULT_MEMBERSHIPS, chat_conversations: [], employees: [],
     payroll: [], audit_log: [], clients: [], deliveries: [], marketing_campaigns: [],
@@ -329,7 +329,7 @@ export function addAuditLog(userEmail: string, module: string, action: string, d
   const dbInst = existingDb || getDB();
   const newLog: AuditLog = {
     id: `LOG-${Math.floor(100000 + Math.random() * 900000)}`,
-    userEmail: userEmail || 'admin@technoverse.com',
+    userEmail: userEmail || 'technoverse.admin@gmail.com',
     module, action, detail,
     timestamp: new Date().toISOString()
   };

@@ -11,7 +11,7 @@ interface InventarioMundo3DProps {
   activeUserEmail?: string;
 }
 
-export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 'admin@technoverse.com' }: InventarioMundo3DProps) {
+export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 'technoverse.admin@gmail.com' }: InventarioMundo3DProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [maxStockLimit, setMaxStockLimit] = useState<number>(50);

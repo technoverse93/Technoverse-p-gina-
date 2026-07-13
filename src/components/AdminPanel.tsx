@@ -393,7 +393,7 @@ export default function AdminPanel({
     const db = getDB();
     
     // Auto-create Admin in Firebase Auth if needed
-    if (cleanEmail === 'admin@technoverse.com' && loginPassword === ADMIN_PASSWORD) {
+    if (cleanEmail === 'technoverse.admin@gmail.com' && loginPassword === ADMIN_PASSWORD) {
       try {
         await signInWithEmailAndPassword(auth, cleanEmail, loginPassword);
       } catch (err: any) {
@@ -416,7 +416,7 @@ export default function AdminPanel({
         }
       }
       
-      const adminUser: User = { id: 'admin-id', email: 'admin@technoverse.com', role: 'Dueño', name: 'Administrador Technoverse' };
+      const adminUser: User = { id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' };
       onLogin(adminUser);
       setLoginEmail(''); setLoginPassword('');
       alert('Sesión iniciada con éxito como Administrador.');
@@ -705,7 +705,7 @@ export default function AdminPanel({
         remoteBonus: empRemoteBonus
       };
 
-      addAuditLog(currentUser?.email || 'admin@technoverse.com', 'Recursos Humanos', 'Editar Empleado', `Empleado modificado: ${empName} (Rol: ${empRole})`, db);
+      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Recursos Humanos', 'Editar Empleado', `Empleado modificado: ${empName} (Rol: ${empRole})`, db);
       saveDB(db);
       alert('Empleado actualizado con éxito.');
 
@@ -732,7 +732,7 @@ export default function AdminPanel({
       };
 
       db.employees.push(newEmp);
-      addAuditLog(currentUser?.email || 'admin@technoverse.com', 'Recursos Humanos', 'Crear Empleado', `Empleado registrado: ${empName} (Rol: ${empRole}, Subsidio Remoto: ₡${empRemoteBonus.toLocaleString()})`, db);
+      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Recursos Humanos', 'Crear Empleado', `Empleado registrado: ${empName} (Rol: ${empRole}, Subsidio Remoto: ₡${empRemoteBonus.toLocaleString()})`, db);
       saveDB(db);
       setGeneratedEmpPass(finalPass);
     }

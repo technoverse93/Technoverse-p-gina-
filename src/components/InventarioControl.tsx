@@ -475,7 +475,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             type: 'Entrada',
             notes: `Importación masiva desde PDF. Referencia: Importación PDF.`,
             timestamp: new Date().toISOString(),
-            userEmail: currentUser?.email || 'admin@technoverse.com',
+            userEmail: currentUser?.email || 'technoverse.admin@gmail.com',
             resultingStock: row.stock,
             reference: 'Importación PDF'
           });
@@ -495,7 +495,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
 
       if (importedCount > 0) {
         addAuditLog(
-          currentUser?.email || 'admin@technoverse.com',
+          currentUser?.email || 'technoverse.admin@gmail.com',
           'Inventario',
           'Importación PDF',
           `Importación de ${importedCount} productos desde archivo PDF.`,
@@ -775,12 +775,12 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
               type: 'Entrada manual',
               notes: 'Edición manual desde formulario',
               timestamp: new Date().toISOString(),
-              userEmail: currentUser?.email || 'admin@technoverse.com',
+              userEmail: currentUser?.email || 'technoverse.admin@gmail.com',
               resultingStock: finalStock
             });
           }
           
-          addAuditLog(currentUser?.email || 'admin@technoverse.com', 'Inventario', 'Editar Producto', `Producto modificado: ${prodName} (SKU: ${prodSku})`, db);
+          addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Editar Producto', `Producto modificado: ${prodName} (SKU: ${prodSku})`, db);
         }
       } else {
         const newSku = prodSku.trim() || `${prodCategory.substring(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -822,11 +822,11 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             type: 'Entrada manual',
             notes: 'Inventario inicial',
             timestamp: new Date().toISOString(),
-            userEmail: currentUser?.email || 'admin@technoverse.com',
+            userEmail: currentUser?.email || 'technoverse.admin@gmail.com',
             resultingStock: finalStock
           });
         }
-        addAuditLog(currentUser?.email || 'admin@technoverse.com', 'Inventario', 'Crear Producto', `Producto creado: ${prodName} (SKU: ${newSku})`, db);
+        addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Crear Producto', `Producto creado: ${prodName} (SKU: ${newSku})`, db);
         
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('product:created', { detail: newProduct }));
@@ -854,14 +854,14 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     const idx = db.products.findIndex(x => x.id === p.id);
     if (idx !== -1) {
       db.products[idx].active = false;
-      addAuditLog(currentUser?.email || 'admin@technoverse.com', 'Inventario', 'Desactivar Producto', `Producto desactivado por eliminación: ${p.name}`, db);
+      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Desactivar Producto', `Producto desactivado por eliminación: ${p.name}`, db);
 
       // Cascading deletion for linked products if this is a spare part
       if (sparePartCategories.includes(p.category)) {
         const linkedProducts = db.products.filter(x => x.linkedSparePartSku === p.sku);
         linkedProducts.forEach(lp => {
           lp.active = false;
-          addAuditLog(currentUser?.email || 'admin@technoverse.com', 'Inventario', 'Desactivar Producto', `Producto vinculado (${lp.name}) desactivado por eliminación de repuesto: ${p.sku}`, db);
+          addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Desactivar Producto', `Producto vinculado (${lp.name}) desactivado por eliminación de repuesto: ${p.sku}`, db);
         });
       }
     }
@@ -917,7 +917,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     });
 
     if (adjustmentsMade > 0) {
-      addAuditLog(currentUser?.email || 'admin@technoverse.com', 'Inventario', 'Conteo Físico', `Se ajustaron ${adjustmentsMade} productos tras conteo físico.`, db);
+      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Conteo Físico', `Se ajustaron ${adjustmentsMade} productos tras conteo físico.`, db);
       saveDB(db);
       loadData();
       onDataChanged();

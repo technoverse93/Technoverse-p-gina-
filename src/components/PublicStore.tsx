@@ -234,7 +234,7 @@ export default function PublicStore({
     const db = getDB();
     
     // Auto-create Admin in Firebase Auth if needed
-    if (cleanEmail === 'admin@technoverse.com' && loginPassword === ADMIN_PASSWORD) {
+    if (cleanEmail === 'technoverse.admin@gmail.com' && loginPassword === ADMIN_PASSWORD) {
       try {
         await signInWithEmailAndPassword(auth, cleanEmail, loginPassword);
       } catch (err: any) {
@@ -257,7 +257,7 @@ export default function PublicStore({
         }
       }
       
-      const adminUser: User = { id: 'admin-id', email: 'admin@technoverse.com', role: 'Dueño', name: 'Administrador Technoverse' };
+      const adminUser: User = { id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' };
       onLogin(adminUser);
       setIsLoginModalOpen(false);
       setLoginEmail(''); setLoginPassword('');
@@ -343,7 +343,7 @@ export default function PublicStore({
     const db = getDB();
     const exists = db.clients?.some(c => c.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
                    db.employees?.some(emp => emp.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
-                   regEmail.trim().toLowerCase() === 'admin@technoverse.com';
+                   regEmail.trim().toLowerCase() === 'technoverse.admin@gmail.com';
     if (exists) {
       alert('El correo electrónico ya se encuentra registrado localmente.');
       return;
