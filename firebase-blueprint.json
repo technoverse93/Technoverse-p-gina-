@@ -1,0 +1,95 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "User profile with roles and membership status",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["Dueño", "Empleado", "Cliente"] },
+        "employeeRole": { "type": "string" },
+        "name": { "type": "string" },
+        "membershipTier": { "type": "string" }
+      },
+      "required": ["id", "email", "role", "name"]
+    },
+    "Product": {
+      "title": "Product",
+      "description": "Catalog product or spare part",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "sku": { "type": "string" },
+        "category": { "type": "string" },
+        "price": { "type": "number" },
+        "cost": { "type": "number" },
+        "stock": { "type": "number" },
+        "imageUrl": { "type": "string" },
+        "active": { "type": "boolean" }
+      },
+      "required": ["id", "name", "sku", "price", "stock"]
+    },
+    "InventoryMovement": {
+      "title": "InventoryMovement",
+      "description": "Record of stock changes",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productId": { "type": "string" },
+        "quantityChange": { "type": "number" },
+        "type": { "type": "string" },
+        "timestamp": { "type": "string" },
+        "userEmail": { "type": "string" }
+      },
+      "required": ["id", "productId", "quantityChange", "type", "timestamp"]
+    },
+    "RepairOrder": {
+      "title": "RepairOrder",
+      "description": "Technical support ticket",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "ticket": { "type": "string" },
+        "customerId": { "type": "string" },
+        "status": { "type": "string" },
+        "totalCost": { "type": "number" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "ticket", "customerId", "status", "createdAt"]
+    },
+    "Order": {
+      "title": "Order",
+      "description": "Customer purchase order",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "customerId": { "type": "string" },
+        "total": { "type": "number" },
+        "status": { "type": "string" },
+        "timestamp": { "type": "string" }
+      },
+      "required": ["id", "customerId", "total", "status", "timestamp"]
+    },
+    "AppSettings": {
+      "title": "AppSettings",
+      "description": "Global application configuration",
+      "type": "object",
+      "properties": {
+        "cedulaJuridica": { "type": "string" },
+        "companyPhone": { "type": "string" },
+        "companyAddress": { "type": "string" }
+      }
+    }
+  },
+  "firestore": {
+    "users": { "schema": "User", "description": "User profiles" },
+    "products": { "schema": "Product", "description": "Catalog items" },
+    "inventory_movements": { "schema": "InventoryMovement", "description": "Stock history" },
+    "repair_orders": { "schema": "RepairOrder", "description": "Repair tickets" },
+    "orders": { "schema": "Order", "description": "Sales orders" },
+    "globals/settings": { "schema": "AppSettings", "description": "App configuration" },
+    "globals/sync_state": { "schema": { "type": "object" }, "description": "Real-time sync signals" }
+  }
+}

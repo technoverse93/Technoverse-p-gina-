@@ -1,8 +1,49 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
+    // Catch-all deny
     match /{document=**} {
-      allow read, write: if true;
+      allow read, write: if false;
     }
+
+    // Global helpers
+    function isSignedIn() { return request.auth != null; }
+    function isAdmin() { return isSignedIn() && exists(/databases/$(database)/documents/admins/$(request.auth.uid)); }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function incoming() { return request.resource.data; }
+    function existing() { return resource.data; }
+
+    // User profiles
+    match /users/{userId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn() && (request.auth.uid == userId || isAdmin());
+    }
+
+    // Admins list
+    match /admins/{userId} {
+      allow read: if isSignedIn();
+    }
+
+    // Global settings and sync state
+    match /globals/{docId} {
+      allow read: if isSignedIn();
+      allow write: if isSignedIn(); // Simplified for now to allow sync state updates
+    }
+
+    // Business collections
+    match /products/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /inventory_movements/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /repair_orders/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /orders/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /membership_tiers/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /chat_conversations/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /employees/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /payroll/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /audit_log/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /clients/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /deliveries/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /marketing_campaigns/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /banners/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
+    match /historical_skus/{id} { allow read: if isSignedIn(); allow write: if isSignedIn(); }
   }
 }

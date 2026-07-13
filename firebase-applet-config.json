@@ -3,7 +3,7 @@
   "appId": "1:520068415433:web:47c4e6f1b25ea2fbcc3218",
   "apiKey": "AIzaSyA-g7oruNRQoEQ4i6-McIgMfHUsZeoRkaI",
   "authDomain": "gen-lang-client-0092955603.firebaseapp.com",
-  "firestoreDatabaseId": "(default)",
+  "firestoreDatabaseId": "technoverse-v3",
   "storageBucket": "gen-lang-client-0092955603.firebasestorage.app",
   "messagingSenderId": "520068415433",
   "measurementId": "",

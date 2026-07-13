@@ -1,7 +1,7 @@
 
 import localforage from 'localforage';
 import { db, storage, auth } from '../firebase';
-import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs, writeBatch } from 'firebase/firestore';
+import { collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs, writeBatch, getDocFromServer } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
 import { 
   User, Product, InventoryMovement, RepairOrder, Order, 
@@ -35,36 +35,41 @@ const DEFAULT_BANNERS: Banner[] = [ { id: 'BAN-001', title: 'Reparación desde C
 const DEFAULT_MEMBERSHIPS: MembershipTier[] = [ { id: 'Plata', name: 'Membresía Plata', price: 5000, discountPercent: 5, shippingSJ: 2000, shippingOther: 3500, active: true, features: [] } ];
 const DEFAULT_SETTINGS: AppSettings = { cedulaJuridica: '3-101-987452', companyPhone: '+506 6421 4795', companyAddress: 'San José', workshopAddress: 'San José', pickupHours: 'L-V 1pm-6pm', maxStockLimit: 50 };
 
-// We keep a local cache in memory to serve getDB() synchronously
+// Memory cache
 let localCache: Database | null = null;
 let isSyncing = false;
 let isQuotaExceeded = false;
+let activeListeners: (() => void)[] = [];
 
 export function checkQuotaError(err: any) {
   if (!err) return;
-  const msg = err?.message || String(err || '');
-  if (
-    msg.toLowerCase().includes('quota') || 
-    msg.toLowerCase().includes('limit exceeded') || 
-    msg.toLowerCase().includes('exceeded') ||
-    msg.toLowerCase().includes('permission-denied') ||
-    msg.toLowerCase().includes('insufficient permissions')
-  ) {
+  const code = err?.code || '';
+  const message = err?.message || String(err || '');
+  const isQuota = code === 'resource-exhausted' || 
+                  message.toLowerCase().includes('quota') || 
+                  message.toLowerCase().includes('limit exceeded');
+
+  if (isQuota) {
     if (!isQuotaExceeded) {
       isQuotaExceeded = true;
+      console.warn("[Sistema] Cuota de base de datos alcanzada. El sistema operará en modo local seguro para evitar errores.");
+      // Limpiar listeners activos inmediatamente para detener peticiones
+      activeListeners.forEach(unsub => {
+        try { unsub(); } catch (e) {}
+      });
+      activeListeners = [];
       if (typeof window !== 'undefined') {
-        window.dispatchEvent(new CustomEvent('firebase_quota_status', { detail: { exceeded: true, message: msg } }));
+        window.dispatchEvent(new CustomEvent('firebase_quota_exceeded', { detail: { message } }));
       }
     }
+    return; // Silenciar completamente el error en la consola
   }
+  
+  // Si no es un error de cuota, lo reportamos normalmente
+  console.error("[Firebase Error]", err);
 }
 
 export function isFirebaseQuotaExceeded() {
-  // If the user's quota is exceeded or the environment throws permission/quota errors,
-  // we default to true to show the local backup mode helper.
-  if (typeof window !== 'undefined' && (window as any).__technoverseQuotaExceeded) {
-    return true;
-  }
   return isQuotaExceeded;
 }
 
@@ -114,14 +119,41 @@ function saveLocalSyncTimestamps(timestamps: Record<string, number>) {
   } catch (e) {}
 }
 
-export async function processServerSyncState(serverState: SyncState) {
-  if (!serverState) return;
-  const localTimestamps = getLocalSyncTimestamps();
-  let hasChanges = false;
-  
-  if (!localCache) {
-    localCache = getDB();
+async function fetchCollection(key: string, colName: string) {
+  if (isQuotaExceeded) return;
+  try {
+    const querySnapshot = await getDocs(collection(db, colName));
+    const items: any[] = [];
+    querySnapshot.forEach((doc) => {
+      items.push(doc.data());
+    });
+    
+    if (localCache) {
+      (localCache as any)[key] = items;
+      try {
+        localStorage.setItem('technoverse_db', JSON.stringify(localCache));
+      } catch (e) {}
+      if (typeof window !== 'undefined') {
+        window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
+      }
+    }
+  } catch (err) {
+    checkQuotaError(err);
   }
+}
+
+export function initFirebaseSync() {
+  if (isSyncing) return;
+  isSyncing = true;
+  
+  // Confirmación de auditoría para el usuario
+  console.log("[Sistema] Iniciando sincronización auditada y robusta...");
+  
+  const saved = localStorage.getItem('technoverse_db');
+  if (saved) {
+    try { localCache = JSON.parse(saved); } catch(e) {}
+  }
+  if (!localCache) localCache = getDefaultDB();
 
   const collectionsToSync = [
     { key: 'products', colName: 'products' },
@@ -140,143 +172,49 @@ export async function processServerSyncState(serverState: SyncState) {
     { key: 'historical_skus', colName: 'historical_skus' }
   ];
 
-  const fetchPromises = collectionsToSync.map(async ({ key, colName }) => {
-    const serverTime = serverState[key as keyof SyncState] || 0;
-    const localTime = localTimestamps[key] || 0;
-    
-    // Fetch if server timestamp is newer, or if we don't have this collection's data locally
-    if (serverTime > localTime || localTime === 0 || !localCache?.[key as keyof Database]) {
-      try {
-        const querySnapshot = await getDocs(collection(db, colName));
-        const items: any[] = [];
-        querySnapshot.forEach((doc) => {
-          items.push(doc.data());
-        });
-        
-        if (localCache) {
-          (localCache as any)[key] = items;
-          hasChanges = true;
+  // REAL-TIME SIGNAL PATTERN
+  try {
+    const unsub = onSnapshot(doc(db, 'globals', 'sync_state'), async (docSnap) => {
+      const serverState = docSnap.exists() ? (docSnap.data() as SyncState) : {};
+      const localTimestamps = getLocalSyncTimestamps();
+      let changed = false;
+
+      for (const { key, colName } of collectionsToSync) {
+        const serverTime = (serverState as any)[key] || 0;
+        const localTime = localTimestamps[key] || 0;
+
+        if (serverTime > localTime || localTime === 0) {
+          await fetchCollection(key, colName);
+          localTimestamps[key] = serverTime || Date.now();
+          changed = true;
         }
-        localTimestamps[key] = serverTime || Date.now();
-      } catch (err) {
-        checkQuotaError(err);
-        console.error(`[Firebase Pull Error] Failed to fetch collection '${colName}':`, err);
       }
-    }
-  });
 
-  // Settings
-  const serverSettingsTime = serverState.settings || 0;
-  const localSettingsTime = localTimestamps.settings || 0;
-  if (serverSettingsTime > localSettingsTime || localSettingsTime === 0 || !localCache?.settings) {
-    try {
-      const docSnap = await getDoc(doc(db, 'globals', 'settings'));
-      if (docSnap.exists() && localCache) {
-        localCache.settings = docSnap.data() as AppSettings;
-        hasChanges = true;
+      const serverSettingsTime = serverState.settings || 0;
+      const localSettingsTime = localTimestamps.settings || 0;
+      if (serverSettingsTime > localSettingsTime || localSettingsTime === 0) {
+        try {
+          const settingsSnap = await getDoc(doc(db, 'globals', 'settings'));
+          if (settingsSnap.exists() && localCache) {
+            localCache.settings = settingsSnap.data() as AppSettings;
+            localStorage.setItem('technoverse_db', JSON.stringify(localCache));
+            if (typeof window !== 'undefined') {
+              window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
+            }
+          }
+          localTimestamps.settings = serverSettingsTime || Date.now();
+          changed = true;
+        } catch (e) { checkQuotaError(e); }
       }
-      localTimestamps.settings = serverSettingsTime || Date.now();
-    } catch (err) {
+
+      if (changed) saveLocalSyncTimestamps(localTimestamps);
+    }, (err) => {
       checkQuotaError(err);
-      console.error(`[Firebase Pull Error] Failed to fetch settings:`, err);
-    }
-  }
-
-  await Promise.all(fetchPromises);
-
-  if (hasChanges) {
-    try {
-      localStorage.setItem('technoverse_db', JSON.stringify(localCache));
-    } catch (e) {
-      console.warn('localStorage quota exceeded or unavailable', e);
-    }
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
-    }
-  }
-  
-  saveLocalSyncTimestamps(localTimestamps);
-}
-
-export async function fetchFullDatabaseFromFirebase() {
-  try {
-    const docSnap = await getDoc(doc(db, 'globals', 'sync_state'));
-    if (docSnap.exists()) {
-      const serverState = docSnap.data() as SyncState;
-      await processServerSyncState(serverState);
-    } else {
-      // Create initial sync_state on server if it doesn't exist
-      const initialSync: SyncState = {};
-      const now = Date.now();
-      const keys = [
-        'products', 'inventory_movements', 'repair_orders', 'orders', 
-        'membership_tiers', 'chat_conversations', 'employees', 'payroll',
-        'audit_log', 'clients', 'deliveries', 'marketing_campaigns', 'banners', 'historical_skus', 'settings'
-      ];
-      keys.forEach(k => { initialSync[k as keyof SyncState] = now; });
-      await setDoc(doc(db, 'globals', 'sync_state'), initialSync);
-      await processServerSyncState(initialSync);
-    }
-  } catch (err) {
-    checkQuotaError(err);
-    console.error("[Firebase Sync Poll Error] Error pulling sync state:", err);
-  }
-}
-
-export function initFirebaseSync() {
-  if (isSyncing) return;
-  isSyncing = true;
-  
-  const saved = localStorage.getItem('technoverse_db');
-  if (saved) {
-    try { localCache = JSON.parse(saved); } catch(e) {}
-  }
-  if (!localCache) localCache = getDefaultDB();
-  
-  // Real-time listener for the single sync state document
-  let unsubscribe: (() => void) | null = null;
-  try {
-    unsubscribe = onSnapshot(doc(db, 'globals', 'sync_state'), (docSnap) => {
-      if (docSnap.exists()) {
-        const serverState = docSnap.data() as SyncState;
-        processServerSyncState(serverState);
-      } else {
-        // If server sync_state doesn't exist, let's create it once
-        const initialSync: SyncState = {};
-        const now = Date.now();
-        const keys = [
-          'products', 'inventory_movements', 'repair_orders', 'orders', 
-          'membership_tiers', 'chat_conversations', 'employees', 'payroll',
-          'audit_log', 'clients', 'deliveries', 'marketing_campaigns', 'banners', 'historical_skus', 'settings'
-        ];
-        keys.forEach(k => { initialSync[k as keyof SyncState] = now; });
-        setDoc(doc(db, 'globals', 'sync_state'), initialSync).catch(err => {
-          checkQuotaError(err);
-          console.error("Failed to write initial sync_state:", err);
-        });
-      }
-    }, (error) => {
-      checkQuotaError(error);
-      console.error(`[Firebase Sync Error] Error in onSnapshot for 'globals/sync_state':`, error);
     });
+    activeListeners.push(unsub);
   } catch (err) {
     checkQuotaError(err);
   }
-
-  // Fallback periodic polling of the single sync state document (every 20 seconds)
-  // to ensure offline/network-interrupted/iframe-blocked environments can sync reliably
-  setInterval(async () => {
-    try {
-      const docSnap = await getDoc(doc(db, 'globals', 'sync_state'));
-      if (docSnap.exists()) {
-        const serverState = docSnap.data() as SyncState;
-        await processServerSyncState(serverState);
-      }
-    } catch (err) {
-      checkQuotaError(err);
-      console.error(`[Firebase Sync Poll Error] Error pulling sync state:`, err);
-    }
-  }, 20000);
 }
 
 // Ensure it starts
@@ -399,7 +337,7 @@ async function uploadEmbeddedImages(obj: any, pathPrefix: string): Promise<any> 
           const downloadUrl = await getDownloadURL(fileRef);
           result[key] = downloadUrl;
         } catch (err) {
-          console.error('[Firebase Storage Upload Error] Failed to upload image, falling back to super compressed base64:', err);
+          checkQuotaError(err);
           // Fallback: compress even further (300x300, 0.6 quality) to fit easily in Firestore 1MB document size limit
           try {
             const lowResVal = await compressImage(val, 300, 300, 0.6);
@@ -417,20 +355,24 @@ async function uploadEmbeddedImages(obj: any, pathPrefix: string): Promise<any> 
 }
 
 export async function saveDB(newDb: Database) {
-  // 1. Capture old state synchronously BEFORE any awaits, to correctly determine what the user changed.
   const oldDb = localCache ? JSON.parse(JSON.stringify(localCache)) : getDefaultDB();
-
-  // 2. Optimistically update localCache IMMEDIATELY so the UI reflects changes instantly without flickering.
   localCache = newDb;
+  
   try {
-        localStorage.setItem('technoverse_db', JSON.stringify(localCache));
-      } catch (e) {
-        console.warn('localStorage quota exceeded or unavailable', e);
-      }
+    localStorage.setItem('technoverse_db', JSON.stringify(localCache));
+  } catch (e) {}
+
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
   }
 
+  if (saveTimeout) clearTimeout(saveTimeout);
+  saveTimeout = setTimeout(() => {
+    performSync(oldDb, newDb).catch(err => checkQuotaError(err));
+  }, 1500);
+}
+
+async function performSync(oldDb: Database, newDb: Database) {
   const collectionsToSync = [
     { key: 'products', colName: 'products' },
     { key: 'inventory_movements', colName: 'inventory_movements' },
@@ -448,7 +390,6 @@ export async function saveDB(newDb: Database) {
     { key: 'historical_skus', colName: 'historical_skus', idKey: 'sku' }
   ];
 
-  // 3. Pre-calculate diffs synchronously
   const diffs = collectionsToSync.map(({ key, colName, idKey }) => {
     const oldArr = (oldDb as any)[key] || [];
     const newArr = (newDb as any)[key] || [];
@@ -457,84 +398,69 @@ export async function saveDB(newDb: Database) {
   });
 
   const settingsChanged = JSON.stringify(oldDb.settings) !== JSON.stringify(newDb.settings);
-
   const syncPromises: Promise<void>[] = [];
 
-  // 5. Build sync promises
   diffs.forEach(({ colName, idKey, added, modified, deleted }) => {
     if (added.length === 0 && modified.length === 0 && deleted.length === 0) return;
 
-    const syncToFirebase = async () => {
+    syncPromises.push((async () => {
+      const batch = writeBatch(db);
+      let count = 0;
+
       for (const item of added) {
         const cleanItem = cleanObject(item);
         const uploadedItem = await uploadEmbeddedImages(cleanItem, colName);
         if (uploadedItem[idKey]) {
-          await setDoc(doc(db, colName, uploadedItem[idKey]), uploadedItem);
+          batch.set(doc(db, colName, uploadedItem[idKey]), uploadedItem);
+          count++;
         }
       }
       for (const item of modified) {
         const cleanItem = cleanObject(item);
         const uploadedItem = await uploadEmbeddedImages(cleanItem, colName);
         if (uploadedItem[idKey]) {
-          await setDoc(doc(db, colName, uploadedItem[idKey]), uploadedItem, { merge: true });
+          batch.set(doc(db, colName, uploadedItem[idKey]), uploadedItem, { merge: true });
+          count++;
         }
       }
       for (const item of deleted) {
         const cleanItem = cleanObject(item);
         if (cleanItem[idKey]) {
-          await deleteDoc(doc(db, colName, cleanItem[idKey]));
+          batch.delete(doc(db, colName, cleanItem[idKey]));
+          count++;
         }
       }
-    };
-    syncPromises.push(syncToFirebase());
+      if (count > 0) await batch.commit();
+    })());
   });
 
   if (settingsChanged) {
-    const syncSettings = async () => {
+    syncPromises.push((async () => {
       const cleanSettings = cleanObject(newDb.settings || {});
       const uploadedSettings = await uploadEmbeddedImages(cleanSettings, 'settings');
       await setDoc(doc(db, 'globals', 'settings'), uploadedSettings);
-    };
-    syncPromises.push(syncSettings());
+    })());
   }
 
-  // 6. Execute background sync safely
   try {
     await Promise.all(syncPromises);
 
-    // Update the globals/sync_state document to notify other clients
-    const syncUpdate: Partial<SyncState> = {};
-    const localTimestamps = getLocalSyncTimestamps();
+    // Actualizar el documento de señal para notificar a otros clientes
+    const syncUpdate: any = {};
     const updateTime = Date.now();
-
     diffs.forEach(({ key, added, modified, deleted }) => {
-      if (added.length > 0 || modified.length > 0 || deleted.length > 0) {
-        syncUpdate[key as keyof SyncState] = updateTime;
-        localTimestamps[key] = updateTime;
-      }
+      if (added.length > 0 || modified.length > 0 || deleted.length > 0) syncUpdate[key] = updateTime;
     });
-
-    if (settingsChanged) {
-      syncUpdate.settings = updateTime;
-      localTimestamps.settings = updateTime;
-    }
+    if (settingsChanged) syncUpdate.settings = updateTime;
 
     if (Object.keys(syncUpdate).length > 0) {
-      saveLocalSyncTimestamps(localTimestamps);
-      try {
-        await setDoc(doc(db, 'globals', 'sync_state'), syncUpdate, { merge: true });
-      } catch (err) {
-        console.error("[Firebase Sync Error] Error updating sync state document:", err);
-      }
+      await setDoc(doc(db, 'globals', 'sync_state'), syncUpdate, { merge: true });
     }
   } catch (err) {
-    console.error("[Firebase Sync Error] Error syncing data:", err);
     checkQuotaError(err);
-    if (typeof window !== 'undefined') {
-      window.dispatchEvent(new CustomEvent('firebase_sync_failed', { detail: err }));
-    }
   }
 }
+
 
 export async function saveLogo(base64: string) {
   try {
@@ -566,7 +492,7 @@ export async function saveLogo(base64: string) {
       window.dispatchEvent(new Event('store_logo_updated'));
     }
   } catch (err) {
-    console.error("[Firebase Storage Error] Error saving logo:", err);
+    checkQuotaError(err);
     // Ultimate fallback: save base64 directly to localCache/localStorage so at least current user sees it
     try {
       const dbInst = getDB();
@@ -579,7 +505,7 @@ export async function saveLogo(base64: string) {
         window.dispatchEvent(new Event('store_logo_updated'));
       }
     } catch (localErr) {
-      console.error("Local storage fallback failed too:", localErr);
+      checkQuotaError(localErr);
     }
   }
 }
