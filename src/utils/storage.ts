@@ -118,12 +118,15 @@ export function getDB(): Database {
 }
 
 function diffArrays(oldArr: any[], newArr: any[], key = 'id') {
-  const oldMap = new Map(oldArr.map(item => [item[key], item]));
+  const safeOldArr = (oldArr || []).filter(item => item && item[key] !== undefined);
+  const safeNewArr = (newArr || []).filter(item => item && item[key] !== undefined);
+
+  const oldMap = new Map(safeOldArr.map(item => [item[key], item]));
   const added: any[] = [];
   const modified: any[] = [];
   const deleted: any[] = [];
   
-  newArr.forEach(item => {
+  safeNewArr.forEach(item => {
     if (!oldMap.has(item[key])) added.push(item);
     else {
       const oldItem = oldMap.get(item[key]);

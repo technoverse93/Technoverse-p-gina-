@@ -1229,7 +1229,7 @@ if (!m) return null;
                               <td className="p-4 text-[var(--text-secondary)] font-mono">{p.sku}</td>
                               <td className="p-4 text-[var(--text-secondary)]">{p.category}</td>
                               <td className="p-4">
-                                <div className="text-emerald-500 font-bold dark:text-[var(--brand-gold-light)]">₡{p.price.toLocaleString()}</div>
+                                <div className="text-emerald-500 font-bold dark:text-[var(--brand-gold-light)]">₡{(p.price || 0).toLocaleString()}</div>
                                 <div className="text-[var(--text-secondary)] text-[10px]">Costo: ₡{(p.cost || 0).toLocaleString()}</div>
                               </td>
                               <td className="p-4">
@@ -1254,7 +1254,7 @@ if (!m) return null;
                                     type="number" 
                                     min="0" 
                                     className="w-20 bg-[var(--bg-surface)] border border-amber-500/50 rounded-lg px-2 py-1 text-xs text-[var(--text-primary)] text-right focus:outline-none focus:border-amber-400 font-mono"
-                                    placeholder={p.stock.toString()}
+                                    placeholder={String(p.stock ?? 0)}
                                     value={countData[p.id] ?? ''}
                                     onChange={e => setCountData({...countData, [p.id]: Number(e.target.value)})}
                                   />
@@ -1816,7 +1816,7 @@ if (!m) return null;
               <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Rotación de Productos</h4>
               <p className="text-[10px] text-[var(--text-secondary)] mb-2">Simulación de movimiento basado en stock.</p>
               <div className="space-y-2">
-                {products.filter(p => p && p.stock > 0).slice(0, 4).map(p => (
+                {products.filter(p => p && p.stock !== undefined && p.stock !== null && p.stock > 0).slice(0, 4).map(p => (
                   <div key={p.id} className="bg-[var(--bg-surface)] border border-[var(--border-color)]/50 p-2 rounded-lg flex justify-between items-center">
                     <span className="text-[10px] text-[var(--text-primary)] truncate max-w-[150px]">{p.name}</span>
                     <span className="text-[9px] font-mono text-emerald-400 dark:text-[var(--brand-gold-light)]">{p.stock} en stock</span>
@@ -2235,7 +2235,7 @@ if (!m) return null;
                                 </td>
 
                                 <td className="p-3 text-right font-mono text-[11px] text-sky-400 dark:text-[var(--brand-gold-light)]">
-                                  ₡{row.cost.toLocaleString()}
+                                  ₡{(row.cost || 0).toLocaleString()}
                                 </td>
 
                                 <td className="p-3">
