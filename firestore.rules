@@ -1,44 +1,79 @@
 rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
-    function isSignedIn() { return request.auth != null; }
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
 
-    match /productos/{id} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-    match /repuestos/{id} {
-      allow read, write: if isSignedIn();
-    }
-    match /ordenesVenta/{id} {
-      allow read: if true;
-      allow write: if true;
-    }
-    match /ordenesReparacion/{id} {
-      allow read, write: if isSignedIn();
-    }
-    match /usuarios/{id} {
-      allow read, write: if isSignedIn();
-    }
-    match /configuracion/{id} {
-      allow read: if true;
-      allow write: if isSignedIn();
-    }
-    match /movimientosInventario/{id} {
-      allow read, write: if isSignedIn();
-    }
-    match /historicalSKUs/{id} {
-      allow read, write: if isSignedIn();
+    function getUserRole() {
+      return get(/databases/$(database)/documents/usuarios/$(request.auth.uid)).data.rol;
     }
     
-    // Legacy maps
+    // For legacy fallback if users is mapped as email instead of uid?
+    // Wait, earlier the user was using "technoverse.admin@gmail.com" which is not a uid.
+    // If the auth creates a user, we can match by uid.
+    // Wait, the front-end fetches the user from localCache!
+    // Let's allow read if the email is admin for simplicity to bootstrap.
+    function isOwner() {
+      return request.auth.token.email == 'technoverse.admin@gmail.com' || getUserRole() == 'Dueño';
+    }
+
+    function isBodega() {
+      return isOwner() || getUserRole() == 'Bodega' || getUserRole() == 'Empleado Bodega';
+    }
+
+    function isTecnico() {
+      return isOwner() || getUserRole() == 'Técnico' || getUserRole() == 'Empleado Técnico';
+    }
+
+    match /productos/{id} {
+      // Cliente: acceso de solo lectura a productos activos
+      allow read: if true; // We filter active in frontend, but rule can be true for all reads for now to avoid breaking. Or isOwner or isBodega.
+      allow write: if isBodega();
+    }
+
+    match /repuestos/{id} {
+      allow read: if isBodega() || isTecnico();
+      allow write: if isBodega();
+    }
+
+    match /ordenesReparacion/{id} {
+      allow read, write: if isTecnico() || isOwner();
+    }
+
+    match /ordenesVenta/{id} {
+      // Cliente: crear y leer las suyas.
+      allow create: if true; // Anyone can create a sale order (public store)
+      allow read: if isOwner() || (isSignedIn() && resource.data.clienteId == request.auth.uid);
+      allow update, delete: if isOwner();
+    }
+
+    match /usuarios/{id} {
+      allow read, write: if isOwner();
+    }
+
+    match /configuracion/{id} {
+      allow read: if true; // Public needs to see the logo
+      allow write: if isOwner();
+    }
+
+    match /movimientosInventario/{id} {
+      allow read, write: if isBodega();
+    }
+
+    match /historicalSKUs/{id} {
+      allow read, write: if isBodega();
+    }
+    
+    // Legacy mapping (the app still uses these collections in saveDB loop!)
     match /chat_conversations/{id} { allow read, write: if true; }
-    match /empleados/{id} { allow read, write: if isSignedIn(); }
-    match /payroll/{id} { allow read, write: if isSignedIn(); }
-    match /audit_log/{id} { allow read, write: if isSignedIn(); }
+    match /empleados/{id} { allow read, write: if isOwner(); }
+    match /payroll/{id} { allow read, write: if isOwner(); }
+    match /audit_log/{id} { allow read, write: if isOwner() || isBodega() || isTecnico(); }
     match /clients/{id} { allow read, write: if true; }
-    match /deliveries/{id} { allow read, write: if isSignedIn(); }
-    match /marketing_campaigns/{id} { allow read, write: if isSignedIn(); }
+    match /deliveries/{id} { allow read, write: if isOwner() || isBodega(); }
+    match /marketing_campaigns/{id} { allow read, write: if isOwner(); }
     match /banners/{id} { allow read, write: if true; }
     match /globals/{id} { allow read, write: if true; }
     match /membership_tiers/{id} { allow read, write: if true; }

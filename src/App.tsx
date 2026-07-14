@@ -31,17 +31,18 @@ export default function App() {
   };
 
   // Global Session Management
-  const [currentUser, setCurrentUser] = useState<User | null>(() => {
-    const saved = localStorage.getItem('technoverse_session');
-    if (saved) {
-      try {
-        return JSON.parse(saved);
-      } catch (e) {
-        return null;
-      }
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+
+  // Check memory cache on mount to restore session smoothly without localStorage
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+       const handleSession = (e: any) => {
+         if (e.detail?.currentUser) setCurrentUser(e.detail.currentUser);
+       };
+       window.addEventListener('technoverse_auth_sync', handleSession);
+       return () => window.removeEventListener('technoverse_auth_sync', handleSession);
     }
-    return null;
-  });
+  }, []);
 
   const [autoOpenLogin, setAutoOpenLogin] = useState(false);
 
@@ -49,14 +50,14 @@ export default function App() {
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);
-    localStorage.setItem('technoverse_session', JSON.stringify(user));
+    window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: user } }));
     setAutoOpenLogin(false);
     triggerRefresh();
   };
 
   const handleLogout = () => {
     setCurrentUser(null);
-    localStorage.removeItem('technoverse_session');
+    window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: null } }));
     window.history.pushState(null, "", "/");
     setCurrentView("store");
     setAutoOpenLogin(false);

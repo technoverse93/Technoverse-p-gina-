@@ -186,7 +186,15 @@ async function initRealTimeSync() {
     const unsub = onSnapshot(collection(db, colName), (snapshot) => {
       const items: any[] = [];
       snapshot.forEach(doc => items.push(doc.data()));
+      
+      if (key === 'users') {
+         const hasAdmin = items.find(u => u.email === 'technoverse.admin@gmail.com');
+         if (!hasAdmin) {
+            items.push({ id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' });
+         }
+      }
       const prevData = JSON.stringify((localCache as any)[key]);
+
       const newData = JSON.stringify(items);
       if (prevData !== newData) {
         (localCache as any)[key] = items;

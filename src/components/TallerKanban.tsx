@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { Kanban, Search, Plus, Save, Clock, HelpCircle, FileText, CheckCircle2, ChevronRight, RefreshCw, Key } from 'lucide-react';
 import { RepairOrder, Product, ClientProfile } from '../types';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
+import { processRepairAtomic } from '../utils/transactions';
 
 interface TallerKanbanProps {
   activeUserEmail?: string;
@@ -188,8 +189,8 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
       
       if (selectedRepair) {
         const db = getDB();
-        const repIdx = db.repair_orders.findIndex(r => r.id === selectedRepair.id);
-        if (repIdx !== -1) {
+        const idxRep = db.repair_orders.findIndex(r => r.id === selectedRepair.id);
+        if (idxRep !== -1) {
           db.repair_orders[repIdx].status = 'Esperando repuestos';
           db.repair_orders[repIdx].bitacora.push({
             status: 'Esperando repuestos',
@@ -236,7 +237,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     setRepuestosSelected(repuestosSelected.filter((_, i) => i !== idx));
   };
 
-  const handleSaveDiagnosisAndCost = (e: React.FormEvent) => {
+  const handleSaveDiagnosisAndCost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRepair) return;
     if (laborCost === '') {
@@ -245,7 +246,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     }
 
     const db = getDB();
-    const repIdx = db.repair_orders.findIndex(r => r.id === selectedRepair.id);
+    const idxRep = db.repair_orders.findIndex(r => r.id === selectedRepair.id);
     if (repIdx === -1) return;
 
     const originalRepair = db.repair_orders[repIdx];
@@ -278,66 +279,43 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
     if (!stockValid) return;
 
-    // Apply stock changes
-    repuestosSelected.forEach(rep => {
-      const pIdx = db.products.findIndex(p => p.id === rep.productId);
-      if (pIdx !== -1) {
-        const prod = db.products[pIdx];
-        const previouslyConsumed = originalRepair.repuestos.find(pr => pr.productId === rep.productId)?.quantity || 0;
-        const netDeduction = rep.quantity - previouslyConsumed;
-        if (netDeduction !== 0) {
-          db.products[pIdx].stock -= netDeduction;
-          
-          // Cascading update for linked products
-          if (sparePartCategories.includes(prod.category)) {
-            const newStock = db.products[pIdx].stock;
-            db.products.forEach((lp, lpIdx) => {
-              if (lp.linkedSparePartSku === prod.sku) {
-                db.products[lpIdx].stock = newStock;
-                // If stock reaches 0, deactivate. If > 0, reactivate.
-                if (newStock <= 0) db.products[lpIdx].active = false;
-                else if (newStock > 0 && lp.active === false) db.products[lpIdx].active = true;
-              }
-            });
-          }
 
-          db.inventory_movements.unshift({
-            id: `MOV-${Date.now()}`,
-            productId: rep.productId,
-            productName: rep.productName,
-            quantityChange: -netDeduction,
-            type: 'Salida',
-            notes: `Consumo automático por reparación taller ticket: ${selectedRepair.ticket}`,
-            timestamp: new Date().toISOString(),
-            userEmail: activeUserEmail
-          });
-        }
-      }
-    });
-
-    // Calculate sum of repuestos costs
     const sparePartsTotal = repuestosSelected.reduce((sum, r) => sum + (r.price * r.quantity), 0);
     const totalRepairCost = finalLaborCost + sparePartsTotal;
 
-    // Update Repair order parameters
-    db.repair_orders[repIdx].diagnosisManual = diagnosis;
-    db.repair_orders[repIdx].laborCost = finalLaborCost;
-    db.repair_orders[repIdx].repuestos = repuestosSelected;
-    db.repair_orders[repIdx].totalCost = totalRepairCost;
+    const newRepairData = {
+      ...originalRepair,
+      diagnosisManual: diagnosis,
+      laborCost: finalLaborCost,
+      repuestos: repuestosSelected,
+      totalCost: totalRepairCost,
+      bitacora: [
+        ...originalRepair.bitacora,
+        {
+          status: originalRepair.status,
+          notes: `Diagnóstico y cotización actualizados. Mano de Obra: ₡${finalLaborCost}. Repuestos: ₡${sparePartsTotal}. Total: ₡${totalRepairCost}`,
+          timestamp: new Date().toISOString(),
+          user: activeUserEmail
+        }
+      ]
+    };
 
-    // Log diagnostic action
-    db.repair_orders[repIdx].bitacora.push({
-      status: originalRepair.status,
-      notes: `Diagnóstico y cotización actualizados. Mano de Obra: ₡${finalLaborCost}. Repuestos: ₡${sparePartsTotal}. Total: ₡${totalRepairCost}`,
-      timestamp: new Date().toISOString(),
-      user: activeUserEmail
-    });
+    const result = await processRepairAtomic(originalRepair, repuestosSelected, activeUserEmail || 'admin', finalLaborCost, diagnosis, newRepairData);
+    
+    if (!result.success) {
+      alert(result.error);
+      return;
+    }
 
-    saveDB(db);
-    addAuditLog(activeUserEmail, 'Taller', 'Actualizar Diagnóstico', `Diagnóstico de ticket ${selectedRepair.ticket} guardado.`);
-
-    // Refresh UI
+    addAuditLog(activeUserEmail || 'admin', 'Taller', 'Actualizar Diagnóstico', `Diagnóstico de ticket ${selectedRepair.ticket} guardado.`);
+    
+    // UI Update immediately for snappy feel
+    if (idxRep !== -1) {
+       db.repair_orders[idxRep] = newRepairData;
+    }
+    
     loadTallerData();
+
     setSelectedRepair(null);
     if (onRepairUpdated) onRepairUpdated();
     alert('Diagnóstico y presupuesto de reparación actualizados correctamente.');
@@ -345,7 +323,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
   const handleUpdateStatus = (repairId: string, newStatus: RepairOrder['status']) => {
     const db = getDB();
-    const repIdx = db.repair_orders.findIndex(r => r.id === repairId);
+    const idxRep = db.repair_orders.findIndex(r => r.id === repairId);
     if (repIdx === -1) return;
 
     const rep = db.repair_orders[repIdx];

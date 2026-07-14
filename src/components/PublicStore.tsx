@@ -14,6 +14,7 @@ import { Product, Order, OrderItem, RepairOrder } from '../types';
 import { auth } from '../firebase';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD } from '../utils/storage';
+import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
 
 import { User } from '../types';
@@ -231,7 +232,7 @@ export default function PublicStore({
     const cleanEmail = loginEmail.trim().toLowerCase();
     
     
-    const db = getDB();
+    
     
     // Auto-create Admin in Firebase Auth if needed
     if (cleanEmail === 'technoverse.admin@gmail.com' && loginPassword === ADMIN_PASSWORD) {
@@ -349,7 +350,7 @@ export default function PublicStore({
       return;
     }
     
-    const db = getDB();
+    
     const exists = db.clients?.some(c => c && c.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
                    db.employees?.some(emp => emp && emp.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
                    regEmail.trim().toLowerCase() === 'technoverse.admin@gmail.com';
@@ -443,7 +444,7 @@ export default function PublicStore({
   }, [onRefreshTrigger]);
 
   const loadStoreProducts = () => {
-    const db = getDB();
+    
     setDbInstance(db);
     setStoreLogo(db.settings?.storeLogo || null);
     // Filter out spare part categories from public store
@@ -487,7 +488,7 @@ export default function PublicStore({
   const getProductDiscountedPrice = (prod: Product, level: string) => {
     if (level === 'Normal') return prod.price;
 
-    const db = getDB();
+    
     const tier = db.membership_tiers.find(t => t.id === level && t.active);
     
     // Check if membership is applicable to this product
@@ -502,7 +503,7 @@ export default function PublicStore({
 
   // Dynamic Shipping calculation based on province and active membership configuration
   const calculateShippingCost = (prov: string, level: string) => {
-    const db = getDB();
+    
     const tier = db.membership_tiers.find(t => t.id === level && t.active);
     if (!tier) return prov === 'San José' ? 2500 : 4000; // default values
 
@@ -609,7 +610,7 @@ export default function PublicStore({
   const cartTotal = subtotalAfterCoupon + cartShipping + cartTax;
 
   const handleApplyCoupon = () => {
-    const db = getDB();
+    
     const coupon = db.marketing_campaigns?.find(c => c.code.toUpperCase() === couponCode.toUpperCase() && c.active);
     if (!coupon) {
       alert("Cupón no encontrado o inactivo.");
@@ -623,7 +624,7 @@ export default function PublicStore({
   };
 
   // Complete functional checkout and stock update
-  const handleConfirmOrder = (e: React.FormEvent) => {
+  const handleConfirmOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
 
@@ -640,7 +641,7 @@ export default function PublicStore({
       return;
     }
 
-    const db = getDB();
+    
 
     // Verify stock availability once more
     let isStockValid = true;
@@ -724,8 +725,16 @@ export default function PublicStore({
       timestamp: new Date().toISOString()
     };
 
+    
+    const result = await processSaleAtomic(cart, newOrder);
+    if (!result.success) {
+      alert(result.error);
+      return;
+    }
+
     // Ensure client registration in CRM
-    let client = db.clients.find(c => c.name.toLowerCase() === recipientName.trim().toLowerCase());
+    
+    let client = db.clients?.find(c => c.name.toLowerCase() === recipientName.trim().toLowerCase());
     if (!client) {
       db.clients.push({
         id: newOrder.customerId,
@@ -742,6 +751,7 @@ export default function PublicStore({
     }
 
     // Register logistics delivery
+    if (!db.deliveries) db.deliveries = [];
     db.deliveries.unshift({
       id: invoiceId,
       type: 'Orden',
@@ -752,23 +762,15 @@ export default function PublicStore({
       status: 'Pendiente',
       incidences: []
     });
-
-    db.orders.push(newOrder);
-
-    // Increment coupon usage if applied
-    if (appliedCoupon) {
-      const dbCoupon = db.marketing_campaigns.find(c => c.id === appliedCoupon.id);
-      if (dbCoupon) {
-        dbCoupon.used += 1;
-      }
-    }
-
+    
+    // Save clients and deliveries, but avoid touching products since it's handled by transaction
     saveDB(db);
 
     addAuditLog('cliente@technoverse.com', 'Ventas', 'Crear Compra', `Factura ${invoiceId} emitida por un monto de ₡${cartTotal.toLocaleString()} para ${recipientName}`);
-
     setConfirmedOrder(newOrder);
     setCheckoutStep(3); // Completed!
+    setCart([]);
+
     setCart([]);
     loadStoreProducts();
   };
@@ -781,7 +783,7 @@ export default function PublicStore({
       return;
     }
 
-    const db = getDB();
+    
     const num = Math.floor(100 + Math.random() * 900);
     const repId = `GT-${num}`;
     const tktId = `TKT-${num}`;

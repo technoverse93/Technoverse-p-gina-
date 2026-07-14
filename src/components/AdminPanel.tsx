@@ -79,6 +79,9 @@ export default function AdminPanel({
       setShowConfigSubmenu(false);
     }
   }, [activeDropdown]);
+
+  
+
   const [isInventoryExpanded, setIsInventoryExpanded] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
@@ -1822,11 +1825,14 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
           </div>
         )}
         {activeTab === 'taller' && (
-          /* MODULE C: TALLER (KANBAN COMPONENT EMBEDDED) */
-          <div className="space-y-4" id="view-taller">
-            <TallerKanban activeUserEmail={currentUser?.email} onRepairUpdated={loadAllAdminData} />
-          </div>
-
+          (isOwner || hasPermission('taller')) ? (
+            /* MODULE C: TALLER (KANBAN COMPONENT EMBEDDED) */
+            <div className="space-y-4" id="view-taller">
+              <TallerKanban activeUserEmail={currentUser?.email} onRepairUpdated={loadAllAdminData} />
+            </div>
+          ) : (
+             <div className="p-8 text-center text-rose-500 font-bold">Acceso denegado. Permisos insuficientes.</div>
+          )
         )}
         {activeTab === 'empleados' && (
           /* MODULE D: EMPLEADOS Y NÓMINAS */
