@@ -1,4 +1,3 @@
-
 import { db, storage, auth } from '../firebase';
 import { 
   collection, doc, setDoc, deleteDoc, onSnapshot, getDoc, getDocs, 
@@ -62,6 +61,16 @@ let isQuotaExceeded = false;
 let activeListeners: (() => void)[] = [];
 let saveTimeout: any = null;
 let initializedCollectionsCount = 0;
+let pendingWrites: Database[] = [];
+let broadcastChannel: BroadcastChannel | null = null;
+
+if (typeof window !== 'undefined') {
+  try {
+    broadcastChannel = new BroadcastChannel('technoverse_db_channel');
+  } catch (e) {
+    broadcastChannel = null;
+  }
+}
 
 
 function mapToFirestore(colName: string, item: any): any {
@@ -133,7 +142,8 @@ function mapToFirestore(colName: string, item: any): any {
     mapped.fechaEliminacion = item.deletedAt || new Date().toISOString();
   }
   if (colName === 'configuracion' || colName === 'settings') {
-    mapped.logoURL = item.storeLogoUrl || '';
+    mapped.logoURL = item.storeLogo || '';
+    mapped.storeLogo = item.storeLogo || '';
     mapped.datosEmpresa = {
       nombre: 'Technoverse',
       razonSocial: 'Technoverse S.A.',
@@ -182,7 +192,7 @@ async function initRealTimeSync() {
   console.log("[Sistema] Iniciando canales de comunicación en tiempo real...");
   
   COLLECTIONS_CONFIG.forEach(({ key, colName }) => {
-    if (key === 'products') return; // Handled specially below
+    if (key === 'products') return;
     const unsub = onSnapshot(collection(db, colName), (snapshot) => {
       const items: any[] = [];
       snapshot.forEach(doc => items.push(doc.data()));
@@ -209,7 +219,6 @@ async function initRealTimeSync() {
     activeListeners.push(unsub);
   });
 
-  // Special handling for merged 'products' and 'repuestos' collections
   let currentProductos: any[] = [];
   let currentRepuestos: any[] = [];
   const updateMergedProducts = () => {
@@ -243,14 +252,22 @@ async function initRealTimeSync() {
 
   const unsubSettings = onSnapshot(doc(db, 'configuracion', 'settings'), (docSnap) => {
     if (docSnap.exists()) {
-      const serverSettings = docSnap.data() as AppSettings;
+      const raw = docSnap.data() as any;
+      const serverSettings: AppSettings = {
+        cedulaJuridica: raw.datosEmpresa?.cedulaJuridica || raw.cedulaJuridica || '',
+        companyPhone: raw.datosEmpresa?.telefono || raw.companyPhone || '',
+        companyAddress: raw.datosEmpresa?.direccion || raw.companyAddress || '',
+        workshopAddress: raw.workshopAddress || raw.datosEmpresa?.direccion || '',
+        pickupHours: raw.pickupHours || 'L-V 1pm-6pm',
+        maxStockLimit: raw.maxStockLimit || 50,
+        storeLogo: raw.logoURL || raw.storeLogo || raw.settings?.storeLogo || undefined
+      };
       const prevSettings = JSON.stringify(localCache.settings);
       const newSettings = JSON.stringify(serverSettings);
 
       if (prevSettings !== newSettings) {
         localCache.settings = serverSettings;
         if (lastSyncedDb) lastSyncedDb.settings = JSON.parse(JSON.stringify(serverSettings));
-        saveLocal();
         notifyUpdate();
       }
     }
@@ -259,6 +276,7 @@ async function initRealTimeSync() {
       initializedCollectionsCount++;
       if (initializedCollectionsCount === COLLECTIONS_CONFIG.length + 1) {
         console.log("[Sistema] Base de datos conectada y sincronizada al 100%.");
+        flushPendingWrites();
       }
     }
   }, (err) => checkQuotaError(err));
@@ -272,6 +290,9 @@ function saveLocal() {
 function notifyUpdate() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
+    if (broadcastChannel) {
+      try { broadcastChannel.postMessage({ type: 'UPDATE_DB' }); } catch (e) {}
+    }
   }
 }
 
@@ -281,13 +302,11 @@ export function initFirebaseSync() {
   
   console.log("[Sistema] Sincronización Real-Time Directa Activada.");
   
-  // Siempre inicializamos con base vacía hasta que Firebase responda
   localCache = getDefaultDB();
 
   initRealTimeSync();
 }
 
-// Ensure it starts
 if (typeof window !== 'undefined') {
   initFirebaseSync();
 }
@@ -396,7 +415,6 @@ async function uploadEmbeddedImages(obj: any, pathPrefix: string): Promise<any> 
       const val = obj[key];
       if (typeof val === 'string' && val.startsWith('data:') && val.includes(';base64,')) {
         try {
-          // Client-side compress before upload to keep it lightweight (600x600, 0.75 quality)
           const compressedVal = await compressImage(val, 600, 600, 0.75);
           const fileRef = ref(storage, `${pathPrefix}/${Date.now()}_${Math.floor(Math.random() * 100000)}.jpg`);
           await uploadString(fileRef, compressedVal, 'data_url');
@@ -404,12 +422,11 @@ async function uploadEmbeddedImages(obj: any, pathPrefix: string): Promise<any> 
           result[key] = downloadUrl;
         } catch (err) {
           checkQuotaError(err);
-          // Fallback: compress even further (300x300, 0.6 quality) to fit easily in Firestore 1MB document size limit
           try {
             const lowResVal = await compressImage(val, 300, 300, 0.6);
             result[key] = lowResVal;
           } catch (compressErr) {
-            result[key] = val; // ultimate fallback
+            result[key] = val;
           }
         }
       } else {
@@ -420,25 +437,36 @@ async function uploadEmbeddedImages(obj: any, pathPrefix: string): Promise<any> 
   return result;
 }
 
+async function flushPendingWrites() {
+  while (pendingWrites.length > 0) {
+    const pending = pendingWrites.shift()!;
+    try {
+      const dbToSyncFrom = JSON.parse(JSON.stringify(lastSyncedDb!));
+      const dbToSyncTo = JSON.parse(JSON.stringify(pending));
+      await performSync(dbToSyncFrom, dbToSyncTo);
+    } catch (err) {
+      checkQuotaError(err);
+    }
+  }
+}
+
 export async function saveDB(newDb: Database) {
+  localCache = newDb;
+  notifyUpdate();
+
   if (!lastSyncedDb) {
-    // If not initialized yet, we can't reliably sync
+    pendingWrites.push(newDb);
+    console.warn("[Sistema] Firestore aún no responde. Cambio encolado y se guardará automáticamente.");
     return;
   }
 
   const dbToSyncFrom = JSON.parse(JSON.stringify(lastSyncedDb));
   const dbToSyncTo = JSON.parse(JSON.stringify(newDb));
-  
-  // Optimistic UI update
-  localCache = newDb;
-  notifyUpdate();
 
-  // Immediately perform sync (no debounce)
   try {
     await performSync(dbToSyncFrom, dbToSyncTo);
   } catch (err) {
     checkQuotaError(err);
-    // Revert optimistic update on failure
     localCache = JSON.parse(JSON.stringify(lastSyncedDb));
     notifyUpdate();
   }
@@ -533,7 +561,6 @@ export async function saveLogo(base64: string) {
         await saveDB(dbInst);
       } catch (storageErr) {
         console.warn("[Firebase Storage Warning] Storage upload failed, falling back to direct compressed base64 in Firestore settings:", storageErr);
-        // Compress base64 further so it takes very little space in Firestore
         const lowResLogo = await compressImage(base64, 250, 250, 0.7);
         const dbInst = getDB();
         if (!dbInst.settings) dbInst.settings = DEFAULT_SETTINGS;
@@ -551,7 +578,6 @@ export async function saveLogo(base64: string) {
     }
   } catch (err) {
     checkQuotaError(err);
-    // Ultimate fallback: save base64 directly to localCache so at least current user sees it
     try {
       const dbInst = getDB();
       if (!dbInst.settings) dbInst.settings = DEFAULT_SETTINGS;
