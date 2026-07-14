@@ -148,8 +148,7 @@ h5, .text-lg {
 .text-\[8px\],
 .text-\[9px\],
 .text-\[10px\],
-.text-\[10px\]\/*,
-[class*="text-[10px]"] */ {
+[class*="text-[10px]"] {
   font-size: clamp(0.72rem, 0.7rem + 0.1vw, 0.75rem) !important;
 }
 

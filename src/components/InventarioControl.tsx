@@ -852,11 +852,29 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   };
 
   const confirmDeleteProduct = (p: Product) => {
+    if (p.stock > 0) {
+      alert('No se puede eliminar un producto con stock mayor a 0.');
+      return;
+    }
     const db = getDB();
     const idx = db.products.findIndex(x => x && x.id === p.id);
     if (idx !== -1) {
       db.products[idx].active = false;
       addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Desactivar Producto', `Producto desactivado por eliminación: ${p.name}`, db);
+      
+      // Store in historical
+      if (!db.historical_skus) db.historical_skus = [];
+      if (!db.historical_skus.find(h => h.sku === p.sku)) {
+        db.historical_skus.push({
+          sku: p.sku,
+          name: p.name,
+          category: p.category,
+          price: p.price,
+          cost: p.cost,
+          imageUrl: p.imageUrl,
+          deletedAt: new Date().toISOString()
+        });
+      }
 
       // Cascading deletion for linked products if this is a spare part
       if (sparePartCategories.includes(p.category)) {
@@ -867,7 +885,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         });
       }
     }
-
     saveDB(db);
     loadData();
     onDataChanged();
