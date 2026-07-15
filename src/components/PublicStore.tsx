@@ -11,9 +11,8 @@ import { ProductCard } from './ProductCard';
 import { MarketingRow } from './MarketingRow';
 import { FeaturedCategoriesCarousel } from './FeaturedCategoriesCarousel';
 import { Product, Order, OrderItem, RepairOrder } from '../types';
-import { auth } from '../firebase';
-import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD } from '../utils/storage';
+import { supabase } from '../supabaseClient';
+import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
 
@@ -231,109 +230,44 @@ export default function PublicStore({
   const handleClientLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     const cleanEmail = loginEmail.trim().toLowerCase();
-    
-    
-    
-    
-    // Auto-create Admin in Firebase Auth if needed
-    if (cleanEmail === 'technoverse.admin@gmail.com' && loginPassword === ADMIN_PASSWORD) {
-      try {
-        await signInWithEmailAndPassword(auth, cleanEmail, loginPassword);
-      } catch (err: any) {
-        if (err.code === 'auth/operation-not-allowed') {
-          alert('¡ATENCIÓN! Debes habilitar "Correo/Contraseña" en Firebase Console -> Authentication -> Sign-in method.');
-          return;
-        }
-        if (err.code === 'auth/user-not-found' || err.code === 'auth/invalid-credential' || err.code === 'auth/invalid-login-credentials') {
-          try {
-            await createUserWithEmailAndPassword(auth, cleanEmail, loginPassword);
-          } catch (createErr: any) {
-            console.error(createErr);
-            alert('Error creando el administrador en Firebase: ' + createErr.message);
-            return;
-          }
-        } else {
-          console.error(err);
-          alert('Error de autenticación: ' + err.message);
-          return;
-        }
-      }
-      
-      const adminUser: User = { id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' };
-      onLogin(adminUser);
-      setIsLoginModalOpen(false);
-      setLoginEmail(''); setLoginPassword('');
-      alert('Sesión iniciada con éxito como Administrador.');
+
+    // Autenticación real y segura vía Supabase Auth (contraseñas nunca viajan
+    // en texto plano ni se comparan en el navegador).
+    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
+      email: cleanEmail,
+      password: loginPassword,
+    });
+
+    if (authError || !authData.user) {
+      alert('Credenciales inválidas. Por favor verifique el correo y contraseña.');
       return;
     }
 
-    // Normal user login
-    try {
-      await signInWithEmailAndPassword(auth, cleanEmail, loginPassword);
-    } catch (err: any) {
-      console.error(err);
-      if (err.code === 'auth/operation-not-allowed') {
-        alert('El administrador debe habilitar la autenticación por correo/contraseña en Firebase Console.');
-      } else {
-        alert('Credenciales inválidas en el servidor. Por favor verifique el correo y contraseña.');
-      }
+    const { data: profile, error: profileError } = await supabase
+      .from('profiles')
+      .select('*')
+      .eq('id', authData.user.id)
+      .single();
+
+    if (profileError || !profile) {
+      alert('No se pudo cargar el perfil de la cuenta. Contacte al administrador.');
       return;
     }
 
-    if (cleanEmail === 'technoverse.admin@gmail.com') {
-      const adminUser: User = { id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' };
-      onLogin(adminUser);
-      setIsLoginModalOpen(false);
-      setLoginEmail(''); setLoginPassword('');
-      alert('Sesión iniciada con éxito como Administrador.');
-      return;
-    }
-  
-    
-    // 2. Employee check
-    const emp = db.employees?.find(e => e.email.toLowerCase() === cleanEmail && e.password === loginPassword && e.active);
-    if (emp) {
-      const empUser: User = {
-        id: emp.id,
-        email: emp.email,
-        role: 'Empleado',
-        employeeRole: emp.role,
-        name: emp.name
-      };
-      onLogin(empUser);
-      setIsLoginModalOpen(false);
-      setLoginEmail('');
-      setLoginPassword('');
-      alert(`Sesión iniciada con éxito como ${emp.name} (${emp.role}). El menú de cuenta se ha actualizado.`);
-      return;
-    }
+    const loggedUser: User = {
+      id: profile.id,
+      email: profile.email,
+      role: profile.role,
+      employeeRole: profile.employee_role || undefined,
+      name: profile.name || profile.email,
+      membershipTier: profile.membership_tier || undefined,
+    };
 
-    // 3. Client check
-    // Optional 2FA Check for Client (Disabled by default, keeping it empty for now)
-    const client = db.clients?.find(c => c.email.toLowerCase() === cleanEmail && (c as any).password === loginPassword);
-    if (client) {
-      const clientUser: User = {
-        id: client.id,
-        email: client.email,
-        role: 'Cliente',
-        name: client.name,
-        membershipTier: client.membershipTier
-      };
-      onLogin(clientUser);
-      setIsLoginModalOpen(false);
-      setLoginEmail('');
-      setLoginPassword('');
-      alert(`Bienvenido de vuelta, ${client.name}. Sesión iniciada con éxito.`);
-      return;
-    }
-
-    // Fallback search
-    const clientByEmail = db.clients?.find(c => c.email.toLowerCase() === cleanEmail);
-    if (clientByEmail) {
-      alert('Contraseña incorrecta para esta cuenta de cliente. Inténtelo de nuevo.');
-    } else {
-      alert('No encontramos ninguna cuenta con este correo electrónico. Seleccione "Crear Cuenta" para registrarse.');
-    }
+    onLogin(loggedUser);
+    setIsLoginModalOpen(false);
+    setLoginEmail('');
+    setLoginPassword('');
+    alert(`Bienvenido, ${loggedUser.name}. Sesión iniciada con éxito.`);
   };
 
   const handleClientRegisterSubmit = async (e: React.FormEvent) => {
@@ -342,55 +276,68 @@ export default function PublicStore({
       alert('Por favor complete todos los datos.');
       return;
     }
-    
-    try {
-      await createUserWithEmailAndPassword(auth, regEmail.trim(), regPassword.trim());
-    } catch (err) {
-      console.error(err);
-      alert('Error creando cuenta en el servidor. Puede que el correo ya esté registrado.');
-      return;
-    }
-    
-    
-    const exists = db.clients?.some(c => c && c.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
-                   db.employees?.some(emp => emp && emp.email.toLowerCase() === regEmail.trim().toLowerCase()) || 
-                   regEmail.trim().toLowerCase() === 'technoverse.admin@gmail.com';
-    if (exists) {
-      alert('El correo electrónico ya se encuentra registrado localmente.');
-      return;
-    }
 
-    const newClientId = `CLI-${Math.floor(10000 + Math.random() * 90000)}`;
-    const newClient = {
-      id: newClientId,
-      name: regName.trim(),
-      email: regEmail.trim().toLowerCase(),
-      phone: regPhone.trim(),
-      province: regProvince as any,
-      addressDetail: regAddress.trim(),
-      membershipTier: regMembership,
+    const cleanEmail = regEmail.trim().toLowerCase();
+
+    // Supabase Auth crea la cuenta y, mediante un trigger en la base de datos,
+    // genera automáticamente el perfil correspondiente en la tabla "profiles".
+    const { data: authData, error: authError } = await supabase.auth.signUp({
+      email: cleanEmail,
       password: regPassword,
-      cardsTokenized: [],
-      balance: 0,
-      notes: 'Cliente registrado desde el portal web.'
-    };
+      options: { data: { name: regName.trim() } },
+    });
 
-    if (!db.clients) db.clients = [];
-    db.clients.push(newClient);
-    saveDB(db);
+    if (authError) {
+      alert('Error creando la cuenta: ' + (authError.message || 'el correo ya podría estar registrado.'));
+      return;
+    }
+    if (!authData.user) {
+      alert('No se pudo crear la cuenta. Intente de nuevo.');
+      return;
+    }
+
+    // Completar el perfil con la membresía elegida
+    await supabase
+      .from('profiles')
+      .update({ membership_tier: regMembership })
+      .eq('id', authData.user.id);
+
+    // Guardar los datos comerciales del cliente (dirección, teléfono, provincia)
+    const newClientId = `CLI-${Math.floor(10000 + Math.random() * 90000)}`;
+    await supabase.from('client_profiles').insert({
+      id: newClientId,
+      profile_id: authData.user.id,
+      name: regName.trim(),
+      email: cleanEmail,
+      phone: regPhone.trim(),
+      province: regProvince,
+      address_detail: regAddress.trim(),
+      membership_tier: regMembership,
+      notes: 'Cliente registrado desde el portal web.',
+    });
+
+    // Si el proyecto de Supabase requiere confirmación de correo, todavía no
+    // hay sesión activa: se le pide confirmar antes de iniciar sesión.
+    if (!authData.session) {
+      alert(`¡Cuenta creada! Revisa tu correo (${cleanEmail}) para confirmarla antes de iniciar sesión.`);
+      setIsLoginModalOpen(false);
+      setIsRegisterMode(false);
+      setRegName(''); setRegEmail(''); setRegPhone(''); setRegAddress(''); setRegPassword('');
+      return;
+    }
 
     const clientUser: User = {
-      id: newClientId,
-      email: newClient.email,
+      id: authData.user.id,
+      email: cleanEmail,
       role: 'Cliente',
-      name: newClient.name,
-      membershipTier: newClient.membershipTier
+      name: regName.trim(),
+      membershipTier: regMembership,
     };
 
     onLogin(clientUser);
     setIsLoginModalOpen(false);
-    alert(`¡Cuenta creada con éxito! Bienvenido a Technoverse, ${newClient.name}.`);
-    
+    alert(`¡Cuenta creada con éxito! Bienvenido a Technoverse, ${regName.trim()}.`);
+
     setRegName('');
     setRegEmail('');
     setRegPhone('');
