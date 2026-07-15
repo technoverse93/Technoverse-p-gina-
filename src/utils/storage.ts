@@ -4,6 +4,7 @@ import {
   writeBatch, query, limit, getDocFromServer 
 } from 'firebase/firestore';
 import { ref, uploadString, getDownloadURL } from 'firebase/storage';
+import { supabase } from '../supabaseClient';
 import { 
   User, Product, InventoryMovement, RepairOrder, Order, 
   MembershipTier, ChatConversation, Employee, Payroll, 
@@ -37,7 +38,6 @@ const DEFAULT_MEMBERSHIPS: MembershipTier[] = [ { id: 'Plata', name: 'Membresía
 const DEFAULT_SETTINGS: AppSettings = { cedulaJuridica: '3-101-987452', companyPhone: '+506 6421 4795', companyAddress: 'San José', workshopAddress: 'San José', pickupHours: 'L-V 1pm-6pm', maxStockLimit: 50 };
 
 const COLLECTIONS_CONFIG = [
-  { key: 'products', colName: 'productos', idKey: 'id' },
   { key: 'inventory_movements', colName: 'movimientosInventario', idKey: 'id' },
   { key: 'repair_orders', colName: 'ordenesReparacion', idKey: 'id' },
   { key: 'orders', colName: 'ordenesVenta', idKey: 'id' },
@@ -71,6 +71,134 @@ if (typeof window !== 'undefined') {
     broadcastChannel = null;
   }
 }
+
+// ===================== Supabase: Productos en tiempo real =====================
+// Los productos ahora viven en Supabase (tabla "products"), no en Firestore.
+// Esto se hizo para tener una base de datos en tiempo real funcional sin
+// depender de las cuotas/créditos de Firebase para esta colección.
+
+function mapProductFromSupabase(row: any): Product {
+  return {
+    id: row.id,
+    name: row.name,
+    sku: row.sku,
+    category: row.category,
+    price: Number(row.price) || 0,
+    cost: Number(row.cost) || 0,
+    stock: row.stock ?? 0,
+    imageUrl: row.image_url || '',
+    discountPercent: Number(row.discount_percent) || 0,
+    discountStartDate: row.discount_start_date || undefined,
+    discountEndDate: row.discount_end_date || undefined,
+    applicableMemberships: row.applicable_memberships || [],
+    active: row.active !== false,
+    description: row.description || '',
+    minStock: row.min_stock ?? 0,
+    weight: row.weight ?? undefined,
+    dimensions: row.dimensions || undefined,
+    row: row.warehouse_row || undefined,
+    shelf: row.shelf || undefined,
+    physicalLocation: row.physical_location || undefined,
+    warranty: row.warranty || undefined,
+    isDoubleStock: row.is_double_stock || false,
+    internalStock: row.internal_stock ?? 0,
+    clientStock: row.client_stock ?? 0,
+    linkedSparePartSku: row.linked_spare_part_sku || undefined,
+  };
+}
+
+function mapProductToSupabase(p: Product): any {
+  return {
+    id: p.id,
+    name: p.name || '',
+    sku: p.sku || '',
+    category: p.category || '',
+    price: p.price || 0,
+    cost: p.cost || 0,
+    stock: p.stock || 0,
+    image_url: p.imageUrl || '',
+    discount_percent: p.discountPercent || 0,
+    discount_start_date: p.discountStartDate || null,
+    discount_end_date: p.discountEndDate || null,
+    applicable_memberships: p.applicableMemberships || [],
+    active: p.active !== false,
+    description: p.description || '',
+    min_stock: p.minStock || 0,
+    weight: p.weight ?? null,
+    dimensions: p.dimensions || null,
+    warehouse_row: p.row || null,
+    shelf: p.shelf || null,
+    physical_location: p.physicalLocation || null,
+    warranty: p.warranty || null,
+    is_double_stock: p.isDoubleStock || false,
+    internal_stock: p.internalStock || 0,
+    client_stock: p.clientStock || 0,
+    linked_spare_part_sku: p.linkedSparePartSku || null,
+  };
+}
+
+let productsRealtimeReady = false;
+let pendingProductWrites: { added: Product[]; modified: Product[]; deleted: Product[] }[] = [];
+
+async function refreshProductsFromSupabase() {
+  const { data, error } = await supabase.from('products').select('*');
+  if (error) {
+    console.error('[Supabase] Error cargando productos:', error.message);
+    return;
+  }
+  const items = (data || []).map(mapProductFromSupabase);
+  localCache.products = items;
+  if (!lastSyncedDb) {
+    lastSyncedDb = JSON.parse(JSON.stringify(localCache));
+  } else {
+    lastSyncedDb.products = JSON.parse(JSON.stringify(items));
+  }
+  notifyUpdate();
+}
+
+async function initProductsRealtimeSync() {
+  await refreshProductsFromSupabase();
+  productsRealtimeReady = true;
+  flushPendingProductWrites();
+
+  supabase
+    .channel('products-realtime-sync')
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'products' }, () => {
+      refreshProductsFromSupabase();
+    })
+    .subscribe();
+}
+
+async function syncProductsToSupabase(added: Product[], modified: Product[], deleted: Product[]) {
+  if (!productsRealtimeReady) {
+    pendingProductWrites.push({ added, modified, deleted });
+    return;
+  }
+  try {
+    for (const item of added) {
+      const { error } = await supabase.from('products').insert(mapProductToSupabase(item));
+      if (error) console.error('[Supabase] Error creando producto:', error.message);
+    }
+    for (const item of modified) {
+      const { error } = await supabase.from('products').update(mapProductToSupabase(item)).eq('id', item.id);
+      if (error) console.error('[Supabase] Error actualizando producto:', error.message);
+    }
+    for (const item of deleted) {
+      const { error } = await supabase.from('products').delete().eq('id', item.id);
+      if (error) console.error('[Supabase] Error eliminando producto:', error.message);
+    }
+  } catch (err: any) {
+    console.error('[Supabase] Error de sincronización de productos:', err?.message || err);
+  }
+}
+
+async function flushPendingProductWrites() {
+  while (pendingProductWrites.length > 0) {
+    const pending = pendingProductWrites.shift()!;
+    await syncProductsToSupabase(pending.added, pending.modified, pending.deleted);
+  }
+}
+// ================== Fin Supabase: Productos en tiempo real ==================
 
 
 function mapToFirestore(colName: string, item: any): any {
@@ -192,7 +320,6 @@ async function initRealTimeSync() {
   console.log("[Sistema] Iniciando canales de comunicación en tiempo real...");
   
   COLLECTIONS_CONFIG.forEach(({ key, colName }) => {
-    if (key === 'products') return;
     const unsub = onSnapshot(collection(db, colName), (snapshot) => {
       const items: any[] = [];
       snapshot.forEach(doc => items.push(doc.data()));
@@ -219,36 +346,8 @@ async function initRealTimeSync() {
     activeListeners.push(unsub);
   });
 
-  let currentProductos: any[] = [];
-  let currentRepuestos: any[] = [];
-  const updateMergedProducts = () => {
-    const merged = [...currentProductos, ...currentRepuestos];
-    const prevData = JSON.stringify((localCache as any)['products']);
-    const newData = JSON.stringify(merged);
-    if (prevData !== newData) {
-      (localCache as any)['products'] = merged;
-      if (!lastSyncedDb) {
-        lastSyncedDb = JSON.parse(JSON.stringify(localCache));
-      } else {
-        (lastSyncedDb as any)['products'] = JSON.parse(JSON.stringify(merged));
-      }
-      notifyUpdate();
-    }
-  };
-
-  const unsubProd = onSnapshot(collection(db, 'productos'), (snapshot) => {
-    currentProductos = [];
-    snapshot.forEach(doc => currentProductos.push(doc.data()));
-    updateMergedProducts();
-  });
-  activeListeners.push(unsubProd);
-
-  const unsubRep = onSnapshot(collection(db, 'repuestos'), (snapshot) => {
-    currentRepuestos = [];
-    snapshot.forEach(doc => currentRepuestos.push(doc.data()));
-    updateMergedProducts();
-  });
-  activeListeners.push(unsubRep);
+  // Productos: sincronizados en tiempo real vía Supabase (no Firestore).
+  initProductsRealtimeSync();
 
   const unsubSettings = onSnapshot(doc(db, 'configuracion', 'settings'), (docSnap) => {
     if (docSnap.exists()) {
@@ -473,30 +572,24 @@ export async function saveDB(newDb: Database) {
 }
 
 async function performSync(oldDb: Database, newDb: Database) {
-  const spareCategories = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
   const diffs: any[] = [];
-  
+
+  // Productos: van a Supabase, no a Firestore.
+  const productDiff = diffArrays(oldDb.products || [], newDb.products || [], 'id');
+  const hasProductChanges = productDiff.added.length > 0 || productDiff.modified.length > 0 || productDiff.deleted.length > 0;
+
   COLLECTIONS_CONFIG.forEach(({ key, colName, idKey }) => {
-    if (key === 'products') {
-      const oldArr = (oldDb as any)[key] || [];
-      const newArr = (newDb as any)[key] || [];
-      
-      const oldProds = oldArr.filter(p => !spareCategories.includes(p.category) && p.category !== 'Repuestos');
-      const newProds = newArr.filter(p => !spareCategories.includes(p.category) && p.category !== 'Repuestos');
-      diffs.push({ key: 'productos', colName: 'productos', idKey: idKey || 'id', ...diffArrays(oldProds, newProds, idKey || 'id') });
-      
-      const oldRep = oldArr.filter(p => spareCategories.includes(p.category) || p.category === 'Repuestos');
-      const newRep = newArr.filter(p => spareCategories.includes(p.category) || p.category === 'Repuestos');
-      diffs.push({ key: 'repuestos', colName: 'repuestos', idKey: idKey || 'id', ...diffArrays(oldRep, newRep, idKey || 'id') });
-    } else {
-      const oldArr = (oldDb as any)[key] || [];
-      const newArr = (newDb as any)[key] || [];
-      diffs.push({ key, colName, idKey: idKey || 'id', ...diffArrays(oldArr, newArr, idKey || 'id') });
-    }
+    const oldArr = (oldDb as any)[key] || [];
+    const newArr = (newDb as any)[key] || [];
+    diffs.push({ key, colName, idKey: idKey || 'id', ...diffArrays(oldArr, newArr, idKey || 'id') });
   });
 
   const settingsChanged = JSON.stringify(oldDb.settings) !== JSON.stringify(newDb.settings);
   const syncPromises: Promise<void>[] = [];
+
+  if (hasProductChanges) {
+    syncPromises.push(syncProductsToSupabase(productDiff.added, productDiff.modified, productDiff.deleted));
+  }
 
   diffs.forEach(({ colName, idKey, added, modified, deleted }) => {
     if (added.length === 0 && modified.length === 0 && deleted.length === 0) return;
