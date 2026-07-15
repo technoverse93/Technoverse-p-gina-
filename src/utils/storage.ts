@@ -410,7 +410,10 @@ async function syncTableToSupabase(cfg: TableConfig<any>, added: any[], modified
 
   const errors: string[] = [];
   for (const item of added) {
-    const { error } = await supabase.from(cfg.table).insert(cfg.toRow(item));
+    // upsert (no insert): un doble clic/reenvío accidental con el mismo id
+    // no debe romper con un 409 de clave duplicada y hacer que se revierta
+    // toda la pantalla; simplemente sobreescribe con los mismos datos.
+    const { error } = await supabase.from(cfg.table).upsert(cfg.toRow(item), { onConflict: cfg.idKey });
     if (error) errors.push(`crear en ${cfg.table} (${item[cfg.idKey]}): ${error.message}`);
   }
   for (const item of modified) {
@@ -501,12 +504,12 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
   const errors: string[] = [];
 
   for (const conv of added) {
-    const { error } = await supabase.from('chat_conversations').insert(chatConvToRow(conv));
+    const { error } = await supabase.from('chat_conversations').upsert(chatConvToRow(conv), { onConflict: 'id' });
     if (error) errors.push(`crear conversación ${conv.id}: ${error.message}`);
     for (const msg of conv.messages || []) {
-      const { error: msgErr } = await supabase.from('chat_messages').insert({
+      const { error: msgErr } = await supabase.from('chat_messages').upsert({
         id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp
-      });
+      }, { onConflict: 'id' });
       if (msgErr) errors.push(`crear mensaje ${msg.id}: ${msgErr.message}`);
     }
   }
@@ -519,9 +522,9 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
     const oldMsgIds = new Set((oldConv?.messages || []).map((m: ChatMessage) => m.id));
     const newMessages = (conv.messages || []).filter((m: ChatMessage) => !oldMsgIds.has(m.id));
     for (const msg of newMessages) {
-      const { error: msgErr } = await supabase.from('chat_messages').insert({
+      const { error: msgErr } = await supabase.from('chat_messages').upsert({
         id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp
-      });
+      }, { onConflict: 'id' });
       if (msgErr) errors.push(`crear mensaje ${msg.id}: ${msgErr.message}`);
     }
   }
