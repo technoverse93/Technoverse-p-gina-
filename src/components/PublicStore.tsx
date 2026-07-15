@@ -392,13 +392,18 @@ export default function PublicStore({
   }, [onRefreshTrigger]);
 
   const loadStoreProducts = () => {
-    
-    setDbInstance(db);
-    setStoreLogo(db.settings?.storeLogo || null);
+    // IMPORTANTE: leer SIEMPRE datos frescos con getDB(). Antes se usaba la
+    // variable "db" capturada en el primer render (cuando Supabase aún no
+    // había respondido y estaba vacía), por eso el visitante anónimo veía
+    // todo vacío hasta que un re-render (p. ej. al iniciar sesión) traía datos
+    // nuevos. Con getDB() aquí, cada tick/evento refleja el estado real.
+    const freshDb = getDB();
+    setDbInstance(freshDb);
+    setStoreLogo(freshDb.settings?.storeLogo || null);
     // Filter out spare part categories from public store
     const SPARE_PART_CATEGORIES = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
-    setProducts((db.products || []).filter(p => p && p.active !== false && p.stock > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
-    setBanners(db.banners ? db.banners.filter(b => b && b.active) : []);
+    setProducts((freshDb.products || []).filter(p => p && p.active !== false && p.stock > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
+    setBanners(freshDb.banners ? freshDb.banners.filter(b => b && b.active) : []);
   };
 
   // Search input autocompletion logic in Spanish
