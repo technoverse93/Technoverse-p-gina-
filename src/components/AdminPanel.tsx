@@ -11,7 +11,7 @@ import { auth, app as firebaseApp } from '../firebase';
 import { initializeApp } from 'firebase/app';
 import { getAuth as getSecondaryAuth, createUserWithEmailAndPassword } from 'firebase/auth';
 import { signInWithEmailAndPassword } from 'firebase/auth';
-import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD } from '../utils/storage';
+import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
 import { storage } from '../firebase';
 import { ref, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
@@ -482,18 +482,27 @@ export default function AdminPanel({
   };
 
   
-  const handleSaveConfig = () => {
+  const handleSaveConfig = async () => {
     const db = getDB();
     if (!db.settings) db.settings = {} as any;
     db.settings.cedulaJuridica = cedulaJuridica;
     db.settings.companyPhone = companyPhone;
     db.settings.companyAddress = companyAddress;
     db.settings.pickupHours = pickupHours;
-    if (storeLogoPreview) {
-      db.settings.storeLogo = storeLogoPreview;
+
+    try {
+      // El logo se guarda con saveLogo(), que sube la imagen a Firebase Storage
+      // y solo entonces persiste la URL final (mismo camino que ya se probó
+      // funcional, en vez de incrustar el base64 directo en la configuración).
+      if (storeLogoPreview) {
+        await saveLogo(storeLogoPreview);
+      }
+      addAuditLog(currentUser?.email || 'admin', 'Configuración', 'Actualizar Ajustes', 'Ajustes fiscales, operativos y logo actualizados', db);
+      await saveDB(db);
+    } catch (err: any) {
+      alert('No se pudo guardar la configuración/logo en la base de datos. Detalle: ' + (err?.message || err));
+      return;
     }
-    addAuditLog(currentUser?.email || 'admin', 'Configuración', 'Actualizar Ajustes', 'Ajustes fiscales, operativos y logo actualizados', db);
-    saveDB(db);
     alert('Parámetros de facturación fiscal y de operación residencial guardados con éxito.');
   };
 
@@ -570,7 +579,7 @@ export default function AdminPanel({
   }, [activeTab, isAuthenticated, currentUser]);
 
   // Product CRUD triggers
-  const handleProductSubmit = (e: React.FormEvent) => {
+  const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!prodName.trim() || prodPrice <= 0 || prodCost <= 0) {
       alert('Por favor complete todos los datos con valores positivos.');
@@ -630,7 +639,12 @@ export default function AdminPanel({
       addAuditLog(currentUser?.email || 'admin', 'Inventario', 'Crear Producto', `Nuevo artículo registrado: ${prodName} (SKU: ${sku}) en la ubicación: "${prodPhysicalLocation || 'Sin asignar'}"`);
     }
 
-    saveDB(db);
+    try {
+      await saveDB(db);
+    } catch (err: any) {
+      alert('No se pudo guardar el producto en la base de datos. Detalle: ' + (err?.message || err));
+      return;
+    }
     loadAllAdminData();
     setShowProductForm(false);
     setEditingProductId(null);
@@ -662,11 +676,16 @@ export default function AdminPanel({
     setShowProductForm(true);
   };
 
-  const handleDeleteProduct = (prodId: string, name: string) => {
+  const handleDeleteProduct = async (prodId: string, name: string) => {
     if (!window.confirm(`¿Seguro que desea eliminar el producto ${name}?`)) return;
     const db = getDB();
     db.products = db.products.filter(p => p && p.id !== prodId);
-    saveDB(db);
+    try {
+      await saveDB(db);
+    } catch (err: any) {
+      alert('No se pudo eliminar el producto en la base de datos. Detalle: ' + (err?.message || err));
+      return;
+    }
     addAuditLog(currentUser?.email || 'admin', 'Inventario', 'Eliminar Producto', `Artículo eliminado: ${name}`);
     loadAllAdminData();
     if (onRefreshTrigger) onRefreshTrigger();
