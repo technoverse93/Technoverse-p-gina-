@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import React, { useState, useEffect, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { PaginatedTbody } from './PaginationHelper';
 import { 
   LayoutDashboard, Package, Wrench, Users, CreditCard, FileSpreadsheet, 
@@ -48,6 +48,8 @@ export default function AdminPanel({
   theme,
   toggleTheme
 }: AdminPanelProps) {
+  const isSavingConfigRef = useRef(false);
+  const isSavingProductRef = useRef(false);
   const [isMounted, setIsMounted] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
@@ -461,6 +463,20 @@ export default function AdminPanel({
 
   
   const handleSaveConfig = async () => {
+    // Evita que un doble clic/doble toque en el celular dispare el mismo
+    // guardado varias veces en paralelo (eso causaba conflictos 409 en
+    // Supabase y hacía que la pantalla revirtiera cambios que sí se habían
+    // guardado).
+    if (isSavingConfigRef.current) return;
+    isSavingConfigRef.current = true;
+    try {
+      await handleSaveConfigInner();
+    } finally {
+      isSavingConfigRef.current = false;
+    }
+  };
+
+  const handleSaveConfigInner = async () => {
     const db = getDB();
     if (!db.settings) db.settings = {} as any;
     db.settings.cedulaJuridica = cedulaJuridica;
@@ -559,6 +575,19 @@ export default function AdminPanel({
   // Product CRUD triggers
   const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    // Evita doble envío (doble clic/doble toque) creando el mismo producto
+    // dos veces en paralelo, lo que antes causaba un conflicto 409 en
+    // Supabase y revertía la pantalla.
+    if (isSavingProductRef.current) return;
+    isSavingProductRef.current = true;
+    try {
+      await handleProductSubmitInner();
+    } finally {
+      isSavingProductRef.current = false;
+    }
+  };
+
+  const handleProductSubmitInner = async () => {
     if (!prodName.trim() || prodPrice <= 0 || prodCost <= 0) {
       alert('Por favor complete todos los datos con valores positivos.');
       return;
