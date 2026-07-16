@@ -854,10 +854,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   };
 
   const confirmDeleteProduct = (p: Product) => {
-    if (p.stock > 0) {
-      alert('No se puede eliminar un producto con stock mayor a 0.');
-      return;
-    }
     const db = getDB();
     const idx = db.products.findIndex(x => x && x.id === p.id);
     if (idx !== -1) {
