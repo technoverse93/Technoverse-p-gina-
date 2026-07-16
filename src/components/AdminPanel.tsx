@@ -79,22 +79,6 @@ export default function AdminPanel({
   const [isMobileInventoryMenuOpen, setIsMobileInventoryMenuOpen] = useState(false);
   const [isMobileMoreMenuOpen, setIsMobileMoreMenuOpen] = useState(false);
 
-  const handleDropdownEnter = (e: React.MouseEvent<HTMLDivElement | HTMLButtonElement>) => {
-    const button = e.currentTarget;
-    const rect = button.getBoundingClientRect();
-    const spaceRight = window.innerWidth - rect.right;
-    const dropdown = button.querySelector('.dynamic-dropdown') as HTMLElement;
-    if (dropdown) {
-      if (spaceRight < 320) {
-        dropdown.style.left = 'auto';
-        dropdown.style.right = '0';
-      } else {
-        dropdown.style.left = '0';
-        dropdown.style.right = 'auto';
-      }
-    }
-  };
-
   useLayoutEffect(() => {
     // Dynamic dropdown positioning to prevent going off-screen
     const handleDropdownPosition = () => {
@@ -1246,45 +1230,13 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
             <Home className="w-3 h-3" />
             Ver tienda
           </button>
-          <div className="relative hidden lg:block" onMouseEnter={handleDropdownEnter}>
-            <button 
-              onClick={() => {
-                setActiveDropdown(activeDropdown === 'profile' ? null : 'profile');
-              }}
-              className="flex items-center gap-2 pl-2 pr-3 py-1 rounded-full bg-[var(--bg-surface)] hover:bg-[var(--bg-surface)] border border-[var(--border-color)] transition cursor-pointer text-[var(--text-primary)] "
-            >
-              <div className="w-6 h-6 rounded-full bg-[var(--bg-base)] text-[var(--text-primary)] flex items-center justify-center font-bold text-[10px] uppercase border border-[var(--border-color)]">
-                {currentUser?.name.substring(0, 2)}
-              </div>
-              <span className="text-sm font-bold text-[var(--text-primary)] hidden sm:inline">
-                {currentUser?.name.split(' ')[0]}
-              </span>
-              <ChevronDown className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
-            </button>
-            {activeDropdown === 'profile' && (
-              <div className="absolute top-full mt-2 min-w-[260px] bg-[var(--bg-surface)] dynamic-dropdown border border-[var(--border-color)] rounded-2xl shadow-sm p-4 z-[70] transition-all duration-200 ease-out text-[var(--text-primary)] animate-in fade-in slide-in-from-top-2" style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}>
-                <div className="px-4 py-3 border-b border-[var(--border-color)] mb-2">
-                  <div className="text-sm font-bold text-[var(--text-primary)] truncate">{currentUser?.name}</div>
-                  <div className="text-[9px] text-[var(--brand-gold-mid)] font-extrabold uppercase tracking-wider">
-                    {currentUser?.role === 'Dueño' ? 'Dueño Principal' : `Empleado: ${currentUser?.employeeRole}`}
-                  </div>
-                </div>
-
-                <div className="border-t border-[var(--border-color)] my-1 pt-1">
-                  <button
-                    onClick={() => {
-                      handleLogout();
-                      setActiveDropdown(null);
-                    }}
-                    className="w-full flex items-center gap-2 px-4 py-3 text-sm text-rose-400 hover:text-rose-300 hover:bg-rose-500/10 rounded-xl text-left font-bold transition cursor-pointer"
-                  >
-                    <LogOut className="w-4 h-4" />
-                    <span>Cerrar Sesión</span>
-                  </button>
-                </div>
-              </div>
-            )}
-          </div>
+          <button
+            onClick={handleLogout}
+            className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 hover:bg-rose-500/20 hover:text-rose-400 transition cursor-pointer font-bold text-sm"
+          >
+            <LogOut className="w-4 h-4" />
+            <span>Cerrar sesión</span>
+          </button>
         </div>
       </header>
 
