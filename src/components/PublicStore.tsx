@@ -894,7 +894,7 @@ export default function PublicStore({
                     style={{ willChange: 'transform, opacity', transformOrigin: 'top left' }}
                   >
                     <div className="px-4 py-2 border-b border-slate-50 mb-1">
-                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Explorar Categorías</span>
+                      <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Explorar Categorías</span>
                     </div>
                     <div className="max-h-80 overflow-y-auto custom-scrollbar">
                       {CATEGORIES.map(cat => cat && (
@@ -929,7 +929,7 @@ export default function PublicStore({
         {/* Search input with autocomplete */}
         <div className="flex-1 max-w-lg mx-4 lg:mx-8 relative hidden sm:block">
           <div className="relative flex items-center bg-[var(--bg-surface)] border border-[var(--border-color)] focus-within:border-blue-500 dark:focus-within:border-[var(--brand-gold-dark)] focus-within:ring-2 focus-within:ring-blue-500/20 dark:focus-within:ring-[var(--brand-gold-mid)] rounded-2xl px-4 py-2 transition-all duration-200">
-            <Search className="w-4 h-4 text-slate-400 mr-3 flex-shrink-0" />
+            <Search className="w-4 h-4 text-[var(--text-muted)] mr-3 flex-shrink-0" />
             <input
               type="text"
               value={searchQuery}
@@ -940,7 +940,7 @@ export default function PublicStore({
             {searchQuery && (
               <button 
                 onClick={handleResetSearch} 
-                className="text-slate-400 hover:text-[var(--text-secondary)] transition-colors p-1"
+                className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors p-1"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -968,12 +968,12 @@ export default function PublicStore({
                         {p.imageUrl ? (
                           <img src={p.imageUrl} alt="" className="w-full h-full object-contain" />
                         ) : (
-                          <Smartphone className="w-5 h-5 text-slate-400" />
+                          <Smartphone className="w-5 h-5 text-[var(--text-muted)]" />
                         )}
                       </div>
                       <div>
                         <div className="text-sm font-bold text-[var(--text-secondary)]">{p.name}</div>
-                        <div className="text-[10px] text-slate-500 font-mono uppercase">SKU: {p.sku} • {p.category}</div>
+                        <div className="text-[10px] text-[var(--text-muted)] font-mono uppercase">SKU: {p.sku} • {p.category}</div>
                       </div>
                     </div>
                     <div className="text-sm font-bold text-blue-600 dark:text-[var(--brand-gold-light)] font-mono">₡{p.price.toLocaleString()}</div>
@@ -1035,13 +1035,13 @@ export default function PublicStore({
                   {!isAuthenticated ? (
                     <form onSubmit={handleClientLoginSubmit} className="p-5 space-y-4">
                       <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3 mb-1">
-                        <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Portal de Clientes</span>
+                        <span className="text-xs font-black text-[var(--text-muted)] uppercase tracking-widest">Portal de Clientes</span>
                         <ShoppingBag className="w-4 h-4 text-blue-500 dark:text-[var(--brand-gold-light)] opacity-20" />
                       </div>
                       
                       <div className="space-y-4">
                         <div>
-                          <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1.5 ml-1 tracking-wider">
+                          <label className="block text-[10px] uppercase font-bold text-[var(--text-muted)] mb-1.5 ml-1 tracking-wider">
                             Correo Electrónico
                           </label>
                           <input
@@ -1054,7 +1054,7 @@ export default function PublicStore({
                           />
                         </div>
                         <div>
-                          <label className="block text-[10px] uppercase font-bold text-slate-500 mb-1.5 ml-1 tracking-wider">
+                          <label className="block text-[10px] uppercase font-bold text-[var(--text-muted)] mb-1.5 ml-1 tracking-wider">
                             Contraseña
                           </label>
                           <input
@@ -1098,7 +1098,7 @@ export default function PublicStore({
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="text-sm font-black text-[var(--text-secondary)] whitespace-normal break-words leading-tight">{currentUser?.name}</div>
-                            <div className="text-[10px] text-slate-500 whitespace-normal break-words mb-1">{currentUser?.email}</div>
+                            <div className="text-[10px] text-[var(--text-muted)] whitespace-normal break-words mb-1">{currentUser?.email}</div>
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-blue-100 text-blue-600 dark:text-[var(--brand-gold-light)] tracking-tighter dark:bg-[var(--brand-gold-mid)]">
                               {currentUser?.role === 'Cliente' ? `${currentUser.membershipTier} Member` : currentUser?.role}
                             </span>
@@ -1187,8 +1187,8 @@ export default function PublicStore({
                   style={{ willChange: 'transform, opacity' }}
                 >
                   <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-base)]">
-                    <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Carrito de Compras</span>
-                    <button onClick={() => setIsCartDropdownOpen(false)} className="text-slate-400 hover:text-[var(--text-secondary)] p-1">
+                    <span className="text-xs font-black text-[var(--text-muted)] uppercase tracking-widest">Carrito de Compras</span>
+                    <button onClick={() => setIsCartDropdownOpen(false)} className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] p-1">
                       <X className="w-4 h-4" />
                     </button>
                   </div>
@@ -1196,12 +1196,12 @@ export default function PublicStore({
                   <div className="flex-1 overflow-y-auto p-4 space-y-4 custom-scrollbar">
                     {cart.length === 0 ? (
                       <div className="py-12 text-center flex flex-col items-center gap-3">
-                        <div className="w-16 h-16 bg-[var(--bg-surface)] rounded-full flex items-center justify-center text-slate-300">
+                        <div className="w-16 h-16 bg-[var(--bg-surface)] rounded-full flex items-center justify-center text-[var(--text-muted)]">
                           <ShoppingBag className="w-8 h-8" />
                         </div>
                         <div className="space-y-1">
                           <p className="text-sm font-bold text-[var(--text-secondary)]">Tu carrito está vacío</p>
-                          <p className="text-[11px] text-slate-500">¿Buscas algo especial? Explora nuestro catálogo.</p>
+                          <p className="text-[11px] text-[var(--text-muted)]">¿Buscas algo especial? Explora nuestro catálogo.</p>
                         </div>
                       </div>
                     ) : (
@@ -1211,7 +1211,7 @@ export default function PublicStore({
                             {it.product.imageUrl ? (
                               <img src={it.product.imageUrl} alt="" className="w-full h-full object-contain group-hover/item:scale-110 transition-transform duration-300" />
                             ) : (
-                              <Smartphone className="w-6 h-6 text-slate-300" />
+                              <Smartphone className="w-6 h-6 text-[var(--text-muted)]" />
                             )}
                           </div>
                           <div className="flex-1 min-w-0 flex flex-col justify-center">
@@ -1219,13 +1219,13 @@ export default function PublicStore({
                               <h4 className="text-sm font-bold text-[var(--text-secondary)] whitespace-normal break-words pr-2">{it.product.name}</h4>
                               <button 
                                 onClick={() => handleRemoveFromCart(idx)}
-                                className="text-slate-300 hover:text-rose-500 p-0.5 transition-colors"
+                                className="text-[var(--text-muted)] hover:text-rose-500 p-0.5 transition-colors"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
                             </div>
                             <div className="flex justify-between items-end mt-1">
-                              <div className="text-[11px] font-bold text-slate-500">
+                              <div className="text-[11px] font-bold text-[var(--text-muted)]">
                                 {it.quantity} x ₡{getProductDiscountedPrice(it.product, buyerMembership).toLocaleString()}
                               </div>
                               <div className="text-sm font-black text-blue-600 dark:text-[var(--brand-gold-light)] font-mono">
@@ -1241,7 +1241,7 @@ export default function PublicStore({
                   {cart.length > 0 && (
                     <div className="p-4 bg-[var(--bg-surface)] border-t border-[var(--border-color)] space-y-4">
                       <div className="flex justify-between items-center px-1">
-                        <span className="text-xs font-bold text-slate-500 uppercase">Subtotal</span>
+                        <span className="text-xs font-bold text-[var(--text-muted)] uppercase">Subtotal</span>
                         <span className="text-lg font-black text-[var(--text-secondary)] font-mono">
                           ₡{cart.reduce((sum, it) => sum + (getProductDiscountedPrice(it.product, buyerMembership) * it.quantity), 0).toLocaleString()}
                         </span>
@@ -1293,7 +1293,7 @@ export default function PublicStore({
                   }}
                   className={`w-full text-left py-3 px-4 text-sm rounded-xl transition-all font-semibold ${
                     (selectedCategory === cat || (cat === 'Todos' && selectedCategory === null))
-                      ? 'bg-[var(--brand-gold-mid)] text-white'
+                      ? 'bg-[var(--brand-gold-mid)] text-[#1a1408] dark:text-[#14100a]'
                       : 'text-[var(--text-secondary)] hover:bg-[var(--bg-base)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)]'
                   }`}
                 >
@@ -1396,7 +1396,7 @@ export default function PublicStore({
             {banners.length > 0 && (
               <div className="relative h-44 bg-gradient-to-r from-blue-500/5 via-white to-[#D4AF37]/5 dark:bg-[var(--bg-surface)] dark:bg-none rounded-3xl border border-[var(--border-color)] flex items-center justify-between p-8 overflow-hidden shadow-sm mb-8">
                 <div className="space-y-2 max-w-md z-10">
-                  <span className="text-[10px] bg-[var(--brand-gold-mid)] text-white px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">{banners[0].type}</span>
+                  <span className="text-[10px] bg-[var(--brand-gold-mid)] text-[#1a1408] dark:text-[#14100a] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">{banners[0].type}</span>
                   <h2 className="text-xl md:text-2xl font-extrabold text-[var(--text-primary)] tracking-tight leading-none">
                     {banners[0].title}
                   </h2>
@@ -1441,7 +1441,7 @@ export default function PublicStore({
                 <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-3xl p-12 text-center max-w-md mx-auto space-y-4 shadow-sm animate-in fade-in">
                   <AlertCircle className="w-12 h-12 text-[var(--brand-gold-mid)] mx-auto opacity-70" />
                   <h4 className="font-bold text-sm text-[var(--text-primary)]">Sin stock disponible</h4>
-                  <p className="text-sm text-slate-500 leading-relaxed font-sans">
+                  <p className="text-sm text-[var(--text-muted)] leading-relaxed font-sans">
                     Actualmente no disponemos de artículos en esta categoría. Estamos trabajando para renovar nuestro inventario lo antes posible.
                   </p>
                 </div>
@@ -1531,7 +1531,7 @@ export default function PublicStore({
 
                 <button
                   type="submit"
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-white font-extrabold text-sm py-3 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer"
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] dark:text-[#14100a] font-extrabold text-sm py-3 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer"
                 >
                   Abrir Ticket de Reparación Oficial
                 </button>
@@ -1540,7 +1540,7 @@ export default function PublicStore({
               {generatedTicket && (
                 <div className="bg-[var(--bg-surface)] rounded-2xl p-4 border border-[var(--border-color)] space-y-2 text-center animate-in fade-in">
                   <CheckCircle className="w-8 h-8 text-blue-600 dark:text-[var(--brand-gold-light)] mx-auto animate-bounce" />
-                  <h4 className="font-bold text-sm text-slate-850">¡Ticket de Soporte Generado!</h4>
+                  <h4 className="font-bold text-sm text-[var(--text-primary)]">¡Ticket de Soporte Generado!</h4>
                   <p className="text-[10px] text-[var(--text-secondary)]">Su dispositivo ha sido registrado con éxito. Puede consultar el estado en tiempo real ingresando su número de ticket en la sección derecha de esta página.</p>
                   <div className="font-mono text-base font-bold text-blue-600 dark:text-[var(--brand-gold-light)] select-text">{generatedTicket}</div>
                 </div>
@@ -1627,7 +1627,7 @@ export default function PublicStore({
                         </div>
 
                         <div className="flex flex-col items-end justify-between">
-                          <span className="font-mono font-bold text-slate-850">₡{getProductDiscountedPrice(it.product, buyerMembership).toLocaleString()}</span>
+                          <span className="font-mono font-bold text-[var(--text-primary)]">₡{getProductDiscountedPrice(it.product, buyerMembership).toLocaleString()}</span>
                           
                           <div className="flex items-center gap-2 mt-1">
                             <button 
@@ -1868,7 +1868,7 @@ export default function PublicStore({
                         <button
                           onClick={handleApplyCoupon}
                           disabled={!couponCode || !!appliedCoupon}
-                          className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-white font-bold px-3 py-1.5 rounded-lg transition text-sm cursor-pointer"
+                          className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] dark:text-[#14100a] font-bold px-3 py-1.5 rounded-lg transition text-sm cursor-pointer"
                         >
                           {appliedCoupon ? 'Aplicado' : 'Aplicar'}
                         </button>
@@ -1906,7 +1906,7 @@ export default function PublicStore({
                         setCheckoutStep(1);
                       }}
                       disabled={cart.length === 0}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
+                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] dark:text-[#14100a] font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
                     >
                       Continuar a Envío <ArrowRight className="w-4 h-4" />
                     </button>
@@ -1929,7 +1929,7 @@ export default function PublicStore({
                         }
                         setCheckoutStep(2);
                       }}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] text-white font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
+                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] text-[#1a1408] dark:text-[#14100a] font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
                     >
                       Continuar al Pago <ArrowRight className="w-4 h-4" />
                     </button>
@@ -1938,7 +1938,7 @@ export default function PublicStore({
                   {checkoutStep === 2 && (
                     <button
                       onClick={handleConfirmOrder}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-white font-extrabold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition shadow-sm cursor-pointer"
+                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-[#1a1408] dark:text-[#14100a] font-extrabold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition shadow-sm cursor-pointer"
                     >
                       Autorizar Transmisión Fiscal y Pagar
                     </button>
@@ -1971,7 +1971,7 @@ export default function PublicStore({
           <div className="relative max-w-md w-full glass-panel-strong rounded-3xl p-8 shadow-sm space-y-6 text-[var(--text-primary)] animate-in zoom-in-95 duration-200" id="login-register-modal">
             <div className="text-center space-y-2">
               <div className="w-12 h-12 bg-gradient-to-tr from-[#3B82F6] to-blue-600 dark:bg-[var(--brand-gold-mid)] dark:bg-none rounded-2xl flex items-center justify-center border border-white/40 shadow-sm mx-auto">
-                <span className="text-white text-lg">🔑</span>
+                <span className="text-white dark:text-[#14100a] text-lg">🔑</span>
               </div>
               <h2 className="text-lg font-extrabold tracking-tight font-display text-[var(--text-primary)]">
                 {isRegisterMode ? 'Crear Cuenta' : 'Iniciar Sesión'}
@@ -2070,7 +2070,7 @@ export default function PublicStore({
 
                 <button
                   type="submit"
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-white font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer"
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] dark:text-[#14100a] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer"
                 >
                   Registrarse y Entrar
                 </button>
@@ -2102,7 +2102,7 @@ export default function PublicStore({
 
                 <button
                   type="submit"
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-white font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer"
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] dark:text-[#14100a] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer"
                 >
                   Iniciar Sesión
                 </button>
@@ -2254,7 +2254,7 @@ export default function PublicStore({
                     className={`w-full py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider text-center transition cursor-pointer shadow-sm ${
                       selectedProductDetail.stock === 0
                         ? 'bg-slate-200 text-[var(--text-primary)] cursor-not-allowed'
-                        : 'bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] text-white'
+                        : 'bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] text-[#1a1408] dark:text-[#14100a]'
                     }`}
                   >
                     Añadir al carrito
@@ -2270,7 +2270,7 @@ export default function PublicStore({
       {showCartSuccessToast && (
         <div className="fixed bottom-28 right-6 z-[998] bg-[#1E293B]/95 border border-[var(--brand-gold-mid)]/50 text-white px-5 py-3 rounded-2xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300">
           <div className="p-1 bg-[var(--brand-gold-mid)] rounded-lg">
-            <CheckCircle className="w-4 h-4 text-white" />
+            <CheckCircle className="w-4 h-4 text-[#1a1408] dark:text-[#14100a]" />
           </div>
           <div>
             <div className="text-[10px] text-[var(--brand-gold-mid)] font-bold uppercase tracking-wider">¡Éxito!</div>
