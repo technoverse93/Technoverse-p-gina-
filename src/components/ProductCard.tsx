@@ -16,22 +16,22 @@ export function ProductCard({ prod, onClick, onAddToCart, buyerMembership, getPr
   const isDiscounted = discountedPrice < prod.price;
 
   return (
-    <div 
+    <div
       onClick={onClick}
-      className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden flex flex-col justify-between shadow-sm hover:shadow-md hover:border-[var(--brand-gold-mid)]/50 transition-all duration-300 group relative cursor-pointer hover:-translate-y-1"
+      className="glass-card rounded-2xl overflow-hidden flex flex-col justify-between group relative cursor-pointer hover:-translate-y-1.5"
     >
       {/* Superposed Actions */}
       <div className="absolute top-3 right-3 z-20 flex flex-col gap-2">
-        <button 
+        <button
           onClick={(e) => { e.stopPropagation(); /* Add to favorites logic placeholder */ }}
-          className="p-1.5 bg-white/80 hover:bg-white rounded-full text-slate-400 hover:text-rose-500 transition-colors shadow-sm"
+          className="glass-pill p-1.5 rounded-full text-[var(--text-muted)] hover:text-rose-500 transition-colors"
           title="Favoritos"
         >
           <Heart className="w-4 h-4" />
         </button>
-        <button 
+        <button
           onClick={(e) => { e.stopPropagation(); onAddToCart(prod); }}
-          className="p-1.5 bg-white/80 hover:bg-white rounded-full text-slate-400 hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] transition-colors shadow-sm"
+          className="glass-pill p-1.5 rounded-full text-[var(--text-muted)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] transition-colors"
           title="Añadir al carrito"
         >
           <ShoppingBag className="w-4 h-4" />
@@ -39,11 +39,11 @@ export function ProductCard({ prod, onClick, onAddToCart, buyerMembership, getPr
       </div>
 
       {/* Image viewer */}
-      <div className="h-44 bg-[var(--bg-surface)] relative flex items-center justify-center p-4">
+      <div className="h-44 relative flex items-center justify-center p-4 bg-gradient-to-b from-transparent to-[var(--brand-navy)]/[0.03] dark:to-black/10">
         {prod.imageUrl ? (
-          <img 
-            src={prod.imageUrl} 
-            alt={prod.name} 
+          <img
+            src={prod.imageUrl}
+            alt={prod.name}
             className="max-h-full max-w-full object-contain group-hover:scale-105 transition duration-300"
             referrerPolicy="no-referrer"
           />
@@ -53,10 +53,10 @@ export function ProductCard({ prod, onClick, onAddToCart, buyerMembership, getPr
             <span className="text-[10px] font-mono">Sin Imagen</span>
           </div>
         )}
-        
+
         {/* Category Badge if Discounted or new (Placeholder) */}
         {isDiscounted && (
-          <span className="absolute top-3 left-3 z-10 text-[9px] bg-[var(--brand-gold-mid)] text-white px-2 py-0.5 rounded-full font-bold">
+          <span className="absolute top-3 left-3 z-10 text-[9px] btn-glass-primary px-2 py-0.5 rounded-full font-bold">
             OFERTA
           </span>
         )}
