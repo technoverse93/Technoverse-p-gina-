@@ -1200,7 +1200,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
   ];
 
   return (
-    <div className="h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex flex-col overflow-hidden w-full" id="admin-panel-root">
+    <div className="h-dvh bg-[var(--bg-base)] text-[var(--text-primary)] flex flex-col overflow-hidden w-full" id="admin-panel-root">
       {/* UNIFIED NAVIGATION HEADER WITH BREADCRUMB GLASS DROP-DOWNS */}
       <header className="glass-nav h-12 sm:h-14 sticky top-0 z-50 flex items-center justify-between px-3 md:px-4">
         <div className="flex items-center gap-3 sm:gap-4 overflow-hidden flex-1 min-w-0">
