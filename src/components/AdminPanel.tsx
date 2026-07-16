@@ -477,25 +477,34 @@ export default function AdminPanel({
   };
 
   const handleSaveConfigInner = async () => {
-    const db = getDB();
-    if (!db.settings) db.settings = {} as any;
-    db.settings.cedulaJuridica = cedulaJuridica;
-    db.settings.companyPhone = companyPhone;
-    db.settings.companyAddress = companyAddress;
-    db.settings.pickupHours = pickupHours;
-
     try {
-      // El logo se guarda con saveLogo(), que persiste la imagen comprimida
-      // directamente en Supabase (app_settings.store_logo).
+      // El logo se guarda PRIMERO con saveLogo(), que persiste la imagen
+      // comprimida directamente en Supabase (app_settings.store_logo).
       if (storeLogoPreview) {
         await saveLogo(storeLogoPreview);
       }
+
+      // CRÍTICO: se vuelve a leer getDB() DESPUÉS de guardar el logo. Antes
+      // "db" se capturaba ANTES de guardar el logo (sin el logo nuevo), y el
+      // saveDB() de aquí abajo lo usaba tal cual — eso sobreescribía el logo
+      // recién guardado de vuelta al valor viejo en el mismo clic. Por eso
+      // Supabase confirmaba la subida pero la interfaz no lo reflejaba: el
+      // propio guardado lo revertía un instante después.
+      const db = getDB();
+      if (!db.settings) db.settings = {} as any;
+      db.settings.cedulaJuridica = cedulaJuridica;
+      db.settings.companyPhone = companyPhone;
+      db.settings.companyAddress = companyAddress;
+      db.settings.pickupHours = pickupHours;
+
       addAuditLog(currentUser?.email || 'admin', 'Configuración', 'Actualizar Ajustes', 'Ajustes fiscales, operativos y logo actualizados', db);
       await saveDB(db);
     } catch (err: any) {
       alert('No se pudo guardar la configuración/logo en la base de datos. Detalle: ' + (err?.message || err));
       return;
     }
+    setStoreLogoPreview(null);
+    loadAllAdminData();
     alert('Parámetros de facturación fiscal y de operación residencial guardados con éxito.');
   };
 
