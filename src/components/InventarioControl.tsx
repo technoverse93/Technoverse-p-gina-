@@ -788,34 +788,67 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         }
       } else {
         const newSku = prodSku.trim() || `${prodCategory.substring(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
-        
+
         // Prevent active SKU duplicate conflicts
-        const duplicate = db.products.find(p => p && p.active !== false && p.sku && p.sku.toLowerCase() === newSku.toLowerCase().trim());
-        if (duplicate) {
-          setFormError(`El SKU "${newSku}" ya está siendo utilizado por otro producto activo ("${duplicate.name}").`);
+        const activeDuplicate = db.products.find(p => p && p.active !== false && p.sku && p.sku.toLowerCase() === newSku.toLowerCase().trim());
+        if (activeDuplicate) {
+          setFormError(`El SKU "${newSku}" ya está siendo utilizado por otro producto activo ("${activeDuplicate.name}").`);
           return;
         }
 
-        const newProduct: Product = {
-          id: `PROD-${Date.now()}`,
-          name: prodName.trim(),
-          sku: newSku,
-          description: prodDesc.trim(),
-          category: prodCategory,
-          price: finalPrice,
-          cost: finalCost,
-          stock: finalStock,
-          minStock: finalMinStock,
-          linkedSparePartSku: sparePartCategories.includes(prodCategory) ? undefined : prodLinkedSparePartSku,
-          physicalLocation: locationValue,
-          imageUrl: prodImage || TECHNOVERSE_PLACEHOLDER,
-          discountPercent: prodApplyDiscount ? finalDiscount : 0,
-          applicableMemberships: prodMemberships,
-          active: finalStock > 0,
-          warranty: prodWarranty
-        };
-        db.products.push(newProduct);
-        
+        // El SKU es único en la base de datos (incluye productos inactivos/
+        // eliminados, que solo se marcan active:false pero conservan su fila).
+        // Si el SKU viene del histórico y corresponde a un producto ya
+        // desactivado, hay que REACTIVAR esa misma fila, no crear una nueva:
+        // insertar un producto nuevo con un SKU que ya existe en otra fila
+        // (aunque esté inactiva) viola la restricción UNIQUE y la base de
+        // datos rechaza el guardado — por eso el producto "aparecía y
+        // desaparecía" al reintegrar desde el histórico.
+        const inactiveMatch = db.products.find(p => p && p.active === false && p.sku && p.sku.toLowerCase() === newSku.toLowerCase().trim());
+
+        let newProduct: Product;
+        if (inactiveMatch) {
+          const idx = db.products.findIndex(p => p.id === inactiveMatch.id);
+          newProduct = {
+            ...inactiveMatch,
+            name: prodName.trim(),
+            description: prodDesc.trim(),
+            category: prodCategory,
+            price: finalPrice,
+            cost: finalCost,
+            stock: finalStock,
+            minStock: finalMinStock,
+            linkedSparePartSku: sparePartCategories.includes(prodCategory) ? undefined : prodLinkedSparePartSku,
+            physicalLocation: locationValue,
+            imageUrl: prodImage || TECHNOVERSE_PLACEHOLDER,
+            discountPercent: prodApplyDiscount ? finalDiscount : 0,
+            applicableMemberships: prodMemberships,
+            active: finalStock > 0,
+            warranty: prodWarranty
+          };
+          db.products[idx] = newProduct;
+        } else {
+          newProduct = {
+            id: `PROD-${Date.now()}`,
+            name: prodName.trim(),
+            sku: newSku,
+            description: prodDesc.trim(),
+            category: prodCategory,
+            price: finalPrice,
+            cost: finalCost,
+            stock: finalStock,
+            minStock: finalMinStock,
+            linkedSparePartSku: sparePartCategories.includes(prodCategory) ? undefined : prodLinkedSparePartSku,
+            physicalLocation: locationValue,
+            imageUrl: prodImage || TECHNOVERSE_PLACEHOLDER,
+            discountPercent: prodApplyDiscount ? finalDiscount : 0,
+            applicableMemberships: prodMemberships,
+            active: finalStock > 0,
+            warranty: prodWarranty
+          };
+          db.products.push(newProduct);
+        }
+
         // Register initial stock movement if > 0
         if (finalStock > 0) {
           db.inventory_movements.unshift({
@@ -824,14 +857,20 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             productName: newProduct.name,
             quantityChange: finalStock,
             type: 'Entrada manual',
-            notes: 'Inventario inicial',
+            notes: inactiveMatch ? 'Reintegro de producto desde histórico' : 'Inventario inicial',
             timestamp: new Date().toISOString(),
             userEmail: currentUser?.email || 'technoverse.admin@gmail.com',
             resultingStock: finalStock
           });
         }
         addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Crear Producto', `Producto creado: ${prodName} (SKU: ${newSku})`, db);
-        
+
+        // El SKU ya se reintegró como producto: se elimina del histórico
+        // para no seguir contando como pendiente de depuración.
+        if (db.historical_skus) {
+          db.historical_skus = db.historical_skus.filter(h => h && h.sku.toLowerCase() !== newSku.toLowerCase().trim());
+        }
+
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('product:created', { detail: newProduct }));
           if (prodStock > 0) {
