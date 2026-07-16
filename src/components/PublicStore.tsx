@@ -1186,7 +1186,7 @@ export default function PublicStore({
                   id="cart-dropdown"
                   style={{ willChange: 'transform, opacity' }}
                 >
-                  <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-surface)]/50">
+                  <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between bg-[var(--bg-base)]">
                     <span className="text-xs font-black text-slate-500 uppercase tracking-widest">Carrito de Compras</span>
                     <button onClick={() => setIsCartDropdownOpen(false)} className="text-slate-400 hover:text-[var(--text-secondary)] p-1">
                       <X className="w-4 h-4" />

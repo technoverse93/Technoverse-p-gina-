@@ -1276,7 +1276,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                   </div>
                 </div>
 
-                <div className="border-t border-[var(--border-color)] my-1 pt-1">
+                <div className="hidden md:block border-t border-[var(--border-color)] my-1 pt-1">
                   <button
                     onClick={(e) => {
                       e.stopPropagation();
@@ -1730,8 +1730,8 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                       <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Actividad Reciente de Transacciones</span>
                       <CreditCard className="w-4 h-4 text-amber-500" />
                     </div>
-                    <div className="flex-1 h-full bg-[var(--bg-surface)]/50 rounded-2xl border border-[var(--border-color)] p-6 flex items-end justify-between gap-3 relative overflow-hidden">
-                      <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-emerald-500 to-blue-500 dark:from-[var(--brand-gold-mid)] dark:via-[var(--brand-gold-light)] dark:to-[var(--brand-gold-dark)] opacity-20" />
+                    <div className="flex-1 h-full bg-[var(--bg-base)] rounded-2xl border border-[var(--border-color)] p-6 flex items-end justify-between gap-3 relative" style={{ contain: 'layout style' }}>
+                      <div className="absolute top-0 left-0 w-full h-1 bg-blue-500 dark:bg-[var(--brand-gold-mid)] opacity-20" />
                       {orders.length === 0 ? (
                         <div className="absolute inset-0 flex flex-col items-center justify-center text-xs text-slate-400 font-bold uppercase tracking-widest gap-2">
                           <ShoppingBag className="w-8 h-8 opacity-20" />
@@ -1739,26 +1739,27 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                         </div>
                       ) : (
                         orders.slice(-15).map((ord, idx) => (
-                          <motion.div 
-                            key={ord.id} 
-                            initial={{ height: 0 }}
-                            animate={{ height: `${Math.min(100, Math.max(15, (ord.total / (totalSalesRevenue || 500000)) * 100))}%` }}
+                          <div
+                            key={ord.id}
                             className="flex-1 flex flex-col items-center gap-2 h-full justify-end group cursor-pointer"
                           >
                             <div className="relative w-full h-full flex flex-col justify-end">
                               <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-10">
-                                <div className="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded shadow-xl whitespace-nowrap">
+                                <div className="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded whitespace-nowrap">
                                   ₡{ord.total.toLocaleString()}
                                 </div>
                                 <div className="w-2 h-2 bg-slate-800 rotate-45 mx-auto -mt-1" />
                               </div>
-                              <div 
-                                className="w-full bg-blue-500/80 rounded-t-lg group-hover:bg-blue-600 dark:hover:bg-[var(--brand-gold-mid)] dark:bg-[var(--brand-gold-mid)] transition-all shadow-sm"
-                                style={{ height: '100%' }}
+                              <motion.div
+                                initial={{ scaleY: 0 }}
+                                animate={{ scaleY: Math.min(1, Math.max(0.15, ord.total / (totalSalesRevenue || 500000))) }}
+                                transition={{ type: 'tween', duration: 0.3 }}
+                                style={{ transformOrigin: 'bottom' }}
+                                className="w-full h-full bg-blue-600 rounded-t-lg group-hover:bg-blue-700 dark:bg-[var(--brand-gold-mid)] dark:group-hover:bg-[var(--brand-gold-dark)] transition-colors"
                               />
                             </div>
                             <span className="text-[9px] font-black text-slate-400 font-mono hidden sm:block">#{ord.id.split('-').pop()}</span>
-                          </motion.div>
+                          </div>
                         ))
                       )}
                     </div>
