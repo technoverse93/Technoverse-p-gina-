@@ -2,10 +2,10 @@ import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
 import { PaginatedGrid } from './PaginationHelper';
 import { 
-  ShoppingBag, Search, Menu, ChevronDown, Trash2, ArrowRight, 
+  ShoppingBag, Search, ChevronDown, Trash2, ArrowRight,
   MapPin, CreditCard, CheckCircle, Smartphone, Wrench, Settings,
   MessageSquare, Sparkles, AlertCircle, FileDown, Heart, ShieldAlert,
-  User as UserIcon, X, LogOut, Sun, Moon
+  User as UserIcon, X, LogOut, Sun, Moon, Home, LayoutGrid
 } from 'lucide-react';
 import { ProductCard } from './ProductCard';
 import { MarketingRow } from './MarketingRow';
@@ -89,6 +89,21 @@ export default function PublicStore({
   const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
   const [isCartDropdownOpen, setIsCartDropdownOpen] = useState(false);
   const [isCartBouncing, setIsCartBouncing] = useState(false);
+  const [isCatalogDropdownOpen, setIsCatalogDropdownOpen] = useState(false);
+  const catalogCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const openCatalogDropdown = () => {
+    if (catalogCloseTimer.current) { clearTimeout(catalogCloseTimer.current); catalogCloseTimer.current = null; }
+    setIsAccountDropdownOpen(false);
+    setIsCartDropdownOpen(false);
+    setIsCatalogDropdownOpen(true);
+  };
+  const scheduleCloseCatalogDropdown = () => {
+    if (catalogCloseTimer.current) clearTimeout(catalogCloseTimer.current);
+    catalogCloseTimer.current = setTimeout(() => setIsCatalogDropdownOpen(false), 180);
+  };
+  useEffect(() => {
+    return () => { if (catalogCloseTimer.current) clearTimeout(catalogCloseTimer.current); };
+  }, []);
 
   // Unified login & registration states
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -151,19 +166,20 @@ export default function PublicStore({
 
   // Active Hero Slide
   const [heroSlide, setHeroSlide] = useState(0);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
   useEffect(() => {
-    if (isCartOpen || selectedProductDetail || isLoginModalOpen || isMobileMenuOpen) {
+    if (isCartOpen || selectedProductDetail || isLoginModalOpen) {
       document.body.style.overflow = "hidden";
     } else {
       document.body.style.overflow = "auto";
     }
     return () => { document.body.style.overflow = "auto"; };
-  }, [isCartOpen, selectedProductDetail, isLoginModalOpen, isMobileMenuOpen]);
+  }, [isCartOpen, selectedProductDetail, isLoginModalOpen]);
 
-  // Dynamic dropdown positioning to prevent going off-screen
+  // Dynamic dropdown positioning to prevent going off-screen (desktop only —
+  // on mobile these panels use a fixed bottom-sheet layout via Tailwind classes)
   useLayoutEffect(() => {
     const handleDropdownPosition = () => {
+      if (window.innerWidth < 768) return;
       const dropdowns = document.querySelectorAll('.dynamic-dropdown');
       dropdowns.forEach(dropdown => {
         const el = dropdown as HTMLElement;
@@ -194,7 +210,7 @@ export default function PublicStore({
     handleDropdownPosition();
     window.addEventListener('resize', handleDropdownPosition);
     return () => window.removeEventListener('resize', handleDropdownPosition);
-  }, [isAccountDropdownOpen, isCartDropdownOpen, isMobileMenuOpen]);
+  }, [isAccountDropdownOpen, isCartDropdownOpen]);
 
   // Real-time Cart bounce engine (200ms scale feedback)
   const prevCartCount = React.useRef(0);
@@ -831,7 +847,7 @@ export default function PublicStore({
     <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans relative" id="store-page-root">
       
       {/* Compact 48px/56px Header */}
-      <header className="h-14 sm:h-16 fixed top-0 left-0 right-0 z-40 bg-[var(--bg-surface)] border-b border-[var(--border-color)] flex items-center justify-between px-4 md:px-6 shadow-sm">
+      <header className="h-14 sm:h-16 fixed top-0 left-0 right-0 z-40 glass-nav flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-4 lg:gap-8">
           <button 
             onClick={() => { setActiveTab('store'); setSelectedCategory(null); }}
@@ -853,43 +869,52 @@ export default function PublicStore({
 
           <nav className="hidden md:flex items-center gap-6">
             {/* Catalog Dropdown */}
-            <div 
-              className="relative" 
-              onMouseEnter={() => setIsAccountDropdownOpen(false) || setIsCartDropdownOpen(false)}
+            <div
+              className="relative"
+              onMouseEnter={openCatalogDropdown}
+              onMouseLeave={scheduleCloseCatalogDropdown}
             >
-              <button 
+              <button
                 className="group flex items-center gap-1.5 text-sm font-bold text-[var(--text-secondary)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] tracking-wide uppercase transition-colors"
-                onMouseEnter={(e) => {
-                  const el = e.currentTarget.nextElementSibling as HTMLElement;
-                  if (el) el.style.display = 'block';
-                }}
+                onClick={() => (isCatalogDropdownOpen ? setIsCatalogDropdownOpen(false) : openCatalogDropdown())}
+                aria-expanded={isCatalogDropdownOpen}
+                aria-controls="catalog-dropdown"
               >
-                Catálogo <ChevronDown className="w-4 h-4 group-hover:rotate-180 transition-transform duration-200" />
+                Catálogo <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isCatalogDropdownOpen ? 'rotate-180' : ''}`} />
               </button>
-              <div 
-                id="catalog-dropdown"
-                className="absolute top-full left-0 mt-2 w-[280px] max-w-[calc(100vw-32px)] sm:w-64 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl shadow-xl p-2 hidden hover:block group-hover:block z-50 animate-in fade-in zoom-in-95 duration-150"
-                style={{ willChange: 'transform, opacity' }}
-              >
-                <div className="px-4 py-2 border-b border-slate-50 mb-1">
-                  <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Explorar Categorías</span>
-                </div>
-                <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                  {CATEGORIES.map(cat => cat && (
-                    <button
-                      key={cat}
-                      onClick={() => {
-                        setSelectedCategory(cat === 'Todos' ? null : cat);
-                        setActiveTab('store');
-                      }}
-                      className="w-full text-left py-3 px-4 hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] text-sm rounded-xl transition-all font-semibold flex items-center justify-between group/item break-words whitespace-normal"
-                    >
-                      <span className="flex-1 mr-2 leading-tight">{cat}</span>
-                      <ArrowRight className="w-3 h-3 opacity-0 group-hover/item:opacity-100 -translate-x-2 group-hover/item:translate-x-0 transition-all flex-shrink-0" />
-                    </button>
-                  ))}
-                </div>
-              </div>
+              <AnimatePresence>
+                {isCatalogDropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: 10, scale: 0.96 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: 10, scale: 0.96 }}
+                    transition={{ duration: 0.16, ease: [0.23, 1, 0.32, 1] }}
+                    id="catalog-dropdown"
+                    className="absolute top-full left-0 mt-2 w-[280px] max-w-[calc(100vw-32px)] sm:w-64 glass-panel rounded-2xl p-2 z-[60]"
+                    style={{ willChange: 'transform, opacity', transformOrigin: 'top left' }}
+                  >
+                    <div className="px-4 py-2 border-b border-slate-50 mb-1">
+                      <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Explorar Categorías</span>
+                    </div>
+                    <div className="max-h-80 overflow-y-auto custom-scrollbar">
+                      {CATEGORIES.map(cat => cat && (
+                        <button
+                          key={cat}
+                          onClick={() => {
+                            setSelectedCategory(cat === 'Todos' ? null : cat);
+                            setActiveTab('store');
+                            setIsCatalogDropdownOpen(false);
+                          }}
+                          className="w-full text-left py-3 px-4 hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] text-sm rounded-xl transition-all font-semibold flex items-center justify-between group/item break-words whitespace-normal"
+                        >
+                          <span className="flex-1 mr-2 leading-tight">{cat}</span>
+                          <ArrowRight className="w-3 h-3 opacity-0 group-hover/item:opacity-100 -translate-x-2 group-hover/item:translate-x-0 transition-all flex-shrink-0" />
+                        </button>
+                      ))}
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
 
             <button 
@@ -929,7 +954,7 @@ export default function PublicStore({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: "easeOut" }}
-                className="absolute top-full left-0 right-0 mt-2 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden max-h-[400px] overflow-y-auto z-50 py-2"
+                className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-2xl overflow-hidden max-h-[400px] overflow-y-auto z-[60] py-2"
                 id="search-suggestions-dropdown"
               >
                 {searchResults.map(p => p && (
@@ -965,42 +990,45 @@ export default function PublicStore({
           {/* Theme Toggle */}
           <button
             onClick={toggleTheme}
-            className="p-3 md:p-2.5 rounded-xl border bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--brand-gold-mid)] hover:text-[var(--brand-gold-mid)] transition-all duration-200 flex items-center justify-center cursor-pointer dark:border-[#8f7a5a] dark:text-[#c9b57e]"
+            className="p-3 md:p-2.5 rounded-xl glass-pill text-[var(--text-secondary)] hover:border-[var(--brand-gold-mid)] hover:text-[var(--brand-gold-mid)] transition-all duration-200 flex items-center justify-center cursor-pointer"
             title="Cambiar Tema"
           >
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
 
-          {/* Account Dropdown */}
+          {/* Account Dropdown — trigger button lives in the header on desktop only; on
+              mobile this same state is triggered from the bottom navigation bar */}
           <div className="relative">
-            <button
-              onClick={() => {
-                setIsAccountDropdownOpen(!isAccountDropdownOpen);
-                setIsCartDropdownOpen(false);
-                setIsMobileMenuOpen(false);
-                setSearchQuery('');
-              }}
-              className={`group p-3 md:p-2.5 rounded-xl border transition-all duration-200 flex items-center justify-center relative cursor-pointer ${
-                isAccountDropdownOpen 
-                  ? 'bg-blue-600 dark:bg-[var(--brand-gold-mid)] border-blue-600 dark:border-[var(--brand-gold-dark)] text-white shadow-lg shadow-blue-200' 
-                  : 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-blue-400 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-dark)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)]'
-              }`}
-              title="Mi Cuenta"
-            >
-              <UserIcon className="w-5 h-5" />
-              {isAuthenticated && (
-                <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-emerald-500 dark:bg-[var(--brand-gold-mid)] rounded-full border-2 border-white shadow-sm" />
-              )}
-            </button>
+            <div className="hidden md:block">
+              <button
+                onClick={() => {
+                  setIsAccountDropdownOpen(!isAccountDropdownOpen);
+                  setIsCartDropdownOpen(false);
+                  setIsCatalogDropdownOpen(false);
+                  setSearchQuery('');
+                }}
+                className={`group p-3 md:p-2.5 rounded-xl transition-all duration-200 flex items-center justify-center relative cursor-pointer ${
+                  isAccountDropdownOpen
+                    ? 'btn-glass-primary'
+                    : 'glass-pill text-[var(--text-secondary)] hover:border-[var(--brand-gold-mid)] hover:text-[var(--brand-gold-mid)]'
+                }`}
+                title="Mi Cuenta"
+              >
+                <UserIcon className="w-5 h-5" />
+                {isAuthenticated && (
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-emerald-500 dark:bg-[var(--brand-gold-mid)] rounded-full border-2 border-white shadow-sm" />
+                )}
+              </button>
+            </div>
 
             <AnimatePresence>
               {isAccountDropdownOpen && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 12, scale: 0.95, transformOrigin: 'top right' }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 12, scale: 0.95 }}
                   transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="absolute top-full right-0 mt-3 w-[320px] max-w-[calc(100vw-32px)] sm:w-80 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden z-50 dynamic-dropdown"
+                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-80 max-w-none md:max-w-[calc(100vw-32px)] max-h-[70vh] md:max-h-[85vh] glass-panel rounded-2xl overflow-y-auto z-[60] dynamic-dropdown"
                   id="account-dropdown"
                   style={{ willChange: 'transform, opacity' }}
                 >
@@ -1042,7 +1070,7 @@ export default function PublicStore({
 
                       <button
                         type="submit"
-                        className="w-full bg-blue-600 hover:bg-blue-700 dark:hover:bg-[var(--brand-gold-mid)] dark:bg-[var(--brand-gold-mid)] text-white font-bold text-sm py-3.5 rounded-xl transition-all transform active:scale-[0.98] shadow-lg shadow-blue-200 dark:text-slate-950"
+                        className="w-full btn-glass-primary font-bold text-sm py-3.5 rounded-xl active:scale-[0.98]"
                       >
                         Iniciar Sesión
                       </button>
@@ -1120,38 +1148,41 @@ export default function PublicStore({
             </AnimatePresence>
           </div>
 
-          {/* Cart Dropdown Trigger */}
+          {/* Cart Dropdown Trigger — button lives in the header on desktop only; on
+              mobile this same state is triggered from the bottom navigation bar */}
           <div className="relative">
-            <button
-              onClick={() => {
-                setIsCartDropdownOpen(!isCartDropdownOpen);
-                setIsAccountDropdownOpen(false);
-                setIsMobileMenuOpen(false);
-                setSearchQuery('');
-              }}
-              className={`p-3 md:p-2.5 rounded-xl border transition-all duration-300 relative flex items-center justify-center cursor-pointer ${
-                isCartDropdownOpen 
-                  ? 'bg-blue-600 dark:bg-[var(--brand-gold-mid)] border-blue-600 dark:border-[var(--brand-gold-dark)] text-white shadow-lg shadow-blue-200' 
-                  : 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-blue-400 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-dark)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)]'
-              } ${isCartBouncing ? 'scale-110' : 'scale-100'}`}
-              title="Carrito"
-            >
-              <ShoppingBag className="w-5 h-5" />
-              {cart.length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[10px] font-black min-w-[20px] h-5 rounded-full flex items-center justify-center border-2 border-white px-1 shadow-sm">
-                  {cart.reduce((sum, it) => sum + it.quantity, 0)}
-                </span>
-              )}
-            </button>
+            <div className="hidden md:block">
+              <button
+                onClick={() => {
+                  setIsCartDropdownOpen(!isCartDropdownOpen);
+                  setIsAccountDropdownOpen(false);
+                  setIsCatalogDropdownOpen(false);
+                  setSearchQuery('');
+                }}
+                className={`p-3 md:p-2.5 rounded-xl transition-all duration-300 relative flex items-center justify-center cursor-pointer ${
+                  isCartDropdownOpen
+                    ? 'btn-glass-primary'
+                    : 'glass-pill text-[var(--text-secondary)] hover:border-[var(--brand-gold-mid)] hover:text-[var(--brand-gold-mid)]'
+                } ${isCartBouncing ? 'scale-110' : 'scale-100'}`}
+                title="Carrito"
+              >
+                <ShoppingBag className="w-5 h-5" />
+                {cart.length > 0 && (
+                  <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[10px] font-black min-w-[20px] h-5 rounded-full flex items-center justify-center border-2 border-white px-1 shadow-sm">
+                    {cart.reduce((sum, it) => sum + it.quantity, 0)}
+                  </span>
+                )}
+              </button>
+            </div>
 
             <AnimatePresence>
               {isCartDropdownOpen && (
-                <motion.div 
+                <motion.div
                   initial={{ opacity: 0, y: 12, scale: 0.95, transformOrigin: 'top right' }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 12, scale: 0.95 }}
                   transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="absolute top-full right-0 mt-3 w-[320px] max-w-[calc(100vw-32px)] sm:w-96 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden z-50 flex flex-col max-h-[600px] dynamic-dropdown"
+                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-96 max-w-none md:max-w-[calc(100vw-32px)] glass-panel rounded-2xl overflow-hidden z-[60] flex flex-col max-h-[70vh] md:max-h-[600px] dynamic-dropdown"
                   id="cart-dropdown"
                   style={{ willChange: 'transform, opacity' }}
                 >
@@ -1221,7 +1252,7 @@ export default function PublicStore({
                           setCheckoutStep(0);
                           setIsCartDropdownOpen(false);
                         }}
-                        className="w-full bg-blue-600 hover:bg-blue-700 dark:hover:bg-[var(--brand-gold-mid)] dark:bg-[var(--brand-gold-mid)] text-white font-bold py-4 rounded-xl shadow-lg shadow-blue-100 flex items-center justify-center gap-2 transition-all transform active:scale-[0.98] dark:text-slate-950"
+                        className="w-full btn-glass-primary font-bold py-4 rounded-xl flex items-center justify-center gap-2 active:scale-[0.98]"
                       >
                         Finalizar Compra <ArrowRight className="w-4 h-4" />
                       </button>
@@ -1232,74 +1263,124 @@ export default function PublicStore({
             </AnimatePresence>
           </div>
 
-          <div className="relative md:hidden">
-            <button 
-              className={`p-3 md:p-2.5 rounded-xl border transition-all duration-200 flex items-center justify-center cursor-pointer ${
-                isMobileMenuOpen 
-                  ? 'bg-blue-600 dark:bg-[var(--brand-gold-mid)] border-blue-600 dark:border-[var(--brand-gold-dark)] text-white shadow-lg' 
-                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] border-[var(--border-color)] hover:border-blue-400 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-dark)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)]'
-              }`}
-              onClick={() => {
-                setIsMobileMenuOpen(!isMobileMenuOpen);
-                setIsAccountDropdownOpen(false);
-                setIsCartDropdownOpen(false);
-                setSearchQuery('');
-              }}
-            >
-              <Menu className="w-5 h-5" />
-            </button>
-            <AnimatePresence>
-              {isMobileMenuOpen && (
-                <motion.div 
-                  initial={{ opacity: 0, y: -10 }}
-                  animate={{ opacity: 1, y: 0 }}
-                  exit={{ opacity: 0, y: -10 }}
-                  transition={{ duration: 0.2 }}
-                  className="absolute top-full right-0 mt-3 w-[280px] max-w-[calc(100vw-32px)] sm:w-64 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl shadow-2xl overflow-hidden z-50 dynamic-dropdown"
-                >
-                  <div className="px-4 py-2 border-b border-slate-50 mb-1">
-                    <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest">Navegación Móvil</span>
-                  </div>
-                  
-                  <div className="p-2 space-y-1">
-                    <div className="text-[10px] uppercase font-bold text-slate-400 px-2 pt-2 pb-1">Catálogo</div>
-                    {CATEGORIES.map(cat => cat && (
-                      <button
-                        key={cat}
-                        onClick={() => {
-                          setSelectedCategory(cat === 'Todos' ? null : cat);
-                          setActiveTab('store');
-                          setIsMobileMenuOpen(false);
-                        }}
-                        className={`w-full text-left py-2 px-3 text-sm rounded-xl transition-all font-semibold ${
-                          (selectedCategory === cat || (cat === 'Todos' && selectedCategory === null))
-                            ? 'bg-[var(--brand-gold-mid)] text-white'
-                            : 'text-[var(--text-secondary)] hover:bg-slate-50 hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)]'
-                        }`}
-                      >
-                        {cat}
-                      </button>
-                    ))}
-                    
-                    <div className="h-px bg-[var(--border-color)] mx-2 my-2" />
-                    <button 
-                      onClick={() => {
-                        setActiveTab('repairs');
-                        setIsMobileMenuOpen(false);
-                      }}
-                      className="w-full text-left py-3 px-3 text-sm font-bold text-[var(--text-secondary)] hover:bg-blue-50 dark:hover:bg-[var(--brand-gold-mid)]/10 hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] rounded-xl transition-colors flex items-center gap-2"
-                    >
-                      <Wrench className="w-4 h-4" /> Soporte Técnico
-                    </button>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
         </div>
       </header>
+
+      {/* Mobile catalog floating sheet — triggered from the bottom navigation bar.
+          Reuses the same isCatalogDropdownOpen state as the desktop dropdown;
+          the desktop version above is unreachable on mobile (hidden md:flex ancestor),
+          so this is a dedicated mobile-anchored rendering of the same category list. */}
+      <AnimatePresence>
+        {isCatalogDropdownOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+            className="floating-sheet-mobile glass-panel rounded-2xl p-2 md:hidden"
+          >
+            <div className="px-4 py-2 border-b border-[var(--border-color)] mb-1">
+              <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Explorar Categorías</span>
+            </div>
+            <div className="p-1 space-y-1">
+              {CATEGORIES.map(cat => cat && (
+                <button
+                  key={cat}
+                  onClick={() => {
+                    setSelectedCategory(cat === 'Todos' ? null : cat);
+                    setActiveTab('store');
+                    setIsCatalogDropdownOpen(false);
+                  }}
+                  className={`w-full text-left py-3 px-4 text-sm rounded-xl transition-all font-semibold ${
+                    (selectedCategory === cat || (cat === 'Todos' && selectedCategory === null))
+                      ? 'bg-[var(--brand-gold-mid)] text-white'
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-base)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)]'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Global bottom navigation bar (mobile only) — replaces the hamburger menu
+          entirely. Drives the exact same state/handlers as the desktop header. */}
+      <nav className="bottom-nav-bar md:hidden flex items-stretch">
+        <button
+          className={`bottom-nav-item ${activeTab === 'store' && !isCatalogDropdownOpen ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('store');
+            setSelectedCategory(null);
+            setIsCatalogDropdownOpen(false);
+            setIsAccountDropdownOpen(false);
+            setIsCartDropdownOpen(false);
+          }}
+        >
+          <span className="bn-icon-wrap"><Home className="w-5 h-5" /></span>
+          Inicio
+        </button>
+        <button
+          className={`bottom-nav-item ${isCatalogDropdownOpen ? 'active' : ''}`}
+          onClick={() => {
+            if (isCatalogDropdownOpen) { setIsCatalogDropdownOpen(false); return; }
+            setIsAccountDropdownOpen(false);
+            setIsCartDropdownOpen(false);
+            setIsCatalogDropdownOpen(true);
+          }}
+        >
+          <span className="bn-icon-wrap"><LayoutGrid className="w-5 h-5" /></span>
+          Catálogo
+        </button>
+        <button
+          className={`bottom-nav-item ${activeTab === 'repairs' ? 'active' : ''}`}
+          onClick={() => {
+            setActiveTab('repairs');
+            setIsCatalogDropdownOpen(false);
+            setIsAccountDropdownOpen(false);
+            setIsCartDropdownOpen(false);
+          }}
+        >
+          <span className="bn-icon-wrap"><Wrench className="w-5 h-5" /></span>
+          Soporte
+        </button>
+        <button
+          className={`bottom-nav-item ${isAccountDropdownOpen ? 'active' : ''}`}
+          onClick={() => {
+            if (isAccountDropdownOpen) { setIsAccountDropdownOpen(false); return; }
+            setIsCatalogDropdownOpen(false);
+            setIsCartDropdownOpen(false);
+            setIsAccountDropdownOpen(true);
+            setSearchQuery('');
+          }}
+        >
+          <span className="bn-icon-wrap"><UserIcon className="w-5 h-5" /></span>
+          Cuenta
+        </button>
+        <button
+          className={`bottom-nav-item relative ${isCartDropdownOpen ? 'active' : ''}`}
+          onClick={() => {
+            if (isCartDropdownOpen) { setIsCartDropdownOpen(false); return; }
+            setIsCatalogDropdownOpen(false);
+            setIsAccountDropdownOpen(false);
+            setIsCartDropdownOpen(true);
+            setSearchQuery('');
+          }}
+        >
+          <span className="bn-icon-wrap relative">
+            <ShoppingBag className="w-5 h-5" />
+            {cart.length > 0 && (
+              <span className="absolute -top-1.5 -right-2 bg-rose-600 text-white text-[9px] font-black min-w-[16px] h-4 rounded-full flex items-center justify-center px-1">
+                {cart.reduce((sum, it) => sum + it.quantity, 0)}
+              </span>
+            )}
+          </span>
+          Carrito
+        </button>
+      </nav>
       {/* Main Body */}
-      <main className="pt-16 sm:pt-20 pb-20 px-4 md:px-6 max-w-7xl mx-auto space-y-12">
+      <main className="pt-16 sm:pt-20 pb-28 md:pb-20 px-4 md:px-6 max-w-7xl mx-auto space-y-12">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -1385,7 +1466,7 @@ export default function PublicStore({
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" id="repairs-portal-section">
             
             {/* Left side: Technical Service Registration form */}
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-3xl p-6 text-[var(--text-primary)] space-y-4 shadow-sm">
+            <div className="glass-panel-strong rounded-3xl p-6 text-[var(--text-primary)] space-y-4 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
                 <Smartphone className="w-6 h-6 text-blue-600 dark:text-[var(--brand-gold-light)]" />
                 <div>
@@ -1468,7 +1549,7 @@ export default function PublicStore({
 
             {/* Right side: Public lookup section (rendered directly inside workshop component) */}
             <div className="space-y-6">
-              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-3xl p-6 text-[var(--text-primary)] shadow-sm">
+              <div className="glass-panel-strong rounded-3xl p-6 text-[var(--text-primary)] shadow-sm">
                 <h3 className="font-bold text-sm mb-2 text-blue-600 dark:text-[var(--brand-gold-light)] flex items-center gap-1.5">
                   <Heart className="w-5 h-5 text-[var(--brand-gold-mid)]" /> ¿Por qué reparar con Technoverse?
                 </h3>
@@ -1478,7 +1559,7 @@ export default function PublicStore({
               </div>
 
               {/* Taller public lookup widget loaded natively to support 100% functionality */}
-              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-3xl p-5 shadow-sm space-y-3">
+              <div className="glass-panel-strong rounded-3xl p-5 shadow-sm space-y-3">
                 <div className="text-sm font-bold text-[var(--text-primary)]">Buscador y Monitor Fiscal de Garantías:</div>
                 <div className="p-4 text-sm text-[var(--text-primary)] leading-relaxed bg-[var(--bg-surface)] rounded-xl border border-[var(--border-color)]/50">
                   🔍 Usa la barra superior de consulta en <strong>Soporte Técnico</strong> para verificar cualquier reparación por su número de ticket (ej: TKT-123) o por el correo registrado. Pruébalo abriendo una solicitud a la izquierda.
@@ -1497,7 +1578,7 @@ export default function PublicStore({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4" id="shopping-cart-sidebar">
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm " onClick={() => { setIsCartOpen(false); setCheckoutStep(0); }} />
 
-          <div className="relative max-w-2xl w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-3xl shadow-sm flex flex-col justify-between text-[var(--text-primary)] overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200" id="checkout-cart-modal-container">
+          <div className="relative max-w-2xl w-full glass-panel-strong rounded-3xl shadow-sm flex flex-col justify-between text-[var(--text-primary)] overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200" id="checkout-cart-modal-container">
             {/* Cart Header */}
             <div className="p-5 bg-[var(--bg-surface)] border-b border-[var(--border-color)] flex items-center justify-between">
               <h3 className="font-bold text-sm text-[var(--text-primary)] flex items-center gap-2">
@@ -1887,7 +1968,7 @@ export default function PublicStore({
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
           <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm " onClick={() => setIsLoginModalOpen(false)} />
 
-          <div className="relative max-w-md w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-3xl p-8 shadow-sm space-y-6 text-[var(--text-primary)] animate-in zoom-in-95 duration-200" id="login-register-modal">
+          <div className="relative max-w-md w-full glass-panel-strong rounded-3xl p-8 shadow-sm space-y-6 text-[var(--text-primary)] animate-in zoom-in-95 duration-200" id="login-register-modal">
             <div className="text-center space-y-2">
               <div className="w-12 h-12 bg-gradient-to-tr from-[#3B82F6] to-blue-600 dark:bg-[var(--brand-gold-mid)] dark:bg-none rounded-2xl flex items-center justify-center border border-white/40 shadow-sm mx-auto">
                 <span className="text-white text-lg">🔑</span>
@@ -2047,7 +2128,7 @@ export default function PublicStore({
       {selectedProductDetail && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
           <div 
-            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-3xl shadow-sm overflow-hidden w-full max-w-xl max-h-[90vh] flex flex-col md:flex-row animate-in zoom-in-95 duration-250"
+            className="glass-panel-strong rounded-3xl shadow-sm overflow-hidden w-full max-w-xl max-h-[90vh] flex flex-col md:flex-row animate-in zoom-in-95 duration-250"
             id="product-detail-modal"
           >
             {/* Left side: Photo */}
