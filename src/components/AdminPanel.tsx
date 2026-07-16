@@ -1268,7 +1268,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
               <ChevronDown className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
             </button>
             {activeDropdown === 'profile' && (
-              <div className="absolute top-full mt-2 min-w-[260px] bg-[var(--bg-surface)] dynamic-dropdown border border-[var(--border-color)] rounded-2xl shadow-sm p-4 z-50 transition-all duration-200 ease-out text-[var(--text-primary)] animate-in fade-in slide-in-from-top-2">
+              <div className="absolute top-full mt-2 min-w-[260px] bg-[var(--bg-surface)] dynamic-dropdown border border-[var(--border-color)] rounded-2xl shadow-sm p-4 z-[70] transition-all duration-200 ease-out text-[var(--text-primary)] animate-in fade-in slide-in-from-top-2" style={{ transform: 'translateZ(0)', backfaceVisibility: 'hidden' }}>
                 <div className="px-4 py-3 border-b border-[var(--border-color)] mb-2">
                   <div className="text-sm font-bold text-[var(--text-primary)] truncate">{currentUser?.name}</div>
                   <div className="text-[9px] text-[var(--brand-gold-mid)] font-extrabold uppercase tracking-wider">
@@ -1467,7 +1467,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
 
 
         {/* WORKSPACE CONTENT AREA */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 lg:pb-8 space-y-6 w-full bg-[var(--bg-base)]">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 lg:pb-8 space-y-6 w-full bg-[var(--bg-base)]" style={{ willChange: 'scroll-position' }}>
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -2072,7 +2072,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
 
             {/* Pay Slip Modal */}
             {selectedPaySlip && (
-              <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm flex items-center justify-center p-4 z-50">
+              <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-[100]">
                 <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl w-full max-w-lg p-6 text-[var(--text-primary)] space-y-4 shadow-sm relative animate-in fade-in zoom-in duration-150">
                   <div className="flex justify-between items-start border-b border-[var(--border-color)]/80 pb-3">
                     <div>

@@ -890,7 +890,7 @@ export default function PublicStore({
                     exit={{ opacity: 0, y: 10, scale: 0.96 }}
                     transition={{ duration: 0.16, ease: [0.23, 1, 0.32, 1] }}
                     id="catalog-dropdown"
-                    className="absolute top-full left-0 mt-2 w-[280px] max-w-[calc(100vw-32px)] sm:w-64 glass-panel rounded-2xl p-2 z-[60]"
+                    className="absolute top-full left-0 mt-2 w-[280px] max-w-[calc(100vw-32px)] sm:w-64 glass-panel rounded-2xl p-2 z-[70]"
                     style={{ willChange: 'transform, opacity', transformOrigin: 'top left' }}
                   >
                     <div className="px-4 py-2 border-b border-slate-50 mb-1">
@@ -954,7 +954,7 @@ export default function PublicStore({
                 animate={{ opacity: 1, y: 0, scale: 1 }}
                 exit={{ opacity: 0, y: 10, scale: 0.98 }}
                 transition={{ duration: 0.15, ease: "easeOut" }}
-                className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-2xl overflow-hidden max-h-[400px] overflow-y-auto z-[60] py-2"
+                className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-2xl overflow-hidden max-h-[400px] overflow-y-auto z-[70] py-2"
                 id="search-suggestions-dropdown"
               >
                 {searchResults.map(p => p && (
@@ -1028,7 +1028,7 @@ export default function PublicStore({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 12, scale: 0.95 }}
                   transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-80 max-w-none md:max-w-[calc(100vw-32px)] max-h-[70vh] md:max-h-[85vh] glass-panel rounded-2xl overflow-y-auto z-[60] dynamic-dropdown"
+                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-80 max-w-none md:max-w-[calc(100vw-32px)] max-h-[70vh] md:max-h-[85vh] glass-panel rounded-2xl overflow-y-auto z-[70] dynamic-dropdown"
                   id="account-dropdown"
                   style={{ willChange: 'transform, opacity' }}
                 >
@@ -1182,7 +1182,7 @@ export default function PublicStore({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 12, scale: 0.95 }}
                   transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-96 max-w-none md:max-w-[calc(100vw-32px)] glass-panel rounded-2xl overflow-hidden z-[60] flex flex-col max-h-[70vh] md:max-h-[600px] dynamic-dropdown"
+                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-96 max-w-none md:max-w-[calc(100vw-32px)] glass-panel rounded-2xl overflow-hidden z-[70] flex flex-col max-h-[70vh] md:max-h-[600px] dynamic-dropdown"
                   id="cart-dropdown"
                   style={{ willChange: 'transform, opacity' }}
                 >
@@ -1575,8 +1575,8 @@ export default function PublicStore({
 
       {/* Centered Cart & Checkout Modal */}
       {isCartOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" id="shopping-cart-sidebar">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm " onClick={() => { setIsCartOpen(false); setCheckoutStep(0); }} />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" id="shopping-cart-sidebar">
+          <div className="absolute inset-0 bg-slate-900/50" onClick={() => { setIsCartOpen(false); setCheckoutStep(0); }} />
 
           <div className="relative max-w-2xl w-full glass-panel-strong rounded-3xl shadow-sm flex flex-col justify-between text-[var(--text-primary)] overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200" id="checkout-cart-modal-container">
             {/* Cart Header */}
@@ -1965,8 +1965,8 @@ export default function PublicStore({
 
       {/* Login / Register Unified Modal */}
       {isLoginModalOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/50 backdrop-blur-sm " onClick={() => setIsLoginModalOpen(false)} />
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
+          <div className="absolute inset-0 bg-slate-900/50" onClick={() => setIsLoginModalOpen(false)} />
 
           <div className="relative max-w-md w-full glass-panel-strong rounded-3xl p-8 shadow-sm space-y-6 text-[var(--text-primary)] animate-in zoom-in-95 duration-200" id="login-register-modal">
             <div className="text-center space-y-2">
@@ -2126,7 +2126,7 @@ export default function PublicStore({
 
       {/* INTERACTIVE PRODUCT DETAIL MODAL */}
       {selectedProductDetail && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/50 backdrop-blur-sm animate-in fade-in duration-200">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 animate-in fade-in duration-200">
           <div 
             className="glass-panel-strong rounded-3xl shadow-sm overflow-hidden w-full max-w-xl max-h-[90vh] flex flex-col md:flex-row animate-in zoom-in-95 duration-250"
             id="product-detail-modal"
