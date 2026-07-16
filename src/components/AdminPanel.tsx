@@ -1244,15 +1244,15 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
             {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
           </button>
           
-          <button 
+          <button
             onClick={onNavigateToStore}
-            className="hidden md:flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--brand-gold-mid)]/10 text-sky-400 dark:text-[var(--brand-gold-light)] hover:bg-[var(--brand-gold-mid)]/20 transition text-[10px] font-bold uppercase tracking-wider border border-sky-500 dark:border-[var(--brand-gold-mid)]/20"
+            className="flex lg:hidden items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--brand-gold-mid)]/10 text-sky-400 dark:text-[var(--brand-gold-light)] hover:bg-[var(--brand-gold-mid)]/20 transition text-[10px] font-bold uppercase tracking-wider border border-sky-500 dark:border-[var(--brand-gold-mid)]/20"
             title="Volver a la tienda"
           >
             <Home className="w-3 h-3" />
             Ver tienda
           </button>
-          <div className="relative" onMouseEnter={handleDropdownEnter}>
+          <div className="relative hidden lg:block" onMouseEnter={handleDropdownEnter}>
             <button 
               onClick={() => {
                 setActiveDropdown(activeDropdown === 'profile' ? null : 'profile');
@@ -2974,6 +2974,18 @@ if (!del) return null;
                   <span className="text-sm font-semibold">{item.label}</span>
                 </button>
               ))}
+              <div className="border-t border-[var(--border-color)] my-1 pt-1">
+                <button
+                  onClick={() => {
+                    setIsMobileMoreMenuOpen(false);
+                    handleLogout();
+                  }}
+                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-rose-500 hover:bg-rose-500/10 transition cursor-pointer font-bold"
+                >
+                  <LogOut className="w-4 h-4 flex-shrink-0" />
+                  <span className="text-sm font-semibold">Cerrar Sesión</span>
+                </button>
+              </div>
             </div>
           </motion.div>
         )}
