@@ -95,6 +95,15 @@ body {
   transition: background-color 0.25s ease, color 0.25s ease;
 }
 
+/* Aísla el árbol de cada shell principal en su propio contexto de apilamiento
+   (sin crear containing block para descendientes fixed, a diferencia de
+   transform) — evita que el compositor mezcle sus capas con el resto de la
+   página durante el scroll. */
+#store-page-root,
+#admin-panel-root {
+  isolation: isolate;
+}
+
 /* Custom scrollbars */
 ::-webkit-scrollbar {
   width: 6px;
@@ -160,6 +169,7 @@ body {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
   box-shadow: none;
+  contain: layout style;
   transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, border-color 0.3s ease;
 }
 .glass-card:hover {
