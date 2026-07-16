@@ -113,6 +113,16 @@ body {
 
 /* ==========================================================================
    Superficies planas y capas flotantes ("Structured Premium")
+
+   Escala de z-index (evita colisiones de stacking en móvil):
+     40  → chrome fijo permanente (navbar superior, bottom nav bar)
+     70  → capas flotantes transitorias (dropdowns, popovers, hojas móviles)
+     100 → modales de pantalla completa (siempre por encima de todo)
+
+   Aislamiento de capas: los contenedores fijos/flotantes se promueven a su
+   propia capa de composición (transform: translateZ(0) + backface-visibility)
+   para que el navegador no tenga que repintarlos junto con el contenido que
+   hace scroll debajo — evita el "tearing"/estática en GPUs móviles.
    ========================================================================== */
 
 /* Panel flotante genérico: dropdowns, modales — superficie sólida + borde + sombra suave */
@@ -120,6 +130,9 @@ body {
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
   box-shadow: var(--float-shadow);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
 /* Variante para modales grandes (checkout, formularios largos) */
@@ -127,9 +140,15 @@ body {
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
   box-shadow: var(--float-shadow-lg);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 
-/* Barra de navegación superior: superficie sólida + línea inferior, sin sombra */
+/* Barra de navegación superior: superficie sólida + línea inferior, sin sombra.
+   Nota: sin transform/translateZ aquí — este header contiene los paneles
+   flotantes de cuenta/carrito, que en móvil usan position:fixed anclado al
+   viewport; promover el header a su propia capa rompería ese anclaje. */
 .glass-nav {
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-color);
@@ -201,11 +220,14 @@ body {
   left: 0;
   right: 0;
   bottom: 0;
-  z-index: 60;
+  z-index: 40;
   background: var(--bg-surface);
   border-top: 1px solid var(--border-color);
   box-shadow: var(--float-shadow);
   padding-bottom: env(safe-area-inset-bottom, 0px);
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
 }
 .bottom-nav-item {
   display: flex;
@@ -245,9 +267,13 @@ body {
   left: 12px;
   right: 12px;
   bottom: calc(64px + env(safe-area-inset-bottom, 0px));
-  z-index: 61;
+  z-index: 70;
   max-height: 70vh;
   overflow-y: auto;
+  transform: translateZ(0);
+  -webkit-backface-visibility: hidden;
+  backface-visibility: hidden;
+  will-change: transform, opacity;
 }
 
 /* Smooth keyframe for bouncing cart */
