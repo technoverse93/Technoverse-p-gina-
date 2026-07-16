@@ -59,8 +59,7 @@ export default function AdminPanel({
   const [isActionsDropdownOpen, setIsActionsDropdownOpen] = useState(false);
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
-  const [showConfigSubmenu, setShowConfigSubmenu] = useState(false);
-  
+
   // Navigation sidebar
   const [activeTab, setActiveTab] = useState<string>(() => {
     const path = window.location.pathname;
@@ -71,11 +70,6 @@ export default function AdminPanel({
     return 'dashboard';
   });
 
-  useEffect(() => {
-    if (activeDropdown !== 'profile') {
-      setShowConfigSubmenu(false);
-    }
-  }, [activeDropdown]);
 
   
 
@@ -1274,119 +1268,6 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                   <div className="text-[9px] text-[var(--brand-gold-mid)] font-extrabold uppercase tracking-wider">
                     {currentUser?.role === 'Dueño' ? 'Dueño Principal' : `Empleado: ${currentUser?.employeeRole}`}
                   </div>
-                </div>
-
-                <div className="hidden md:block border-t border-[var(--border-color)] my-1 pt-1">
-                  <button
-                    onClick={(e) => {
-                      e.stopPropagation();
-                      setShowConfigSubmenu(!showConfigSubmenu);
-                    }}
-                    className="w-full flex items-center justify-between px-4 py-3 text-sm text-[var(--text-primary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] hover:bg-slate-800 rounded-xl text-left font-medium transition cursor-pointer"
-                  >
-                    <div className="flex items-center gap-2">
-                      <Settings className="w-4 h-4 text-[var(--brand-gold-mid)]" />
-                      <span>Configuraciones</span>
-                    </div>
-                    <ChevronDown className={`w-4 h-4 text-[var(--text-secondary)] transition-transform duration-200 ${showConfigSubmenu ? 'rotate-180' : ''}`} />
-                  </button>
-                  
-                  {showConfigSubmenu && (
-                    <div className="mt-1 space-y-1 pl-2 pr-2 border-l-2 border-[var(--brand-gold-mid)]/30 ml-4 max-h-[45vh] overflow-y-auto">
-                      {/* Inventario Subitems */}
-                      {getPermittedSubItems('inventario').length > 0 && (
-                        <>
-                          <div className="text-[9px] uppercase font-bold text-[var(--text-secondary)] px-3 py-1 tracking-wider border-b border-[var(--border-color)] mb-1 mt-2 first:mt-0">
-                            Control Inventario
-                          </div>
-                          {getPermittedSubItems('inventario').map(sub => sub && (
-                            <button
-                              key={sub.id}
-                              onClick={() => {
-                                setActiveTab(sub.id);
-                                setActiveDropdown(null);
-                              }}
-                              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-xl text-left transition cursor-pointer ${
-                                activeTab === sub.id
-                                  ? 'text-[var(--brand-gold-mid)] bg-[var(--bg-surface)] font-bold'
-                                  : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)] hover:bg-slate-800'
-                              }`}
-                            >
-                              <sub.icon className="w-3.5 h-3.5 text-[var(--brand-gold-mid)] flex-shrink-0" />
-                              <span>{sub.label}</span>
-                            </button>
-                          ))}
-                        </>
-                      )}
-
-                      {/* Taller & CRM Subitems */}
-                      {(hasPermission('taller') || isOwner || hasPermission('clientes')) && (
-                        <>
-                          <div className="text-[9px] uppercase font-bold text-[var(--text-secondary)] px-3 py-1 tracking-wider border-b border-[var(--border-color)] mb-1 mt-2">
-                            Operaciones
-                          </div>
-                          {hasPermission('taller') && (
-                            <button
-                              onClick={() => {
-                                setActiveTab('taller');
-                                setActiveDropdown(null);
-                              }}
-                              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-xl text-left transition cursor-pointer ${
-                                activeTab === 'taller'
-                                  ? 'text-[var(--brand-gold-mid)] bg-[var(--bg-surface)] font-bold'
-                                  : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)] hover:bg-slate-800'
-                              }`}
-                            >
-                              <Wrench className="w-3.5 h-3.5 text-[var(--brand-gold-mid)] flex-shrink-0" />
-                              <span>Taller</span>
-                            </button>
-                          )}
-                          {(isOwner || hasPermission('clientes')) && (
-                            <button
-                              onClick={() => {
-                                setActiveTab('clientes');
-                                setActiveDropdown(null);
-                              }}
-                              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-xl text-left transition cursor-pointer ${
-                                activeTab === 'clientes'
-                                  ? 'text-[var(--brand-gold-mid)] bg-[var(--bg-surface)] font-bold'
-                                  : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)] hover:bg-slate-800'
-                              }`}
-                            >
-                              <CreditCard className="w-3.5 h-3.5 text-[var(--brand-gold-mid)] flex-shrink-0" />
-                              <span>Clientes CRM</span>
-                            </button>
-                          )}
-                        </>
-                      )}
-
-                      {/* Administración Subitems */}
-                      {getPermittedSubItems('administracion').length > 0 && (
-                        <>
-                          <div className="text-[9px] uppercase font-bold text-[var(--text-secondary)] px-3 py-1 tracking-wider border-b border-[var(--border-color)] mb-1 mt-2">
-                            Servicios & Finanzas
-                          </div>
-                          {getPermittedSubItems('administracion').map(sub => sub && (
-                            <button
-                              key={sub.id}
-                              onClick={() => {
-                                setActiveTab(sub.id);
-                                setActiveDropdown(null);
-                              }}
-                              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm rounded-xl text-left transition cursor-pointer ${
-                                activeTab === sub.id
-                                  ? 'text-[var(--brand-gold-mid)] bg-[var(--bg-surface)] font-bold'
-                                  : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)] hover:bg-slate-800'
-                              }`}
-                            >
-                              <sub.icon className="w-3.5 h-3.5 text-[var(--brand-gold-mid)] flex-shrink-0" />
-                              <span>{sub.label}</span>
-                            </button>
-                          ))}
-                        </>
-                      )}
-                    </div>
-                  )}
                 </div>
 
                 <div className="border-t border-[var(--border-color)] my-1 pt-1">
