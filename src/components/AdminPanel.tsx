@@ -1507,17 +1507,17 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 h-[380px] space-y-4">
                       <div className="h-4 bg-[var(--border-color)] rounded w-48 animate-pulse" />
-                      <div className="flex-1 w-full bg-[var(--bg-surface)]/50 rounded-xl animate-pulse" style={{ height: '280px' }} />
+                      <div className="flex-1 w-full bg-[var(--border-color)] rounded-xl animate-pulse" style={{ height: '280px' }} />
                     </div>
                     <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 h-[380px] space-y-4">
                       <div className="h-4 bg-[var(--border-color)] rounded w-48 animate-pulse" />
-                      <div className="flex-1 w-full bg-[var(--bg-surface)]/50 rounded-xl animate-pulse" style={{ height: '280px' }} />
+                      <div className="flex-1 w-full bg-[var(--border-color)] rounded-xl animate-pulse" style={{ height: '280px' }} />
                     </div>
                   </div>
 
                   <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 h-[260px] space-y-4">
                     <div className="h-4 bg-[var(--border-color)] rounded w-64 animate-pulse" />
-                    <div className="flex-1 w-full bg-[var(--bg-surface)]/50 rounded-xl animate-pulse" style={{ height: '180px' }} />
+                    <div className="flex-1 w-full bg-[var(--border-color)] rounded-xl animate-pulse" style={{ height: '180px' }} />
                   </div>
                 </motion.div>
               ) : (
@@ -1530,7 +1530,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                 >
                   <div className="flex items-center justify-between">
                     <h3 className="text-xl font-black text-[var(--text-secondary)] flex items-center gap-3 tracking-tight">
-                      <div className="p-2 bg-blue-600 dark:bg-[var(--brand-gold-mid)] rounded-xl shadow-lg shadow-blue-100">
+                      <div className="p-2 bg-blue-600 dark:bg-[var(--brand-gold-mid)] rounded-xl shadow-sm">
                         <LayoutDashboard className="w-5 h-5 text-white" />
                       </div>
                       Centro de Operaciones Technoverse
@@ -1570,7 +1570,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
                     </div>
 
                     <div className={`bg-[var(--bg-surface)] border rounded-2xl p-5 space-y-3 shadow-sm transition-all duration-300 ${
-                      repairsAwaitingParts > 0 ? 'border-rose-500 bg-rose-50 shadow-rose-100' : 'border-[var(--border-color)] hover:shadow-md'
+                      repairsAwaitingParts > 0 ? 'border-rose-500' : 'border-[var(--border-color)] hover:shadow-md'
                     }`}>
                       <div className="flex items-center justify-between">
                         <span className="text-[10px] font-black uppercase tracking-wider text-slate-400">Backlog Repuestos</span>
