@@ -8,11 +8,12 @@
 
   --color-bg-base: var(--bg-base);
   --color-bg-surface: var(--bg-surface);
+  --color-bg-elevated: var(--bg-elevated);
   --color-text-primary: var(--text-primary);
   --color-text-secondary: var(--text-secondary);
   --color-text-muted: var(--text-muted);
   --color-border-color: var(--border-color);
-  
+
   --color-brand-navy: var(--brand-navy);
   --color-brand-gold-dark: var(--brand-gold-dark);
   --color-brand-gold-mid: var(--brand-gold-mid);
@@ -29,36 +30,68 @@
   --font-size-5xl: clamp(1.6rem, 1.4rem + 1vw, 2.25rem);
 }
 
+/* ==========================================================================
+   Sistema de diseño — "Structured Premium" (navy + dorado), superficies
+   planas de alto contraste. Sin desenfoque de vidrio: la jerarquía viene
+   de bordes de 1px y una sombra suave reservada solo para capas flotantes
+   (menús, dropdowns, modales) que se posan sobre el contenido.
+   --bg-base:     fondo de página
+   --bg-surface:  tarjetas y paneles apoyados sobre la página (elevación 1)
+   --bg-elevated: menús, dropdowns, modales — flotan sobre todo (elevación 2)
+   ========================================================================== */
+
 @layer base {
   :root {
-    --bg-base: #F8F9FA;
+    --bg-base: #EFF1F5;
     --bg-surface: #ffffff;
-    --text-primary: #1F2937;
-    --text-secondary: #4B5563;
-    --text-muted: #9CA3AF;
-    --border-color: #E5E7EB;
-    
-    --brand-navy: #031837;
-    --brand-gold-dark: #8f7a5a;
-    --brand-gold-mid: #c9b57e;
-    --brand-gold-light: #e3d386;
+    --bg-elevated: #ffffff;
+    --text-primary: #182239;
+    --text-secondary: #49546E;
+    --text-muted: #878FA1;
+    --border-color: #E0E3EB;
+
+    --brand-navy: #121C30;
+    --brand-gold-dark: #8F7C5B;
+    --brand-gold-mid: #BDAB7F;
+    --brand-gold-light: #CABB91;
+    --brand-gold-rgb: 189, 171, 127;
+
+    /* Sombra reservada para capas flotantes (dropdowns, modales, bottom nav) */
+    --float-shadow: 0 12px 32px -14px rgba(18, 28, 48, 0.16), 0 4px 12px -6px rgba(18, 28, 48, 0.08);
+    --float-shadow-lg: 0 28px 64px -20px rgba(18, 28, 48, 0.22), 0 10px 24px -10px rgba(18, 28, 48, 0.11);
   }
-  
+
+  /* Tema oscuro — carbón/azulado profundamente desaturado (sin negros puros
+     ni tonos saturados), acentos dorados atenuados y profesionales. */
   .dark {
-    --bg-base: #031837;
-    --bg-surface: #0a2144;
-    --text-primary: #F3F4F6;
-    --text-secondary: #9CA3AF;
-    --text-muted: #6B7280;
-    --border-color: #1e3a63;
+    --bg-base: #13151B;
+    --bg-surface: #1C1F26;
+    --bg-elevated: #252931;
+    --text-primary: #EEEFF1;
+    --text-secondary: #B6BAC3;
+    --text-muted: #868C98;
+    --border-color: rgba(255, 255, 255, 0.08);
+
+    --brand-navy: #121C30;
+    --brand-gold-dark: #998666;
+    --brand-gold-mid: #C5B58C;
+    --brand-gold-light: #DCD0A8;
+    --brand-gold-rgb: 220, 208, 168;
+
+    --float-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.45), 0 4px 12px -6px rgba(0, 0, 0, 0.28);
+    --float-shadow-lg: 0 28px 64px -20px rgba(0, 0, 0, 0.55), 0 10px 24px -10px rgba(0, 0, 0, 0.32);
   }
+}
+
+html {
+  background-color: var(--bg-base);
 }
 
 body {
   background-color: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  transition: background-color 0.2s ease, color 0.2s ease;
+  transition: background-color 0.25s ease, color 0.25s ease;
 }
 
 /* Custom scrollbars */
@@ -78,27 +111,143 @@ body {
   background: var(--brand-gold-mid);
 }
 
-/* Glass panels */
+/* ==========================================================================
+   Superficies planas y capas flotantes ("Structured Premium")
+   ========================================================================== */
+
+/* Panel flotante genérico: dropdowns, modales — superficie sólida + borde + sombra suave */
 .glass-panel {
-  background: rgba(255, 255, 255, 0.7);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(255, 255, 255, 0.4);
-}
-.dark .glass-panel {
-  background: rgba(10, 33, 68, 0.7);
-  border: 1px solid rgba(143, 122, 90, 0.2);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--float-shadow);
 }
 
-.glass-gold {
-  background: rgba(255, 255, 255, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  border: 1px solid rgba(201, 181, 126, 0.2);
+/* Variante para modales grandes (checkout, formularios largos) */
+.glass-panel-strong {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-color);
+  box-shadow: var(--float-shadow-lg);
 }
-.dark .glass-gold {
-  background: rgba(10, 33, 68, 0.75);
-  border: 1px solid rgba(201, 181, 126, 0.2);
+
+/* Barra de navegación superior: superficie sólida + línea inferior, sin sombra */
+.glass-nav {
+  background: var(--bg-surface);
+  border-bottom: 1px solid var(--border-color);
+}
+
+/* Tarjeta de producto: superficie plana, sin sombra en reposo, acento dorado al hover */
+.glass-card {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+  box-shadow: none;
+  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+}
+.glass-card:hover {
+  box-shadow: var(--float-shadow);
+  border-color: rgba(var(--brand-gold-rgb), 0.5);
+}
+
+/* Pastilla plana para badges, filtros y botones de icono */
+.glass-pill {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-color);
+}
+
+/* Botón dorado primario — plano, con borde definido, sin resplandor de vidrio */
+.btn-glass-primary {
+  background: linear-gradient(135deg, var(--brand-gold-mid), var(--brand-gold-dark));
+  color: #1a1408;
+  border: 1px solid rgba(var(--brand-gold-rgb), 0.6);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
+  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+}
+.dark .btn-glass-primary {
+  color: #14100a;
+}
+.btn-glass-primary:hover {
+  filter: brightness(1.06);
+  transform: translateY(-1px);
+}
+.btn-glass-primary:active {
+  transform: translateY(0);
+  filter: brightness(0.98);
+}
+
+/* Campos de formulario — superficie plana */
+.glass-input {
+  background: var(--bg-base);
+  border: 1px solid var(--border-color);
+}
+.dark .glass-input {
+  background: rgba(255, 255, 255, 0.04);
+}
+.glass-input:focus {
+  border-color: rgba(var(--brand-gold-rgb), 0.7);
+  box-shadow: 0 0 0 3px rgba(var(--brand-gold-rgb), 0.18);
+  outline: none;
+}
+
+/* Alias existente, mismo sistema plano con borde dorado sutil */
+.glass-gold {
+  background: var(--bg-surface);
+  border: 1px solid rgba(var(--brand-gold-rgb), 0.35);
+}
+
+/* ==========================================================================
+   Barra de navegación inferior (móvil) — patrón global de la plataforma
+   ========================================================================== */
+.bottom-nav-bar {
+  position: fixed;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  z-index: 60;
+  background: var(--bg-surface);
+  border-top: 1px solid var(--border-color);
+  box-shadow: var(--float-shadow);
+  padding-bottom: env(safe-area-inset-bottom, 0px);
+}
+.bottom-nav-item {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  flex: 1;
+  padding: 8px 4px 7px;
+  color: var(--text-muted);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.01em;
+  transition: color 0.15s ease;
+}
+.bottom-nav-item.active {
+  color: var(--brand-gold-dark);
+}
+.dark .bottom-nav-item.active {
+  color: var(--brand-gold-light);
+}
+.bottom-nav-item .bn-icon-wrap {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 9px;
+}
+.bottom-nav-item.active .bn-icon-wrap {
+  background: rgba(var(--brand-gold-rgb), 0.16);
+}
+
+/* Panel flotante anclado sobre la barra inferior (catálogo/cuenta en móvil) */
+.floating-sheet-mobile {
+  position: fixed;
+  left: 12px;
+  right: 12px;
+  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  z-index: 61;
+  max-height: 70vh;
+  overflow-y: auto;
 }
 
 /* Smooth keyframe for bouncing cart */
@@ -182,21 +331,21 @@ button:has(> svg.lucide),
 }
 
 /* ==========================================================================
-   Elevación de tema oscuro — Tanda 1: Login y Tienda únicamente
+   Elevación de tema oscuro — Login y Tienda
    ========================================================================== */
 
 .dark #store-page-root {
-  --bg-base: #031837 !important;       /* surface-0 */
-  --bg-surface: #04214d !important;    /* surface-1 */
-  --text-primary: #F2EDE3 !important;  /* principal blanco cálido */
-  --text-secondary: #A39E93 !important;/* secundario gris-dorado apagado */
-  --border-color: rgba(255, 255, 255, 0.08) !important; /* Borde de 1px con opacidad al 8% */
-  
-  background-color: #031837 !important;
-  color: #F2EDE3 !important;
+  --bg-base: #13151B !important;
+  --bg-surface: #1C1F26 !important;
+  --text-primary: #EEEFF1 !important;
+  --text-secondary: #B6BAC3 !important;
+  --border-color: rgba(255, 255, 255, 0.08) !important;
+
+  background-color: #13151B !important;
+  color: #EEEFF1 !important;
 }
 
-/* Modals and Dropdowns (Elevated Surfaces - surface-2) */
+/* Modals and Dropdowns (Elevated Surfaces) */
 .dark #store-page-root #catalog-dropdown,
 .dark #store-page-root #search-suggestions-dropdown,
 .dark #store-page-root #account-dropdown,
@@ -205,12 +354,12 @@ button:has(> svg.lucide),
 .dark #store-page-root #product-detail-modal,
 .dark #store-page-root #checkout-cart-modal-container,
 .dark #store-page-root #floating-chat-window {
-  --bg-surface: #052a60 !important; /* so nested bg-[var(--bg-surface)] uses surface-2 */
-  --bg-base: #052a60 !important;
-  background-color: #052a60 !important; /* surface-2 */
-  border: 1px solid rgba(255, 255, 255, 0.09) !important; /* 1px border con opacidad al 9% */
-  box-shadow: 0 10px 30px -10px rgba(0, 0, 0, 0.5) !important;
-  color: #F2EDE3 !important;
+  --bg-surface: #252931 !important;
+  --bg-base: #252931 !important;
+  background-color: #252931 !important;
+  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  box-shadow: var(--float-shadow-lg) !important;
+  color: #EEEFF1 !important;
 }
 
 /* Ensure secondary text elements inside elevated components use the correct color variables */
@@ -222,11 +371,11 @@ button:has(> svg.lucide),
 .dark #store-page-root #product-detail-modal *,
 .dark #store-page-root #checkout-cart-modal-container *,
 .dark #store-page-root #floating-chat-window * {
-  --text-primary: #F2EDE3 !important;
-  --text-secondary: #A39E93 !important;
+  --text-primary: #EEEFF1 !important;
+  --text-secondary: #B6BAC3 !important;
 }
 
-/* Active elements, input fields, and hover states inside Elevated Surfaces (surface-3 - #063273) */
+/* Active elements, input fields, and hover states inside Elevated Surfaces */
 .dark #store-page-root #catalog-dropdown a:hover,
 .dark #store-page-root #catalog-dropdown button:hover,
 .dark #store-page-root #search-suggestions-dropdown button:hover,
@@ -237,8 +386,8 @@ button:has(> svg.lucide),
 .dark #store-page-root #checkout-cart-modal-container button:hover,
 .dark #store-page-root #checkout-cart-modal-container a:hover,
 .dark #store-page-root #product-detail-modal button:hover {
-  background-color: #063273 !important; /* surface-3 */
-  color: #F2EDE3 !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #EEEFF1 !important;
 }
 
 /* Inputs, Textareas, and Selects in Elevated Surfaces */
@@ -250,23 +399,22 @@ button:has(> svg.lucide),
 .dark #store-page-root #product-detail-modal select,
 .dark #store-page-root #checkout-cart-modal-container input,
 .dark #store-page-root #checkout-cart-modal-container select {
-  background-color: #063273 !important; /* surface-3 */
+  background-color: rgba(255, 255, 255, 0.06) !important;
   border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: #F2EDE3 !important;
+  color: #EEEFF1 !important;
 }
 
 /* Handle specific buttons and badges inside these modules to use warm white text and appropriate borders */
 .dark #store-page-root .hover\:bg-slate-50:hover {
-  background-color: #052a60 !important; /* surface-2 as hover */
+  background-color: rgba(255, 255, 255, 0.06) !important;
 }
 
 .dark #store-page-root .bg-slate-200,
 .dark #store-page-root .disabled\:bg-slate-200:disabled {
-  background-color: #063273 !important; /* surface-3 */
-  color: #F2EDE3 !important;
+  background-color: rgba(255, 255, 255, 0.08) !important;
+  color: #EEEFF1 !important;
 }
 
 .dark #store-page-root .hover\:bg-slate-200:hover {
-  background-color: #063273 !important; /* surface-3 */
+  background-color: rgba(255, 255, 255, 0.08) !important;
 }
-
