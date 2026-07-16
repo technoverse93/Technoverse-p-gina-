@@ -56,9 +56,10 @@
     --brand-gold-light: #CABB91;
     --brand-gold-rgb: 189, 171, 127;
 
-    /* Sombra reservada para capas flotantes (dropdowns, modales, bottom nav) */
-    --float-shadow: 0 12px 32px -14px rgba(18, 28, 48, 0.16), 0 4px 12px -6px rgba(18, 28, 48, 0.08);
-    --float-shadow-lg: 0 28px 64px -20px rgba(18, 28, 48, 0.22), 0 10px 24px -10px rgba(18, 28, 48, 0.11);
+    /* Sombra reservada para capas flotantes (dropdowns, modales, bottom nav) —
+       una sola capa, radio de difuminado corto: económica para el compositor. */
+    --float-shadow: 0 4px 12px -4px rgba(18, 28, 48, 0.18);
+    --float-shadow-lg: 0 8px 20px -6px rgba(18, 28, 48, 0.22);
   }
 
   /* Tema oscuro — carbón/azulado profundamente desaturado (sin negros puros
@@ -78,8 +79,8 @@
     --brand-gold-light: #DCD0A8;
     --brand-gold-rgb: 220, 208, 168;
 
-    --float-shadow: 0 12px 32px -14px rgba(0, 0, 0, 0.45), 0 4px 12px -6px rgba(0, 0, 0, 0.28);
-    --float-shadow-lg: 0 28px 64px -20px rgba(0, 0, 0, 0.55), 0 10px 24px -10px rgba(0, 0, 0, 0.32);
+    --float-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.4);
+    --float-shadow-lg: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
   }
 }
 
