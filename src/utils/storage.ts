@@ -392,13 +392,6 @@ function initTableRealtimeSync(cfg: TableConfig<any>) {
     genericReady[cfg.key as string] = true;
     flushGenericPending(cfg);
   });
-
-  supabase
-    .channel(`${cfg.table}-realtime-sync`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: cfg.table }, () => {
-      refreshTableFromSupabase(cfg);
-    })
-    .subscribe();
 }
 
 async function syncTableToSupabase(cfg: TableConfig<any>, added: any[], modified: any[], deleted: any[]) {
@@ -487,11 +480,6 @@ function initChatRealtimeSync() {
     chatReady = true;
     flushChatPending();
   });
-
-  supabase.channel('chat-realtime-sync')
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations' }, () => refreshChatFromSupabase())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => refreshChatFromSupabase())
-    .subscribe();
 }
 
 async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatConversation[]) {
@@ -582,8 +570,27 @@ async function refreshSettingsFromSupabase() {
 
 function initSettingsRealtimeSync() {
   refreshSettingsFromSupabase().then(() => { settingsReady = true; });
+}
 
-  supabase.channel('app-settings-realtime-sync')
+// Antes cada tabla abría su PROPIO canal/websocket (17 canales en total:
+// 15 tablas + chat + settings). Abrir tantos canales por separado desde un
+// mismo cliente es innecesario y poco confiable: algunos podían tardar en
+// suscribirse o fallar en silencio (como pasaba con el logo), mientras que
+// productos -al ser el más probado- parecía funcionar siempre. Ahora se usa
+// UN SOLO canal multiplexado con todas las tablas, tal como recomienda
+// Supabase, eliminando esa fuente de fallos intermitentes.
+function initRealtimeChannel() {
+  const channel = supabase.channel('technoverse-realtime-sync');
+
+  TABLE_CONFIGS.forEach((cfg) => {
+    channel.on('postgres_changes', { event: '*', schema: 'public', table: cfg.table }, () => {
+      refreshTableFromSupabase(cfg);
+    });
+  });
+
+  channel
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations' }, () => refreshChatFromSupabase())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => refreshChatFromSupabase())
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => refreshSettingsFromSupabase())
     .subscribe();
 }
@@ -609,6 +616,7 @@ export function initFirebaseSync() {
   TABLE_CONFIGS.forEach(initTableRealtimeSync);
   initChatRealtimeSync();
   initSettingsRealtimeSync();
+  initRealtimeChannel();
 }
 
 if (typeof window !== 'undefined') {
