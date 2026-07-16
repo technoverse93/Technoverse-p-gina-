@@ -383,7 +383,15 @@ async function refreshTableFromSupabase(cfg: TableConfig<any>) {
     notifySyncError(`No se pudo leer "${cfg.table}": ${error.message}`);
     return;
   }
-  (localCache as any)[cfg.key] = (data || []).map(cfg.fromRow);
+  const items = (data || []).map(cfg.fromRow);
+  (localCache as any)[cfg.key] = items;
+  // CRÍTICO: lastSyncedDb es la base contra la que se compara cualquier
+  // guardado futuro. Si solo se actualizaba localCache pero no lastSyncedDb,
+  // este quedaba con los datos de arranque (getDefaultDB()) para siempre en
+  // esa colección. Entonces, si UNA sola tabla fallaba al guardar (ej. un SKU
+  // duplicado), saveDB() revertía TODO a ese estado de arranque casi vacío,
+  // en vez de al último estado real sincronizado — eso vaciaba la interfaz.
+  (lastSyncedDb as any)[cfg.key] = JSON.parse(JSON.stringify(items));
   notifyUpdate();
 }
 
@@ -467,11 +475,13 @@ async function refreshChatFromSupabase() {
     messagesByConv[m.conversation_id].push({ id: m.id, sender: m.sender, text: m.text, timestamp: m.created_at });
   });
 
-  localCache.chat_conversations = (convRows || []).map((r: any): ChatConversation => ({
+  const conversations = (convRows || []).map((r: any): ChatConversation => ({
     id: r.id, customerName: r.customer_name || '', customerEmail: r.customer_email || '',
     membershipLevel: r.membership_level || 'Normal', status: r.status || 'active',
     unreadCount: r.unread_count || 0, messages: messagesByConv[r.id] || []
   }));
+  localCache.chat_conversations = conversations;
+  lastSyncedDb.chat_conversations = JSON.parse(JSON.stringify(conversations));
   notifyUpdate();
 }
 
@@ -563,7 +573,9 @@ async function refreshSettingsFromSupabase() {
     return;
   }
   if (data) {
-    localCache.settings = settingsFromRow(data);
+    const settings = settingsFromRow(data);
+    localCache.settings = settings;
+    lastSyncedDb.settings = JSON.parse(JSON.stringify(settings));
     notifyUpdate();
   }
 }
