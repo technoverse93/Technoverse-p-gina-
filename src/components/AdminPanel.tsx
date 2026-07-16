@@ -2,10 +2,10 @@ import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { PaginatedTbody } from './PaginationHelper';
 import { 
-  LayoutDashboard, Package, Wrench, Users, CreditCard, FileSpreadsheet, 
-  Settings, ShieldCheck, Heart, Megaphone, Truck, ShieldAlert, LogOut, Sun, Moon, 
-  Menu, X, Plus, Trash2, Edit, Save, RefreshCw, Key, ArrowRightLeft, Eye, Download, DollarSign, BookOpen, ChevronDown, ChevronRight, ShoppingBag,
-  Home, Sparkles, UserPlus, TrendingUp, BarChart3, Activity
+  LayoutDashboard, Package, Wrench, Users, CreditCard, FileSpreadsheet,
+  Settings, ShieldCheck, Heart, Megaphone, Truck, ShieldAlert, LogOut, Sun, Moon,
+  X, Plus, Trash2, Edit, Save, RefreshCw, Key, ArrowRightLeft, Eye, Download, DollarSign, BookOpen, ChevronDown, ChevronRight, ShoppingBag,
+  Home, Sparkles, UserPlus, TrendingUp, BarChart3, Activity, MoreHorizontal
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
@@ -81,7 +81,9 @@ export default function AdminPanel({
 
   const [isInventoryExpanded, setIsInventoryExpanded] = useState(false);
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
-  const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
+  // Mobile bottom-navigation overflow sheets (replace the old hamburger drawer)
+  const [isMobileInventoryMenuOpen, setIsMobileInventoryMenuOpen] = useState(false);
+  const [isMobileMoreMenuOpen, setIsMobileMoreMenuOpen] = useState(false);
 
   const handleDropdownEnter = (e: React.MouseEvent<HTMLDivElement | HTMLButtonElement>) => {
     const button = e.currentTarget;
@@ -1200,15 +1202,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
   return (
     <div className="h-screen bg-[var(--bg-base)] text-[var(--text-primary)] flex flex-col overflow-hidden w-full" id="admin-panel-root">
       {/* UNIFIED NAVIGATION HEADER WITH BREADCRUMB GLASS DROP-DOWNS */}
-      <header className="bg-[var(--bg-surface)] h-12 sm:h-14 border-b border-[var(--border-color)]/80 sticky top-0 z-50 flex items-center justify-between px-3 md:px-4">
-        {/* Mobile menu toggle */}
-        <button 
-          onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)} 
-          className="lg:hidden mr-2 p-2 rounded-xl text-[var(--text-primary)] hover:bg-[var(--bg-surface)] hover:bg-slate-800 transition flex-shrink-0"
-          title="Menú"
-        >
-          <Menu className="w-5 h-5" />
-        </button>
+      <header className="glass-nav h-12 sm:h-14 sticky top-0 z-50 flex items-center justify-between px-3 md:px-4">
         <div className="flex items-center gap-3 sm:gap-4 overflow-hidden flex-1 min-w-0">
           <button onClick={() => onNavigateToStore? onNavigateToStore() : window.location.reload()} className="hidden lg:flex flex-shrink-0 items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--brand-gold-mid)]/10 text-sky-600 dark:text-[var(--brand-gold-light)] font-bold text-[10px] hover:bg-[var(--brand-gold-mid)]/20 transition"><svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> Ver tienda</button>
           <div className="flex items-center gap-2 flex-shrink-0">
@@ -1416,7 +1410,7 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
       {/* WORKSPACE CONTENT AREA */}
       <div className="flex-1 flex flex-row overflow-hidden w-full relative">
         {/* Sidebar on Desktop / Drawer on Mobile */}
-        <aside className={`hidden lg:flex flex-col bg-[var(--bg-surface)] border-r border-[var(--border-color)]/85 transition-all duration-300 overflow-hidden flex-shrink-0 ${isSidebarCollapsed ? 'w-16' : 'w-64'}`}>
+        <aside className={`hidden lg:flex flex-col glass-panel !rounded-none !border-y-0 !border-l-0 transition-all duration-300 overflow-hidden flex-shrink-0 ${isSidebarCollapsed ? 'w-16' : 'w-64'}`}>
           <div className="flex-1 overflow-y-auto py-4 space-y-4 px-3 select-none">
             {/* Sidebar toggle button inside the sidebar top */}
             <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between px-2'} mb-2`}>
@@ -1471,83 +1465,9 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
           </div>
         </aside>
 
-        {/* Mobile Menu Drawer Overlay */}
-        <AnimatePresence>
-          {isMobileMenuOpen && (
-            <>
-              {/* Back-drop overlay */}
-              <motion.div 
-                initial={{ opacity: 0 }}
-                animate={{ opacity: 0.5 }}
-                exit={{ opacity: 0 }}
-                onClick={() => setIsMobileMenuOpen(false)}
-                className="fixed inset-0 bg-black z-40 lg:hidden"
-              />
-
-              {/* Drawer content */}
-              <motion.aside
-                initial={{ x: "-100%" }}
-                animate={{ x: 0 }}
-                exit={{ x: "-100%" }}
-                transition={{ type: "spring", bounce: 0, duration: 0.3 }}
-                className="fixed inset-y-0 left-0 w-72 bg-[var(--bg-surface)] border-r border-[var(--border-color)] z-50 flex flex-col p-4 space-y-4 lg:hidden"
-              >
-                <div className="flex items-center justify-between pb-2 border-b border-[var(--border-color)]">
-                  <div className="flex items-center gap-2">
-                    <img src={storeLogoPreview || storeLogo || "/logo.png"} alt="Technoverse Logo" className="h-8 w-8 rounded-lg object-contain bg-[var(--bg-surface)] p-0.5" />
-                    <span className="font-display font-bold text-base text-[var(--brand-gold-mid)]">Technoverse</span>
-                  </div>
-                  <button 
-                    onClick={() => setIsMobileMenuOpen(false)}
-                    className="p-1.5 rounded-lg text-slate-400 hover:bg-slate-800 transition"
-                  >
-                    <X className="w-5 h-5" />
-                  </button>
-                </div>
-
-                <div className="flex-1 overflow-y-auto space-y-4 pr-1 select-none">
-                  {sidebarSections.map((sec, secIdx) => {
-                    const permittedItems = sec.items.filter(item => isOwner || hasPermission(item.id));
-                    if (permittedItems.length === 0) return null;
-
-                    return (
-                      <div key={secIdx} className="space-y-1">
-                        <div className="text-[9px] uppercase font-bold text-slate-500 px-3 py-1 tracking-widest border-b border-[var(--border-color)]/30 mb-1">
-                          {sec.title}
-                        </div>
-                        {permittedItems.map(item => {
-                          const Icon = item.icon;
-                          const isActive = activeTab === item.id;
-                          return (
-                            <button
-                              key={item.id}
-                              onClick={() => {
-                                setActiveTab(item.id);
-                                setIsMobileMenuOpen(false);
-                                setActiveDropdown(null);
-                              }}
-                              className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${
-                                isActive 
-                                  ? 'text-[var(--brand-gold-mid)] bg-[var(--bg-surface)] border border-[var(--brand-gold-mid)]/20 font-bold' 
-                                  : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)] hover:bg-slate-800'
-                              }`}
-                            >
-                              <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-[var(--brand-gold-mid)]' : 'text-slate-400'}`} />
-                              <span className="text-xs font-semibold">{item.label}</span>
-                            </button>
-                          );
-                        })}
-                      </div>
-                    );
-                  })}
-                </div>
-              </motion.aside>
-            </>
-          )}
-        </AnimatePresence>
 
         {/* WORKSPACE CONTENT AREA */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 space-y-6 w-full bg-[var(--bg-base)]">
+        <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 lg:pb-8 space-y-6 w-full bg-[var(--bg-base)]">
           <AnimatePresence mode="wait">
             <motion.div
               key={activeTab}
@@ -2986,6 +2906,151 @@ if (!del) return null;
           </AnimatePresence>
       </main>
       </div>
+
+      {/* Mobile overflow sheets for the bottom navigation bar (Inventario / Más) */}
+      <AnimatePresence>
+        {isMobileInventoryMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+            className="floating-sheet-mobile glass-panel rounded-2xl p-2 lg:hidden"
+          >
+            <div className="px-4 py-2 border-b border-[var(--border-color)] mb-1">
+              <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Control de Inventario</span>
+            </div>
+            <div className="p-1 space-y-1">
+              {getPermittedSubItems('inventario').map(item => item && (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setIsMobileInventoryMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${
+                    activeTab === item.id
+                      ? 'text-[var(--brand-gold-mid)] bg-[var(--bg-base)] font-bold'
+                      : 'text-[var(--text-primary)] hover:bg-[var(--bg-base)]'
+                  }`}
+                >
+                  <item.icon className="w-4 h-4 flex-shrink-0 text-[var(--brand-gold-mid)]" />
+                  <span className="text-sm font-semibold">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      <AnimatePresence>
+        {isMobileMoreMenuOpen && (
+          <motion.div
+            initial={{ opacity: 0, y: 16, scale: 0.97 }}
+            animate={{ opacity: 1, y: 0, scale: 1 }}
+            exit={{ opacity: 0, y: 16, scale: 0.97 }}
+            transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
+            className="floating-sheet-mobile glass-panel rounded-2xl p-2 lg:hidden"
+          >
+            <div className="px-4 py-2 border-b border-[var(--border-color)] mb-1">
+              <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Servicios &amp; Finanzas</span>
+            </div>
+            <div className="p-1 space-y-1">
+              {getPermittedSubItems('administracion').map(item => item && (
+                <button
+                  key={item.id}
+                  onClick={() => {
+                    setActiveTab(item.id);
+                    setIsMobileMoreMenuOpen(false);
+                  }}
+                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${
+                    activeTab === item.id
+                      ? 'text-[var(--brand-gold-mid)] bg-[var(--bg-base)] font-bold'
+                      : 'text-[var(--text-primary)] hover:bg-[var(--bg-base)]'
+                  }`}
+                >
+                  <item.icon className="w-4 h-4 flex-shrink-0 text-[var(--brand-gold-mid)]" />
+                  <span className="text-sm font-semibold">{item.label}</span>
+                </button>
+              ))}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Global bottom navigation bar (mobile only) — replaces the hamburger + drawer entirely */}
+      <nav className="bottom-nav-bar lg:hidden flex items-stretch">
+        {(isOwner || hasPermission('dashboard')) && (
+          <button
+            className={`bottom-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('dashboard');
+              setActiveDropdown(null);
+              setIsMobileInventoryMenuOpen(false);
+              setIsMobileMoreMenuOpen(false);
+            }}
+          >
+            <span className="bn-icon-wrap"><LayoutDashboard className="w-5 h-5" /></span>
+            Dashboard
+          </button>
+        )}
+        {getPermittedSubItems('inventario').length > 0 && (
+          <button
+            className={`bottom-nav-item ${isMobileInventoryMenuOpen || activeTab.startsWith('inventario_') ? 'active' : ''}`}
+            onClick={() => {
+              if (isMobileInventoryMenuOpen) { setIsMobileInventoryMenuOpen(false); return; }
+              setIsMobileMoreMenuOpen(false);
+              setActiveDropdown(null);
+              setIsMobileInventoryMenuOpen(true);
+            }}
+          >
+            <span className="bn-icon-wrap"><Package className="w-5 h-5" /></span>
+            Inventario
+          </button>
+        )}
+        {hasPermission('taller') && (
+          <button
+            className={`bottom-nav-item ${activeTab === 'taller' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('taller');
+              setActiveDropdown(null);
+              setIsMobileInventoryMenuOpen(false);
+              setIsMobileMoreMenuOpen(false);
+            }}
+          >
+            <span className="bn-icon-wrap"><Wrench className="w-5 h-5" /></span>
+            Taller
+          </button>
+        )}
+        {(isOwner || hasPermission('clientes')) && (
+          <button
+            className={`bottom-nav-item ${activeTab === 'clientes' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('clientes');
+              setActiveDropdown(null);
+              setIsMobileInventoryMenuOpen(false);
+              setIsMobileMoreMenuOpen(false);
+            }}
+          >
+            <span className="bn-icon-wrap"><CreditCard className="w-5 h-5" /></span>
+            Clientes
+          </button>
+        )}
+        {getPermittedSubItems('administracion').length > 0 && (
+          <button
+            className={`bottom-nav-item ${isMobileMoreMenuOpen ? 'active' : ''}`}
+            onClick={() => {
+              if (isMobileMoreMenuOpen) { setIsMobileMoreMenuOpen(false); return; }
+              setIsMobileInventoryMenuOpen(false);
+              setActiveDropdown(null);
+              setIsMobileMoreMenuOpen(true);
+            }}
+          >
+            <span className="bn-icon-wrap"><MoreHorizontal className="w-5 h-5" /></span>
+            Más
+          </button>
+        )}
+      </nav>
     </div>
   );
 }
