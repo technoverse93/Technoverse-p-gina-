@@ -1,8 +1,7 @@
 export interface User {
   id: string;
   email: string;
-  role: 'Dueño' | 'Empleado' | 'Cliente';
-  employeeRole?: 'Soporte' | 'Técnico' | 'Bodega' | 'Contabilidad' | 'Marketing' | 'Repartidor' | 'Oficial de Cumplimiento';
+  role: 'Dueño' | 'Cliente';
   name: string;
   membershipTier?: 'Normal' | 'Plata' | 'Oro' | 'Platino';
   token?: string;
@@ -139,40 +138,6 @@ export interface ChatConversation {
   messages: ChatMessage[];
   status: 'active' | 'archived';
   unreadCount: number;
-}
-
-export interface Employee {
-  id: string;
-  name: string;
-  email: string;
-  role: 'Soporte' | 'Técnico' | 'Bodega' | 'Contabilidad' | 'Marketing' | 'Repartidor' | 'Oficial de Cumplimiento';
-  active: boolean;
-  baseSalary: number; // In Colones
-  contractType: 'Indefinido' | 'Temporal' | 'Servicios Profesionales';
-  dateJoined: string;
-  password?: string;
-  remoteBonus?: number; // Subsidio de servicios domésticos (trabajo remoto)
-  pin?: string;
-}
-
-export interface Payroll {
-  id: string;
-  employeeId: string;
-  employeeName: string;
-  month: string; // e.g. "2026-07"
-  baseSalary: number;
-  ccssTrabajador: number; // 9.67%
-  ccssPatrono: number;    // 26.33%
-  insSeguro: number;      // ~1.5%
-  lptTrabajador: number;  // 1%
-  lptPatrono: number;     // 1.5%
-  fclPatrono: number;     // 3%
-  retencionRenta: number; // based on tramos
-  bonos: number;
-  horasExtra: number;
-  salarioNeto: number;
-  costoLaboralTotal: number; // baseSalary + cargas patronales + bonos
-  status: 'Borrador' | 'Aprobado' | 'Pagado';
 }
 
 export interface AuditLog {
