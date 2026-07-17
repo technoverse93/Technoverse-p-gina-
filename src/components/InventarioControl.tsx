@@ -1789,7 +1789,7 @@ if (!m) return null;
 
       {/* Traceability Modal */}
       {traceProductModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl w-full max-w-2xl p-6 space-y-4 shadow-sm relative">
             <button onClick={() => setTraceProductModal(null)} className="absolute top-4 right-4 text-[var(--text-secondary)] hover:text-white">
               <X className="w-5 h-5" />
@@ -1842,7 +1842,7 @@ if (!m) return null;
 
       {/* Delete Confirmation Modal */}
       {deleteProductModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-950/80 z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl w-full max-w-md p-6 space-y-4 shadow-sm">
             <h4 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
               <Trash2 className="w-5 h-5 text-rose-500" /> ¿Eliminar este producto?
@@ -1933,7 +1933,7 @@ if (!m) return null;
 
       {/* PDF Import Modal */}
       {showPdfModal && (
-        <div className="fixed inset-0 bg-slate-900/50 backdrop-blur-sm /90 z-50 flex items-center justify-center p-4">
+        <div className="fixed inset-0 bg-slate-950/90 z-50 flex items-center justify-center p-4">
           <div className="bg-[var(--bg-surface)] border border-white/15 rounded-3xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden shadow-sm relative">
             
             {/* Modal Header */}

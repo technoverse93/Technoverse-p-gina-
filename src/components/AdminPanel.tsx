@@ -4,7 +4,7 @@ import { PaginatedTbody } from './PaginationHelper';
 import { 
   LayoutDashboard, Package, Wrench, Users, CreditCard, FileSpreadsheet,
   Settings, ShieldCheck, Megaphone, Truck, ShieldAlert, LogOut, Sun, Moon,
-  X, Plus, Trash2, Edit, Save, RefreshCw, Key, ArrowRightLeft, Eye, EyeOff, Download, DollarSign, BookOpen, ChevronDown, ChevronRight, ShoppingBag,
+  X, Plus, Trash2, Edit, Save, RefreshCw, Key, ArrowRightLeft, Eye, EyeOff, Download, DollarSign, BookOpen, ChevronDown, ChevronRight, ShoppingBag, CheckCircle,
   Home, Sparkles, UserPlus, TrendingUp, BarChart3, Activity, MoreHorizontal
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
@@ -146,6 +146,8 @@ export default function AdminPanel({
   const [showPassword, setShowPassword] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [generatedUserPass, setGeneratedUserPass] = useState<string | null>(null);
+  const [showLoginToast, setShowLoginToast] = useState(false);
+  const [loginToastMessage, setLoginToastMessage] = useState('');
 
   // General parameters state
   const [cedulaJuridica, setCedulaJuridica] = useState('');
@@ -386,7 +388,9 @@ export default function AdminPanel({
     const adminUser: User = { id: 'admin-id', email: cleanEmail, role: 'Dueño', name: profile.name || 'Administrador Technoverse' };
     onLogin(adminUser);
     setLoginEmail(''); setLoginPassword('');
-    alert('Sesión iniciada con éxito como Administrador.');
+    setLoginToastMessage('Sesión iniciada con éxito como Administrador.');
+    setShowLoginToast(true);
+    setTimeout(() => setShowLoginToast(false), 3000);
   };
 
   
@@ -891,6 +895,17 @@ export default function AdminPanel({
 
   return (
     <div className="h-dvh bg-[var(--bg-base)] text-[var(--text-primary)] flex flex-col overflow-hidden w-full" id="admin-panel-root">
+      {showLoginToast && (
+        <div className="fixed bottom-6 right-6 z-[998] bg-[#1E293B]/95 border border-[var(--brand-gold-mid)]/50 text-white px-5 py-3 rounded-2xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300">
+          <div className="p-1 bg-[var(--brand-gold-mid)] rounded-lg">
+            <CheckCircle className="w-4 h-4 text-[#1a1408] dark:text-[#14100a]" />
+          </div>
+          <div>
+            <div className="text-[10px] text-[var(--brand-gold-mid)] font-bold uppercase tracking-wider">¡Éxito!</div>
+            <div className="text-sm font-sans text-slate-100">{loginToastMessage}</div>
+          </div>
+        </div>
+      )}
       {/* UNIFIED NAVIGATION HEADER WITH BREADCRUMB GLASS DROP-DOWNS */}
       <header className="glass-nav h-12 sm:h-14 sticky top-0 z-50 flex items-center justify-between px-3 md:px-4">
         <div className="flex items-center gap-3 sm:gap-4 overflow-hidden flex-1 min-w-0">

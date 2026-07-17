@@ -269,7 +269,9 @@ export default function PublicStore({
     setIsLoginModalOpen(false);
     setLoginEmail('');
     setLoginPassword('');
-    alert(`Bienvenido, ${loggedUser.name}. Sesión iniciada con éxito.`);
+    setToastMessage(`Bienvenido, ${loggedUser.name}. Sesión iniciada con éxito.`);
+    setShowCartSuccessToast(true);
+    setTimeout(() => setShowCartSuccessToast(false), 3000);
   };
 
   const handleClientRegisterSubmit = async (e: React.FormEvent) => {
@@ -330,7 +332,9 @@ export default function PublicStore({
 
     onLogin(clientUser);
     setIsLoginModalOpen(false);
-    alert(`¡Cuenta creada con éxito! Bienvenido a Technoverse, ${regName.trim()}.`);
+    setToastMessage(`¡Cuenta creada con éxito! Bienvenido a Technoverse, ${regName.trim()}.`);
+    setShowCartSuccessToast(true);
+    setTimeout(() => setShowCartSuccessToast(false), 3000);
 
     setRegName('');
     setRegEmail('');

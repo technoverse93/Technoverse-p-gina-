@@ -696,7 +696,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
       {/* DIAGNOSTIC DETAILS MODAL */}
       {selectedRepair && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in" id="repair-detail-modal">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-in fade-in" id="repair-detail-modal">
           <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden shadow-sm w-full max-w-xl text-[var(--text-primary)] flex flex-col">
             
             {/* Header */}
