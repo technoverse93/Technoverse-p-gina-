@@ -2,12 +2,17 @@ import React, { useState, useEffect } from 'react';
 import PublicStore from './components/PublicStore';
 import AdminPanel from './components/AdminPanel';
 import { User } from './types';
+import { initKeyboard } from './mobile/keyboard';
 
 export default function App() {
   const [currentView, setCurrentView] = useState<'store' | 'admin'>(
     window.location.pathname.startsWith('/admin') ? 'admin' : 'store'
   );
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
+
+  useEffect(() => {
+    initKeyboard();
+  }, []);
 
   // Theme Management
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
