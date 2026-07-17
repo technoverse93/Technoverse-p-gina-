@@ -1,6 +1,6 @@
 {
   "$schema": "./node_modules/wrangler/config-schema.json",
-  "name": "technoverse-pagina",
+  "name": "technoverse-cr",
   "compatibility_date": "2026-07-14",
   "assets": {
     "directory": "./dist",
