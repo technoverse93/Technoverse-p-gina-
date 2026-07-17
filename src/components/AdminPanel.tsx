@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
+import React, { useState, useEffect, useLayoutEffect, useRef, Suspense, lazy } from 'react';
 import { PaginatedTbody } from './PaginationHelper';
 import { CustomSelect } from './CustomSelect';
 import { 
@@ -13,10 +13,18 @@ import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/s
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
 import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog, Banner } from '../types';
-import TallerKanban from './TallerKanban';
-import InventarioControl from './InventarioControl';
-import ComplianceModule from './ComplianceModule';
-import InventarioMundo3D from './InventarioMundo3D';
+
+// Cargados solo cuando se visita su pestaña: reduce el JS que el A12 tiene
+// que parsear/ejecutar en el arranque del panel.
+const TallerKanban = lazy(() => import('./TallerKanban'));
+const InventarioControl = lazy(() => import('./InventarioControl'));
+const ComplianceModule = lazy(() => import('./ComplianceModule'));
+
+const TabLoadingFallback = () => (
+  <div className="flex items-center justify-center py-24 text-[var(--text-muted)] text-sm gap-2">
+    <RefreshCw className="w-4 h-4 animate-spin" /> Cargando módulo...
+  </div>
+);
 
 interface AdminPanelProps {
   onNavigateToStore: () => void;
@@ -1333,19 +1341,23 @@ export default function AdminPanel({
         {(activeTab === 'productos' || activeTab.startsWith('inventario_')) && (
           /* MODULE B: PRODUCTOS (INVENTARIO CRUD) */
           <div className="space-y-6" id="view-productos">
-            <InventarioControl 
-              currentUser={currentUser} 
-              onDataChanged={loadAllAdminData} 
-              defaultSubTab={activeTab.startsWith('inventario_') ? (activeTab.replace('inventario_', '') as any) : 'productos'}
-              onTabChange={(tab) => setActiveTab(`inventario_${tab}`)}
-            />
+            <Suspense fallback={<TabLoadingFallback />}>
+              <InventarioControl
+                currentUser={currentUser}
+                onDataChanged={loadAllAdminData}
+                defaultSubTab={activeTab.startsWith('inventario_') ? (activeTab.replace('inventario_', '') as any) : 'productos'}
+                onTabChange={(tab) => setActiveTab(`inventario_${tab}`)}
+              />
+            </Suspense>
           </div>
         )}
         {activeTab === 'taller' && (
           (isOwner || hasPermission('taller')) ? (
             /* MODULE C: TALLER (KANBAN COMPONENT EMBEDDED) */
             <div className="space-y-4" id="view-taller">
-              <TallerKanban activeUserEmail={currentUser?.email} onRepairUpdated={loadAllAdminData} />
+              <Suspense fallback={<TabLoadingFallback />}>
+                <TallerKanban activeUserEmail={currentUser?.email} onRepairUpdated={loadAllAdminData} />
+              </Suspense>
             </div>
           ) : (
              <div className="p-8 text-center text-rose-500 font-bold">Acceso denegado. Permisos insuficientes.</div>
@@ -1526,10 +1538,12 @@ export default function AdminPanel({
         {activeTab === 'cumplimiento' && (
           /* MODULE L: CUMPLIMIENTO LEGAL (EMBEDDED NATIVELY) */
           <div className="space-y-4" id="view-cumplimiento">
-            <ComplianceModule 
-              onRefreshData={loadAllAdminData} 
-              activeUserEmail={currentUser?.email} 
-            />
+            <Suspense fallback={<TabLoadingFallback />}>
+              <ComplianceModule
+                onRefreshData={loadAllAdminData}
+                activeUserEmail={currentUser?.email}
+              />
+            </Suspense>
           </div>
 
         )}
