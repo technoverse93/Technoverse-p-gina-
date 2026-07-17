@@ -150,7 +150,8 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
   // Generate Electronic XML simulation preview strictly formatted under Hacienda DGT-R-48-2016
   const getSimulatedInvoiceXml = (order: Order) => {
     const key = `506${new Date(order.timestamp).toLocaleDateString('es-CR', { year: '2-digit', month: '2-digit', day: '2-digit' }).replace(/\//g, '')}0001010101000000012610255478`;
-    
+    const settings = getDB().settings;
+
     return `<?xml version="1.0" encoding="utf-8"?>
 <FacturaElectronica xmlns="https://cdn.comprobanteselectronicos.go.cr/xml-schemas/v4.3/facturaElectronica" xmlns:xs="http://www.w3.org/2001/XMLSchema" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance">
   <Clave>${key}</Clave>
@@ -161,11 +162,11 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
     <Nombre>Technoverse Costa Rica S.A.</Nombre>
     <Identificacion>
       <Tipo>02</Tipo> <!-- Cédula Jurídica -->
-      <Numero>3-101-987452</Numero>
+      <Numero>${settings?.cedulaJuridica || 'Pendiente de configurar'}</Numero>
     </Identificacion>
     <Telefono>
       <CodigoPais>506</CodigoPais>
-      <NumTelefono>64214795</NumTelefono>
+      <NumTelefono>${settings?.companyPhone || ''}</NumTelefono>
     </Telefono>
     <CorreoElectronico>facturacion@technoverse.com</CorreoElectronico>
   </Emisor>

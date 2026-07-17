@@ -150,10 +150,10 @@ export default function AdminPanel({
   const [generatedUserPass, setGeneratedUserPass] = useState<string | null>(null);
 
   // General parameters state
-  const [cedulaJuridica, setCedulaJuridica] = useState('3-101-987452');
+  const [cedulaJuridica, setCedulaJuridica] = useState('');
   const [companyPhone, setCompanyPhone] = useState('');
   const [companyAddress, setCompanyAddress] = useState('');
-  const [pickupHours, setPickupHours] = useState('Lunes a Viernes: 8:00 AM - 5:00 PM (Retiros con cita previa)');
+  const [pickupHours, setPickupHours] = useState('');
   const [storeLogo, setStoreLogo] = useState('');
   const [storeLogoPreview, setStoreLogoPreview] = useState<string | null>(null);
 
@@ -639,7 +639,7 @@ export default function AdminPanel({
         <body>
           <div class="header">
             <div class="logo">TECHNOVERSE S.A.</div>
-            <div>Cédula Jurídica: ${db.settings?.cedulaJuridica || '3-101-555444'}</div>
+            <div>Cédula Jurídica: ${db.settings?.cedulaJuridica || 'Pendiente de configurar'}</div>
             <div>Factura Electrónica ${order.id}</div>
           </div>
           <div class="details">
@@ -1980,12 +1980,13 @@ if (!del) return null;
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Cédula Jurídica (Simulada)</label>
+                  <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Cédula Jurídica / Física</label>
                   <input
                     type="text"
                     value={cedulaJuridica}
                     onChange={(e) => setCedulaJuridica(e.target.value)}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
+                    placeholder="Ej. 3-101-000000"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] dark:text-zinc-100 focus:outline-none font-mono placeholder:text-[var(--text-muted)]"
                   />
                 </div>
                 <div>
@@ -1994,7 +1995,8 @@ if (!del) return null;
                     type="text"
                     value={companyPhone}
                     onChange={(e) => setCompanyPhone(e.target.value)}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
+                    placeholder="Ej. +506 0000 0000"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] dark:text-zinc-100 focus:outline-none font-mono placeholder:text-[var(--text-muted)]"
                   />
                 </div>
               </div>
@@ -2006,7 +2008,8 @@ if (!del) return null;
                     type="text"
                     value={companyAddress}
                     onChange={(e) => setCompanyAddress(e.target.value)}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                    placeholder="Provincia, cantón, distrito y señas exactas"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] dark:text-zinc-100 focus:outline-none placeholder:text-[var(--text-muted)]"
                   />
                 </div>
                 <div>
@@ -2015,21 +2018,25 @@ if (!del) return null;
                     type="text"
                     value={pickupHours}
                     onChange={(e) => setPickupHours(e.target.value)}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                    placeholder="Ej. Lunes a viernes, 1pm a 6pm"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] dark:text-zinc-100 focus:outline-none placeholder:text-[var(--text-muted)]"
                   />
                 </div>
               </div>
 
-              {/* COSTA RICAN HOME BUSINESS COMPLIANCE NOTE */}
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 space-y-2 mt-4">
+              {/* COSTA RICAN E-COMMERCE COMPLIANCE NOTE */}
+              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 space-y-3 mt-4">
                 <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-400 flex items-center gap-1.5">
-                  ⚠️ NOTA DE CUMPLIMIENTO LEGAL: OPERACIÓN DOMICILIARIA (COSTA RICA)
+                  ⚠️ NOTA DE CUMPLIMIENTO LEGAL (COSTA RICA)
                 </span>
                 <p className="text-[11px] text-[var(--text-primary)] leading-relaxed">
-                  De conformidad con la reglamentación de las municipalidades costarricenses y la Dirección General de Tributación de Hacienda, Technoverse se encuentra registrado bajo la modalidad de <strong>microempresa de base tecnológica operada desde el hogar</strong> (régimen pyme o simplificado, según corresponda).
+                  <strong>Facturación electrónica (Hacienda / DGT):</strong> Toda venta debe documentarse mediante comprobante electrónico autorizado (factura, tiquete o nota de crédito electrónica) conforme al Reglamento de Comprobantes Electrónicos para Efectos Tributarios (resolución DGT-R-48-2016 y sus reformas), con el Impuesto al Valor Agregado desglosado por línea según la Ley del IVA (Ley Nº 9635) y transmitido al Ministerio de Hacienda para su validación.
                 </p>
                 <p className="text-[11px] text-[var(--text-primary)] leading-relaxed">
-                  La actividad principal de reparación técnica, mantenimiento e inventario de repuestos se realiza respetando el <strong>Uso de Suelo Residencial No Molesto</strong>, sin bodegaje industrial ni afectación al vecindario. Las entregas se gestionan mediante Correos de Costa Rica o mensajería independiente, y los retiros se realizan estrictamente bajo cita previa.
+                  <strong>Protección al consumidor (MEIC / Ley Nº 7472):</strong> Los precios publicados deben mostrarse en colones costarricenses con impuestos incluidos, sin cargos ocultos. El plazo, costo y condiciones de entrega deben informarse antes de completar la compra. El consumidor tiene derecho a la reversión del cargo y a devoluciones cuando el bien no corresponda a lo ofrecido, conforme a la Ley de Promoción de la Competencia y Defensa Efectiva del Consumidor y su reglamento.
+                </p>
+                <p className="text-[11px] text-[var(--text-primary)] leading-relaxed">
+                  <strong>Protección de datos personales (PRODHAB / Ley Nº 8968):</strong> Los datos de clientes (identificación, contacto, medios de pago) se recaban con consentimiento informado, se usan únicamente para los fines de la relación comercial y están sujetos a los derechos de acceso, rectificación, cancelación y oposición (ARCO) que otorga la Ley de Protección de la Persona frente al Tratamiento de sus Datos Personales, supervisada por la PRODHAB.
                 </p>
               </div>
 
