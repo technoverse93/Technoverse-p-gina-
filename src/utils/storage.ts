@@ -1,7 +1,7 @@
 import { supabase } from '../supabaseClient';
 import {
   User, Product, InventoryMovement, RepairOrder, Order,
-  MembershipTier, ChatConversation, ChatMessage,
+  ChatConversation, ChatMessage,
   AuditLog, ClientProfile, LogisticsDelivery, MarketingCampaign,
   AppSettings, Banner, HistoricalSku
 } from '../types';
@@ -20,7 +20,6 @@ interface Database {
   inventory_movements: InventoryMovement[];
   repair_orders: RepairOrder[];
   orders: Order[];
-  membership_tiers: MembershipTier[];
   chat_conversations: ChatConversation[];
   audit_log: AuditLog[];
   clients: ClientProfile[];
@@ -32,14 +31,13 @@ interface Database {
 }
 
 const DEFAULT_BANNERS: Banner[] = [{ id: 'BAN-001', title: 'Reparación desde Casa', description: 'Ahorre tiempo', type: 'Servicios', active: true }];
-const DEFAULT_MEMBERSHIPS: MembershipTier[] = [{ id: 'Plata', name: 'Membresía Plata', price: 5000, discountPercent: 5, shippingSJ: 2000, shippingOther: 3500, active: true, features: [] }];
 const DEFAULT_SETTINGS: AppSettings = { cedulaJuridica: '', companyPhone: '', companyAddress: '', workshopAddress: '', pickupHours: '', maxStockLimit: 50 };
 
 function getDefaultDB(): Database {
   return {
     users: [{ id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' }],
     products: [], inventory_movements: [], repair_orders: [], orders: [],
-    membership_tiers: DEFAULT_MEMBERSHIPS, chat_conversations: [],
+    chat_conversations: [],
     audit_log: [], clients: [], deliveries: [], marketing_campaigns: [],
     banners: DEFAULT_BANNERS, settings: DEFAULT_SETTINGS, historical_skus: []
   };
@@ -176,7 +174,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
       id: p.id, name: p.name || '', sku: p.sku || '', category: p.category || '',
       price: p.price || 0, cost: p.cost || 0, stock: p.stock || 0, image_url: p.imageUrl || '',
       discount_percent: p.discountPercent || 0, discount_start_date: p.discountStartDate || null,
-      discount_end_date: p.discountEndDate || null, applicable_memberships: p.applicableMemberships || [],
+      discount_end_date: p.discountEndDate || null,
       active: p.active !== false, description: p.description || '', min_stock: p.minStock || 0,
       weight: p.weight ?? null, dimensions: p.dimensions || null, warehouse_row: p.row || null,
       shelf: p.shelf || null, physical_location: p.physicalLocation || null, warranty: p.warranty || null,
@@ -187,7 +185,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
       id: r.id, name: r.name, sku: r.sku, category: r.category, price: Number(r.price) || 0,
       cost: Number(r.cost) || 0, stock: r.stock ?? 0, imageUrl: r.image_url || '',
       discountPercent: Number(r.discount_percent) || 0, discountStartDate: r.discount_start_date || undefined,
-      discountEndDate: r.discount_end_date || undefined, applicableMemberships: r.applicable_memberships || [],
+      discountEndDate: r.discount_end_date || undefined,
       active: r.active !== false, description: r.description || '', minStock: r.min_stock ?? 0,
       weight: r.weight ?? undefined, dimensions: r.dimensions || undefined, row: r.warehouse_row || undefined,
       shelf: r.shelf || undefined, physicalLocation: r.physical_location || undefined, warranty: r.warranty || undefined,
@@ -251,19 +249,6 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
       pickupInPerson: r.pickup_in_person || false, timestamp: r.created_at
     })
   }),
-  configFor<MembershipTier>({
-    key: 'membership_tiers', table: 'membership_tiers', idKey: 'id',
-    toRow: (m) => ({
-      id: m.id, name: m.name, price: m.price || 0, discount_percent: m.discountPercent || 0,
-      shipping_sj: m.shippingSJ || 0, shipping_other: m.shippingOther || 0, active: m.active !== false,
-      features: m.features || []
-    }),
-    fromRow: (r): MembershipTier => ({
-      id: r.id, name: r.name, price: r.price || 0, discountPercent: r.discount_percent || 0,
-      shippingSJ: r.shipping_sj || 0, shippingOther: r.shipping_other || 0, active: r.active !== false,
-      features: r.features || []
-    })
-  }),
   configFor<AuditLog>({
     key: 'audit_log', table: 'audit_logs', idKey: 'id',
     toRow: (l) => ({
@@ -280,12 +265,12 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
     toRow: (c) => ({
       id: c.id, profile_id: (c as any).profileId || null, name: c.name || '', email: c.email || '',
       phone: c.phone || '', province: c.province, address_detail: c.addressDetail || '',
-      membership_tier: c.membershipTier || 'Normal', cards_tokenized: c.cardsTokenized || [],
+      cards_tokenized: c.cardsTokenized || [],
       balance: c.balance || 0, notes: c.notes || '', pickup_in_person: c.pickupInPerson || false
     }),
     fromRow: (r): ClientProfile => ({
       id: r.id, name: r.name || '', email: r.email || '', phone: r.phone || '', province: r.province,
-      addressDetail: r.address_detail || '', membershipTier: r.membership_tier || 'Normal',
+      addressDetail: r.address_detail || '',
       cardsTokenized: r.cards_tokenized || [], balance: r.balance || 0, notes: r.notes || '',
       pickupInPerson: r.pickup_in_person || false
     })
@@ -418,7 +403,7 @@ let chatPending: { added: ChatConversation[]; modified: ChatConversation[]; dele
 function chatConvToRow(c: ChatConversation) {
   return {
     id: c.id, customer_name: c.customerName || '', customer_email: c.customerEmail || '',
-    membership_level: c.membershipLevel || 'Normal', status: c.status || 'active', unread_count: c.unreadCount || 0
+    status: c.status || 'active', unread_count: c.unreadCount || 0
   };
 }
 
@@ -442,7 +427,7 @@ async function refreshChatFromSupabase() {
 
   const conversations = (convRows || []).map((r: any): ChatConversation => ({
     id: r.id, customerName: r.customer_name || '', customerEmail: r.customer_email || '',
-    membershipLevel: r.membership_level || 'Normal', status: r.status || 'active',
+    status: r.status || 'active',
     unreadCount: r.unread_count || 0, messages: messagesByConv[r.id] || []
   }));
   localCache.chat_conversations = conversations;
