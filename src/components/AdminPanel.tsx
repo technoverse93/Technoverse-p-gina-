@@ -2054,7 +2054,7 @@ if (!del) return null;
                       className="w-full text-sm text-[var(--text-secondary)] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-[var(--brand-gold-mid)] file:text-[var(--text-primary)] hover:file:bg-sky-600 dark:bg-[var(--brand-gold-dark)] file:cursor-pointer transition"
                     />
                     <p className="text-[10px] text-[var(--text-secondary)] leading-normal">
-                      Seleccione una imagen de su computadora. Se guardará localmente y se aplicará inmediatamente en todo el sitio (tienda, panel de administración y empleados).
+                      Seleccione una imagen de su computadora. Se guardará localmente y se aplicará inmediatamente en todo el sitio (tienda y panel de administración).
                     </p>
                   </div>
                 </div>

@@ -274,7 +274,6 @@ export default function PublicStore({
       id: profile.id,
       email: profile.email,
       role: profile.role,
-      employeeRole: profile.employee_role || undefined,
       name: profile.name || profile.email,
       membershipTier: profile.membership_tier || undefined,
     };
