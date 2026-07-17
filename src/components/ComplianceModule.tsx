@@ -1,10 +1,10 @@
 import React, { useState, useEffect } from 'react';
-import { 
-  ShieldCheck, AlertTriangle, FileCheck, Scale, FileText, 
-  Trash2, Download, CheckSquare, Coins, Calendar, Info 
+import {
+  ShieldCheck, AlertTriangle, FileCheck, Scale, FileText,
+  Trash2, Download, CheckSquare
 } from 'lucide-react';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
-import { Order, RepairOrder, ClientProfile, Payroll } from '../types';
+import { Order, RepairOrder, ClientProfile } from '../types';
 
 interface ComplianceModuleProps {
   onRefreshData?: () => void;
@@ -15,11 +15,7 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
   const [orders, setOrders] = useState<Order[]>([]);
   const [repairs, setRepairs] = useState<RepairOrder[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
-  const [payrolls, setPayrolls] = useState<Payroll[]>([]);
-  
-  // Salary Calculator State
-  const [calcBaseSalary, setCalcBaseSalary] = useState<number>(650000); // Average technician salary in CRC
-  
+
   // Privacy Policy edit state
   const [termsText, setTermsText] = useState<string>(
     "Reglamento de Compras, Devoluciones y Garantías Technoverse:\n\n" +
@@ -46,7 +42,6 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
     setOrders(db.orders || []);
     setRepairs(db.repair_orders || []);
     setClients(db.clients || []);
-    setPayrolls(db.payroll || []);
     runRealTimeComplianceAudits(db.orders, db.repair_orders, db.clients, db.products);
   };
 
@@ -152,66 +147,6 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
     addAuditLog(activeUserEmail, 'Protección Datos', 'Portabilidad', `Exportación de datos de portabilidad generada para el cliente ${client.name}`);
   };
 
-  // Costa Rican Social Charges Calculations (CCSS, INS, LPT, FCL)
-  const calculateEmployerCharges = (salary: number) => {
-    const ccssEmpleado = salary * 0.0967; // 9.67% CCSS
-    const ccssPatrono = salary * 0.2633;  // 26.33% CCSS
-    const insTrabajo = salary * 0.015;    // ~1.5% INS
-    const lptEmpleado = salary * 0.010;   // 1% Ley de Protección al Trabajador
-    const lptPatrono = salary * 0.015;    // 1.5% LPT Patronal
-    const fclPatrono = salary * 0.030;    // 3% Fondo Capitalización Laboral
-
-    const retencionRenta = calculateIncomeTaxCRC(salary);
-
-    const salarioNeto = salary - ccssEmpleado - lptEmpleado - retencionRenta;
-    const costoLaboralTotal = salary + ccssPatrono + insTrabajo + lptPatrono + fclPatrono;
-
-    return {
-      ccssEmpleado,
-      ccssPatrono,
-      insTrabajo,
-      lptEmpleado,
-      lptPatrono,
-      fclPatrono,
-      retencionRenta,
-      salarioNeto,
-      costoLaboralTotal
-    };
-  };
-
-  // Hacienda (DGT) Salary withholding tax brackets (Tramos de Renta Costa Rica 2026)
-  const calculateIncomeTaxCRC = (salary: number): number => {
-    if (salary <= 941000) return 0;
-    
-    let tax = 0;
-    let base = salary;
-
-    // Bracket 1: ₡941,000 to ₡1,381,000 (10%)
-    if (base > 941000) {
-      const taxableAmount = Math.min(base, 1381000) - 941000;
-      tax += taxableAmount * 0.10;
-    }
-
-    // Bracket 2: ₡1,381,000 to ₡2,423,000 (15%)
-    if (base > 1381000) {
-      const taxableAmount = Math.min(base, 2423000) - 1381000;
-      tax += taxableAmount * 0.15;
-    }
-
-    // Bracket 3: ₡2,423,000 to ₡4,845,000 (20%)
-    if (base > 2423000) {
-      const taxableAmount = Math.min(base, 4845000) - 2423000;
-      tax += taxableAmount * 0.20;
-    }
-
-    // Bracket 4: Over ₡4,845,000 (25%)
-    if (base > 4845000) {
-      tax += (base - 4845000) * 0.25;
-    }
-
-    return Math.round(tax);
-  };
-
   // Generate Electronic XML simulation preview strictly formatted under Hacienda DGT-R-48-2016
   const getSimulatedInvoiceXml = (order: Order) => {
     const key = `506${new Date(order.timestamp).toLocaleDateString('es-CR', { year: '2-digit', month: '2-digit', day: '2-digit' }).replace(/\//g, '')}0001010101000000012610255478`;
@@ -292,8 +227,6 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
     alert(`Factura ${orderId} validada por la Dirección General de Tributación de Costa Rica y marcada como Aceptada.`);
   };
 
-  const cCosts = calculateEmployerCharges(calcBaseSalary);
-
   return (
     <div className="space-y-6" id="compliance-module-panel">
       
@@ -343,99 +276,7 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
         )}
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        
-        {/* TABLA DE CARGAS SOCIALES Y CALCULADOR PATRONAL (CCSS) */}
-        <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 text-[var(--text-primary)]">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 dark:text-[var(--brand-gold-light)] mb-3 flex items-center gap-1.5 border-b border-[var(--border-color)]/50 pb-2">
-            <Coins className="w-4 h-4 text-sky-400 dark:text-[var(--brand-gold-light)]" /> Cargas Sociales y Costo Laboral Real (CCSS/INS)
-          </h4>
-
-          <div className="space-y-4">
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-[10px] font-mono leading-relaxed border-collapse">
-                <thead>
-                  <tr className="border-b border-[var(--border-color)]/80 text-[var(--text-secondary)]">
-                    <th className="py-1.5">Entidad y Seguro Social</th>
-                    <th className="py-1.5 text-right">Porcentaje Empleado</th>
-                    <th className="py-1.5 text-right">Porcentaje Patrono</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-white/5 text-[var(--text-secondary)]">
-                  <tr>
-                    <td className="py-1.5 font-sans">Caja Costarricense de Seguro Social (CCSS)</td>
-                    <td className="py-1.5 text-right font-mono text-[var(--text-primary)]">9.67%</td>
-                    <td className="py-1.5 text-right font-mono text-emerald-400 dark:text-[var(--brand-gold-light)]">26.33%</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1.5 font-sans">INS - Riesgos del Trabajo</td>
-                    <td className="py-1.5 text-right font-mono text-[var(--text-secondary)]">0.00%</td>
-                    <td className="py-1.5 text-right font-mono text-emerald-400 dark:text-[var(--brand-gold-light)]">~1.50%</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1.5 font-sans">Ley Protección Trabajador (LPT)</td>
-                    <td className="py-1.5 text-right font-mono text-[var(--text-primary)]">1.00%</td>
-                    <td className="py-1.5 text-right font-mono text-emerald-400 dark:text-[var(--brand-gold-light)]">1.50%</td>
-                  </tr>
-                  <tr>
-                    <td className="py-1.5 font-sans">Fondo de Capitalización Laboral (FCL)</td>
-                    <td className="py-1.5 text-right font-mono text-[var(--text-secondary)]">0.00%</td>
-                    <td className="py-1.5 text-right font-mono text-emerald-400 dark:text-[var(--brand-gold-light)]">3.00%</td>
-                  </tr>
-                </tbody>
-              </table>
-            </div>
-
-            {/* Practical salary cost calculator */}
-            <div className="bg-[var(--bg-surface)] p-4 rounded-xl border border-[var(--border-color)]/50 space-y-3">
-              <span className="text-[10px] font-bold uppercase text-[var(--text-secondary)] block">Simular Costo Laboral Real</span>
-              
-              <div className="flex gap-2">
-                <input
-                  type="number"
-                  min="350000"
-                  step="10000"
-                  value={calcBaseSalary}
-                  onChange={(e) => setCalcBaseSalary(Math.max(1, parseInt(e.target.value) || 0))}
-                  placeholder="Salario Base Colones"
-                  className="flex-1 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-1.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)] font-mono"
-                />
-                <span className="text-xs self-center font-bold font-mono">₡ CRC</span>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-[10px] font-mono border-t border-[var(--border-color)]/50 pt-2.5">
-                <div>
-                  <div className="text-[var(--text-secondary)]">Deducción CCSS Trabajador:</div>
-                  <div className="text-rose-400 font-bold">-₡{cCosts.ccssEmpleado.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-[var(--text-secondary)]">Aporte CCSS Patronal (26.33%):</div>
-                  <div className="text-emerald-400 dark:text-[var(--brand-gold-light)] font-bold">+₡{cCosts.ccssPatrono.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-[var(--text-secondary)]">Retención de Renta Trabajador:</div>
-                  <div className="text-rose-400 font-bold">-₡{cCosts.retencionRenta.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-[var(--text-secondary)]">Cargas INS/FCL Patronales:</div>
-                  <div className="text-emerald-400 dark:text-[var(--brand-gold-light)] font-bold">+₡{(cCosts.insTrabajo + cCosts.fclPatrono + cCosts.lptPatrono).toLocaleString()}</div>
-                </div>
-              </div>
-
-              <div className="grid grid-cols-2 gap-2 text-xs font-bold border-t border-[var(--border-color)]/80 pt-2 bg-[var(--bg-surface)] p-2 rounded-lg">
-                <div>
-                  <div className="text-[9px] uppercase text-[var(--text-secondary)] font-sans">Salario Neto Depositado:</div>
-                  <div className="text-[var(--text-primary)] font-mono">₡{cCosts.salarioNeto.toLocaleString()}</div>
-                </div>
-                <div>
-                  <div className="text-[9px] uppercase text-[var(--text-secondary)] font-sans">Costo Laboral Real Empresa:</div>
-                  <div className="text-emerald-400 dark:text-[var(--brand-gold-light)] font-mono">₡{cCosts.costoLaboralTotal.toLocaleString()}</div>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
+      <div>
         {/* PROTECCIÓN DE DATOS (LEY 8968 - PRODHAB) */}
         <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 text-[var(--text-primary)]">
           <h4 className="text-xs font-bold uppercase tracking-wider text-indigo-400 mb-3 flex items-center gap-1.5 border-b border-[var(--border-color)]/50 pb-2 dark:text-[var(--brand-gold-light)]">
