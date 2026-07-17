@@ -3,7 +3,7 @@ import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { PaginatedTbody } from './PaginationHelper';
 import { 
   LayoutDashboard, Package, Wrench, Users, CreditCard, FileSpreadsheet,
-  Settings, ShieldCheck, Heart, Megaphone, Truck, ShieldAlert, LogOut, Sun, Moon,
+  Settings, ShieldCheck, Megaphone, Truck, ShieldAlert, LogOut, Sun, Moon,
   X, Plus, Trash2, Edit, Save, RefreshCw, Key, ArrowRightLeft, Eye, EyeOff, Download, DollarSign, BookOpen, ChevronDown, ChevronRight, ShoppingBag,
   Home, Sparkles, UserPlus, TrendingUp, BarChart3, Activity, MoreHorizontal
 } from 'lucide-react';
@@ -11,7 +11,7 @@ import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
-import { User, Product, Order, RepairOrder, ClientProfile, MembershipTier, LogisticsDelivery, MarketingCampaign, AuditLog, Banner } from '../types';
+import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog, Banner } from '../types';
 import TallerKanban from './TallerKanban';
 import InventarioControl from './InventarioControl';
 import ComplianceModule from './ComplianceModule';
@@ -119,7 +119,6 @@ export default function AdminPanel({
   const [orders, setOrders] = useState<Order[]>([]);
   const [repairs, setRepairs] = useState<RepairOrder[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
-  const [memberships, setMemberships] = useState<MembershipTier[]>([]);
   const [deliveries, setDeliveries] = useState<LogisticsDelivery[]>([]);
   const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
   const [banners, setBanners] = useState<Banner[]>([]);
@@ -138,7 +137,6 @@ export default function AdminPanel({
   const [prodRow, setProdRow] = useState('A');
   const [prodShelf, setProdShelf] = useState('1');
   const [prodPhysicalLocation, setProdPhysicalLocation] = useState('');
-  const [prodMemberships, setProdMemberships] = useState<('Plata' | 'Oro' | 'Platino')[]>(['Plata', 'Oro', 'Platino']);
 
   // New admin user creation state
   const [showCreateUserForm, setShowCreateUserForm] = useState(false);
@@ -161,7 +159,7 @@ export default function AdminPanel({
   const [editingClient, setEditingClient] = useState<ClientProfile | null>(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
   const [clientForm, setClientForm] = useState<Partial<ClientProfile>>({
-    name: '', email: '', phone: '', province: 'San José', addressDetail: '', membershipTier: 'Normal', notes: ''
+    name: '', email: '', phone: '', province: 'San José', addressDetail: '', notes: ''
   });
 
   // Marketing states
@@ -217,7 +215,7 @@ export default function AdminPanel({
       setClientForm(client);
     } else {
       setEditingClient(null);
-      setClientForm({ name: '', email: '', phone: '', province: 'San José', addressDetail: '', membershipTier: 'Normal', notes: '' });
+      setClientForm({ name: '', email: '', phone: '', province: 'San José', addressDetail: '', notes: '' });
     }
     setIsClientModalOpen(true);
   };
@@ -246,7 +244,7 @@ export default function AdminPanel({
       const idx = db.clients.findIndex(c => c && c.id === editingClient.id);
       if (idx !== -1) {
         db.clients[idx] = { ...db.clients[idx], ...clientForm } as ClientProfile;
-        addAuditLog(currentUser?.email || 'admin', 'CRM', 'Editar Cliente', `Cliente actualizado: ${clientForm.name} (Membresía: ${clientForm.membershipTier})`, db);
+        addAuditLog(currentUser?.email || 'admin', 'CRM', 'Editar Cliente', `Cliente actualizado: ${clientForm.name}`, db);
       }
     } else {
       const newClient: ClientProfile = {
@@ -256,7 +254,7 @@ export default function AdminPanel({
         balance: 0
       };
       db.clients.push(newClient);
-      addAuditLog(currentUser?.email || 'admin', 'CRM', 'Crear Cliente', `Nuevo cliente registrado: ${clientForm.name} (Membresía: ${clientForm.membershipTier})`, db);
+      addAuditLog(currentUser?.email || 'admin', 'CRM', 'Crear Cliente', `Nuevo cliente registrado: ${clientForm.name}`, db);
     }
 
     try {
@@ -325,7 +323,6 @@ export default function AdminPanel({
       setStoreLogo(db.settings.storeLogo || '');
     }
     setClients(db.clients || []);
-    setMemberships(db.membership_tiers || []);
     setDeliveries(db.deliveries || []);
     setCampaigns(db.marketing_campaigns || []);
     setBanners(db.banners || []);
@@ -492,7 +489,6 @@ export default function AdminPanel({
           stock: prodStock,
           imageUrl: prodImage,
           discountPercent: prodDiscount,
-          applicableMemberships: prodMemberships,
           physicalLocation: prodPhysicalLocation
         };
         
@@ -520,7 +516,6 @@ export default function AdminPanel({
         stock: prodStock,
         imageUrl: prodImage,
         discountPercent: prodDiscount,
-        applicableMemberships: prodMemberships,
         physicalLocation: prodPhysicalLocation
       };
       db.products.push(newProduct);
@@ -560,7 +555,6 @@ export default function AdminPanel({
     setProdImage(p.imageUrl);
     setProdDiscount(p.discountPercent);
     setProdPhysicalLocation(p.physicalLocation || '');
-    setProdMemberships(p.applicableMemberships);
     setShowProductForm(true);
   };
 
@@ -745,17 +739,6 @@ export default function AdminPanel({
     loadAllAdminData();
     if (onRefreshTrigger) onRefreshTrigger();
     alert(`Nota de crédito emitida con éxito. Stock reintegrado.`);
-  };
-
-  // Membership modifications
-  const handleUpdateMembership = (id: 'Plata' | 'Oro' | 'Platino', field: keyof MembershipTier, value: any) => {
-    const db = getDB();
-    const idx = db.membership_tiers.findIndex(m => m && m.id === id);
-    if (idx !== -1) {
-      db.membership_tiers[idx] = { ...db.membership_tiers[idx], [field]: value };
-      saveDB(db);
-      loadAllAdminData();
-    }
   };
 
   // Image pre-view upload simulation
@@ -1393,15 +1376,6 @@ export default function AdminPanel({
                       </select>
                     </div>
                     <div>
-                      <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Nivel de Membresía</label>
-                      <select required value={clientForm.membershipTier} onChange={e => setClientForm({...clientForm, membershipTier: e.target.value as any})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)]">
-                        <option value="Normal">Normal</option>
-                        {memberships.filter(m => m && m.active).map(m => m && (
-                          <option key={m.id} value={m.id}>{m.name}</option>
-                        ))}
-                      </select>
-                    </div>
-                    <div>
                       <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Dirección Exacta</label>
                       <input required type="text" value={clientForm.addressDetail} onChange={e => setClientForm({...clientForm, addressDetail: e.target.value})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)]" />
                     </div>
@@ -1426,7 +1400,6 @@ export default function AdminPanel({
                       <th className="p-4">Cliente</th>
                       <th className="p-4">Correo / Teléfono</th>
                       <th className="p-4">Provincia</th>
-                      <th className="p-4 text-center">Nivel de Membresía</th>
                       <th className="p-4 text-center">Tarjetas Tokenizadas</th>
                       <th className="p-4 text-center">Acciones</th>
                     </tr>
@@ -1439,16 +1412,6 @@ export default function AdminPanel({
                             <div>{c.phone}</div>
                           </td>
                           <td className="p-4 font-sans text-[var(--text-primary)]">{c.province}</td>
-                          <td className="p-4 text-center">
-                            <span className={`px-2.5 py-0.5 rounded-full text-[9px] font-extrabold uppercase tracking-wider ${
-                              c.membershipTier === 'Platino' ? 'bg-indigo-600 dark:bg-[var(--brand-gold-mid)] text-white dark:text-slate-950' :
-                              c.membershipTier === 'Oro' ? 'bg-amber-500 text-[var(--text-primary)]' :
-                              c.membershipTier === 'Plata' ? 'bg-slate-300 text-[var(--text-primary)]' :
-                              'bg-slate-700 text-[var(--text-primary)]'
-                            }`}>
-                              {c.membershipTier}
-                            </span>
-                          </td>
                           <td className="p-4 text-center">
                             {c.cardsTokenized.length > 0 ? (
                               <span className="font-mono text-[10px] text-emerald-400 dark:text-[var(--brand-gold-light)]">
@@ -1551,79 +1514,6 @@ export default function AdminPanel({
               onRefreshData={loadAllAdminData} 
               activeUserEmail={currentUser?.email} 
             />
-          </div>
-
-        )}
-        {activeTab === 'memberships' && (
-          /* MODULE G: MEMBRESÍAS EDITABLES */
-          <div className="space-y-6" id="view-memberships">
-            <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <Heart className="w-5 h-5 text-rose-500 animate-pulse" /> Ficha de Configuración de Membresías
-            </h3>
-
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              {memberships.map(tier => tier && (
-                <div key={tier.id} className={`bg-[var(--bg-surface)]  border ${tier.active ? 'border-sky-500 dark:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50' : 'border-[var(--border-color)]/80 opacity-50'} rounded-2xl p-6 space-y-4 flex flex-col justify-between`}>
-                  <div className="space-y-2">
-                    <div className="flex justify-between items-center">
-                      <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] font-mono">Technoverse Plus</span>
-                      <button 
-                        onClick={() => handleUpdateMembership(tier.id, 'active', !tier.active)}
-                        className={`text-[10px] px-2 py-1 rounded font-bold uppercase ${tier.active ? 'bg-rose-500/10 text-rose-400' : 'bg-emerald-500 dark:bg-[var(--brand-gold-mid)]/10 text-emerald-400 dark:text-[var(--brand-gold-light)]'}`}
-                      >
-                        {tier.active ? 'Desactivar' : 'Activar'}
-                      </button>
-                    </div>
-                    <h4 className="text-base font-extrabold text-[var(--text-primary)]">{tier.name}</h4>
-                    
-                    <div className="space-y-3 pt-2">
-                      <div>
-                        <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono">Precio Mensual (Colones)</label>
-                        <input
-                          type="number"
-                          value={tier.price}
-                          onChange={(e) => handleUpdateMembership(tier.id, 'price', Math.max(0, parseInt(e.target.value) || 0))}
-                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono">Descuento en compras (%)</label>
-                        <input
-                          type="number"
-                          max="100"
-                          value={tier.discountPercent}
-                          onChange={(e) => handleUpdateMembership(tier.id, 'discountPercent', Math.min(100, Math.max(0, parseInt(e.target.value) || 0)))}
-                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
-                        />
-                      </div>
-                    </div>
-                  </div>
-
-                  <div className="bg-[var(--bg-surface)] p-3 rounded-xl border border-[var(--border-color)]/50 space-y-2">
-                    <span className="text-[9px] text-[var(--text-secondary)] uppercase block font-bold">Distribución Residencial:</span>
-                    <div className="text-[10px] font-mono text-[var(--text-primary)]">Retiro en Residencia: <strong className="text-emerald-400 dark:text-[var(--brand-gold-light)]">Gratis (₡0)</strong></div>
-                    <div>
-                      <label className="text-[9px] text-[var(--text-secondary)] uppercase">San José GAM (Express)</label>
-                      <input 
-                        type="number" 
-                        value={tier.shippingSJ}
-                        onChange={(e) => handleUpdateMembership(tier.id, 'shippingSJ', Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded px-2 py-1 text-sm text-[var(--text-primary)]" 
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[9px] text-[var(--text-secondary)] uppercase">Otras Prov. (Correos CR)</label>
-                      <input 
-                        type="number" 
-                        value={tier.shippingOther}
-                        onChange={(e) => handleUpdateMembership(tier.id, 'shippingOther', Math.max(0, parseInt(e.target.value) || 0))}
-                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded px-2 py-1 text-sm text-[var(--text-primary)]" 
-                      />
-                    </div>
-                  </div>
-                </div>
-              ))}
-            </div>
           </div>
 
         )}

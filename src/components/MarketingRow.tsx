@@ -8,11 +8,10 @@ interface MarketingRowProps {
   products: Product[];
   onProductClick: (prod: Product) => void;
   onAddToCart: (prod: Product) => void;
-  buyerMembership: 'Normal' | 'Plata' | 'Oro' | 'Platino';
-  getProductDiscountedPrice: (prod: Product, membership: string) => number;
+  getProductDiscountedPrice: (prod: Product) => number;
 }
 
-export function MarketingRow({ title, products, onProductClick, onAddToCart, buyerMembership, getProductDiscountedPrice }: MarketingRowProps) {
+export function MarketingRow({ title, products, onProductClick, onAddToCart, getProductDiscountedPrice }: MarketingRowProps) {
   if (!products || products.length === 0) return null;
 
   return (
@@ -34,7 +33,6 @@ export function MarketingRow({ title, products, onProductClick, onAddToCart, buy
             prod={prod} 
             onClick={() => onProductClick(prod)}
             onAddToCart={onAddToCart}
-            buyerMembership={buyerMembership}
             getProductDiscountedPrice={getProductDiscountedPrice}
           />
         ))}

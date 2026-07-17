@@ -117,7 +117,6 @@ export default function PublicStore({
   const [regProvince, setRegProvince] = useState('San José');
   const [regAddress, setRegAddress] = useState('');
   const [regPassword, setRegPassword] = useState('');
-  const [regMembership, setRegMembership] = useState<'Normal' | 'Plata' | 'Oro' | 'Platino'>('Normal');
 
   // App state
   const [searchQuery, setSearchQuery] = useState('');
@@ -130,9 +129,7 @@ export default function PublicStore({
   // Shopping cart state
   const [cart, setCart] = useState<{ product: Product; quantity: number }[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
-  const [membershipDiscount, setMembershipDiscount] = useState<number>(0);
-  const [buyerMembership, setBuyerMembership] = useState<'Normal' | 'Plata' | 'Oro' | 'Platino'>('Normal');
-  
+
   // Checkout process state
   const [checkoutStep, setCheckoutStep] = useState<number>(0); // 0 = cart, 1 = delivery, 2 = payment, 3 = confirmed
   const [shippingProvince, setShippingProvince] = useState<string>('San José');
@@ -224,15 +221,6 @@ export default function PublicStore({
     }
   }, [cart]);
 
-  // Synchronize buyerMembership automatically if client logs in
-  useEffect(() => {
-    if (currentUser?.role === 'Cliente' && currentUser.membershipTier) {
-      setBuyerMembership(currentUser.membershipTier);
-    } else {
-      setBuyerMembership('Normal');
-    }
-  }, [currentUser]);
-
   useEffect(() => {
     if (autoOpenLogin) {
       setIsLoginModalOpen(true);
@@ -275,7 +263,6 @@ export default function PublicStore({
       email: profile.email,
       role: profile.role,
       name: profile.name || profile.email,
-      membershipTier: profile.membership_tier || undefined,
     };
 
     onLogin(loggedUser);
@@ -311,12 +298,6 @@ export default function PublicStore({
       return;
     }
 
-    // Completar el perfil con la membresía elegida
-    await supabase
-      .from('profiles')
-      .update({ membership_tier: regMembership })
-      .eq('id', authData.user.id);
-
     // Guardar los datos comerciales del cliente (dirección, teléfono, provincia)
     const newClientId = `CLI-${Math.floor(10000 + Math.random() * 90000)}`;
     await supabase.from('client_profiles').insert({
@@ -327,7 +308,6 @@ export default function PublicStore({
       phone: regPhone.trim(),
       province: regProvince,
       address_detail: regAddress.trim(),
-      membership_tier: regMembership,
       notes: 'Cliente registrado desde el portal web.',
     });
 
@@ -346,7 +326,6 @@ export default function PublicStore({
       email: cleanEmail,
       role: 'Cliente',
       name: regName.trim(),
-      membershipTier: regMembership,
     };
 
     onLogin(clientUser);
@@ -452,31 +431,10 @@ export default function PublicStore({
     loadStoreProducts();
   };
 
-  // Dynamic pricing with membership discount based on active tiers
-  const getProductDiscountedPrice = (prod: Product, level: string) => {
-    if (level === 'Normal') return prod.price;
+  const getProductDiscountedPrice = (prod: Product) => prod.price;
 
-    
-    const tier = db.membership_tiers.find(t => t.id === level && t.active);
-    
-    // Check if membership is applicable to this product
-    const isApplicable = prod.applicableMemberships.includes(level as any);
-    
-    if (tier && isApplicable) {
-      const discountMult = (100 - tier.discountPercent) / 100;
-      return Math.round(prod.price * discountMult);
-    }
-    return prod.price;
-  };
-
-  // Dynamic Shipping calculation based on province and active membership configuration
-  const calculateShippingCost = (prov: string, level: string) => {
-    
-    const tier = db.membership_tiers.find(t => t.id === level && t.active);
-    if (!tier) return prov === 'San José' ? 2500 : 4000; // default values
-
-    return prov === 'San José' ? tier.shippingSJ : tier.shippingOther;
-  };
+  // Shipping calculation based on destination province
+  const calculateShippingCost = (prov: string) => prov === 'San José' ? 2500 : 4000;
 
   const handleAddToCart = (prod: Product) => {
     if (prod.stock <= 0) {
@@ -553,12 +511,7 @@ export default function PublicStore({
   // Calculations for subtotal, discount, tax, shipping, total
   const cartSubtotal = cart.reduce((sum, it) => sum + (it.product.price * it.quantity), 0);
   
-  const discountedSubtotal = cart.reduce((sum, it) => {
-    const priceWithDisc = getProductDiscountedPrice(it.product, buyerMembership);
-    return sum + (priceWithDisc * it.quantity);
-  }, 0);
-
-  const cartMembershipDiscount = cartSubtotal - discountedSubtotal;
+  const discountedSubtotal = cartSubtotal;
 
   let couponDiscountAmount = 0;
   if (appliedCoupon) {
@@ -571,7 +524,7 @@ export default function PublicStore({
 
   const subtotalAfterCoupon = Math.max(0, discountedSubtotal - couponDiscountAmount);
 
-  const cartShipping = cart.length > 0 ? calculateShippingCost(shippingProvince, buyerMembership) : 0;
+  const cartShipping = cart.length > 0 ? calculateShippingCost(shippingProvince) : 0;
   
   // IVA 13% Costa Rica applied to subtotal minus discounts
   const cartTax = Math.round(subtotalAfterCoupon * 0.13);
@@ -640,10 +593,10 @@ export default function PublicStore({
         productName: it.product.name,
         quantity: it.quantity,
         price: it.product.price,
-        discountApplied: it.product.price - getProductDiscountedPrice(it.product, buyerMembership)
+        discountApplied: it.product.price - getProductDiscountedPrice(it.product)
       })),
       subtotal: cartSubtotal,
-      membershipDiscount: cartMembershipDiscount,
+      membershipDiscount: 0,
       shippingCost: cartShipping,
       taxAmount: cartTax,
       total: cartTotal,
@@ -699,7 +652,6 @@ export default function PublicStore({
         phone: recipientPhone.trim(),
         province: shippingProvince as any,
         addressDetail: shippingAddress.trim(),
-        membershipTier: buyerMembership,
         cardsTokenized: paymentMethod === 'Tarjeta' ? [{ last4: cardNumber.slice(-4), brand: 'Visa' }] : [],
         balance: 0,
         notes: 'Cliente registrado automáticamente desde checkout.'
@@ -1099,7 +1051,7 @@ export default function PublicStore({
                             <div className="text-sm font-black text-[var(--text-secondary)] whitespace-normal break-words leading-tight">{currentUser?.name}</div>
                             <div className="text-[10px] text-[var(--text-muted)] whitespace-normal break-words mb-1">{currentUser?.email}</div>
                             <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-blue-100 text-blue-600 dark:text-[var(--brand-gold-light)] tracking-tighter dark:bg-[var(--brand-gold-mid)]">
-                              {currentUser?.role === 'Cliente' ? `${currentUser.membershipTier} Member` : currentUser?.role}
+                              {currentUser?.role}
                             </span>
                           </div>
                         </div>
@@ -1225,10 +1177,10 @@ export default function PublicStore({
                             </div>
                             <div className="flex justify-between items-end mt-1">
                               <div className="text-[11px] font-bold text-[var(--text-muted)]">
-                                {it.quantity} x ₡{getProductDiscountedPrice(it.product, buyerMembership).toLocaleString()}
+                                {it.quantity} x ₡{getProductDiscountedPrice(it.product).toLocaleString()}
                               </div>
                               <div className="text-sm font-black text-blue-600 dark:text-[var(--brand-gold-light)] font-mono">
-                                ₡{(getProductDiscountedPrice(it.product, buyerMembership) * it.quantity).toLocaleString()}
+                                ₡{(getProductDiscountedPrice(it.product) * it.quantity).toLocaleString()}
                               </div>
                             </div>
                           </div>
@@ -1242,7 +1194,7 @@ export default function PublicStore({
                       <div className="flex justify-between items-center px-1">
                         <span className="text-xs font-bold text-[var(--text-muted)] uppercase">Subtotal</span>
                         <span className="text-lg font-black text-[var(--text-secondary)] font-mono">
-                          ₡{cart.reduce((sum, it) => sum + (getProductDiscountedPrice(it.product, buyerMembership) * it.quantity), 0).toLocaleString()}
+                          ₡{cart.reduce((sum, it) => sum + (getProductDiscountedPrice(it.product) * it.quantity), 0).toLocaleString()}
                         </span>
                       </div>
                       <button
@@ -1424,7 +1376,6 @@ export default function PublicStore({
                 products={filteredProducts.slice(0, 8)} // Passed top items, row will slice to 4
                 onProductClick={(prod) => { setSelectedProductDetail(prod); setDetailQuantity(1); }}
                 onAddToCart={handleAddToCart}
-                buyerMembership={buyerMembership}
                 getProductDiscountedPrice={getProductDiscountedPrice}
               />
             )}
@@ -1452,7 +1403,6 @@ export default function PublicStore({
                       prod={prod}
                       onClick={() => { setSelectedProductDetail(prod); setDetailQuantity(1); }}
                       onAddToCart={handleAddToCart}
-                      buyerMembership={buyerMembership}
                       getProductDiscountedPrice={getProductDiscountedPrice}
                     />
                   ))}
@@ -1626,7 +1576,7 @@ export default function PublicStore({
                         </div>
 
                         <div className="flex flex-col items-end justify-between">
-                          <span className="font-mono font-bold text-[var(--text-primary)]">₡{getProductDiscountedPrice(it.product, buyerMembership).toLocaleString()}</span>
+                          <span className="font-mono font-bold text-[var(--text-primary)]">₡{getProductDiscountedPrice(it.product).toLocaleString()}</span>
                           
                           <div className="flex items-center gap-2 mt-1">
                             <button 
@@ -1701,7 +1651,7 @@ export default function PublicStore({
                     <div>
                       <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Tarifa de Envío</label>
                       <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm text-blue-600 dark:text-[var(--brand-gold-light)] font-bold font-mono">
-                        ₡{calculateShippingCost(shippingProvince, buyerMembership).toLocaleString()}
+                        ₡{calculateShippingCost(shippingProvince).toLocaleString()}
                       </div>
                     </div>
                   </div>
@@ -1846,13 +1796,6 @@ export default function PublicStore({
                       <span>Subtotal:</span>
                       <span className="font-mono">₡{cartSubtotal.toLocaleString()}</span>
                     </div>
-                    {cartMembershipDiscount > 0 && (
-                      <div className="flex justify-between text-[var(--brand-gold-mid)] font-bold">
-                        <span>Descuento Membresía ({buyerMembership}):</span>
-                        <span className="font-mono">-₡{cartMembershipDiscount.toLocaleString()}</span>
-                      </div>
-                    )}
-                    
                     {/* Coupon UI */}
                     {checkoutStep === 0 && (
                       <div className="flex items-center gap-2 pt-2 border-t border-[var(--border-color)] mt-2">
@@ -2017,32 +1960,17 @@ export default function PublicStore({
                     />
                   </div>
                 </div>
-                <div className="grid grid-cols-2 gap-2">
-                  <div>
-                    <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Provincia</label>
-                    <select
-                      value={regProvince}
-                      onChange={(e) => setRegProvince(e.target.value)}
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition cursor-pointer"
-                    >
-                      {COSTA_RICA_PROVINCES.map(prov => prov && (
-                        <option key={prov} value={prov}>{prov}</option>
-                      ))}
-                    </select>
-                  </div>
-                  <div>
-                    <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Membresía Deseada</label>
-                    <select
-                      value={regMembership}
-                      onChange={(e: any) => setRegMembership(e.target.value)}
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition font-bold text-amber-600 cursor-pointer"
-                    >
-                      <option value="Normal">Normal (Gratis)</option>
-                      <option value="Plata">Plata (Ahorro)</option>
-                      <option value="Oro">Oro (Premium)</option>
-                      <option value="Platino">Platino (Elite)</option>
-                    </select>
-                  </div>
+                <div>
+                  <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Provincia</label>
+                  <select
+                    value={regProvince}
+                    onChange={(e) => setRegProvince(e.target.value)}
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition cursor-pointer"
+                  >
+                    {COSTA_RICA_PROVINCES.map(prov => prov && (
+                      <option key={prov} value={prov}>{prov}</option>
+                    ))}
+                  </select>
                 </div>
                 <div>
                   <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Dirección de Entrega Exacta</label>
@@ -2184,7 +2112,7 @@ export default function PublicStore({
                   <div className="text-[10px] uppercase font-mono text-[var(--text-primary)] tracking-wider">Precio Final:</div>
                   <div className="flex items-baseline gap-2">
                     {(() => {
-                      const discountedPrice = getProductDiscountedPrice(selectedProductDetail, buyerMembership);
+                      const discountedPrice = getProductDiscountedPrice(selectedProductDetail);
                       const isDiscounted = discountedPrice < selectedProductDetail.price;
                       return isDiscounted ? (
                         <>
@@ -2203,11 +2131,6 @@ export default function PublicStore({
                     })()}
                     <span className="text-[9px] text-[var(--text-primary)]">IVA incluido</span>
                   </div>
-                  {buyerMembership !== 'Normal' && (
-                    <div className="text-[9px] text-[var(--brand-gold-mid)] font-bold mt-0.5">
-                      ★ ¡Descuento de membresía {buyerMembership} aplicado!
-                    </div>
-                  )}
                 </div>
               </div>
 

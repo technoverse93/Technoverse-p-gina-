@@ -143,7 +143,6 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
         phone: '+506 8000 0000',
         province: 'San José',
         addressDetail: 'Dirección a reportar',
-        membershipTier: 'Normal',
         cardsTokenized: [],
         balance: 0,
         notes: 'Cliente registrado automáticamente al abrir orden de servicio.'

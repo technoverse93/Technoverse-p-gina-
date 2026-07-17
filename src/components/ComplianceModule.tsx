@@ -400,7 +400,6 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
                       phone: selectedOrderXml.paymentMethod,
                       province: selectedOrderXml.paymentDetails.phone || 'N/A',
                       addressDetail: 'N/A',
-                      membershipTier: 'Normal',
                       cardsTokenized: [],
                       balance: selectedOrderXml.total,
                       notes: getSimulatedInvoiceXml(selectedOrderXml)

@@ -7,12 +7,11 @@ interface ProductCardProps {
   prod: Product;
   onClick: () => void;
   onAddToCart: (prod: Product) => void;
-  buyerMembership: 'Normal' | 'Plata' | 'Oro' | 'Platino';
-  getProductDiscountedPrice: (prod: Product, membership: string) => number;
+  getProductDiscountedPrice: (prod: Product) => number;
 }
 
-export function ProductCard({ prod, onClick, onAddToCart, buyerMembership, getProductDiscountedPrice }: ProductCardProps) {
-  const discountedPrice = getProductDiscountedPrice(prod, buyerMembership);
+export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPrice }: ProductCardProps) {
+  const discountedPrice = getProductDiscountedPrice(prod);
   const isDiscounted = discountedPrice < prod.price;
 
   return (

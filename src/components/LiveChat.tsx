@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Shield, Bot, User, Award } from 'lucide-react';
+import { MessageSquare, Send, X, Shield, Bot, User } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 
@@ -18,10 +18,6 @@ export const FAQ_DATA = [
     a: "Según la Ley 7472 de Costa Rica, ofrecemos una garantía real incondicional de un mínimo de 3 meses en todas las reparaciones de hardware. Esta garantía se respalda con un ticket firmado y un hash trazable."
   },
   {
-    q: "¿Cómo funcionan las membresías?",
-    a: "Ofrecemos membresías Plata, Oro y Platino. Brindan descuentos automáticos del 5%, 10% y 15% en compras y reparaciones, envío gratuito (según la provincia) y soporte prioritario en la cola de atención."
-  },
-  {
     q: "¿Cumplen con la facturación electrónica?",
     a: "Sí, cada compra u orden de reparación genera un XML firmado conforme a la resolución DGT-R-48-2016 del Ministerio de Hacienda de Costa Rica, con IVA del 13% desglosado."
   }
@@ -34,7 +30,6 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
   const [inputText, setInputText] = useState('');
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
-  const [clientMembership, setClientMembership] = useState<'Normal' | 'Plata' | 'Oro' | 'Platino'>('Normal');
   const [isRegistered, setIsRegistered] = useState(false);
   
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -76,7 +71,6 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
         id: `CONV-${Date.now()}`,
         customerName: clientName,
         customerEmail: clientEmail,
-        membershipLevel: clientMembership,
         messages: [newMsg],
         status: 'active',
         unreadCount: 0
@@ -119,7 +113,6 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
         lowerText.includes(faq.q.split(' ')[1]) || // simple keyword match
         (lowerText.includes('garant') && faq.q.includes('garantía')) ||
         (lowerText.includes('pago') && faq.q.includes('pago')) ||
-        (lowerText.includes('membres') && faq.q.includes('membresías')) ||
         (lowerText.includes('factur') && faq.q.includes('facturación'))
       );
 
@@ -147,7 +140,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
             updatedDb.chat_conversations[freshIdx].messages.push({
               id: `MSG-${Date.now()}-bot`,
               sender: 'bot',
-              text: "Entiendo tu consulta. He asignado tu ticket a nuestro personal de soporte humano. Debido a tu nivel de membresía (" + updatedDb.chat_conversations[freshIdx].membershipLevel + "), tendrás prioridad en la cola de atención.",
+              text: "Entiendo tu consulta. He asignado tu ticket a nuestro personal de soporte humano. Te atenderemos en el orden de la cola.",
               timestamp: new Date().toISOString()
             });
             saveDB(updatedDb);
@@ -188,13 +181,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
 
   const activeConv = conversations.find(c => c.id === activeConvId);
 
-  // Sorting chat conversations: Platino first, then Oro, then Plata, then Normal
-  const sortedConversations = [...conversations].sort((a, b) => {
-    const priority = { 'Platino': 4, 'Oro': 3, 'Plata': 2, 'Normal': 1 };
-    const priorityA = priority[a.membershipLevel] || 1;
-    const priorityB = priority[b.membershipLevel] || 1;
-    return priorityB - priorityA;
-  });
+  const sortedConversations = conversations;
 
   if (isAdmin) {
     // Admin Support Dashboard view
@@ -203,7 +190,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
         {/* Conversations List */}
         <div className="border-r border-white/10 pr-4 flex flex-col h-full">
           <h3 className="font-semibold text-lg mb-4 text-sky-400 dark:text-[var(--brand-gold-light)] flex items-center gap-2">
-            <MessageSquare className="w-5 h-5" /> Cola de Mensajes (Prioridad de Membresía)
+            <MessageSquare className="w-5 h-5" /> Cola de Mensajes
           </h3>
           <div className="flex-1 overflow-y-auto space-y-2">
             {sortedConversations.length === 0 ? (
@@ -238,14 +225,6 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
                     </div>
                     <div className="text-xs text-[var(--text-secondary)] truncate">{conv.customerEmail}</div>
                   </div>
-                  <span className={`text-[10px] px-2 py-0.5 rounded-full font-bold uppercase tracking-wider ${
-                    conv.membershipLevel === 'Platino' ? 'bg-indigo-600 dark:bg-[var(--brand-gold-mid)] text-white' :
-                    conv.membershipLevel === 'Oro' ? 'bg-amber-500 text-slate-950' :
-                    conv.membershipLevel === 'Plata' ? 'bg-slate-300 text-slate-950' :
-                    'bg-slate-700 text-[var(--text-secondary)]'
-                  }`}>
-                    {conv.membershipLevel}
-                  </span>
                 </button>
               ))
             )}
@@ -261,16 +240,6 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
                 <div>
                   <h4 className="font-medium text-sky-400 dark:text-[var(--brand-gold-light)]">{activeConv.customerName}</h4>
                   <p className="text-xs text-[var(--text-secondary)]">{activeConv.customerEmail}</p>
-                </div>
-                <div className="flex items-center gap-2">
-                  <span className={`text-xs px-2.5 py-1 rounded-full font-bold uppercase ${
-                    activeConv.membershipLevel === 'Platino' ? 'bg-indigo-600 dark:bg-[var(--brand-gold-mid)] text-white animate-pulse' :
-                    activeConv.membershipLevel === 'Oro' ? 'bg-amber-500 text-slate-950' :
-                    activeConv.membershipLevel === 'Plata' ? 'bg-slate-300 text-slate-950' :
-                    'bg-slate-700 text-[var(--text-secondary)]'
-                  }`}>
-                    Membresía {activeConv.membershipLevel} (Soporte prioritario)
-                  </span>
                 </div>
               </div>
 
@@ -393,19 +362,6 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
                     placeholder="juan@gmail.com"
                     className="w-full bg-[var(--bg-surface)] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
                   />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-bold uppercase text-emerald-400 dark:text-[var(--brand-gold-light)] mb-1">Membresía Asociada</label>
-                  <select
-                    value={clientMembership}
-                    onChange={(e: any) => setClientMembership(e.target.value)}
-                    className="w-full bg-slate-900 border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
-                  >
-                    <option value="Normal">Sin membresía (Estándar)</option>
-                    <option value="Plata">Membresía Plata</option>
-                    <option value="Oro">Membresía Oro (Envío gratis SJ)</option>
-                    <option value="Platino">Membresía Platino (VIP)</option>
-                  </select>
                 </div>
               </div>
               <button
