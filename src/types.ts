@@ -3,7 +3,6 @@ export interface User {
   email: string;
   role: 'Dueño' | 'Cliente';
   name: string;
-  membershipTier?: 'Normal' | 'Plata' | 'Oro' | 'Platino';
   token?: string;
 }
 
@@ -19,7 +18,6 @@ export interface Product {
   discountPercent: number;
   discountStartDate?: string;
   discountEndDate?: string;
-  applicableMemberships: ('Plata' | 'Oro' | 'Platino')[];
   active?: boolean;
   description?: string;
   minStock?: number;
@@ -112,17 +110,6 @@ export interface Order {
   pickupInPerson?: boolean; // pick up at home office (shop is home)
 }
 
-export interface MembershipTier {
-  id: 'Plata' | 'Oro' | 'Platino';
-  name: string;
-  price: number;
-  discountPercent: number;
-  shippingSJ: number; // shipping cost to San Jose
-  shippingOther: number; // shipping cost to other provinces
-  active: boolean;
-  features: string[];
-}
-
 export interface ChatMessage {
   id: string;
   sender: 'customer' | 'support' | 'bot';
@@ -134,7 +121,6 @@ export interface ChatConversation {
   id: string;
   customerName: string;
   customerEmail: string;
-  membershipLevel: 'Normal' | 'Plata' | 'Oro' | 'Platino';
   messages: ChatMessage[];
   status: 'active' | 'archived';
   unreadCount: number;
@@ -156,7 +142,6 @@ export interface ClientProfile {
   phone: string;
   province: 'San José' | 'Alajuela' | 'Cartago' | 'Heredia' | 'Guanacaste' | 'Puntarenas' | 'Limón';
   addressDetail: string;
-  membershipTier: 'Normal' | 'Plata' | 'Oro' | 'Platino';
   cardsTokenized: {
     last4: string;
     brand: string;
