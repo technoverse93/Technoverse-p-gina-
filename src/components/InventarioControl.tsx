@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { Product, InventoryMovement } from '../types';
 import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
+import { CustomSelect } from './CustomSelect';
 import { 
   Package, Plus, Edit, Trash2, Search, Filter, History, MapPin, 
   Box, FileText, AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronRight, X, Image as ImageIcon, Save, Download,
@@ -1131,16 +1132,17 @@ if (!m) return null;
                   />
                 </div>
                 {activeSubTab !== 'repuestos' && (
-                  <select
-                    value={categoryFilter}
-                    onChange={e => setCategoryFilter(e.target.value)}
-                    className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none"
-                  >
-                    <option value="Todas">Todas las categorías</option>
-                    {['Fundas', 'Cables', 'Cargadores', 'Protectores', 'Teclados', 'Mouse', 'Audífonos', 'Repuestos', 'Otros'].map(c => (
-                      <option key={c} value={c}>{c}</option>
-                    ))}
-                  </select>
+                  <div className="md:w-56 flex-shrink-0">
+                    <CustomSelect
+                      value={categoryFilter}
+                      onChange={setCategoryFilter}
+                      className="text-xs py-2"
+                      options={[
+                        { value: 'Todas', label: 'Todas las categorías' },
+                        ...['Fundas', 'Cables', 'Cargadores', 'Protectores', 'Teclados', 'Mouse', 'Audífonos', 'Repuestos', 'Otros'].map(c => ({ value: c, label: c }))
+                      ]}
+                    />
+                  </div>
                 )}
                 <button
                   onClick={() => {
@@ -1497,25 +1499,22 @@ if (!m) return null;
                       </div>
                       <div>
                         <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Categoría *</label>
-                        <select 
-                          value={prodCategory} 
-                          onChange={e => {
-                            setProdCategory(e.target.value);
-                            if (sparePartCategories.includes(e.target.value) || e.target.value === 'Repuestos') {
+                        <CustomSelect
+                          value={prodCategory}
+                          onChange={(val) => {
+                            setProdCategory(val);
+                            if (sparePartCategories.includes(val) || val === 'Repuestos') {
                               setProdLinkedSparePartSku('');
                             }
-                          }} 
-                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)]"
-                        >
-                          {activeSubTab === 'repuestos' || sparePartCategories.includes(prodCategory) || prodCategory === 'Repuestos'
-                            ? sparePartCategories.map(c => (
-                                <option key={c} value={c}>{c}</option>
-                              ))
-                            : ['Fundas', 'Cables', 'Cargadores', 'Protectores', 'Teclados', 'Mouse', 'Audífonos', 'Otros'].map(c => (
-                                <option key={c} value={c}>{c}</option>
-                              ))
+                          }}
+                          className="text-xs py-2"
+                          options={
+                            (activeSubTab === 'repuestos' || sparePartCategories.includes(prodCategory) || prodCategory === 'Repuestos'
+                              ? sparePartCategories
+                              : ['Fundas', 'Cables', 'Cargadores', 'Protectores', 'Teclados', 'Mouse', 'Audífonos', 'Otros']
+                            ).map(c => ({ value: c, label: c }))
                           }
-                        </select>
+                        />
                       </div>
                     </div>
 
@@ -1523,11 +1522,10 @@ if (!m) return null;
                       <div className="space-y-3 p-4 bg-[var(--bg-surface)] /50 border border-[var(--border-color)]/50 rounded-xl">
                         <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Vincular a Repuesto (SKU)</label>
                         <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[var(--text-secondary)]" />
-                          <select 
-                            value={prodLinkedSparePartSku} 
-                            onChange={e => {
-                              const sku = e.target.value;
+                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 z-[1] w-3.5 h-3.5 text-[var(--text-secondary)] pointer-events-none" />
+                          <CustomSelect
+                            value={prodLinkedSparePartSku}
+                            onChange={(sku) => {
                               setProdLinkedSparePartSku(sku);
                               if (sku) {
                                 const spare = products.find(p => p && p.sku === sku && (sparePartCategories.includes(p.category) || p.category === 'Repuestos'));
@@ -1540,13 +1538,13 @@ if (!m) return null;
                                 setProdStock('');
                               }
                             }}
-                            className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl pl-9 pr-4 py-2 text-xs text-[var(--text-primary)]"
-                          >
-                            <option value="">-- Sin vinculación --</option>
-                            {products.filter(p => p && (sparePartCategories.includes(p.category) || p.category === 'Repuestos') && p.active !== false).map(p => (
-                              <option key={p.sku} value={p.sku}>{p.sku} - {p.name} (Stock: {p.stock})</option>
-                            ))}
-                          </select>
+                            placeholder="-- Sin vinculación --"
+                            className="pl-9 text-xs py-2"
+                            options={[
+                              { value: '', label: '-- Sin vinculación --' },
+                              ...products.filter(p => p && (sparePartCategories.includes(p.category) || p.category === 'Repuestos') && p.active !== false).map(p => ({ value: p.sku, label: `${p.sku} - ${p.name} (Stock: ${p.stock})` }))
+                            ]}
+                          />
                         </div>
                         {prodLinkedSparePartSku && (
                           <p className="text-[10px] text-sky-400 dark:text-[var(--brand-gold-light)] flex items-center gap-1">
@@ -1558,16 +1556,12 @@ if (!m) return null;
 
                     <div>
                       <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Garantía *</label>
-                      <select 
-                        value={prodWarranty} 
-                        onChange={e => setProdWarranty(e.target.value)} 
-                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)]"
-                      >
-                        <option value="15 días">15 días</option>
-                        <option value="60 días">60 días</option>
-                        <option value="90 días">90 días</option>
-                        <option value="12 meses">12 meses</option>
-                      </select>
+                      <CustomSelect
+                        value={prodWarranty}
+                        onChange={setProdWarranty}
+                        className="text-xs py-2"
+                        options={['15 días', '60 días', '90 días', '12 meses'].map(w => ({ value: w, label: w }))}
+                      />
                     </div>
 
                     <div>
@@ -2304,15 +2298,12 @@ if (!m) return null;
                                 </td>
 
                                 <td className="p-3">
-                                  <select 
-                                    value={row.category} 
-                                    onChange={(e) => handleCategoryChange(index, e.target.value)}
-                                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-xs px-2 py-1 rounded text-[var(--text-primary)] focus:outline-none"
-                                  >
-                                    {['Fundas', 'Cables', 'Cargadores', 'Protectores', 'Teclados', 'Mouse', 'Audífonos', 'Repuestos', 'Otros'].map(c => (
-                                      <option key={c} value={c}>{c}</option>
-                                    ))}
-                                  </select>
+                                  <CustomSelect
+                                    value={row.category}
+                                    onChange={(val) => handleCategoryChange(index, val)}
+                                    className="text-xs py-1"
+                                    options={['Fundas', 'Cables', 'Cargadores', 'Protectores', 'Teclados', 'Mouse', 'Audífonos', 'Repuestos', 'Otros'].map(c => ({ value: c, label: c }))}
+                                  />
                                 </td>
 
                                 <td className="p-3 text-right font-mono text-[11px] text-sky-400 dark:text-[var(--brand-gold-light)]">

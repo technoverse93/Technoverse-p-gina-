@@ -3,6 +3,7 @@ import { Kanban, Search, Plus, Save, Clock, HelpCircle, FileText, CheckCircle2, 
 import { RepairOrder, Product, ClientProfile } from '../types';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { processRepairAtomic } from '../utils/transactions';
+import { CustomSelect } from './CustomSelect';
 
 interface TallerKanbanProps {
   activeUserEmail?: string;
@@ -574,16 +575,17 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Lugar de Reparación en Casa</label>
-              <select
+              <CustomSelect
                 value={newRepairLocation}
-                onChange={(e) => setNewRepairLocation(e.target.value)}
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
-              >
-                <option value="Taller en casa">Taller en casa (Escritorio principal)</option>
-                <option value="Mesa del comedor">Mesa del comedor</option>
-                <option value="Estudio de electrónica">Estudio de electrónica</option>
-                <option value="Garaje / Banco de trabajo">Garaje / Banco de trabajo</option>
-              </select>
+                onChange={setNewRepairLocation}
+                className="text-xs py-2"
+                options={[
+                  { value: 'Taller en casa', label: 'Taller en casa (Escritorio principal)' },
+                  { value: 'Mesa del comedor', label: 'Mesa del comedor' },
+                  { value: 'Estudio de electrónica', label: 'Estudio de electrónica' },
+                  { value: 'Garaje / Banco de trabajo', label: 'Garaje / Banco de trabajo' },
+                ]}
+              />
             </div>
             <div>
               <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Herramientas Requeridas</label>
@@ -673,16 +675,14 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                         {/* Quick state switcher */}
                         <div className="flex justify-between items-center pt-1.5 border-t border-[var(--border-color)]/50">
                           <span className="text-[8px] text-[var(--text-secondary)]">Mover a:</span>
-                          <select
-                            value={rep.status}
-                            onClick={(e) => e.stopPropagation()} // stop parent click
-                            onChange={(e) => handleUpdateStatus(rep.id, e.target.value as RepairOrder['status'])}
-                            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded text-[9px] text-sky-600 dark:text-[var(--brand-gold-light)] px-1 py-0.5 focus:outline-none"
-                          >
-                            {KANBAN_COLUMNS.map(s => (
-                              <option key={s} value={s}>{s}</option>
-                            ))}
-                          </select>
+                          <div className="w-28" onClick={(e) => e.stopPropagation()}>
+                            <CustomSelect
+                              value={rep.status}
+                              onChange={(val) => handleUpdateStatus(rep.id, val as RepairOrder['status'])}
+                              className="text-[9px] text-sky-600 dark:text-[var(--brand-gold-light)] px-1.5 py-0.5"
+                              options={KANBAN_COLUMNS.map(s => ({ value: s, label: s }))}
+                            />
+                          </div>
                         </div>
                       </div>
                     ))
@@ -765,18 +765,22 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] block">Repuestos Disponibles en Inventario Doméstico</span>
                 
                 <div className="flex gap-2">
-                    <select
-                      value={selectedProductId}
-                      onChange={(e) => setSelectedProductId(e.target.value)}
-                      className="flex-1 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none"
-                    >
-                      <option value="">-- Seleccionar Repuesto en Casa --</option>
-                      {products.filter(p => sparePartCategories.includes(p.category) && p.active !== false).map(p => (
-                        <option key={p.id} value={p.id} disabled={p.stock <= 0}>
-                          {p.name} (Stock: {p.stock} un. en "{p.physicalLocation || 'Sin ubicar'}" | ₡{p.price.toLocaleString()})
-                        </option>
-                      ))}
-                    </select>
+                    <div className="flex-1">
+                      <CustomSelect
+                        value={selectedProductId}
+                        onChange={setSelectedProductId}
+                        placeholder="-- Seleccionar Repuesto en Casa --"
+                        className="text-xs py-2"
+                        options={[
+                          { value: '', label: '-- Seleccionar Repuesto en Casa --' },
+                          ...products.filter(p => sparePartCategories.includes(p.category) && p.active !== false).map(p => ({
+                            value: p.id,
+                            label: `${p.name} (Stock: ${p.stock} un. en "${p.physicalLocation || 'Sin ubicar'}" | ₡${p.price.toLocaleString()})`,
+                            disabled: p.stock <= 0
+                          }))
+                        ]}
+                      />
+                    </div>
                   <input
                     type="number"
                     min="1"

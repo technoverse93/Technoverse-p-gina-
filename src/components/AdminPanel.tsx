@@ -1,6 +1,7 @@
 import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect, useLayoutEffect, useRef } from 'react';
 import { PaginatedTbody } from './PaginationHelper';
+import { CustomSelect } from './CustomSelect';
 import { 
   LayoutDashboard, Package, Wrench, Users, CreditCard, FileSpreadsheet,
   Settings, ShieldCheck, Megaphone, Truck, ShieldAlert, LogOut, Sun, Moon,
@@ -1384,11 +1385,11 @@ export default function AdminPanel({
                     </div>
                     <div>
                       <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Provincia</label>
-                      <select required value={clientForm.province} onChange={e => setClientForm({...clientForm, province: e.target.value as any})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)]">
-                        {['San José', 'Alajuela', 'Cartago', 'Heredia', 'Guanacaste', 'Puntarenas', 'Limón'].map(p => p && (
-                          <option key={p} value={p}>{p}</option>
-                        ))}
-                      </select>
+                      <CustomSelect
+                        value={clientForm.province || ''}
+                        onChange={(val) => setClientForm({...clientForm, province: val as any})}
+                        options={['San José', 'Alajuela', 'Cartago', 'Heredia', 'Guanacaste', 'Puntarenas', 'Limón'].map(p => ({ value: p, label: p }))}
+                      />
                     </div>
                     <div>
                       <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Dirección Exacta</label>
@@ -1560,10 +1561,15 @@ export default function AdminPanel({
                     </div>
                     <div>
                       <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Tipo Descuento</label>
-                      <select required value={couponForm.type} onChange={e => setCouponForm({...couponForm, type: e.target.value as any})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)]">
-                        <option value="Porcentaje">% Porcentaje</option>
-                        <option value="Fijo">₡ Monto Fijo</option>
-                      </select>
+                      <CustomSelect
+                        value={couponForm.type || ''}
+                        onChange={(val) => setCouponForm({...couponForm, type: val as any})}
+                        className="py-1.5"
+                        options={[
+                          { value: 'Porcentaje', label: '% Porcentaje' },
+                          { value: 'Fijo', label: '₡ Monto Fijo' },
+                        ]}
+                      />
                     </div>
                     <div>
                       <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Valor</label>
@@ -1646,11 +1652,16 @@ export default function AdminPanel({
                     </div>
                     <div>
                       <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Tipo de Banner</label>
-                      <select required value={bannerForm.type} onChange={e => setBannerForm({...bannerForm, type: e.target.value as any})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)]">
-                        <option value="Lanzamiento">Lanzamiento</option>
-                        <option value="Oferta">Oferta Especial</option>
-                        <option value="General">General</option>
-                      </select>
+                      <CustomSelect
+                        value={bannerForm.type || ''}
+                        onChange={(val) => setBannerForm({...bannerForm, type: val as any})}
+                        className="py-1.5"
+                        options={[
+                          { value: 'Lanzamiento', label: 'Lanzamiento' },
+                          { value: 'Oferta', label: 'Oferta Especial' },
+                          { value: 'General', label: 'General' },
+                        ]}
+                      />
                     </div>
                     <div className="md:col-span-2">
                       <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Descripción</label>

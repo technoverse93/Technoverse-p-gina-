@@ -8,6 +8,7 @@ import {
   User as UserIcon, X, LogOut, Sun, Moon, Home, LayoutGrid
 } from 'lucide-react';
 import { ProductCard } from './ProductCard';
+import { CustomSelect } from './CustomSelect';
 import { MarketingRow } from './MarketingRow';
 import { FeaturedCategoriesCarousel } from './FeaturedCategoriesCarousel';
 import { Product, Order, OrderItem, RepairOrder } from '../types';
@@ -1642,15 +1643,11 @@ export default function PublicStore({
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div>
                       <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Provincia</label>
-                      <select
+                      <CustomSelect
                         value={shippingProvince}
-                        onChange={(e) => setShippingProvince(e.target.value)}
-                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition cursor-pointer"
-                      >
-                        {COSTA_RICA_PROVINCES.map(prov => prov && (
-                          <option key={prov} value={prov}>{prov}</option>
-                        ))}
-                      </select>
+                        onChange={setShippingProvince}
+                        options={COSTA_RICA_PROVINCES.filter(Boolean).map(prov => ({ value: prov, label: prov }))}
+                      />
                     </div>
                     <div>
                       <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Tarifa de Envío</label>
@@ -1966,15 +1963,11 @@ export default function PublicStore({
                 </div>
                 <div>
                   <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Provincia</label>
-                  <select
+                  <CustomSelect
                     value={regProvince}
-                    onChange={(e) => setRegProvince(e.target.value)}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition cursor-pointer"
-                  >
-                    {COSTA_RICA_PROVINCES.map(prov => prov && (
-                      <option key={prov} value={prov}>{prov}</option>
-                    ))}
-                  </select>
+                    onChange={setRegProvince}
+                    options={COSTA_RICA_PROVINCES.filter(Boolean).map(prov => ({ value: prov, label: prov }))}
+                  />
                 </div>
                 <div>
                   <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Dirección de Entrega Exacta</label>

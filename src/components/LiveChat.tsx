@@ -305,7 +305,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
       {/* Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 right-6 z-[999] w-11 h-11 bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] shadow-lg text-[#1a1408] dark:text-[#14100a] rounded-full flex items-center justify-center transition hover:scale-105 active:scale-95 border-2 border-white"
+        className="fixed bottom-24 right-6 z-[45] w-11 h-11 max-w-11 max-h-11 bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] shadow-lg text-[#1a1408] dark:text-[#14100a] rounded-full flex items-center justify-center transition hover:scale-105 active:scale-95 border-2 border-white"
         id="btn-floating-chat"
       >
         <MessageSquare className="w-5 h-5" />
@@ -316,7 +316,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
 
       {/* Chat popup window */}
       {isOpen && (
-        <div className="fixed bottom-40 right-6 z-50 w-[calc(100vw-3rem)] sm:w-96 h-[500px] max-h-[70vh] bg-slate-950 border border-white/10 rounded-2xl shadow-sm flex flex-col text-white overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300" id="floating-chat-window">
+        <div className="fixed bottom-40 right-6 z-[45] w-[calc(100vw-3rem)] sm:w-96 h-[500px] max-h-[70vh] bg-slate-950 border border-white/10 rounded-2xl shadow-sm flex flex-col text-white overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300" id="floating-chat-window">
           {/* Header */}
           <div className="p-4 bg-gradient-to-r from-emerald-500 to-teal-600 dark:bg-[var(--brand-gold-mid)] dark:bg-none flex items-center justify-between shadow-sm">
             <div className="flex items-center gap-2">
