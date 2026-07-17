@@ -1052,7 +1052,10 @@ if (!m) return null;
   const filteredProducts = products.filter(p => {
     if (!p) return false;
     if (p.active === false) return false;
-    
+    // El inventario activo oculta stock agotado; el modo de conteo físico
+    // necesita seguir viendo estas filas para poder recontarlas.
+    if (!isCountingMode && Number(p.stock) <= 0) return false;
+
     // Sub-tab logic
     const isSpare = p.category === 'Repuestos' || sparePartCategories.includes(p.category);
     if (activeSubTab === 'repuestos') {
