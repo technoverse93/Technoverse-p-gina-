@@ -4,14 +4,14 @@ import { PaginatedTbody } from './PaginationHelper';
 import { 
   LayoutDashboard, Package, Wrench, Users, CreditCard, FileSpreadsheet,
   Settings, ShieldCheck, Heart, Megaphone, Truck, ShieldAlert, LogOut, Sun, Moon,
-  X, Plus, Trash2, Edit, Save, RefreshCw, Key, ArrowRightLeft, Eye, Download, DollarSign, BookOpen, ChevronDown, ChevronRight, ShoppingBag,
+  X, Plus, Trash2, Edit, Save, RefreshCw, Key, ArrowRightLeft, Eye, EyeOff, Download, DollarSign, BookOpen, ChevronDown, ChevronRight, ShoppingBag,
   Home, Sparkles, UserPlus, TrendingUp, BarChart3, Activity, MoreHorizontal
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
-import { User, Product, Employee, Payroll, Order, RepairOrder, ClientProfile, MembershipTier, LogisticsDelivery, MarketingCampaign, AuditLog, Banner } from '../types';
+import { User, Product, Order, RepairOrder, ClientProfile, MembershipTier, LogisticsDelivery, MarketingCampaign, AuditLog, Banner } from '../types';
 import TallerKanban from './TallerKanban';
 import InventarioControl from './InventarioControl';
 import ComplianceModule from './ComplianceModule';
@@ -116,8 +116,6 @@ export default function AdminPanel({
   
   // Database entities
   const [products, setProducts] = useState<Product[]>([]);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-  const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [orders, setOrders] = useState<Order[]>([]);
   const [repairs, setRepairs] = useState<RepairOrder[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
@@ -142,29 +140,14 @@ export default function AdminPanel({
   const [prodPhysicalLocation, setProdPhysicalLocation] = useState('');
   const [prodMemberships, setProdMemberships] = useState<('Plata' | 'Oro' | 'Platino')[]>(['Plata', 'Oro', 'Platino']);
 
-  // Employee CRUD state
-  const [showEmployeeForm, setShowEmployeeForm] = useState(false);
-  const [empName, setEmpName] = useState('');
-  const [empEmail, setEmpEmail] = useState('');
-  const [empPassword, setEmpPassword] = useState('');
+  // New admin user creation state
+  const [showCreateUserForm, setShowCreateUserForm] = useState(false);
+  const [newUserName, setNewUserName] = useState('');
+  const [newUserEmail, setNewUserEmail] = useState('');
+  const [newUserPassword, setNewUserPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-  const [editingEmployeeId, setEditingEmployeeId] = useState<string | null>(null);
-  const [empRole, setEmpRole] = useState<Employee['role']>('Técnico');
-  const [empSalary, setEmpSalary] = useState<number>(450000);
-  const [empContract, setEmpContract] = useState<Employee['contractType']>('Indefinido');
-  const [empRemoteBonus, setEmpRemoteBonus] = useState<number>(50000);
-  const [generatedEmpPass, setGeneratedEmpPass] = useState<string | null>(null);
-  const [payrollMonth, setPayrollMonth] = useState('2026-07');
-  const [payrollEmployeeId, setPayrollEmployeeId] = useState('all');
-  const [selectedPaySlip, setSelectedPaySlip] = useState<Payroll | null>(null);
-  useEffect(() => {
-    if (selectedPaySlip) {
-      document.body.style.overflow = "hidden";
-    } else {
-      document.body.style.overflow = "auto";
-    }
-    return () => { document.body.style.overflow = "auto"; };
-  }, [selectedPaySlip]);
+  const [isCreatingUser, setIsCreatingUser] = useState(false);
+  const [generatedUserPass, setGeneratedUserPass] = useState<string | null>(null);
 
   // General parameters state
   const [cedulaJuridica, setCedulaJuridica] = useState('3-101-987452');
@@ -332,8 +315,6 @@ export default function AdminPanel({
   const loadAllAdminData = () => {
     const db = getDB();
     setProducts(db.products || []);
-    setEmployees(db.employees || []);
-    setPayrolls(db.payroll || []);
     setOrders(db.orders || []);
     setRepairs(db.repair_orders || []);
     if (db.settings) {
@@ -403,42 +384,12 @@ export default function AdminPanel({
       return;
     }
 
-    if (profile.role === 'Dueño') {
-      const adminUser: User = { id: 'admin-id', email: cleanEmail, role: 'Dueño', name: profile.name || 'Administrador Technoverse' };
-      onLogin(adminUser);
-      setLoginEmail(''); setLoginPassword('');
-      alert('Sesión iniciada con éxito como Administrador.');
-      return;
-    }
-
-    // Empleado: buscamos su registro operativo (salario, rol interno, activo/inactivo).
-    const db = getDB();
-    const emp = db.employees.find(e => e && e.email.toLowerCase() === cleanEmail);
-    if (!emp || !emp.active) {
-      await supabase.auth.signOut();
-      alert('Su cuenta de empleado no está activa. Contacte al administrador.');
-      return;
-    }
-
-    const empUser: User = {
-      id: emp.id,
-      email: emp.email,
-      role: 'Empleado',
-      employeeRole: emp.role,
-      name: emp.name
-    };
-    onLogin(empUser);
-
-    // Auto routing according to employee permissions
-    if (emp.role === 'Técnico') setActiveTab('taller');
-    else if (emp.role === 'Soporte') setActiveTab('chat');
-    else if (emp.role === 'Bodega') setActiveTab('inventario_productos');
-    else if (emp.role === 'Contabilidad') setActiveTab('facturacion');
-    else if (emp.role === 'Oficial de Cumplimiento') setActiveTab('cumplimiento');
-    else setActiveTab('dashboard');
-
-    addAuditLog(emp.email, 'Seguridad', 'Login Exitoso', `Sesión iniciada por empleado con rol: ${emp.role}`);
+    // Cualquier cuenta autenticada que no sea Cliente es Administrador con
+    // acceso total: ya no existe el rol intermedio de Empleado.
+    const adminUser: User = { id: 'admin-id', email: cleanEmail, role: 'Dueño', name: profile.name || 'Administrador Technoverse' };
+    onLogin(adminUser);
     setLoginEmail(''); setLoginPassword('');
+    alert('Sesión iniciada con éxito como Administrador.');
   };
 
   
@@ -498,68 +449,9 @@ export default function AdminPanel({
   };
 
   // Check RBAC permission for modules
-  const hasPermission = (tab: string): boolean => {
-    if (!currentUser) return false;
-    if (currentUser.role === 'Dueño') return true; // Owner has root access
-    
-    const role = currentUser.employeeRole;
-    if (!role) return false;
-
-    switch (tab) {
-      case 'dashboard':
-        return ['Dueño', 'Contabilidad', 'Oficial de Cumplimiento'].includes(role);
-      case 'productos':
-      case 'inventario_productos':
-      case 'inventario_movimientos':
-      case 'inventario_reportes':
-      case 'inventario_repuestos':
-        return ['Bodega'].includes(role); // Owner sees these via separate menu if needed, but following prompt's strict role separation
-      case 'taller':
-        return ['Técnico'].includes(role);
-      case 'empleados':
-        return false; // Dueño only (handled by isOwner check)
-      case 'clientes':
-        return ['Dueño', 'Soporte', 'Contabilidad'].includes(role);
-      case 'facturacion':
-        return ['Dueño', 'Contabilidad'].includes(role);
-      case 'cumplimiento':
-        return ['Dueño', 'Oficial de Cumplimiento', 'Contabilidad'].includes(role);
-      case 'memberships':
-        return ['Dueño', 'Contabilidad', 'Marketing'].includes(role);
-      case 'marketing':
-        return ['Marketing'].includes(role);
-      case 'logistica':
-        return ['Repartidor', 'Bodega'].includes(role);
-      case 'bitacora':
-        return false; // Dueño only (handled by isOwner check)
-      case 'configuracion':
-        return ['Dueño', 'Contabilidad'].includes(role);
-      default:
-        return false;
-    }
-  };
-
-  // Enforce RBAC on tab change
-  useEffect(() => {
-    if (isAuthenticated && currentUser) {
-      if (!hasPermission(activeTab)) {
-        alert("Acceso denegado. No tienes permisos para ver esta sección.");
-        if (currentUser.role === 'Dueño') {
-          setActiveTab('dashboard');
-        } else {
-          const role = currentUser.employeeRole;
-          if (role === 'Técnico') setActiveTab('taller');
-          else if (role === 'Soporte') setActiveTab('clientes');
-          else if (role === 'Bodega') setActiveTab('inventario_productos');
-          else if (role === 'Contabilidad') setActiveTab('facturacion');
-          else if (role === 'Oficial de Cumplimiento') setActiveTab('cumplimiento');
-          else if (role === 'Marketing') setActiveTab('marketing');
-          else if (role === 'Repartidor') setActiveTab('logistica');
-          else setActiveTab('dashboard');
-        }
-      }
-    }
-  }, [activeTab, isAuthenticated, currentUser]);
+  // Ya no existen roles secundarios: cualquier usuario autenticado en el
+  // panel es Administrador con acceso total.
+  const hasPermission = (_tab: string): boolean => !!currentUser;
 
   // Product CRUD triggers
   const handleProductSubmit = async (e: React.FormEvent) => {
@@ -687,111 +579,40 @@ export default function AdminPanel({
     if (onRefreshTrigger) onRefreshTrigger();
   };
 
-  // Employee creation / editing
-  const handleEmployeeSubmit = async (e: React.FormEvent) => {
+  // Creación de nuevos usuarios administradores (acceso total). La cuenta de
+  // Supabase Auth y la fila en profiles se crean del lado del servidor (Edge
+  // Function con service_role key), para no exponer esa llave en el
+  // navegador ni cerrar la sesión del admin actual.
+  const handleCreateUserSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!empName.trim() || !empEmail.trim() || empSalary < 350000 || empRemoteBonus < 0) return;
-    const db = getDB();
-    let finalPass = empPassword.trim() || `Emp-${Math.floor(100000 + Math.random() * 900000).toString()}`;
+    if (!newUserName.trim() || !newUserEmail.trim() || isCreatingUser) return;
+    setIsCreatingUser(true);
+    try {
+      const finalPass = newUserPassword.trim() || `Admin-${Math.floor(100000 + Math.random() * 900000)}`;
 
-    if (editingEmployeeId) {
-      // Editing Mode
-      const empIndex = db.employees.findIndex(em => em && em.id === editingEmployeeId);
-      if (empIndex === -1) {
-        alert('Empleado no encontrado.');
-        return;
-      }
-      
-      const emailExists = db.employees.some(em => em && em.id !== editingEmployeeId && em.email.toLowerCase() === empEmail.trim().toLowerCase());
-      if (emailExists) {
-        alert('Ya existe otro empleado registrado con ese correo electrónico.');
-        return;
-      }
-
-      const oldEmp = db.employees[empIndex];
-      db.employees[empIndex] = {
-        ...oldEmp,
-        name: empName.trim(),
-        email: empEmail.trim().toLowerCase(),
-        role: empRole,
-        baseSalary: empSalary,
-        contractType: empContract,
-        password: finalPass,
-        remoteBonus: empRemoteBonus
-      };
-
-      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Recursos Humanos', 'Editar Empleado', `Empleado modificado: ${empName} (Rol: ${empRole})`, db);
-      try {
-        await saveDB(db);
-      } catch (err: any) {
-        alert('No se pudo guardar el empleado en la base de datos. Detalle: ' + (err?.message || err));
-        return;
-      }
-      alert('Empleado actualizado con éxito.');
-
-      setEditingEmployeeId(null);
-    } else {
-      // Creation Mode: la cuenta de Supabase Auth y las filas en profiles/employees
-      // se crean del lado del servidor (Edge Function con service_role key), para
-      // no exponer esa llave en el navegador ni cerrar la sesión del admin actual.
-      const exists = db.employees.some(em => em && em.email.toLowerCase() === empEmail.trim().toLowerCase());
-      if (exists) {
-        alert('Ya existe un empleado registrado con ese correo electrónico.');
-        return;
-      }
-
-      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-employee', {
+      const { data: fnData, error: fnError } = await supabase.functions.invoke('create-admin-user', {
         body: {
-          email: empEmail.trim().toLowerCase(),
+          email: newUserEmail.trim().toLowerCase(),
           password: finalPass,
-          name: empName.trim(),
-          role: empRole,
-          baseSalary: empSalary,
-          contractType: empContract,
-          remoteBonus: empRemoteBonus
+          name: newUserName.trim()
         }
       });
 
       if (fnError || !fnData?.success) {
-        alert('No se pudo crear el empleado. Detalle: ' + (fnData?.error || fnError?.message || 'error desconocido'));
+        alert('No se pudo crear el usuario. Detalle: ' + (fnData?.error || fnError?.message || 'error desconocido'));
         return;
       }
 
-      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Recursos Humanos', 'Crear Empleado', `Empleado registrado: ${empName} (Rol: ${empRole}, Subsidio Remoto: ₡${empRemoteBonus.toLocaleString()})`);
-      setGeneratedEmpPass(finalPass);
+      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Seguridad', 'Crear Usuario Administrador', `Usuario administrador creado: ${newUserName} (${newUserEmail})`);
+      setGeneratedUserPass(finalPass);
+      setNewUserName('');
+      setNewUserEmail('');
+      setNewUserPassword('');
+    } finally {
+      setIsCreatingUser(false);
     }
-
-    // Reset Form Fields
-    setEmpName('');
-    setEmpEmail('');
-    setEmpPassword('');
-    setEmpRemoteBonus(50000);
-    loadAllAdminData();
   };
 
-  const handleEditEmployeeClick = (emp: Employee) => {
-    setEditingEmployeeId(emp.id);
-    setEmpName(emp.name);
-    setEmpEmail(emp.email);
-    setEmpRole(emp.role);
-    setEmpSalary(emp.baseSalary);
-    setEmpContract(emp.contractType);
-    setEmpRemoteBonus(emp.remoteBonus ?? 0);
-    setEmpPassword(emp.password || '');
-    setShowEmployeeForm(true);
-  };
-
-  const handleCancelEmployeeEdit = () => {
-    setEditingEmployeeId(null);
-    setEmpName('');
-    setEmpEmail('');
-    setEmpPassword('');
-    setEmpRemoteBonus(50000);
-    setShowEmployeeForm(false);
-  };
-
-  // Toggle employee state
-  
   const downloadFacturaPDF = (order: Order) => {
     const db = getDB();
     const printWindow = window.open('', '_blank');
@@ -861,96 +682,6 @@ export default function AdminPanel({
     `);
     printWindow.document.close();
   };
-const handleToggleEmployeeState = (empId: string, name: string, currentState: boolean) => {
-    const db = getDB();
-    const idx = db.employees.findIndex(e => e && e.id === empId);
-    if (idx !== -1) {
-      db.employees[idx].active = !currentState;
-      addAuditLog(currentUser?.email || 'admin', 'Recursos Humanos', 'Editar Empleado', `Estado de empleado ${name} cambiado a ${!currentState ? 'Activo' : 'Inactivo'}`, db);
-      saveDB(db);
-      loadAllAdminData();
-    }
-  };
-
-  // Generate monthly payroll report
-  const handleGeneratePayroll = () => {
-    if (employees.length === 0) {
-      alert('Primero registre empleados para poder generar una planilla mensual.');
-      return;
-    }
-
-    const db = getDB();
-    const currentMonth = payrollMonth;
-    let empsToProcess = db.employees.filter(e => e && e.active);
-    if (payrollEmployeeId !== 'all') {
-      empsToProcess = empsToProcess.filter(e => e && e.id === payrollEmployeeId);
-    }
-
-    let generatedCount = 0;
-
-    empsToProcess.forEach(emp => {
-    if (!emp) return;
-      const exists = db.payroll.some(p => p && p.employeeId === emp.id && p.month === currentMonth);
-      if (exists) return;
-
-      const salary = emp.baseSalary;
-      const remoteSub = emp.remoteBonus || 0;
-      const ccssEmp = Math.round(salary * 0.0967);
-      const ccssPat = Math.round(salary * 0.2633);
-      const ins = Math.round(salary * 0.015);
-      const lptEmp = Math.round(salary * 0.01);
-      const lptPat = Math.round(salary * 0.015);
-      const fcl = Math.round(salary * 0.03);
-      
-      let renta = 0;
-      if (salary > 941000) {
-        renta = Math.round((salary - 941000) * 0.10);
-      }
-
-      const neto = salary - ccssEmp - lptEmp - renta + remoteSub;
-      const totalLaboral = salary + ccssPat + ins + lptPat + fcl + remoteSub;
-
-      db.payroll.push({
-        id: `PAY-${Math.floor(10000 + Math.random() * 90000)}`,
-        employeeId: emp.id,
-        employeeName: emp.name,
-        month: currentMonth,
-        baseSalary: salary,
-        ccssTrabajador: ccssEmp,
-        ccssPatrono: ccssPat,
-        insSeguro: ins,
-        lptTrabajador: lptEmp,
-        lptPatrono: lptPat,
-        fclPatrono: fcl,
-        retencionRenta: renta,
-        bonos: remoteSub,
-        horasExtra: 0,
-        salarioNeto: neto,
-        costoLaboralTotal: totalLaboral,
-        status: 'Pagado'
-      });
-      generatedCount++;
-    });
-
-    if (generatedCount === 0) {
-      alert(`Ya se generó la planilla para ${payrollEmployeeId === 'all' ? 'todos los empleados' : 'este empleado'} en el mes ${currentMonth}.`);
-      return;
-    }
-
-    db.audit_log.unshift({
-      id: `LOG-${Date.now()}`,
-      userEmail: currentUser?.email || 'admin',
-      module: 'Contabilidad',
-      action: 'Generar Planilla',
-      detail: `Planilla para ${generatedCount} empleado(s) en ${currentMonth} generada exitosamente.`,
-      timestamp: new Date().toISOString()
-    });
-    
-    saveDB(db);
-    loadAllAdminData();
-    alert(`Se generó exitosamente la planilla para ${generatedCount} empleado(s).`);
-  };
-
   // Credit Note returns
   const handleIssueCreditNote = async (orderId: string) => {
     if (!window.confirm('¿Desea generar una Nota de Crédito fiscal (NC-001) para esta factura? Esto reintegrará automáticamente el stock a bodega.')) {
@@ -1128,7 +859,6 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
       return items.filter(it => it && isOwner || hasPermission(it.id));
     } else {
       const items = [
-        { id: 'empleados', label: 'Personal y Nómina', icon: Users },
         { id: 'facturacion', label: 'Contabilidad y FAC', icon: FileSpreadsheet },
         { id: 'cumplimiento', label: 'Cumplimiento Legal', icon: ShieldCheck },
         { id: 'marketing', label: 'Marketing y Banners', icon: Megaphone },
@@ -1166,7 +896,6 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
     {
       title: "Servicios & Finanzas",
       items: [
-        { id: 'empleados', label: 'Personal y Nómina', icon: Users },
         { id: 'facturacion', label: 'Contabilidad y FAC', icon: FileSpreadsheet },
         { id: 'cumplimiento', label: 'Cumplimiento Legal', icon: ShieldCheck },
         { id: 'marketing', label: 'Marketing y Banners', icon: Megaphone },
@@ -1622,398 +1351,6 @@ const handleToggleEmployeeState = (empId: string, name: string, currentState: bo
           ) : (
              <div className="p-8 text-center text-rose-500 font-bold">Acceso denegado. Permisos insuficientes.</div>
           )
-        )}
-        {activeTab === 'empleados' && (
-          /* MODULE D: EMPLEADOS Y NÓMINAS */
-          <div className="space-y-6" id="view-empleados">
-            <div className="flex justify-between items-center border-b border-[var(--border-color)]/50 pb-3">
-              <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <Users className="w-5 h-5 text-sky-500 dark:text-[var(--brand-gold-light)]" /> Planilla Mensual y Cargas Sociales CCSS (Recursos Humanos)
-              </h3>
-              <button
-                onClick={() => setShowEmployeeForm(!showEmployeeForm)}
-                className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-[var(--text-primary)] font-bold text-sm px-4 py-2 rounded-xl transition"
-              >
-                {showEmployeeForm ? 'Ocultar Formulario' : 'Registrar Nuevo Colaborador'}
-              </button>
-            </div>
-
-            {/* EMPLOYEE CREATION/EDITING FORM */}
-            {showEmployeeForm && (
-              <form onSubmit={handleEmployeeSubmit} className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-6 space-y-4">
-                <h4 className="text-sm font-bold uppercase text-sky-400 dark:text-[var(--brand-gold-light)] pb-2 border-b border-[var(--border-color)]/50">
-                  {editingEmployeeId ? 'Ficha de Modificación de Colaborador' : 'Ficha de Empleo Oficial de Costa Rica'}
-                </h4>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Nombre Completo del Colaborador</label>
-                    <input
-                      type="text"
-                      required
-                      value={empName}
-                      onChange={(e) => setEmpName(e.target.value)}
-                      placeholder="Ej. Manuel Solano Rojas"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Correo Institucional</label>
-                    <input
-                      type="email"
-                      required
-                      value={empEmail}
-                      onChange={(e) => setEmpEmail(e.target.value)}
-                      placeholder="manuel@technoverse.com"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
-                    />
-                  </div>
-                </div>
-
-                <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                  <div className="md:col-span-3">
-                    <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Rol Operativo (RBAC en Casa)</label>
-                    <select
-                      value={empRole}
-                      onChange={(e: any) => setEmpRole(e.target.value)}
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none"
-                    >
-                      <option value="Soporte">Soporte (Chat Remoto)</option>
-                      <option value="Técnico">Técnico Especialista (Remoto / Taller)</option>
-                      <option value="Bodega">Auxiliar Doméstico (Stock en casa)</option>
-                      <option value="Contabilidad">Contabilidad (Por horas)</option>
-                      <option value="Marketing">Marketing (Gestión Digital)</option>
-                      <option value="Repartidor">Mensajero / Gestor legal (Por horas)</option>
-                      <option value="Oficial de Cumplimiento">Gestor de Cumplimiento Legal</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Salario Base (CRC)</label>
-                    <input
-                      type="number"
-                      min="350000"
-                      required
-                      value={empSalary}
-                      onChange={(e) => setEmpSalary(Math.max(1, parseInt(e.target.value) || 0))}
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Subsidio Luz/Internet (Remoto)</label>
-                    <input
-                      type="number"
-                      min="0"
-                      required
-                      value={empRemoteBonus}
-                      onChange={(e) => setEmpRemoteBonus(Math.max(0, parseInt(e.target.value) || 0))}
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
-                    />
-                  </div>
-                  <div className="md:col-span-2">
-                    <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Tipo de Contrato</label>
-                    <select
-                      value={empContract}
-                      onChange={(e: any) => setEmpContract(e.target.value)}
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none"
-                    >
-                      <option value="Indefinido">Tiempo Indefinido</option>
-                      <option value="Temporal">Tiempo Temporal</option>
-                      <option value="Servicios Profesionales">Servicios Profesionales</option>
-                    </select>
-                  </div>
-                  <div className="md:col-span-3">
-                    <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Contraseña de Acceso</label>
-                    <div className="flex gap-1.5">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        required
-                        value={empPassword}
-                        onChange={(e) => setEmpPassword(e.target.value)}
-                        placeholder="Mínimo 6 caracteres"
-                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const passHex = Math.floor(100000 + Math.random() * 900000).toString();
-                          setEmpPassword(`Emp-${passHex}`);
-                        }}
-                        className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white font-bold text-[10px] px-2.5 py-1.5 rounded-xl transition cursor-pointer shrink-0 dark:text-slate-950"
-                      >
-                        Generar
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="bg-slate-200 hover:bg-slate-300 text-[var(--text-secondary)] font-bold text-[10px] px-2.5 py-1.5 rounded-xl transition cursor-pointer shrink-0"
-                      >
-                        {showPassword ? 'Ocultar' : 'Mostrar'}
-                      </button>
-                    </div>
-                  </div>
-                </div>
-
-                <div className="flex gap-3">
-                  <button
-                    type="submit"
-                    className="flex-1 bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-[var(--text-primary)] font-bold text-sm py-3 rounded-xl uppercase tracking-wider transition cursor-pointer"
-                  >
-                    {editingEmployeeId ? 'Guardar Cambios del Colaborador' : 'Registrar Colaborador y Emitir Credenciales'}
-                  </button>
-                  {editingEmployeeId && (
-                    <button
-                      type="button"
-                      onClick={handleCancelEmployeeEdit}
-                      className="bg-slate-200 hover:bg-slate-300 text-[var(--text-secondary)] font-bold text-sm py-3 px-6 rounded-xl uppercase tracking-wider transition cursor-pointer"
-                    >
-                      Cancelar Edición
-                    </button>
-                  )}
-                </div>
-
-                {generatedEmpPass && !editingEmployeeId && (
-                  <div className="bg-[var(--bg-surface)] p-4 border border-dashed border-emerald-500 dark:border-[var(--brand-gold-mid)]/50 rounded-xl space-y-2 text-center">
-                    <h5 className="text-emerald-400 dark:text-[var(--brand-gold-light)] text-sm font-bold">¡Credenciales de Seguridad Autogeneradas!</h5>
-                    <p className="text-[10px] text-[var(--text-secondary)]">Por motivos de seguridad informática, copie estos datos de inmediato ya que no volverán a mostrarse:</p>
-                    <div className="flex flex-col sm:flex-row justify-center items-center gap-4 sm:gap-12 mt-2">
-                      <div>
-                        <span className="text-[9px] text-[var(--text-secondary)] uppercase font-bold block mb-1">Contraseña de Empleado</span>
-                        <span className="font-mono text-base font-bold text-[var(--text-primary)] tracking-widest">{generatedEmpPass}</span>
-                      </div>
-                    </div>
-                  </div>
-                )}
-              </form>
-            )}
-
-            {/* Employees Table */}
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden p-5 space-y-4">
-              <span className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] block">Personal Contratado</span>
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-surface)] text-[var(--text-secondary)] font-mono">
-                      <th className="p-3">Colaborador</th>
-                      <th className="p-3">Rol en Domicilio / Horas</th>
-                      <th className="p-3 text-right">Salario Base</th>
-                      <th className="p-3 text-right">Subsidio Remoto</th>
-                      <th className="p-3 text-center">Tipo Contrato</th>
-                      <th className="p-3 text-center">Fecha Ingreso</th>
-                      <th className="p-3 text-center">Acciones</th>
-                    </tr>
-                  </thead>
-                  <PaginatedTbody items={employees} itemsPerPage={10} renderItem={(emp) => ( 
-                        <tr key={emp.id} className="hover:bg-[var(--bg-surface)] transition">
-                          <td className="p-3 font-bold text-[var(--text-primary)]">{emp.name}</td>
-                          <td className="p-3">
-                            <span className="bg-[var(--brand-gold-mid)]/10 text-sky-600 dark:text-[var(--brand-gold-light)] border border-sky-500 dark:border-[var(--brand-gold-mid)]/20 px-2 py-0.5 rounded font-bold uppercase text-[9px]">
-                              {emp.role === 'Bodega' ? 'Auxiliar Domicilio' : emp.role === 'Repartidor' ? 'Mensajero Legal' : emp.role}
-                            </span>
-                          </td>
-                          <td className="p-3 text-right font-mono">₡{emp.baseSalary.toLocaleString()}</td>
-                          <td className="p-3 text-right font-mono text-emerald-600 font-semibold dark:text-[var(--brand-gold-light)]">₡{(emp.remoteBonus ?? 0).toLocaleString()}</td>
-                          <td className="p-3 text-center text-[var(--text-secondary)] text-[11px]">{emp.contractType}</td>
-                          <td className="p-3 text-center font-mono text-[10px] text-[var(--text-secondary)]">{emp.dateJoined}</td>
-                          <td className="p-3 text-center flex items-center justify-center gap-2">
-                            <button
-                              onClick={() => handleEditEmployeeClick(emp)}
-                              className="bg-sky-500 border border-sky-500 dark:border-[var(--brand-gold-mid)] text-sky-600 dark:text-[var(--brand-gold-light)] font-bold text-[10px] uppercase px-2 py-1 rounded transition hover:bg-sky-500 dark:hover:bg-[var(--brand-gold-mid)] dark:bg-[var(--brand-gold-mid)]/20 cursor-pointer"
-                            >
-                              Editar
-                            </button>
-                            <button
-                              onClick={() => handleToggleEmployeeState(emp.id, emp.name, emp.active)}
-                              className={`text-[9px] font-bold px-2 py-1 rounded uppercase tracking-wider cursor-pointer ${
-                                emp.active 
-                                  ? 'bg-emerald-500 dark:bg-[var(--brand-gold-mid)]/15 border border-emerald-500 dark:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)] text-emerald-600 dark:text-[var(--brand-gold-light)]' 
-                                  : 'bg-rose-500/15 border border-rose-500 text-rose-600'
-                              }`}
-                            >
-                              {emp.active ? 'Activo' : 'Suspendido'}
-                            </button>
-                          </td>
-                         </tr> )} />
-                </table>
-              </div>
-            </div>
-
-            {/* Monthly Payroll Generator */}
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 space-y-4">
-              <div className="flex justify-between items-center border-b border-[var(--border-color)]/50 pb-3">
-                <div>
-                  <h4 className="text-sm font-bold uppercase text-sky-400 dark:text-[var(--brand-gold-light)]">Planilla Mensual Consolidada (Deducciones Legales de Costa Rica)</h4>
-                  <p className="text-[10px] text-[var(--text-secondary)]">Procesa salarios netos restando el 9.67% de CCSS Obrero, LPT 1%, INS y retenciones de renta según tramos.</p>
-                </div>
-                <button
-                  onClick={handleGeneratePayroll}
-                  className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-[var(--text-primary)] font-bold text-sm px-4 py-2.5 rounded-xl transition"
-                >
-                  Procesar y Cerrar Planilla Julio 2026
-                </button>
-              </div>
-
-              {payrolls.length === 0 ? (
-                <div className="py-6 text-center text-sm text-[var(--text-secondary)] italic">No hay nóminas procesadas en este mes. Presione el botón superior para generarlas en tiempo real.</div>
-              ) : (
-                <div className="space-y-3">
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-left text-[11px] border-collapse font-mono">
-                      <thead>
-                        <tr className="border-b border-[var(--border-color)]/80 text-[var(--text-secondary)]">
-                          <th className="py-2">Empleado</th>
-                          <th className="py-2 text-right">Salario Bruto</th>
-                          <th className="py-2 text-right">Subsidio Remoto</th>
-                          <th className="py-2 text-right">CCSS Obrero (9.67%)</th>
-                          <th className="py-2 text-right">Aporte CCSS Patrón (26.33%)</th>
-                          <th className="py-2 text-right">Retención Renta</th>
-                          <th className="py-2 text-right">Salario Neto</th>
-                          <th className="py-2 text-center">Acción</th>
-                        </tr>
-                      </thead>
-                      <PaginatedTbody items={payrolls} itemsPerPage={10} renderItem={(pay) => ( 
-                          <tr key={pay.id} className="hover:bg-[var(--bg-surface)] ">
-                            <td className="py-2 font-sans font-medium text-[var(--text-primary)]">{pay.employeeName}</td>
-                            <td className="py-2 text-right">₡{pay.baseSalary.toLocaleString()}</td>
-                            <td className="py-2 text-right text-emerald-400 dark:text-[var(--brand-gold-light)] font-semibold">+₡{(pay.bonos || 0).toLocaleString()}</td>
-                            <td className="py-2 text-right text-rose-400">-₡{pay.ccssTrabajador.toLocaleString()}</td>
-                            <td className="py-2 text-right text-[var(--text-secondary)]">₡{pay.ccssPatrono.toLocaleString()}</td>
-                            <td className="py-2 text-right text-rose-400">-₡{pay.retencionRenta.toLocaleString()}</td>
-                            <td className="py-2 text-right font-bold text-[var(--text-primary)]">₡{pay.salarioNeto.toLocaleString()}</td>
-                            <td className="py-2 text-center">
-                              <button
-                                onClick={() => setSelectedPaySlip(pay)}
-                                className="bg-[var(--brand-gold-mid)]/10 text-sky-400 dark:text-[var(--brand-gold-light)] border border-sky-500 dark:border-[var(--brand-gold-mid)]/20 hover:bg-[var(--brand-gold-mid)]/20 px-2.5 py-1 rounded-lg text-[10px] font-sans font-bold transition"
-                              >
-                                Ver Detalle
-                              </button>
-                            </td>
-                           </tr> )} />
-                    </table>
-                  </div>
-                  
-                  {/* Export action */}
-                  <div className="flex justify-end pt-2 border-t border-[var(--border-color)]/50">
-                    <button
-                      onClick={() => handleExportCSV(payrolls, `Planilla_${payrollMonth}`)}
-                      className="text-[10px] bg-[var(--bg-surface)] border border-[var(--border-color)]/80 hover:bg-[var(--bg-surface)] rounded-lg px-3 py-1.5 flex items-center gap-1 transition font-bold"
-                    >
-                      <Download className="w-3.5 h-3.5 text-blue-600 dark:text-[var(--brand-gold-light)]" /> Exportar Planilla Oficial CSV
-                    </button>
-                  </div>
-                </div>
-              )}
-            </div>
-
-            {/* Pay Slip Modal */}
-            {selectedPaySlip && (
-              <div className="fixed inset-0 bg-slate-900/50 flex items-center justify-center p-4 z-[100]">
-                <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl w-full max-w-lg p-6 text-[var(--text-primary)] space-y-4 shadow-sm relative animate-in fade-in zoom-in duration-150">
-                  <div className="flex justify-between items-start border-b border-[var(--border-color)]/80 pb-3">
-                    <div>
-                      <h4 className="font-bold text-sm text-sky-400 dark:text-[var(--brand-gold-light)]">Comprobante de Pago de Planilla</h4>
-                      <p className="text-[10px] text-[var(--text-secondary)] font-mono">Technoverse S.A. | Cédula Jurídica: {cedulaJuridica}</p>
-                    </div>
-                    <button
-                      onClick={() => setSelectedPaySlip(null)}
-                      className="text-sm bg-[var(--bg-surface)] hover:bg-rose-600 px-2 py-1 rounded-lg transition"
-                    >
-                      Cerrar
-                    </button>
-                  </div>
-
-                  <div className="bg-[var(--bg-surface)] p-4 border border-[var(--border-color)]/50 rounded-xl space-y-2 text-sm font-mono">
-                    <div className="flex justify-between">
-                      <span className="text-[var(--text-secondary)]">Colaborador:</span>
-                      <span className="text-[var(--text-primary)] font-bold">{selectedPaySlip.employeeName}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[var(--text-secondary)]">ID Comprobante:</span>
-                      <span className="text-blue-600 dark:text-[var(--brand-gold-light)] font-bold">{selectedPaySlip.id}</span>
-                    </div>
-                    <div className="flex justify-between">
-                      <span className="text-[var(--text-secondary)]">Periodo Fiscal:</span>
-                      <span className="text-[var(--text-primary)]">{selectedPaySlip.month} (Julio 2026)</span>
-                    </div>
-                  </div>
-
-                  <div className="space-y-2">
-                    <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] block tracking-wider">Detalle del Pago</span>
-                    
-                    <div className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-color)]/50 p-3 space-y-2 text-sm">
-                      {/* Income */}
-                      <div className="flex justify-between">
-                        <span>Salario Base Mensual</span>
-                        <span className="font-mono text-[var(--text-primary)]">₡{selectedPaySlip.baseSalary.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between text-emerald-400 dark:text-[var(--brand-gold-light)]">
-                        <span>Subsidio Teletrabajo (Internet, Luz)</span>
-                        <span className="font-mono font-bold">+₡{(selectedPaySlip.bonos || 0).toLocaleString()}</span>
-                      </div>
-
-                      <div className="border-t border-[var(--border-color)]/50 my-2"></div>
-
-                      {/* Deductions */}
-                      <div className="flex justify-between text-rose-400">
-                        <span>Carga Social CCSS Obrero (9.67%)</span>
-                        <span className="font-mono">-₡{selectedPaySlip.ccssTrabajador.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between text-rose-400">
-                        <span>Aporte LPT Obrero (1.00%)</span>
-                        <span className="font-mono">-₡{Math.round(selectedPaySlip.baseSalary * 0.01).toLocaleString()}</span>
-                      </div>
-                      {selectedPaySlip.retencionRenta > 0 && (
-                        <div className="flex justify-between text-rose-400">
-                          <span>Impuesto sobre la Renta (Tramos)</span>
-                          <span className="font-mono">-₡{selectedPaySlip.retencionRenta.toLocaleString()}</span>
-                        </div>
-                      )}
-
-                      <div className="border-t border-sky-500 dark:border-[var(--brand-gold-mid)]/20 my-2"></div>
-
-                      {/* Final Net Salary */}
-                      <div className="flex justify-between text-[var(--text-primary)] font-bold text-sm bg-[var(--brand-gold-mid)]/10 p-2.5 rounded-lg border border-sky-500 dark:border-[var(--brand-gold-mid)]/20">
-                        <span>Monto Neto Depositado</span>
-                        <span className="font-mono text-emerald-400 dark:text-[var(--brand-gold-light)]">₡{selectedPaySlip.salarioNeto.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* Employer legal costs */}
-                  <div className="space-y-2">
-                    <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] block tracking-wider">Aportes Patronales Legales (Cargas Sociales de Ley)</span>
-                    <div className="bg-[var(--bg-surface)] rounded-xl border border-[var(--border-color)]/50 p-3 text-[10px] space-y-1 text-[var(--text-secondary)] font-mono">
-                      <div className="flex justify-between">
-                        <span>CCSS Seguro de Salud y Pensiones (26.33%)</span>
-                        <span>₡{selectedPaySlip.ccssPatrono.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>INS Riesgos del Trabajo (1.50%)</span>
-                        <span>₡{selectedPaySlip.insSeguro.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Fondo de Capitalización Laboral (FCL 3.00%)</span>
-                        <span>₡{selectedPaySlip.fclPatrono.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between">
-                        <span>Aporte LPT Patrón (1.50%)</span>
-                        <span>₡{selectedPaySlip.lptPatrono.toLocaleString()}</span>
-                      </div>
-                      <div className="flex justify-between text-[var(--text-primary)] font-bold border-t border-[var(--border-color)]/50 pt-1 mt-1">
-                        <span>Costo Laboral Total Technoverse</span>
-                        <span className="text-[var(--text-primary)]">₡{selectedPaySlip.costoLaboralTotal.toLocaleString()}</span>
-                      </div>
-                    </div>
-                  </div>
-
-                  <p className="text-[8px] text-[var(--text-secondary)] text-center uppercase tracking-wide leading-relaxed">
-                    *Comprobante generado por Technoverse bajo la legislación laboral de Costa Rica. Fondos transferidos electrónicamente vía SINPE a cuentas del colaborador.
-                  </p>
-                </div>
-              </div>
-            )}
-
-          </div>
-
         )}
         {activeTab === 'clientes' && (
           /* MODULE E: CLIENTES (CRM) */
@@ -2732,6 +2069,82 @@ if (!del) return null;
                   Guardar Cambios Operativos
                 </button>
               </div>
+            </div>
+
+            {/* CREACIÓN DE USUARIOS ADMINISTRADORES */}
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-6 space-y-4" id="view-crear-usuario">
+              <div className="flex justify-between items-center pb-2 border-b border-[var(--border-color)]/50">
+                <h4 className="text-sm font-bold uppercase text-sky-400 dark:text-[var(--brand-gold-light)]">Gestión de Accesos Administrativos</h4>
+                <button
+                  type="button"
+                  onClick={() => { setShowCreateUserForm(!showCreateUserForm); setGeneratedUserPass(null); }}
+                  className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-[var(--text-primary)] font-bold text-xs px-4 py-2 rounded-xl transition"
+                >
+                  {showCreateUserForm ? 'Ocultar Formulario' : 'Crear Nuevo Usuario'}
+                </button>
+              </div>
+
+              {showCreateUserForm && (
+                <form onSubmit={handleCreateUserSubmit} className="space-y-4">
+                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                    El usuario creado recibirá acceso total (Administrador) al panel. No existen roles limitados: cualquier cuenta autenticada aquí es Administrador.
+                  </p>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Nombre Completo</label>
+                      <input
+                        type="text"
+                        value={newUserName}
+                        onChange={(e) => setNewUserName(e.target.value)}
+                        required
+                        className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                      />
+                    </div>
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Correo Electrónico</label>
+                      <input
+                        type="email"
+                        value={newUserEmail}
+                        onChange={(e) => setNewUserEmail(e.target.value)}
+                        required
+                        className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
+                      />
+                    </div>
+                  </div>
+                  <div>
+                    <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Contraseña (opcional, se genera una segura si se deja vacío)</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? 'text' : 'password'}
+                        value={newUserPassword}
+                        onChange={(e) => setNewUserPassword(e.target.value)}
+                        className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono pr-10"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
+                      >
+                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                      </button>
+                    </div>
+                  </div>
+                  <button
+                    type="submit"
+                    disabled={isCreatingUser}
+                    className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white dark:text-slate-950 font-bold text-sm px-5 py-2.5 rounded-xl transition disabled:opacity-50"
+                  >
+                    {isCreatingUser ? 'Creando...' : 'Registrar Usuario y Emitir Credenciales'}
+                  </button>
+                </form>
+              )}
+
+              {generatedUserPass && (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
+                  <span className="text-[10px] text-[var(--text-secondary)] uppercase font-bold block mb-1">Contraseña del Nuevo Administrador</span>
+                  <span className="font-mono text-sm text-[var(--text-primary)] font-bold">{generatedUserPass}</span>
+                </div>
+              )}
             </div>
           </div>
 
