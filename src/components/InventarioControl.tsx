@@ -14,7 +14,7 @@ function ProductImage({ src, alt, className = "w-10 h-10" }: { src?: string, alt
 
   if (!src || error) {
     return (
-      <div className={`${className} rounded-lg bg-[var(--bg-surface)] border border-[var(--border-color)] flex items-center justify-center text-slate-400`}>
+      <div className={`${className} rounded-lg bg-[var(--bg-surface)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-muted)]`}>
         <Package className="w-5 h-5 opacity-50" />
       </div>
     );
@@ -1067,7 +1067,7 @@ if (!m) return null;
               key={tab.id}
               onClick={() => { setActiveSubTab(tab.id as any); if (onTabChange) onTabChange(tab.id as any); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition flex-shrink-0 ${
-                activeSubTab === tab.id ? 'bg-sky-500 dark:bg-[var(--brand-gold-mid)] text-white shadow-sm' : 'text-[var(--text-secondary)] hover:text-white'
+                activeSubTab === tab.id ? 'bg-sky-500 dark:bg-[var(--brand-gold-mid)] text-white dark:text-slate-950 shadow-sm' : 'text-[var(--text-secondary)] hover:text-sky-500 dark:hover:text-[var(--brand-gold-light)]'
               }`}
             >
               <tab.icon className="w-4 h-4" /> {tab.label}
@@ -1177,27 +1177,27 @@ if (!m) return null;
                       <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-color)]/80 text-[var(--text-secondary)]">
                         {activeSubTab === 'repuestos' ? (
                           <>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400">Foto</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400">SKU</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400">Nombre</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400">Categoría</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400 text-center">Stock</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400 text-right">Precio de Costo</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400 text-center">Garantía</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400 text-right">Acciones</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)]">Foto</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)]">SKU</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)]">Nombre</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)]">Categoría</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)] text-center">Stock</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)] text-right">Precio de Costo</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)] text-center">Garantía</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)] text-right">Acciones</th>
                           </>
                         ) : (
                           <>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400">Producto</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400">SKU</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400">Categoría</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400">Precio / Costo</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400">Stock</th>
-                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400">Ubicación</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)]">Producto</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)]">SKU</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)]">Categoría</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)]">Precio / Costo</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)]">Stock</th>
+                            <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)]">Ubicación</th>
                             {isCountingMode ? (
                               <th className="p-4 font-black uppercase tracking-wider text-[10px] text-amber-500 text-right">Cant. Real</th>
                             ) : (
-                              <th className="p-4 font-black uppercase tracking-wider text-[10px] text-slate-400 text-right">Acciones</th>
+                              <th className="p-4 font-black uppercase tracking-wider text-[10px] text-[var(--text-muted)] text-right">Acciones</th>
                             )}
                           </>
                         )}
@@ -1369,7 +1369,7 @@ if (!m) return null;
                       ))}
                       {filteredProducts.length === 0 && (
                         <tr key="empty-products-row">
-                          <td colSpan={8} className="p-8 text-center text-slate-400 text-xs italic font-medium">
+                          <td colSpan={8} className="p-8 text-center text-[var(--text-muted)] text-xs italic font-medium">
                             {categoryFilter !== 'Todas' 
                               ? 'No hay productos en esta categoría.' 
                               : 'No hay productos que coincidan con los filtros.'}
@@ -1444,7 +1444,7 @@ if (!m) return null;
                                   <span className="font-mono font-bold text-sky-400 dark:text-[var(--brand-gold-light)] truncate">
                                     {h.sku} - <span className="text-[var(--text-primary)] font-sans font-normal">{h.name}</span>
                                   </span>
-                                  <span className="text-[8px] bg-[var(--border-color)] text-slate-500 px-1 py-0.5 rounded-full flex-shrink-0">{h.category}</span>
+                                  <span className="text-[8px] bg-[var(--border-color)] text-[var(--text-muted)] px-1 py-0.5 rounded-full flex-shrink-0">{h.category}</span>
                                 </div>
                               </button>
                             ))}
@@ -1591,7 +1591,7 @@ if (!m) return null;
                           placeholder="Cantidad de stock"
                           value={prodStock} 
                           onChange={e => setProdStock(e.target.value === '' ? '' : Number(e.target.value))} 
-                          className={`w-full border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] font-mono ${prodLinkedSparePartSku ? 'bg-[var(--bg-surface)] text-slate-400 cursor-not-allowed' : 'bg-[var(--bg-surface)] '}`}
+                          className={`w-full border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] font-mono ${prodLinkedSparePartSku ? 'bg-[var(--bg-surface)] text-[var(--text-muted)] cursor-not-allowed' : 'bg-[var(--bg-surface)] '}`}
                           disabled={!!prodLinkedSparePartSku}
                         />
                       </div>
@@ -1724,7 +1724,7 @@ if (!m) return null;
                       <td className="p-3 text-[var(--text-secondary)]">{new Date(m.timestamp).toLocaleString()}</td>
                       <td className="p-3 text-[var(--text-primary)] truncate max-w-[200px]" title={m.productName}>{m.productName}</td>
                       <td className="p-3">
-                        <span className="px-2 py-0.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border-color)]/50 text-slate-500">
+                        <span className="px-2 py-0.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border-color)]/50 text-[var(--text-muted)]">
                           {m.type}
                         </span>
                       </td>
@@ -1746,7 +1746,7 @@ if (!m) return null;
               
   {prodTotal > 1 && (
     <div className="flex items-center justify-between p-4 bg-[var(--bg-surface)] border-t border-[var(--border-color)]">
-      <span className="text-sm text-gray-500">Mostrando {prodStart + 1} a {Math.min(prodStart + 10, filteredProducts.length)} de {filteredProducts.length}</span>
+      <span className="text-sm text-[var(--text-muted)]">Mostrando {prodStart + 1} a {Math.min(prodStart + 10, filteredProducts.length)} de {filteredProducts.length}</span>
       <div className="flex gap-2">
         <button onClick={() => setProdPage(p => Math.max(1, p - 1))} disabled={prodPage === 1} className="px-3 py-1 bg-gray-100 rounded disabled:opacity-50">Anterior</button>
         <span className="px-3 py-1 font-bold">{prodPage} / {prodTotal}</span>
@@ -2115,7 +2115,7 @@ if (!m) return null;
                     <div className="overflow-x-auto max-h-[400px]">
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
-                          <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-color)] text-slate-400 font-black uppercase tracking-wider text-[10px]">
+                          <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-color)] text-[var(--text-muted)] font-black uppercase tracking-wider text-[10px]">
                             <th className="p-4 w-10 text-center">Sel.</th>
                             <th className="p-4 w-16">Imagen</th>
                             <th className="p-4 w-36">SKU</th>
@@ -2156,7 +2156,7 @@ if (!m) return null;
                                 <td className="p-4">
                                   <div className="flex items-center gap-2">
                                     <ProductImage src={row.imageUrl} alt={row.name} className="w-8 h-8" />
-                                    <label className="p-1 rounded bg-[var(--border-color)] hover:bg-slate-200 text-slate-500 cursor-pointer transition">
+                                    <label className="p-1 rounded bg-[var(--border-color)] hover:bg-slate-200 text-[var(--text-muted)] cursor-pointer transition">
                                       <Upload className="w-2.5 h-2.5" />
                                       <input 
                                         type="file" 
@@ -2414,7 +2414,7 @@ if (!m) return null;
                     onClick={handleImportSelected}
                     className={`px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                       isImportDisabled 
-                        ? 'bg-[var(--bg-surface)] text-slate-400 cursor-not-allowed border border-[var(--border-color)]/50' 
+                        ? 'bg-[var(--bg-surface)] text-[var(--text-muted)] cursor-not-allowed border border-[var(--border-color)]/50' 
                         : 'bg-emerald-500 dark:bg-[var(--brand-gold-mid)] hover:bg-emerald-600 dark:hover:bg-[var(--brand-gold-mid)] dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-[var(--text-primary)] shadow-sm shadow-emerald-500/10'
                     }`}
                   >

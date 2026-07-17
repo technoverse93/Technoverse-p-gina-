@@ -282,10 +282,10 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
                   }`}>
                     <div className={`max-w-[75%] rounded-xl p-3 text-sm ${
                       msg.sender === 'support' 
-                        ? 'bg-sky-500 dark:bg-[var(--brand-gold-mid)] text-white' 
+                        ? 'bg-sky-500 dark:bg-[var(--brand-gold-mid)] text-white dark:text-slate-950'
                         : msg.sender === 'bot'
                         ? 'bg-indigo-950/80 dark:bg-[var(--brand-gold-mid)]/10 border border-indigo-500/30 dark:border-[var(--brand-gold-dark)] text-indigo-200 dark:text-[var(--brand-gold-light)]'
-                        : 'bg-[var(--bg-surface)] text-slate-100'
+                        : 'bg-[var(--bg-surface)] text-[var(--text-primary)]'
                     }`}>
                       <div className="flex items-center gap-1 mb-1 text-[10px] opacity-70">
                         {msg.sender === 'support' && <Shield className="w-3 h-3" />}
@@ -309,7 +309,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Escribe tu respuesta como agente soporte..."
-                  className="flex-1 bg-[var(--bg-surface)] border border-white/10 rounded-xl px-4 py-2 text-sm text-white focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                  className="flex-1 bg-[var(--bg-surface)] border border-white/10 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
                 />
                 <button
                   type="submit"
@@ -336,7 +336,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
       {/* Floating Button */}
       <button
         onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 right-6 z-[999] w-11 h-11 bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] shadow-lg text-white rounded-full flex items-center justify-center transition hover:scale-105 active:scale-95 border-2 border-white"
+        className="fixed bottom-24 right-6 z-[999] w-11 h-11 bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] shadow-lg text-[#1a1408] dark:text-[#14100a] rounded-full flex items-center justify-center transition hover:scale-105 active:scale-95 border-2 border-white"
         id="btn-floating-chat"
       >
         <MessageSquare className="w-5 h-5" />
@@ -380,7 +380,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
                     value={clientName}
                     onChange={(e) => setClientName(e.target.value)}
                     placeholder="Ej. Juan Pérez Madrigal"
-                    className="w-full bg-[var(--bg-surface)] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
+                    className="w-full bg-[var(--bg-surface)] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
                   />
                 </div>
                 <div>
@@ -391,7 +391,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
                     value={clientEmail}
                     onChange={(e) => setClientEmail(e.target.value)}
                     placeholder="juan@gmail.com"
-                    className="w-full bg-[var(--bg-surface)] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-white focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
+                    className="w-full bg-[var(--bg-surface)] border border-white/10 rounded-xl px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
                   />
                 </div>
                 <div>
@@ -426,10 +426,10 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
                   }`}>
                     <div className={`max-w-[80%] rounded-xl p-3 text-xs ${
                       msg.sender === 'customer' 
-                        ? 'bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:bg-[var(--brand-gold-dark)] text-white' 
+                        ? 'bg-emerald-600 dark:bg-[var(--brand-gold-mid)] text-white dark:text-slate-950'
                         : msg.sender === 'bot'
                         ? 'bg-slate-900 border border-white/5 text-slate-200'
-                        : 'bg-teal-900/60 dark:bg-[var(--brand-gold-mid)]/10/20 border border-teal-500/30 dark:border-[var(--brand-gold-dark)] text-teal-100 dark:text-[var(--brand-gold-light)] dark:text-[var(--text-primary)]'
+                        : 'bg-teal-900/60 border border-teal-500/30 dark:border-[var(--brand-gold-dark)] text-teal-100 dark:text-[var(--brand-gold-light)]'
                     }`}>
                       <div className="flex items-center gap-1 mb-1 text-[9px] opacity-75">
                         {msg.sender === 'bot' ? <Bot className="w-2.5 h-2.5" /> : <User className="w-2.5 h-2.5" />}
@@ -467,7 +467,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
                   value={inputText}
                   onChange={(e) => setInputText(e.target.value)}
                   placeholder="Escribe tu mensaje aquí..."
-                  className="flex-1 bg-[var(--bg-surface)] border border-white/10 rounded-xl px-3 py-2 text-xs text-white focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
+                  className="flex-1 bg-[var(--bg-surface)] border border-white/10 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
                 />
                 <button
                   type="submit"

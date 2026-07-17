@@ -17,7 +17,7 @@ export function PaginatedTbody({ items, renderItem, itemsPerPage = 10 }) {
     return (
       <tbody>
         <tr>
-          <td colSpan={100} className="text-center py-8 text-sm text-gray-500 italic">No hay registros</td>
+          <td colSpan={100} className="text-center py-8 text-sm text-[var(--text-muted)] italic">No hay registros</td>
         </tr>
       </tbody>
     );
@@ -33,24 +33,24 @@ export function PaginatedTbody({ items, renderItem, itemsPerPage = 10 }) {
           <tr>
             <td colSpan={100} className="p-0 border-t border-[var(--border-color)]">
               <div className="flex items-center justify-between p-4 bg-[var(--bg-surface)]/95">
-                <span className="text-sm text-gray-500">
+                <span className="text-sm text-[var(--text-muted)]">
                   Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, items.length)} de {items.length}
                 </span>
                 <div className="flex items-center gap-3">
                   <button
                     onClick={() => setPage(p => Math.max(1, p - 1))}
                     disabled={page === 1}
-                    className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50 transition"
+                    className="p-1.5 rounded-lg bg-[var(--bg-base)] hover:bg-[var(--border-color)] disabled:opacity-50 transition"
                   >
-                    <ChevronLeft className="w-4 h-4 text-gray-800" />
+                    <ChevronLeft className="w-4 h-4 text-[var(--text-primary)]" />
                   </button>
-                  <span className="text-sm font-medium text-gray-800">Pág {page} de {totalPages}</span>
+                  <span className="text-sm font-medium text-[var(--text-primary)]">Pág {page} de {totalPages}</span>
                   <button
                     onClick={() => setPage(p => Math.min(totalPages, p + 1))}
                     disabled={page === totalPages}
-                    className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50 transition"
+                    className="p-1.5 rounded-lg bg-[var(--bg-base)] hover:bg-[var(--border-color)] disabled:opacity-50 transition"
                   >
-                    <ChevronRight className="w-4 h-4 text-gray-800" />
+                    <ChevronRight className="w-4 h-4 text-[var(--text-primary)]" />
                   </button>
                 </div>
               </div>
@@ -74,7 +74,7 @@ export function PaginatedGrid({ items, renderItem, itemsPerPage = 10, className 
   const visibleItems = items.slice(startIndex, startIndex + itemsPerPage);
 
   if (items.length === 0) {
-    return <div className="text-center py-8 text-sm text-gray-500 italic w-full">No hay elementos</div>;
+    return <div className="text-center py-8 text-sm text-[var(--text-muted)] italic w-full">No hay elementos</div>;
   }
 
   return (
@@ -84,24 +84,24 @@ export function PaginatedGrid({ items, renderItem, itemsPerPage = 10, className 
       </div>
       {totalPages > 1 && (
         <div className="flex items-center justify-between p-4 bg-[var(--bg-surface)]/95 border-t border-[var(--border-color)] rounded-b-2xl">
-          <span className="text-sm text-gray-500">
+          <span className="text-sm text-[var(--text-muted)]">
             Mostrando {startIndex + 1} a {Math.min(startIndex + itemsPerPage, items.length)} de {items.length}
           </span>
           <div className="flex items-center gap-3">
             <button
               onClick={() => setPage(p => Math.max(1, p - 1))}
               disabled={page === 1}
-              className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50 transition"
+              className="p-1.5 rounded-lg bg-[var(--bg-base)] hover:bg-[var(--border-color)] disabled:opacity-50 transition"
             >
-              <ChevronLeft className="w-4 h-4 text-gray-800" />
+              <ChevronLeft className="w-4 h-4 text-[var(--text-primary)]" />
             </button>
-            <span className="text-sm font-medium text-gray-800">Pág {page} de {totalPages}</span>
+            <span className="text-sm font-medium text-[var(--text-primary)]">Pág {page} de {totalPages}</span>
             <button
               onClick={() => setPage(p => Math.min(totalPages, p + 1))}
               disabled={page === totalPages}
-              className="p-1.5 rounded-lg bg-gray-100 hover:bg-gray-200 disabled:opacity-50 transition"
+              className="p-1.5 rounded-lg bg-[var(--bg-base)] hover:bg-[var(--border-color)] disabled:opacity-50 transition"
             >
-              <ChevronRight className="w-4 h-4 text-gray-800" />
+              <ChevronRight className="w-4 h-4 text-[var(--text-primary)]" />
             </button>
           </div>
         </div>

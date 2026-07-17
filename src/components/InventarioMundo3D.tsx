@@ -162,7 +162,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
             <h3 className="text-base font-bold text-[var(--text-primary)] flex items-center gap-2">
               <Home className="w-5 h-5 text-sky-400 dark:text-[var(--brand-gold-light)]" /> Control Físico de Inventario Doméstico
             </h3>
-            <p className="text-xs text-slate-500 max-w-xl mt-1 leading-relaxed">
+            <p className="text-xs text-[var(--text-muted)] max-w-xl mt-1 leading-relaxed">
               El inventario de Technoverse se almacena en la vivienda del CEO. Sin CEDIS ni muelles de carga;
               esta herramienta administra la distribución en habitaciones, armarios y estanterías del hogar de forma profesional.
             </p>
@@ -195,7 +195,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
           <div className="flex justify-between items-center mb-1.5">
             <div className="flex items-center gap-2">
               <span className="text-xs font-semibold text-[var(--text-secondary)]">Capacidad Almacenamiento Doméstico Ocupada</span>
-              <span className="text-[10px] bg-slate-800 text-slate-500 px-1.5 py-0.5 rounded font-mono">Límite: {maxStockLimit} unidades</span>
+              <span className="text-[10px] bg-slate-800 text-[var(--text-muted)] px-1.5 py-0.5 rounded font-mono">Límite: {maxStockLimit} unidades</span>
             </div>
             <span className="text-xs font-bold font-mono text-[var(--text-primary)]">{totalStock} / {maxStockLimit} un. ({occupancyPercentage}%)</span>
           </div>
@@ -236,7 +236,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
               <h4 className="text-sm font-bold text-emerald-400 dark:text-[var(--brand-gold-light)] flex items-center gap-1.5">
                 <ClipboardCheck className="w-4.5 h-4.5" /> Proceso Activo de Conteo Físico Rápido
               </h4>
-              <p className="text-[11px] text-slate-500 mt-0.5">Revise físicamente cada producto y confirme si la cantidad real en casa coincide con el sistema.</p>
+              <p className="text-[11px] text-[var(--text-muted)] mt-0.5">Revise físicamente cada producto y confirme si la cantidad real en casa coincide con el sistema.</p>
             </div>
             
             {/* Quick Filter */}
@@ -248,7 +248,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
                   className={`px-2.5 py-1 rounded-lg border font-bold transition uppercase ${
                     auditFilter === f 
                       ? 'bg-emerald-500 dark:bg-[var(--brand-gold-mid)] text-slate-950 border-emerald-500 dark:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]' 
-                      : 'bg-[var(--bg-surface)]   text-slate-500 border-[var(--border-color)]/80 hover:bg-[var(--bg-surface)]  '
+                      : 'bg-[var(--bg-surface)]   text-[var(--text-muted)] border-[var(--border-color)]/80 hover:bg-[var(--bg-surface)]  '
                   }`}
                 >
                   {f === 'todos' ? 'Todos' : f === 'sin_ubicacion' ? 'Sin Ubicación' : 'Con Diferencia'}
@@ -260,7 +260,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse">
               <thead>
-                <tr className="border-b border-[var(--border-color)]/80 text-slate-500 bg-[var(--bg-surface)] ">
+                <tr className="border-b border-[var(--border-color)]/80 text-[var(--text-muted)] bg-[var(--bg-surface)] ">
                   <th className="p-3">Producto / SKU</th>
                   <th className="p-3">Ubicación Física</th>
                   <th className="p-3 text-center">Cant. Sistema</th>
@@ -290,7 +290,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
                           <div className="font-bold text-[var(--text-primary)]">{p.name}</div>
                           <div className="text-[10px] text-sky-400 dark:text-[var(--brand-gold-light)] font-mono">{p.sku}</div>
                         </td>
-                        <td className="p-3 italic text-slate-500 text-[11px]">
+                        <td className="p-3 italic text-[var(--text-muted)] text-[11px]">
                           {p.physicalLocation || '⚠️ Sin ubicar'}
                         </td>
                         <td className="p-3 text-center font-mono font-bold text-[var(--text-secondary)]">{p.stock} un.</td>
@@ -308,7 +308,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
                         </td>
                         <td className="p-3 text-center font-mono font-bold">
                           {diff === 0 ? (
-                            <span className="text-slate-500">0</span>
+                            <span className="text-[var(--text-muted)]">0</span>
                           ) : diff > 0 ? (
                             <span className="text-emerald-400 dark:text-[var(--brand-gold-light)]">+{diff}</span>
                           ) : (
@@ -335,7 +335,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
                             onClick={() => handleApplySingleAudit(p.id)}
                             className={`px-3 py-1.5 rounded-lg text-[10px] font-bold transition flex items-center gap-1 mx-auto ${
                               diff === 0 
-                                ? 'bg-slate-800 text-slate-500 border border-[var(--border-color)]/50 cursor-not-allowed' 
+                                ? 'bg-slate-800 text-[var(--text-muted)] border border-[var(--border-color)]/50 cursor-not-allowed' 
                                 : 'bg-emerald-500 dark:bg-[var(--brand-gold-mid)] text-slate-950 hover:bg-emerald-600 dark:hover:bg-[var(--brand-gold-mid)] dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] font-extrabold cursor-pointer'
                             }`}
                             disabled={diff === 0}
@@ -360,7 +360,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
         
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
           {Object.keys(groupedProducts).length === 0 ? (
-            <div className="col-span-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 p-12 rounded-2xl text-center text-slate-500 italic">
+            <div className="col-span-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 p-12 rounded-2xl text-center text-[var(--text-muted)] italic">
               No hay productos con ubicaciones asignadas en el hogar.
             </div>
           ) : (
@@ -386,7 +386,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
                       <div key={it.id} className="flex justify-between items-center text-[11px] bg-[var(--bg-surface)] /40 p-2 rounded-lg border border-[var(--border-color)]/50">
                         <div className="truncate max-w-[120px]">
                           <span className="font-bold text-[var(--text-secondary)] text-xs block truncate">{it.name}</span>
-                          <span className="font-mono text-[9px] text-slate-500">{it.sku}</span>
+                          <span className="font-mono text-[9px] text-[var(--text-muted)]">{it.sku}</span>
                         </div>
                         <div className="text-right flex-shrink-0">
                           <span className={`font-mono font-bold block ${it.stock <= 3 ? 'text-rose-400' : 'text-emerald-400 dark:text-[var(--brand-gold-light)]'}`}>
@@ -410,7 +410,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
                 {/* Quick relocation form inline */}
                 {editingLocationProductId && items.some(it => it.id === editingLocationProductId) && (
                   <div className="mt-4 pt-3 border-t border-[var(--border-color)]/50 space-y-2 bg-[var(--bg-surface)] /60 p-2.5 rounded-xl border border-[var(--border-color)]/80">
-                    <label className="block text-[9px] uppercase font-bold text-slate-500">Nueva ubicación en casa</label>
+                    <label className="block text-[9px] uppercase font-bold text-[var(--text-muted)]">Nueva ubicación en casa</label>
                     <div className="flex gap-2">
                       <input
                         type="text"
@@ -444,7 +444,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
           <div className="overflow-x-auto">
             <table className="w-full text-left text-xs border-collapse font-mono leading-relaxed">
               <thead>
-                <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-surface)] text-slate-500">
+                <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-surface)] text-[var(--text-muted)]">
                   <th className="p-3">Código Movimiento</th>
                   <th className="p-3">Artículo</th>
                   <th className="p-3 text-center">Cambio Cant.</th>
@@ -457,7 +457,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
               <tbody className="divide-y divide-white/5 text-[var(--text-secondary)]">
                 {movements.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="text-center py-6 text-slate-500 italic">No hay registros de movimientos en el historial.</td>
+                    <td colSpan={7} className="text-center py-6 text-[var(--text-muted)] italic">No hay registros de movimientos en el historial.</td>
                   </tr>
                 ) : (
                   movements.slice(0, 10).map(m => {
@@ -466,7 +466,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
                     
                     return (
                       <tr key={m.id} className="hover:bg-[var(--bg-surface)] ">
-                        <td className="p-3 text-slate-500 text-[10px]">{m.id}</td>
+                        <td className="p-3 text-[var(--text-muted)] text-[10px]">{m.id}</td>
                         <td className="p-3">
                           <span className="font-bold text-[var(--text-primary)] block">{m.productName}</span>
                         </td>
@@ -487,10 +487,10 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
                           </span>
                         </td>
                         <td className="p-3 text-sky-300 dark:text-[var(--brand-gold-light)] font-semibold">{loc}</td>
-                        <td className="p-3 text-slate-500 text-[11px] max-w-xs truncate" title={m.notes}>{m.notes}</td>
+                        <td className="p-3 text-[var(--text-muted)] text-[11px] max-w-xs truncate" title={m.notes}>{m.notes}</td>
                         <td className="p-3">
                           <div className="text-[10px] font-medium text-[var(--text-secondary)]">{m.userEmail}</div>
-                          <div className="text-[9px] text-slate-500">{new Date(m.timestamp).toLocaleDateString()} {new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                          <div className="text-[9px] text-[var(--text-muted)]">{new Date(m.timestamp).toLocaleDateString()} {new Date(m.timestamp).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
                         </td>
                       </tr>
                     );
