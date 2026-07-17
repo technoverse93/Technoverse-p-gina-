@@ -418,7 +418,7 @@ export default function PublicStore({
     setStoreLogo(freshDb.settings?.storeLogo || null);
     // Filter out spare part categories from public store
     const SPARE_PART_CATEGORIES = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
-    setProducts((freshDb.products || []).filter(p => p && p.active !== false && p.stock > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
+    setProducts((freshDb.products || []).filter(p => p && p.active !== false && Number(p.stock) > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
     setBanners(freshDb.banners ? freshDb.banners.filter(b => b && b.active) : []);
   };
 
