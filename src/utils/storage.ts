@@ -1,7 +1,7 @@
 import { supabase } from '../supabaseClient';
 import {
   User, Product, InventoryMovement, RepairOrder, Order,
-  MembershipTier, ChatConversation, ChatMessage, Employee, Payroll,
+  MembershipTier, ChatConversation, ChatMessage,
   AuditLog, ClientProfile, LogisticsDelivery, MarketingCampaign,
   AppSettings, Banner, HistoricalSku
 } from '../types';
@@ -22,8 +22,6 @@ interface Database {
   orders: Order[];
   membership_tiers: MembershipTier[];
   chat_conversations: ChatConversation[];
-  employees: Employee[];
-  payroll: Payroll[];
   audit_log: AuditLog[];
   clients: ClientProfile[];
   deliveries: LogisticsDelivery[];
@@ -41,8 +39,8 @@ function getDefaultDB(): Database {
   return {
     users: [{ id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' }],
     products: [], inventory_movements: [], repair_orders: [], orders: [],
-    membership_tiers: DEFAULT_MEMBERSHIPS, chat_conversations: [], employees: [],
-    payroll: [], audit_log: [], clients: [], deliveries: [], marketing_campaigns: [],
+    membership_tiers: DEFAULT_MEMBERSHIPS, chat_conversations: [],
+    audit_log: [], clients: [], deliveries: [], marketing_campaigns: [],
     banners: DEFAULT_BANNERS, settings: DEFAULT_SETTINGS, historical_skus: []
   };
 }
@@ -264,39 +262,6 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
       id: r.id, name: r.name, price: r.price || 0, discountPercent: r.discount_percent || 0,
       shippingSJ: r.shipping_sj || 0, shippingOther: r.shipping_other || 0, active: r.active !== false,
       features: r.features || []
-    })
-  }),
-  configFor<Employee>({
-    key: 'employees', table: 'employees', idKey: 'id',
-    toRow: (e) => ({
-      id: e.id, profile_id: e.profileId || null, name: e.name || '', email: e.email || '',
-      role: e.role, active: e.active !== false, base_salary: e.baseSalary || 0,
-      contract_type: e.contractType, date_joined: e.dateJoined || new Date().toISOString().split('T')[0],
-      remote_bonus: e.remoteBonus || 0
-    }),
-    fromRow: (r): Employee => ({
-      id: r.id, name: r.name || '', email: r.email || '', role: r.role, active: r.active !== false,
-      baseSalary: r.base_salary || 0, contractType: r.contract_type, dateJoined: r.date_joined,
-      remoteBonus: r.remote_bonus || 0, profileId: r.profile_id || undefined
-    } as Employee)
-  }),
-  configFor<Payroll>({
-    key: 'payroll', table: 'payroll', idKey: 'id',
-    toRow: (p) => ({
-      id: p.id, employee_id: p.employeeId || '', employee_name: p.employeeName || '', month: p.month,
-      base_salary: p.baseSalary || 0, ccss_trabajador: p.ccssTrabajador || 0, ccss_patrono: p.ccssPatrono || 0,
-      ins_seguro: p.insSeguro || 0, lpt_trabajador: p.lptTrabajador || 0, lpt_patrono: p.lptPatrono || 0,
-      fcl_patrono: p.fclPatrono || 0, retencion_renta: p.retencionRenta || 0, bonos: p.bonos || 0,
-      horas_extra: p.horasExtra || 0, salario_neto: p.salarioNeto || 0, costo_laboral_total: p.costoLaboralTotal || 0,
-      status: p.status
-    }),
-    fromRow: (r): Payroll => ({
-      id: r.id, employeeId: r.employee_id || '', employeeName: r.employee_name || '', month: r.month,
-      baseSalary: r.base_salary || 0, ccssTrabajador: r.ccss_trabajador || 0, ccssPatrono: r.ccss_patrono || 0,
-      insSeguro: r.ins_seguro || 0, lptTrabajador: r.lpt_trabajador || 0, lptPatrono: r.lpt_patrono || 0,
-      fclPatrono: r.fcl_patrono || 0, retencionRenta: r.retencion_renta || 0, bonos: r.bonos || 0,
-      horasExtra: r.horas_extra || 0, salarioNeto: r.salario_neto || 0, costoLaboralTotal: r.costo_laboral_total || 0,
-      status: r.status
     })
   }),
   configFor<AuditLog>({
