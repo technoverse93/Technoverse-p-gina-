@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { ChatConversation, User } from '../../types';
 import { getDB, saveDB, addAuditLog } from '../../utils/storage';
@@ -18,6 +18,14 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ChatStatusFilter>('nuevo');
   const [staffEmails, setStaffEmails] = useState<string[]>([]);
+  // Si el admin sale de la pestaña Chat CRM mientras una escritura (asignar,
+  // cambiar estado, enviar mensaje, resolver) sigue en curso, no se debe
+  // tocar el estado de este componente ya desmontado.
+  const isMountedRef = useRef(true);
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   const loadConversations = useCallback(() => {
     const db = getDB();
@@ -50,12 +58,16 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
     try {
       await saveDB(db);
     } catch (err: any) {
-      alert('No se pudo guardar el cambio en la base de datos. Detalle: ' + (err?.message || err));
-      loadConversations();
+      if (isMountedRef.current) {
+        alert('No se pudo guardar el cambio en la base de datos. Detalle: ' + (err?.message || err));
+        loadConversations();
+      }
       return false;
     }
-    loadConversations();
-    onDataChanged?.();
+    if (isMountedRef.current) {
+      loadConversations();
+      onDataChanged?.();
+    }
     return true;
   };
 
@@ -99,10 +111,11 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
     try {
       await saveDB(db);
     } catch (err: any) {
-      alert('No se pudo eliminar la conversación. Detalle: ' + (err?.message || err));
+      if (isMountedRef.current) alert('No se pudo eliminar la conversación. Detalle: ' + (err?.message || err));
       return;
     }
     addAuditLog(currentUser?.email || 'admin', 'Soporte', 'Chat Resuelto (Hard Delete)', `Conversación de ${conv?.customerName || convId} eliminada permanentemente junto con sus mensajes.`);
+    if (!isMountedRef.current) return;
     if (selectedConvId === convId) setSelectedConvId(null);
     loadConversations();
     onDataChanged?.();

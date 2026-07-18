@@ -22,10 +22,19 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   const [showMenu, setShowMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // La subida de imagen es asíncrona (lectura + compresión + Storage); si el
+  // admin cambia de conversación o sale del módulo antes de que termine, no
+  // se debe tocar el estado de un componente ya desmontado.
+  const isMountedRef = useRef(true);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [conversation.messages.length]);
+
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => { isMountedRef.current = false; };
+  }, []);
 
   const handleSendText = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -57,9 +66,9 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
       const { data } = supabase.storage.from('chat-images').getPublicUrl(path);
       await onSendMessage(conversation.id, { text: '', imageUrl: data.publicUrl });
     } catch (err: any) {
-      alert('No se pudo subir la imagen. Detalle: ' + (err?.message || err));
+      if (isMountedRef.current) alert('No se pudo subir la imagen. Detalle: ' + (err?.message || err));
     } finally {
-      setUploading(false);
+      if (isMountedRef.current) setUploading(false);
     }
   };
 
@@ -171,4 +180,4 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
       </form>
     </>
   );
-  }
+}
