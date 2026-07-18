@@ -29,12 +29,21 @@ export default function LiveChat() {
   const [chatError, setChatError] = useState<string | null>(null);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  // Temporizadores pendientes de las respuestas simuladas del bot: si el
+  // componente se desmonta (ej. el cliente navega al panel admin) antes de
+  // que disparen, deben cancelarse para no tocar estado de un componente
+  // desmontado ni seguir gastando RAM/CPU en segundo plano.
+  const botTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     loadConversations();
     const handleUpdate = () => loadConversations();
     window.addEventListener('technoverse_db_updated', handleUpdate);
-    return () => window.removeEventListener('technoverse_db_updated', handleUpdate);
+    return () => {
+      window.removeEventListener('technoverse_db_updated', handleUpdate);
+      botTimeoutsRef.current.forEach(id => clearTimeout(id));
+      botTimeoutsRef.current = [];
+    };
   }, []);
 
   const loadConversations = () => {
@@ -142,7 +151,7 @@ export default function LiveChat() {
       );
 
       if (matchedFAQ) {
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
           const updatedDb = getDB();
           const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
           const freshConv = updatedDb.chat_conversations[freshIdx];
@@ -157,9 +166,10 @@ export default function LiveChat() {
             loadConversations();
           }
         }, 1000);
+        botTimeoutsRef.current.push(timeoutId);
       } else {
         // Standard placeholder reply if no match
-        setTimeout(() => {
+        const timeoutId = setTimeout(() => {
           const updatedDb = getDB();
           const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
           const freshConv = updatedDb.chat_conversations[freshIdx];
@@ -174,6 +184,7 @@ export default function LiveChat() {
             loadConversations();
           }
         }, 1500);
+        botTimeoutsRef.current.push(timeoutId);
       }
     }
   };
