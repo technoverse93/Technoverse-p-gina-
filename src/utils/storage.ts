@@ -602,6 +602,19 @@ async function syncSettingsToSupabase(newSettings: AppSettings) {
 
 // ===================== Arranque =====================
 
+// Recarga todas las tablas protegidas por RLS. Las tablas se cargan una vez al
+// arrancar la app, cuando aún NO hay sesión (anónimo). Tablas con RLS que
+// bloquean al anónimo — como client_profiles (solo staff/dueño la ven) — quedan
+// vacías. Cuando el admin inicia sesión, hay que volver a leerlas con la sesión
+// autenticada; si no, el panel muestra "No hay registros" pese a existir datos.
+function refreshAllTables() {
+  TABLE_CONFIGS.forEach((cfg) => {
+    coalesce(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg));
+  });
+  coalesce('chat', () => refreshChatFromSupabase());
+  coalesce('settings', () => refreshSettingsFromSupabase());
+}
+
 let started = false;
 export function initFirebaseSync() {
   if (started) return;
@@ -612,6 +625,16 @@ export function initFirebaseSync() {
   initChatRealtimeSync();
   initSettingsRealtimeSync();
   initRealtimeChannel();
+
+  // Al iniciar/cerrar sesión cambian los permisos RLS (ej. el admin pasa a ver
+  // client_profiles). Se relee todo en esos momentos para reflejar lo que el
+  // usuario ahora sí puede ver. Se ignora TOKEN_REFRESHED (no cambia permisos)
+  // y el INITIAL_SESSION anónimo (ya cubierto por la carga inicial de arriba).
+  supabase.auth.onAuthStateChange((event, session) => {
+    if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && session)) {
+      refreshAllTables();
+    }
+  });
 }
 
 if (typeof window !== 'undefined') {
