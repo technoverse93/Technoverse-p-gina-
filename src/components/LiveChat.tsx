@@ -26,7 +26,8 @@ export default function LiveChat() {
   const [clientName, setClientName] = useState('');
   const [clientEmail, setClientEmail] = useState('');
   const [isRegistered, setIsRegistered] = useState(false);
-  
+  const [chatError, setChatError] = useState<string | null>(null);
+
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -47,9 +48,10 @@ export default function LiveChat() {
     }
   }, [conversations, activeConvId, isOpen]);
 
-  const handleRegister = (e: React.FormEvent) => {
+  const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientName.trim() || !clientEmail.trim()) return;
+    setChatError(null);
 
     const db = getDB();
     // Check if there is an ongoing (not yet resolved) conversation for this email
@@ -71,26 +73,36 @@ export default function LiveChat() {
         unreadCount: 0
       };
       db.chat_conversations.push(conv);
-      saveDB(db);
+      try {
+        await saveDB(db);
+      } catch {
+        // Un fallo aquí (ej. app desactualizada, sin conexión) no debe dejar
+        // al cliente en una pantalla rota: se avisa y se puede reintentar.
+        setChatError('No se pudo iniciar el chat. Verifica tu conexión e intenta de nuevo.');
+        loadConversations();
+        return;
+      }
     }
-    
+
     setActiveConvId(conv.id);
     setIsRegistered(true);
     loadConversations();
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
+  const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!inputText.trim() || !activeConvId) return;
+    setChatError(null);
 
     const db = getDB();
     const convIndex = db.chat_conversations.findIndex(c => c.id === activeConvId);
     if (convIndex === -1) return;
 
+    const messageText = inputText.trim();
     const userMsg: ChatMessage = {
       id: `MSG-${Date.now()}`,
       sender: 'customer',
-      text: inputText.trim(),
+      text: messageText,
       timestamp: new Date().toISOString()
     };
 
@@ -103,8 +115,24 @@ export default function LiveChat() {
     const conv = db.chat_conversations[convIndex];
     const botActive = !conv.assignedAdminEmail && conv.status === 'nuevo';
 
+    setInputText('');
+
+    try {
+      await saveDB(db);
+    } catch {
+      // Fallo real de guardado: se avisa al cliente y se le devuelve su texto
+      // para que pueda reintentar, en vez de que el mensaje desaparezca sin
+      // explicación (y sin disparar el bot sobre un mensaje que nunca llegó).
+      setChatError('No se pudo enviar tu mensaje. Verifica tu conexión e intenta de nuevo.');
+      setInputText(messageText);
+      loadConversations();
+      return;
+    }
+
+    loadConversations();
+
     if (botActive) {
-      const lowerText = inputText.toLowerCase();
+      const lowerText = messageText.toLowerCase();
       let matchedFAQ = FAQ_DATA.find(faq =>
         lowerText.includes(faq.q.toLowerCase()) ||
         lowerText.includes(faq.q.split(' ')[1]) || // simple keyword match
@@ -148,14 +176,11 @@ export default function LiveChat() {
         }, 1500);
       }
     }
-
-    saveDB(db);
-    setInputText('');
-    loadConversations();
   };
 
-  const handleFAQClick = (faq: typeof FAQ_DATA[0]) => {
+  const handleFAQClick = async (faq: typeof FAQ_DATA[0]) => {
     if (!activeConvId) return;
+    setChatError(null);
     const db = getDB();
     const convIndex = db.chat_conversations.findIndex(c => c.id === activeConvId);
     if (convIndex === -1) return;
@@ -174,7 +199,11 @@ export default function LiveChat() {
       timestamp: new Date().toISOString()
     });
 
-    saveDB(db);
+    try {
+      await saveDB(db);
+    } catch {
+      setChatError('No se pudo enviar tu consulta. Verifica tu conexión e intenta de nuevo.');
+    }
     loadConversations();
   };
 
@@ -214,6 +243,15 @@ export default function LiveChat() {
               <X className="w-5 h-5" />
             </button>
           </div>
+
+          {chatError && (
+            <div className="px-4 py-2 bg-rose-950/80 border-b border-rose-500/40 text-rose-200 text-[11px] flex items-center justify-between gap-2">
+              <span>{chatError}</span>
+              <button type="button" onClick={() => setChatError(null)} className="shrink-0 text-rose-300 hover:text-white">
+                <X className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          )}
 
           {!isRegistered ? (
             /* Registration Screen */
