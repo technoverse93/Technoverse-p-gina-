@@ -552,6 +552,21 @@ function initSettingsRealtimeSync() {
   refreshSettingsFromSupabase().then(() => { settingsReady = true; });
 }
 
+// Coalescing de recargas por Realtime: un mismo guardado suele disparar varios
+// eventos postgres_changes seguidos (varias filas, o INSERT+UPDATE). Sin esto,
+// CADA evento lanzaba un .select('*') de la tabla ENTERA — descargas y parseos
+// redundantes que saturan la RAM/CPU de un equipo como el Galaxy A12. Ahora los
+// eventos de una misma clave se agrupan en UNA sola recarga tras una ventana
+// corta de silencio (200 ms), imperceptible para el usuario.
+const coalesceTimers: Record<string, ReturnType<typeof setTimeout>> = {};
+function coalesce(key: string, fn: () => void, delay = 200) {
+  if (coalesceTimers[key]) clearTimeout(coalesceTimers[key]);
+  coalesceTimers[key] = setTimeout(() => {
+    delete coalesceTimers[key];
+    fn();
+  }, delay);
+}
+
 // Antes cada tabla abría su PROPIO canal/websocket (17 canales en total:
 // 15 tablas + chat + settings). Abrir tantos canales por separado desde un
 // mismo cliente es innecesario y poco confiable: algunos podían tardar en
@@ -564,14 +579,14 @@ function initRealtimeChannel() {
 
   TABLE_CONFIGS.forEach((cfg) => {
     channel.on('postgres_changes', { event: '*', schema: 'public', table: cfg.table }, () => {
-      refreshTableFromSupabase(cfg);
+      coalesce(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg));
     });
   });
 
   channel
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations' }, () => refreshChatFromSupabase())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => refreshChatFromSupabase())
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => refreshSettingsFromSupabase())
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations' }, () => coalesce('chat', () => refreshChatFromSupabase()))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => coalesce('chat', () => refreshChatFromSupabase()))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => coalesce('settings', () => refreshSettingsFromSupabase()))
     .subscribe();
 }
 
