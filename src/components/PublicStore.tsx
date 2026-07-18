@@ -284,12 +284,23 @@ export default function PublicStore({
 
     const cleanEmail = regEmail.trim().toLowerCase();
 
-    // Supabase Auth crea la cuenta y, mediante un trigger en la base de datos,
-    // genera automáticamente el perfil correspondiente en la tabla "profiles".
+    // Supabase Auth crea la cuenta y un ÚNICO trigger en la base de datos
+    // (handle_new_user) genera de forma atómica tanto el perfil de "profiles"
+    // como el perfil comercial en "client_profiles", leyendo estos metadatos.
+    // Así el cliente SIEMPRE queda guardado y visible para el admin, sin
+    // depender de una segunda petición del frontend (que fallaba sin sesión).
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: cleanEmail,
       password: regPassword,
-      options: { data: { name: regName.trim() } },
+      options: {
+        data: {
+          name: regName.trim(),
+          phone: regPhone.trim(),
+          province: regProvince,
+          address: regAddress.trim(),
+          source: 'portal_cliente',
+        },
+      },
     });
 
     if (authError) {
@@ -301,21 +312,9 @@ export default function PublicStore({
       return;
     }
 
-    // Guardar los datos comerciales del cliente (dirección, teléfono, provincia)
-    const newClientId = `CLI-${Math.floor(10000 + Math.random() * 90000)}`;
-    await supabase.from('client_profiles').insert({
-      id: newClientId,
-      profile_id: authData.user.id,
-      name: regName.trim(),
-      email: cleanEmail,
-      phone: regPhone.trim(),
-      province: regProvince,
-      address_detail: regAddress.trim(),
-      notes: 'Cliente registrado desde el portal web.',
-    });
-
     // Si el proyecto de Supabase requiere confirmación de correo, todavía no
-    // hay sesión activa: se le pide confirmar antes de iniciar sesión.
+    // hay sesión activa: se le pide confirmar antes de iniciar sesión. El
+    // perfil comercial ya quedó creado por el trigger, así que no se pierde.
     if (!authData.session) {
       alert(`¡Cuenta creada! Revisa tu correo (${cleanEmail}) para confirmarla antes de iniciar sesión.`);
       setIsLoginModalOpen(false);
