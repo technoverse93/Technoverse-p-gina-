@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import React, { useState, useEffect, useRef, useLayoutEffect } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { PaginatedGrid } from './PaginationHelper';
 import { 
   ShoppingBag, Search, ChevronDown, Trash2, ArrowRight,
@@ -774,7 +774,13 @@ export default function PublicStore({
     return pc.includes(sc) || sc.includes(pc);
   };
 
-  const filteredProducts = products.filter(p => { if (!p) return false;
+  // useMemo: este filtro recorría TODA la lista de productos en CADA render
+  // (cada tecla del buscador, abrir el carrito, cualquier cambio de estado no
+  // relacionado). Ahora solo se recalcula cuando cambian sus entradas reales,
+  // aligerando el hilo principal en equipos como el Galaxy A12.
+  // (checkCategoryMatch y SPARE_PART_CATEGORIES son puros/constantes; se omiten
+  // de las dependencias a propósito.)
+  const filteredProducts = useMemo(() => products.filter(p => { if (!p) return false;
     // 0. Hidden/Inactive filter
     if (p.active === false) return false;
     if (SPARE_PART_CATEGORIES.includes(p.category)) return false;
@@ -796,7 +802,7 @@ export default function PublicStore({
       if (!match) return false;
     }
     return true;
-  });
+  }), [products, selectedCategory, selectedSearchProductId, searchQuery]);
   const { page: prodPage, setPage: setProdPage, totalPages: prodTotal, startIndex: prodStart, visibleItems: paginatedProducts } = usePagination(filteredProducts, 10);
 
   return (
