@@ -18,6 +18,13 @@ export const FAQ_DATA = [
   }
 ];
 
+// IDs con sufijo aleatorio: dos envíos rápidos (doble tap) pueden caer en el
+// mismo milisegundo con Date.now() puro y colisionar en el upsert por id,
+// forzando la rama UPDATE (bloqueada por RLS para un cliente anónimo).
+function newId(prefix: string): string {
+  return `${prefix}-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+}
+
 export default function LiveChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
@@ -27,23 +34,15 @@ export default function LiveChat() {
   const [clientEmail, setClientEmail] = useState('');
   const [isRegistered, setIsRegistered] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
-  // Temporizadores pendientes de las respuestas simuladas del bot: si el
-  // componente se desmonta (ej. el cliente navega al panel admin) antes de
-  // que disparen, deben cancelarse para no tocar estado de un componente
-  // desmontado ni seguir gastando RAM/CPU en segundo plano.
-  const botTimeoutsRef = useRef<ReturnType<typeof setTimeout>[]>([]);
 
   useEffect(() => {
     loadConversations();
     const handleUpdate = () => loadConversations();
     window.addEventListener('technoverse_db_updated', handleUpdate);
-    return () => {
-      window.removeEventListener('technoverse_db_updated', handleUpdate);
-      botTimeoutsRef.current.forEach(id => clearTimeout(id));
-      botTimeoutsRef.current = [];
-    };
+    return () => window.removeEventListener('technoverse_db_updated', handleUpdate);
   }, []);
 
   const loadConversations = () => {
@@ -59,8 +58,9 @@ export default function LiveChat() {
 
   const handleRegister = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!clientName.trim() || !clientEmail.trim()) return;
+    if (!clientName.trim() || !clientEmail.trim() || isSubmitting) return;
     setChatError(null);
+    setIsSubmitting(true);
 
     const db = getDB();
     // Check if there is an ongoing (not yet resolved) conversation for this email
@@ -68,13 +68,13 @@ export default function LiveChat() {
 
     if (!conv) {
       const newMsg: ChatMessage = {
-        id: `MSG-${Date.now()}-1`,
+        id: newId('MSG'),
         sender: 'bot',
         text: `¡Hola ${clientName}! Bienvenido al soporte de Technoverse Costa Rica. Soy tu asistente virtual. ¿En qué te puedo ayudar hoy? Puedes hacer clic en una pregunta frecuente abajo o escribir tu consulta.`,
         timestamp: new Date().toISOString()
       };
       conv = {
-        id: `CONV-${Date.now()}`,
+        id: newId('CONV'),
         customerName: clientName,
         customerEmail: clientEmail,
         messages: [newMsg],
@@ -89,6 +89,7 @@ export default function LiveChat() {
         // al cliente en una pantalla rota: se avisa y se puede reintentar.
         setChatError('No se pudo iniciar el chat. Verifica tu conexión e intenta de nuevo.');
         loadConversations();
+        setIsSubmitting(false);
         return;
       }
     }
@@ -96,20 +97,25 @@ export default function LiveChat() {
     setActiveConvId(conv.id);
     setIsRegistered(true);
     loadConversations();
+    setIsSubmitting(false);
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!inputText.trim() || !activeConvId) return;
+    if (!inputText.trim() || !activeConvId || isSubmitting) return;
     setChatError(null);
+    setIsSubmitting(true);
 
     const db = getDB();
     const convIndex = db.chat_conversations.findIndex(c => c.id === activeConvId);
-    if (convIndex === -1) return;
+    if (convIndex === -1) {
+      setIsSubmitting(false);
+      return;
+    }
 
     const messageText = inputText.trim();
     const userMsg: ChatMessage = {
-      id: `MSG-${Date.now()}`,
+      id: newId('MSG'),
       sender: 'customer',
       text: messageText,
       timestamp: new Date().toISOString()
@@ -118,12 +124,6 @@ export default function LiveChat() {
     db.chat_conversations[convIndex].messages.push(userMsg);
     db.chat_conversations[convIndex].unreadCount += 1;
 
-    // El bot solo debe responder mientras nadie humano ha tomado el chat.
-    // En cuanto un admin se asigna o cambia el estado (pendiente/resuelto),
-    // el bot se desactiva de inmediato para no competir con soporte humano.
-    const conv = db.chat_conversations[convIndex];
-    const botActive = !conv.assignedAdminEmail && conv.status === 'nuevo';
-
     setInputText('');
 
     try {
@@ -131,80 +131,40 @@ export default function LiveChat() {
     } catch {
       // Fallo real de guardado: se avisa al cliente y se le devuelve su texto
       // para que pueda reintentar, en vez de que el mensaje desaparezca sin
-      // explicación (y sin disparar el bot sobre un mensaje que nunca llegó).
+      // explicación.
       setChatError('No se pudo enviar tu mensaje. Verifica tu conexión e intenta de nuevo.');
       setInputText(messageText);
       loadConversations();
+      setIsSubmitting(false);
       return;
     }
 
+    // Texto libre va directo a soporte humano: el bot tiene prohibido
+    // responder o reaccionar a mensajes escritos manualmente, sin excepción.
     loadConversations();
-
-    if (botActive) {
-      const lowerText = messageText.toLowerCase();
-      let matchedFAQ = FAQ_DATA.find(faq =>
-        lowerText.includes(faq.q.toLowerCase()) ||
-        lowerText.includes(faq.q.split(' ')[1]) || // simple keyword match
-        (lowerText.includes('garant') && faq.q.includes('garantía')) ||
-        (lowerText.includes('pago') && faq.q.includes('pago')) ||
-        (lowerText.includes('factur') && faq.q.includes('facturación'))
-      );
-
-      if (matchedFAQ) {
-        const timeoutId = setTimeout(() => {
-          const updatedDb = getDB();
-          const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
-          const freshConv = updatedDb.chat_conversations[freshIdx];
-          if (freshIdx !== -1 && !freshConv.assignedAdminEmail && freshConv.status === 'nuevo') {
-            freshConv.messages.push({
-              id: `MSG-${Date.now()}-bot`,
-              sender: 'bot',
-              text: matchedFAQ.a,
-              timestamp: new Date().toISOString()
-            });
-            saveDB(updatedDb);
-            loadConversations();
-          }
-        }, 1000);
-        botTimeoutsRef.current.push(timeoutId);
-      } else {
-        // Standard placeholder reply if no match
-        const timeoutId = setTimeout(() => {
-          const updatedDb = getDB();
-          const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
-          const freshConv = updatedDb.chat_conversations[freshIdx];
-          if (freshIdx !== -1 && !freshConv.assignedAdminEmail && freshConv.status === 'nuevo') {
-            freshConv.messages.push({
-              id: `MSG-${Date.now()}-bot`,
-              sender: 'bot',
-              text: "Entiendo tu consulta. He asignado tu ticket a nuestro personal de soporte humano. Te atenderemos en el orden de la cola.",
-              timestamp: new Date().toISOString()
-            });
-            saveDB(updatedDb);
-            loadConversations();
-          }
-        }, 1500);
-        botTimeoutsRef.current.push(timeoutId);
-      }
-    }
+    setIsSubmitting(false);
   };
 
   const handleFAQClick = async (faq: typeof FAQ_DATA[0]) => {
-    if (!activeConvId) return;
+    if (!activeConvId || isSubmitting) return;
     setChatError(null);
+    setIsSubmitting(true);
     const db = getDB();
     const convIndex = db.chat_conversations.findIndex(c => c.id === activeConvId);
-    if (convIndex === -1) return;
+    if (convIndex === -1) {
+      setIsSubmitting(false);
+      return;
+    }
 
     db.chat_conversations[convIndex].messages.push({
-      id: `MSG-${Date.now()}-q`,
+      id: newId('MSG'),
       sender: 'customer',
       text: faq.q,
       timestamp: new Date().toISOString()
     });
 
     db.chat_conversations[convIndex].messages.push({
-      id: `MSG-${Date.now()}-a`,
+      id: newId('MSG'),
       sender: 'bot',
       text: faq.a,
       timestamp: new Date().toISOString()
@@ -216,6 +176,7 @@ export default function LiveChat() {
       setChatError('No se pudo enviar tu consulta. Verifica tu conexión e intenta de nuevo.');
     }
     loadConversations();
+    setIsSubmitting(false);
   };
 
   const activeConv = conversations.find(c => c.id === activeConvId);
@@ -247,7 +208,7 @@ export default function LiveChat() {
                 <p className="text-[10px] text-emerald-100 dark:text-[var(--brand-gold-light)] flex items-center gap-1">● Conectado con soporte humano legal</p>
               </div>
             </div>
-            <button 
+            <button
               onClick={() => setIsOpen(false)}
               className="text-white hover:text-rose-200 transition p-1"
             >
@@ -296,9 +257,10 @@ export default function LiveChat() {
               </div>
               <button
                 type="submit"
-                className="w-full bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] transition text-white text-xs font-bold py-3 rounded-xl shadow-sm mt-4 uppercase tracking-wider dark:text-slate-950"
+                disabled={isSubmitting}
+                className="w-full bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] transition text-white text-xs font-bold py-3 rounded-xl shadow-sm mt-4 uppercase tracking-wider dark:text-slate-950 disabled:opacity-50"
               >
-                Iniciar Chat Seguro
+                {isSubmitting ? 'Conectando...' : 'Iniciar Chat Seguro'}
               </button>
             </form>
           ) : (
@@ -311,7 +273,7 @@ export default function LiveChat() {
                     msg.sender === 'customer' ? 'justify-end' : 'justify-start'
                   }`}>
                     <div className={`max-w-[80%] rounded-xl p-3 text-xs ${
-                      msg.sender === 'customer' 
+                      msg.sender === 'customer'
                         ? 'bg-emerald-600 dark:bg-[var(--brand-gold-mid)] text-white dark:text-slate-950'
                         : msg.sender === 'bot'
                         ? 'bg-slate-900 border border-white/5 text-slate-200'
@@ -340,7 +302,8 @@ export default function LiveChat() {
                       <button
                         key={i}
                         onClick={() => handleFAQClick(faq)}
-                        className="text-[9px] bg-slate-900 border border-white/10 hover:border-emerald-500 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50 rounded-full px-2.5 py-1 text-[var(--text-secondary)] hover:text-emerald-300 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] transition duration-150"
+                        disabled={isSubmitting}
+                        className="text-[9px] bg-slate-900 border border-white/10 hover:border-emerald-500 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50 rounded-full px-2.5 py-1 text-[var(--text-secondary)] hover:text-emerald-300 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] transition duration-150 disabled:opacity-50"
                       >
                         {faq.q}
                       </button>
@@ -360,7 +323,8 @@ export default function LiveChat() {
                 />
                 <button
                   type="submit"
-                  className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] transition p-2 rounded-xl text-white dark:text-slate-950"
+                  disabled={isSubmitting}
+                  className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] transition p-2 rounded-xl text-white dark:text-slate-950 disabled:opacity-50"
                 >
                   <Send className="w-3.5 h-3.5" />
                 </button>
@@ -371,4 +335,4 @@ export default function LiveChat() {
       )}
     </>
   );
-}
+      }
