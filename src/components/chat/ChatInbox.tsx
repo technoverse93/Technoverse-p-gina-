@@ -1,0 +1,89 @@
+import React from 'react';
+import { ChatConversation } from '../../types';
+import type { ChatStatusFilter } from './ChatCRM';
+
+interface ChatInboxProps {
+  conversations: ChatConversation[];
+  selectedConvId: string | null;
+  statusFilter: ChatStatusFilter;
+  onFilterChange: (filter: ChatStatusFilter) => void;
+  onSelect: (id: string) => void;
+}
+
+const FILTERS: { id: ChatStatusFilter; label: string; dot: string }[] = [
+  { id: 'nuevo', label: 'Nuevos', dot: 'bg-blue-500' },
+  { id: 'pendiente', label: 'Pendientes', dot: 'bg-orange-500' },
+  { id: 'todos', label: 'Todos', dot: 'bg-slate-400' }
+];
+
+function lastPreview(conv: ChatConversation): string {
+  const visible = conv.messages.filter(m => !m.isInternalNote);
+  const last = visible[visible.length - 1];
+  if (!last) return 'Sin mensajes todavía';
+  if (last.imageUrl) return '📷 Imagen';
+  return last.text;
+}
+
+export default function ChatInbox({ conversations, selectedConvId, statusFilter, onFilterChange, onSelect }: ChatInboxProps) {
+  return (
+    <>
+      <div className="p-3 border-b border-[var(--border-color)]/60 flex gap-1.5" id="chat-inbox-filters">
+        {FILTERS.map(f => (
+          <button
+            key={f.id}
+            type="button"
+            onClick={() => onFilterChange(f.id)}
+            className={`flex-1 text-[11px] font-bold px-2 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 ${
+              statusFilter === f.id
+                ? 'bg-[var(--text-primary)] text-[var(--bg-surface)]'
+                : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--border-color)]/40'
+            }`}
+          >
+            <span className={`w-1.5 h-1.5 rounded-full ${f.dot}`} />
+            {f.label}
+          </button>
+        ))}
+      </div>
+      <div className="flex-1 overflow-y-auto divide-y divide-[var(--border-color)]/40" id="chat-inbox-list">
+        {conversations.length === 0 ? (
+          <p className="text-xs text-[var(--text-muted)] italic text-center py-10 px-4">No hay conversaciones en esta categoría.</p>
+        ) : (
+          conversations.map(conv => (
+            <button
+              key={conv.id}
+              type="button"
+              onClick={() => onSelect(conv.id)}
+              className={`w-full text-left p-3 flex items-center gap-3 transition ${
+                selectedConvId === conv.id ? 'bg-[var(--brand-gold-mid)]/10' : 'hover:bg-[var(--bg-surface)]'
+              }`}
+            >
+              <div className="relative shrink-0">
+                <div className="w-10 h-10 rounded-full bg-[var(--brand-gold-mid)]/20 text-[var(--brand-gold-dark)] dark:text-[var(--brand-gold-light)] flex items-center justify-center font-bold text-sm">
+                  {conv.customerName?.charAt(0).toUpperCase() || '?'}
+                </div>
+                {conv.assignedAdminEmail && (
+                  <span
+                    title={`Asignado a ${conv.assignedAdminEmail}`}
+                    className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[var(--bg-surface)] flex items-center justify-center text-[7px] font-bold text-white"
+                  >
+                    {conv.assignedAdminEmail.charAt(0).toUpperCase()}
+                  </span>
+                )}
+              </div>
+              <div className="min-w-0 flex-1">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="font-semibold text-xs text-[var(--text-primary)] truncate">{conv.customerName || 'Cliente'}</span>
+                  {conv.unreadCount > 0 && (
+                    <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 animate-pulse" />
+                  )}
+                </div>
+                <p className="text-[11px] text-[var(--text-secondary)] truncate">{lastPreview(conv)}</p>
+              </div>
+              <span className={`w-2 h-2 rounded-full shrink-0 ${conv.status === 'nuevo' ? 'bg-blue-500' : conv.status === 'pendiente' ? 'bg-orange-500' : 'bg-slate-400'}`} />
+            </button>
+          ))
+        )}
+      </div>
+    </>
+  );
+}
