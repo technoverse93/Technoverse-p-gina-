@@ -6,7 +6,7 @@ import {
   LayoutDashboard, Package, Wrench, Users, CreditCard, FileSpreadsheet,
   Settings, ShieldCheck, Megaphone, Truck, ShieldAlert, LogOut, Sun, Moon,
   X, Plus, Trash2, Edit, Save, RefreshCw, Key, ArrowRightLeft, Eye, EyeOff, Download, DollarSign, BookOpen, ChevronDown, ChevronRight, ShoppingBag, CheckCircle,
-  Home, Sparkles, UserPlus, TrendingUp, BarChart3, Activity, MoreHorizontal
+  Home, Sparkles, UserPlus, TrendingUp, BarChart3, Activity, MoreHorizontal, MessageSquare
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
@@ -19,6 +19,7 @@ import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, Ma
 const TallerKanban = lazy(() => import('./TallerKanban'));
 const InventarioControl = lazy(() => import('./InventarioControl'));
 const ComplianceModule = lazy(() => import('./ComplianceModule'));
+const ChatCRM = lazy(() => import('./chat/ChatCRM'));
 
 const TabLoadingFallback = () => (
   <div className="flex items-center justify-center py-24 text-[var(--text-muted)] text-sm gap-2">
@@ -885,6 +886,7 @@ export default function AdminPanel({
     {
       title: "Operaciones",
       items: [
+        { id: 'chat', label: 'Chat CRM', icon: MessageSquare },
         { id: 'taller', label: 'Taller Kanban', icon: Wrench },
         { id: 'clientes', label: 'Clientes CRM', icon: CreditCard }
       ]
@@ -1357,6 +1359,18 @@ export default function AdminPanel({
             <div className="space-y-4" id="view-taller">
               <Suspense fallback={<TabLoadingFallback />}>
                 <TallerKanban activeUserEmail={currentUser?.email} onRepairUpdated={loadAllAdminData} />
+              </Suspense>
+            </div>
+          ) : (
+             <div className="p-8 text-center text-rose-500 font-bold">Acceso denegado. Permisos insuficientes.</div>
+          )
+        )}
+        {activeTab === 'chat' && (
+          (isOwner || hasPermission('chat')) ? (
+            /* MODULE: CHAT CRM (SOPORTE EN TIEMPO REAL) */
+            <div className="space-y-4" id="view-chat">
+              <Suspense fallback={<TabLoadingFallback />}>
+                <ChatCRM currentUser={currentUser} onDataChanged={loadAllAdminData} />
               </Suspense>
             </div>
           ) : (
@@ -2202,6 +2216,20 @@ if (!del) return null;
           >
             <span className="bn-icon-wrap"><Package className="w-5 h-5" /></span>
             Inventario
+          </button>
+        )}
+        {hasPermission('chat') && (
+          <button
+            className={`bottom-nav-item ${activeTab === 'chat' ? 'active' : ''}`}
+            onClick={() => {
+              setActiveTab('chat');
+              setActiveDropdown(null);
+              setIsMobileInventoryMenuOpen(false);
+              setIsMobileMoreMenuOpen(false);
+            }}
+          >
+            <span className="bn-icon-wrap"><MessageSquare className="w-5 h-5" /></span>
+            Chat
           </button>
         )}
         {hasPermission('taller') && (

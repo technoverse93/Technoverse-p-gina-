@@ -1,12 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Shield, Bot, User } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, User } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
-import { getDB, saveDB, addAuditLog } from '../utils/storage';
-
-interface LiveChatProps {
-  isAdmin?: boolean;
-  activeUserEmail?: string;
-}
+import { getDB, saveDB } from '../utils/storage';
 
 export const FAQ_DATA = [
   {
@@ -23,7 +18,7 @@ export const FAQ_DATA = [
   }
 ];
 
-export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@technoverse.com" }: LiveChatProps) {
+export default function LiveChat() {
   const [isOpen, setIsOpen] = useState(false);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
@@ -57,9 +52,9 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
     if (!clientName.trim() || !clientEmail.trim()) return;
 
     const db = getDB();
-    // Check if there is an active conversation for this email
-    let conv = db.chat_conversations.find(c => c.customerEmail === clientEmail && c.status === 'active');
-    
+    // Check if there is an ongoing (not yet resolved) conversation for this email
+    let conv = db.chat_conversations.find(c => c.customerEmail === clientEmail && (c.status === 'nuevo' || c.status === 'pendiente'));
+
     if (!conv) {
       const newMsg: ChatMessage = {
         id: `MSG-${Date.now()}-1`,
@@ -72,7 +67,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
         customerName: clientName,
         customerEmail: clientEmail,
         messages: [newMsg],
-        status: 'active',
+        status: 'nuevo',
         unreadCount: 0
       };
       db.chat_conversations.push(conv);
@@ -94,60 +89,55 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
 
     const userMsg: ChatMessage = {
       id: `MSG-${Date.now()}`,
-      sender: isAdmin ? 'support' : 'customer',
+      sender: 'customer',
       text: inputText.trim(),
       timestamp: new Date().toISOString()
     };
 
     db.chat_conversations[convIndex].messages.push(userMsg);
-    
-    if (isAdmin) {
-      db.chat_conversations[convIndex].unreadCount = 0;
-      addAuditLog(activeUserEmail, 'Soporte', 'Respuesta Chat', `Respuesta enviada a ${db.chat_conversations[convIndex].customerName}`);
-    } else {
-      db.chat_conversations[convIndex].unreadCount += 1;
-      // Auto bot responder if not escalated or if matches FAQ
-      const lowerText = inputText.toLowerCase();
-      let matchedFAQ = FAQ_DATA.find(faq => 
-        lowerText.includes(faq.q.toLowerCase()) || 
-        lowerText.includes(faq.q.split(' ')[1]) || // simple keyword match
-        (lowerText.includes('garant') && faq.q.includes('garantía')) ||
-        (lowerText.includes('pago') && faq.q.includes('pago')) ||
-        (lowerText.includes('factur') && faq.q.includes('facturación'))
-      );
+    db.chat_conversations[convIndex].unreadCount += 1;
 
-      if (matchedFAQ) {
-        setTimeout(() => {
-          const updatedDb = getDB();
-          const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
-          if (freshIdx !== -1) {
-            updatedDb.chat_conversations[freshIdx].messages.push({
-              id: `MSG-${Date.now()}-bot`,
-              sender: 'bot',
-              text: matchedFAQ.a,
-              timestamp: new Date().toISOString()
-            });
-            saveDB(updatedDb);
-            loadConversations();
-          }
-        }, 1000);
-      } else {
-        // Standard placeholder reply if no match
-        setTimeout(() => {
-          const updatedDb = getDB();
-          const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
-          if (freshIdx !== -1) {
-            updatedDb.chat_conversations[freshIdx].messages.push({
-              id: `MSG-${Date.now()}-bot`,
-              sender: 'bot',
-              text: "Entiendo tu consulta. He asignado tu ticket a nuestro personal de soporte humano. Te atenderemos en el orden de la cola.",
-              timestamp: new Date().toISOString()
-            });
-            saveDB(updatedDb);
-            loadConversations();
-          }
-        }, 1500);
-      }
+    // Auto bot responder if not escalated or if matches FAQ
+    const lowerText = inputText.toLowerCase();
+    let matchedFAQ = FAQ_DATA.find(faq =>
+      lowerText.includes(faq.q.toLowerCase()) ||
+      lowerText.includes(faq.q.split(' ')[1]) || // simple keyword match
+      (lowerText.includes('garant') && faq.q.includes('garantía')) ||
+      (lowerText.includes('pago') && faq.q.includes('pago')) ||
+      (lowerText.includes('factur') && faq.q.includes('facturación'))
+    );
+
+    if (matchedFAQ) {
+      setTimeout(() => {
+        const updatedDb = getDB();
+        const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
+        if (freshIdx !== -1) {
+          updatedDb.chat_conversations[freshIdx].messages.push({
+            id: `MSG-${Date.now()}-bot`,
+            sender: 'bot',
+            text: matchedFAQ.a,
+            timestamp: new Date().toISOString()
+          });
+          saveDB(updatedDb);
+          loadConversations();
+        }
+      }, 1000);
+    } else {
+      // Standard placeholder reply if no match
+      setTimeout(() => {
+        const updatedDb = getDB();
+        const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
+        if (freshIdx !== -1) {
+          updatedDb.chat_conversations[freshIdx].messages.push({
+            id: `MSG-${Date.now()}-bot`,
+            sender: 'bot',
+            text: "Entiendo tu consulta. He asignado tu ticket a nuestro personal de soporte humano. Te atenderemos en el orden de la cola.",
+            timestamp: new Date().toISOString()
+          });
+          saveDB(updatedDb);
+          loadConversations();
+        }
+      }, 1500);
     }
 
     saveDB(db);
@@ -180,124 +170,6 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
   };
 
   const activeConv = conversations.find(c => c.id === activeConvId);
-
-  const sortedConversations = conversations;
-
-  if (isAdmin) {
-    // Admin Support Dashboard view
-    return (
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-6 h-[600px] bg-slate-900 border border-white/10 rounded-2xl p-4 text-white overflow-hidden" id="chat-admin-panel">
-        {/* Conversations List */}
-        <div className="border-r border-white/10 pr-4 flex flex-col h-full">
-          <h3 className="font-semibold text-lg mb-4 text-sky-400 dark:text-[var(--brand-gold-light)] flex items-center gap-2">
-            <MessageSquare className="w-5 h-5" /> Cola de Mensajes
-          </h3>
-          <div className="flex-1 overflow-y-auto space-y-2">
-            {sortedConversations.length === 0 ? (
-              <p className="text-sm text-[var(--text-secondary)] italic text-center py-8">No hay chats activos en este momento.</p>
-            ) : (
-              sortedConversations.map(conv => (
-                <button
-                  key={conv.id}
-                  onClick={() => {
-                    setActiveConvId(conv.id);
-                    // Clear unread count on select
-                    const db = getDB();
-                    const idx = db.chat_conversations.findIndex(c => c.id === conv.id);
-                    if (idx !== -1) {
-                      db.chat_conversations[idx].unreadCount = 0;
-                      saveDB(db);
-                      loadConversations();
-                    }
-                  }}
-                  className={`w-full text-left p-3 rounded-xl transition duration-150 flex items-center justify-between border ${
-                    activeConvId === conv.id 
-                      ? 'bg-sky-500 dark:bg-[var(--brand-gold-mid)]/20 border-sky-500 dark:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50' 
-                      : 'bg-[var(--bg-surface)] hover:bg-[var(--bg-surface)] border-white/5'
-                  }`}
-                >
-                  <div className="truncate pr-2">
-                    <div className="font-medium text-sm flex items-center gap-1.5">
-                      {conv.customerName}
-                      {conv.unreadCount > 0 && (
-                        <span className="w-2.5 h-2.5 bg-rose-500 rounded-full animate-pulse" />
-                      )}
-                    </div>
-                    <div className="text-xs text-[var(--text-secondary)] truncate">{conv.customerEmail}</div>
-                  </div>
-                </button>
-              ))
-            )}
-          </div>
-        </div>
-
-        {/* Chat window */}
-        <div className="col-span-2 flex flex-col h-full bg-slate-950 rounded-xl overflow-hidden border border-white/5">
-          {activeConv ? (
-            <>
-              {/* Header */}
-              <div className="p-4 bg-[var(--bg-surface)] border-b border-white/10 flex items-center justify-between">
-                <div>
-                  <h4 className="font-medium text-sky-400 dark:text-[var(--brand-gold-light)]">{activeConv.customerName}</h4>
-                  <p className="text-xs text-[var(--text-secondary)]">{activeConv.customerEmail}</p>
-                </div>
-              </div>
-
-              {/* Message List */}
-              <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {activeConv.messages.map(msg => (
-                  <div key={msg.id} className={`flex ${
-                    msg.sender === 'support' ? 'justify-end' : 'justify-start'
-                  }`}>
-                    <div className={`max-w-[75%] rounded-xl p-3 text-sm ${
-                      msg.sender === 'support' 
-                        ? 'bg-sky-500 dark:bg-[var(--brand-gold-mid)] text-white dark:text-slate-950'
-                        : msg.sender === 'bot'
-                        ? 'bg-indigo-950/80 dark:bg-[var(--brand-gold-mid)]/10 border border-indigo-500/30 dark:border-[var(--brand-gold-dark)] text-indigo-200 dark:text-[var(--brand-gold-light)]'
-                        : 'bg-[var(--bg-surface)] text-[var(--text-primary)]'
-                    }`}>
-                      <div className="flex items-center gap-1 mb-1 text-[10px] opacity-70">
-                        {msg.sender === 'support' && <Shield className="w-3 h-3" />}
-                        {msg.sender === 'bot' && <Bot className="w-3 h-3" />}
-                        {msg.sender === 'customer' && <User className="w-3 h-3" />}
-                        <span className="capitalize">{msg.sender === 'support' ? 'Soporte' : msg.sender === 'bot' ? 'Asistente' : 'Cliente'}</span>
-                        <span>•</span>
-                        <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                      </div>
-                      <p className="whitespace-pre-wrap">{msg.text}</p>
-                    </div>
-                  </div>
-                ))}
-                <div ref={messagesEndRef} />
-              </div>
-
-              {/* Chat Input */}
-              <form onSubmit={handleSendMessage} className="p-4 bg-[var(--bg-surface)] border-t border-white/10 flex gap-2">
-                <input
-                  type="text"
-                  value={inputText}
-                  onChange={(e) => setInputText(e.target.value)}
-                  placeholder="Escribe tu respuesta como agente soporte..."
-                  className="flex-1 bg-[var(--bg-surface)] border border-white/10 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
-                />
-                <button
-                  type="submit"
-                  className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] transition p-2 rounded-xl text-white font-medium flex items-center justify-center dark:text-slate-950"
-                >
-                  <Send className="w-4 h-4" />
-                </button>
-              </form>
-            </>
-          ) : (
-            <div className="flex-1 flex flex-col items-center justify-center text-[var(--text-secondary)] p-8">
-              <MessageSquare className="w-12 h-12 text-[var(--text-secondary)] mb-3" />
-              <p className="text-center">Selecciona una conversación de la lista para atender al cliente en tiempo real.</p>
-            </div>
-          )}
-        </div>
-      </div>
-    );
-  }
 
   // Public Floating Widget view
   return (
@@ -376,7 +248,7 @@ export default function LiveChat({ isAdmin = false, activeUserEmail = "anonimo@t
             <>
               {/* Messages Container */}
               <div className="flex-1 overflow-y-auto p-4 space-y-3">
-                {activeConv?.messages.map(msg => (
+                {activeConv?.messages.filter(msg => !msg.isInternalNote).map(msg => (
                   <div key={msg.id} className={`flex ${
                     msg.sender === 'customer' ? 'justify-end' : 'justify-start'
                   }`}>

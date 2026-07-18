@@ -2046,7 +2046,7 @@ export default function PublicStore({
       )}
 
       {/* Embedded Floating Chat component for real-time customer support */}
-      <LiveChat isAdmin={false} />
+      <LiveChat />
 
       {/* INTERACTIVE PRODUCT DETAIL MODAL */}
       {selectedProductDetail && (

@@ -914,14 +914,11 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     }
   };
 
-  const confirmDeleteProduct = (p: Product) => {
+  const confirmDeleteProduct = async (p: Product) => {
     const db = getDB();
     const idx = db.products.findIndex(x => x && x.id === p.id);
     if (idx !== -1) {
-      db.products[idx].active = false;
-      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Desactivar Producto', `Producto desactivado por eliminación: ${p.name}`, db);
-      
-      // Store in historical
+      // Store in historical (archivo para autorrelleno por SKU) antes de eliminar
       if (!db.historical_skus) db.historical_skus = [];
       if (!db.historical_skus.find(h => h.sku === p.sku)) {
         db.historical_skus.push({
@@ -935,16 +932,25 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         });
       }
 
-      // Cascading deletion for linked products if this is a spare part
+      // Hard Delete en cascada de repuestos vinculados (prohibido dejar productos fantasma)
+      const idsToRemove = [p.id];
       if (sparePartCategories.includes(p.category)) {
         const linkedProducts = db.products.filter(x => x && x.linkedSparePartSku === p.sku);
         linkedProducts.forEach(lp => {
-          lp.active = false;
-          addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Desactivar Producto', `Producto vinculado (${lp.name}) desactivado por eliminación de repuesto: ${p.sku}`, db);
+          idsToRemove.push(lp.id);
+          addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Eliminar Producto', `Producto vinculado (${lp.name}) eliminado (Hard Delete) por eliminación de repuesto: ${p.sku}`, db);
         });
       }
+
+      db.products = db.products.filter(x => x && !idsToRemove.includes(x.id));
+      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Eliminar Producto', `Producto eliminado permanentemente (Hard Delete): ${p.name}`, db);
     }
-    saveDB(db);
+    try {
+      await saveDB(db);
+    } catch (err: any) {
+      alert('No se pudo eliminar el producto en la base de datos. Detalle: ' + (err?.message || err));
+      return;
+    }
     loadData();
     onDataChanged();
   };
