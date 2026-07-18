@@ -445,6 +445,17 @@ function initChatRealtimeSync() {
     chatReady = true;
     flushChatPending();
   });
+
+  // Respaldo por sondeo: el WebSocket de Realtime puede cortarse en
+  // silencio dentro del WebView de Android/Capacitor (visto en el APK) y no
+  // reconectar solo. El chat es la única tabla donde un mensaje nuevo debe
+  // verse casi al instante, así que además del canal en tiempo real se
+  // revisa cada pocos segundos mientras la pestaña esté visible.
+  if (typeof window !== 'undefined') {
+    setInterval(() => {
+      if (document.visibilityState === 'visible') refreshChatFromSupabase();
+    }, 6000);
+  }
 }
 
 async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatConversation[]) {
