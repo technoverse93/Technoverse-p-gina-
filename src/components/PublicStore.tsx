@@ -964,10 +964,19 @@ export default function PublicStore({
             <div className="hidden md:block">
               <button
                 onClick={() => {
-                  setIsAccountDropdownOpen(!isAccountDropdownOpen);
+                  // Sin sesión: abrir el modal CENTRADO (no el dropdown inferior
+                  // con inputs, que el teclado móvil empuja y rompe). Con sesión:
+                  // el dropdown solo muestra el menú (sin inputs), sin problema.
                   setIsCartDropdownOpen(false);
                   setIsCatalogDropdownOpen(false);
                   setSearchQuery('');
+                  if (!isAuthenticated) {
+                    setIsRegisterMode(false);
+                    setIsLoginModalOpen(true);
+                    setIsAccountDropdownOpen(false);
+                  } else {
+                    setIsAccountDropdownOpen(!isAccountDropdownOpen);
+                  }
                 }}
                 className={`group p-3 md:p-2.5 rounded-xl transition-all duration-200 flex items-center justify-center relative cursor-pointer ${
                   isAccountDropdownOpen
@@ -984,7 +993,7 @@ export default function PublicStore({
             </div>
 
             <AnimatePresence>
-              {isAccountDropdownOpen && (
+              {isAccountDropdownOpen && isAuthenticated && (
                 <motion.div
                   initial={{ opacity: 0, y: 12, scale: 0.95, transformOrigin: 'top right' }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -1308,13 +1317,21 @@ export default function PublicStore({
           Soporte
         </button>
         <button
-          className={`bottom-nav-item ${isAccountDropdownOpen ? 'active' : ''}`}
+          className={`bottom-nav-item ${isAccountDropdownOpen || (isLoginModalOpen && !isAuthenticated) ? 'active' : ''}`}
           onClick={() => {
-            if (isAccountDropdownOpen) { setIsAccountDropdownOpen(false); return; }
             setIsCatalogDropdownOpen(false);
             setIsCartDropdownOpen(false);
-            setIsAccountDropdownOpen(true);
             setSearchQuery('');
+            if (!isAuthenticated) {
+              // Sin sesión: modal centrado (el teclado no rompe el layout).
+              setIsAccountDropdownOpen(false);
+              setIsRegisterMode(false);
+              setIsLoginModalOpen(true);
+              return;
+            }
+            // Con sesión: menú inferior (sin inputs), toggle normal.
+            if (isAccountDropdownOpen) { setIsAccountDropdownOpen(false); return; }
+            setIsAccountDropdownOpen(true);
           }}
         >
           <span className="bn-icon-wrap"><UserIcon className="w-5 h-5" /></span>
@@ -1914,10 +1931,14 @@ export default function PublicStore({
 
       {/* Login / Register Unified Modal */}
       {isLoginModalOpen && (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center p-4">
-          <div className="absolute inset-0 bg-slate-900/50" onClick={() => setIsLoginModalOpen(false)} />
+        <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-4 overflow-y-auto">
+          <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm" onClick={() => setIsLoginModalOpen(false)} />
 
-          <div className="relative max-w-md w-full glass-panel-strong rounded-3xl p-8 shadow-sm space-y-6 text-[var(--text-primary)] animate-in zoom-in-95 duration-200" id="login-register-modal">
+          {/* max-h + overflow-y-auto: en móvil, al abrir el teclado el formulario
+              (sobre todo el de registro, que es alto) se desplaza dentro del modal
+              sin empujar ni romper la barra inferior. my-auto lo mantiene centrado
+              cuando cabe, y el scroll interno lo salva cuando no. */}
+          <div className="relative max-w-md w-full my-auto max-h-[92dvh] overflow-y-auto glass-panel-strong rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 text-[var(--text-primary)] animate-in zoom-in-95 duration-200" id="login-register-modal">
             <div className="text-center space-y-2">
               <div className="w-12 h-12 bg-gradient-to-tr from-[#3B82F6] to-blue-600 dark:bg-[var(--brand-gold-mid)] dark:bg-none rounded-2xl flex items-center justify-center border border-white/40 shadow-sm mx-auto">
                 <span className="text-white dark:text-[#14100a] text-lg">🔑</span>

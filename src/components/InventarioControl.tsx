@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import { Product, InventoryMovement } from '../types';
 import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
 import { CustomSelect } from './CustomSelect';
@@ -1051,8 +1051,14 @@ if (!m) return null;
     document.body.removeChild(link);
   };
 
-  const filteredProducts = products.filter(p => {
-    if (!p) return false;
+  // useMemo: evita recorrer toda la lista de productos en cada render (buscar,
+  // paginar, escribir un conteo) — clave para la fluidez en equipos como el
+  // Galaxy A12. Además endurece el filtro para rechazar registros corruptos
+  // (nulos, sin id o sin sku), inactivos y — fuera del conteo — sin stock, de
+  // modo que ningún producto fantasma/huérfano se cuele en la vista.
+  const filteredProducts = useMemo(() => products.filter(p => {
+    // Guarda de integridad: sin objeto, sin id o sin sku = fila huérfana/basura.
+    if (!p || !p.id || !p.sku) return false;
     if (p.active === false) return false;
     // El inventario activo oculta stock agotado; el modo de conteo físico
     // necesita seguir viendo estas filas para poder recontarlas.
@@ -1076,7 +1082,7 @@ if (!m) return null;
       return nameMatch || skuMatch;
     }
     return true;
-  });
+  }), [products, isCountingMode, activeSubTab, categoryFilter, searchQuery]);
   const { page: prodPage, setPage: setProdPage, totalPages: prodTotal, startIndex: prodStart, visibleItems: paginatedProducts } = usePagination(filteredProducts, 10);
 
   return (
