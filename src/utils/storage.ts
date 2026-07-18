@@ -403,7 +403,8 @@ let chatPending: { added: ChatConversation[]; modified: ChatConversation[]; dele
 function chatConvToRow(c: ChatConversation) {
   return {
     id: c.id, customer_name: c.customerName || '', customer_email: c.customerEmail || '',
-    status: c.status || 'active', unread_count: c.unreadCount || 0
+    status: c.status || 'nuevo', unread_count: c.unreadCount || 0,
+    assigned_admin_email: c.assignedAdminEmail || null
   };
 }
 
@@ -422,13 +423,17 @@ async function refreshChatFromSupabase() {
   const messagesByConv: Record<string, ChatMessage[]> = {};
   (msgRows || []).forEach((m: any) => {
     if (!messagesByConv[m.conversation_id]) messagesByConv[m.conversation_id] = [];
-    messagesByConv[m.conversation_id].push({ id: m.id, sender: m.sender, text: m.text, timestamp: m.created_at });
+    messagesByConv[m.conversation_id].push({
+      id: m.id, sender: m.sender, text: m.text, timestamp: m.created_at,
+      imageUrl: m.image_url || undefined, isInternalNote: !!m.is_internal_note
+    });
   });
 
   const conversations = (convRows || []).map((r: any): ChatConversation => ({
     id: r.id, customerName: r.customer_name || '', customerEmail: r.customer_email || '',
-    status: r.status || 'active',
-    unreadCount: r.unread_count || 0, messages: messagesByConv[r.id] || []
+    status: r.status || 'nuevo',
+    unreadCount: r.unread_count || 0, messages: messagesByConv[r.id] || [],
+    assignedAdminEmail: r.assigned_admin_email || undefined
   }));
   localCache.chat_conversations = conversations;
   lastSyncedDb.chat_conversations = JSON.parse(JSON.stringify(conversations));
@@ -456,7 +461,8 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
     if (error) errors.push(`crear conversación ${conv.id}: ${error.message}`);
     for (const msg of conv.messages || []) {
       const { error: msgErr } = await supabase.from('chat_messages').upsert({
-        id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp
+        id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp,
+        image_url: msg.imageUrl || null, is_internal_note: !!msg.isInternalNote
       }, { onConflict: 'id' });
       if (msgErr) errors.push(`crear mensaje ${msg.id}: ${msgErr.message}`);
     }
@@ -471,7 +477,8 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
     const newMessages = (conv.messages || []).filter((m: ChatMessage) => !oldMsgIds.has(m.id));
     for (const msg of newMessages) {
       const { error: msgErr } = await supabase.from('chat_messages').upsert({
-        id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp
+        id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp,
+        image_url: msg.imageUrl || null, is_internal_note: !!msg.isInternalNote
       }, { onConflict: 'id' });
       if (msgErr) errors.push(`crear mensaje ${msg.id}: ${msgErr.message}`);
     }
