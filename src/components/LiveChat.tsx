@@ -97,47 +97,56 @@ export default function LiveChat() {
     db.chat_conversations[convIndex].messages.push(userMsg);
     db.chat_conversations[convIndex].unreadCount += 1;
 
-    // Auto bot responder if not escalated or if matches FAQ
-    const lowerText = inputText.toLowerCase();
-    let matchedFAQ = FAQ_DATA.find(faq =>
-      lowerText.includes(faq.q.toLowerCase()) ||
-      lowerText.includes(faq.q.split(' ')[1]) || // simple keyword match
-      (lowerText.includes('garant') && faq.q.includes('garantía')) ||
-      (lowerText.includes('pago') && faq.q.includes('pago')) ||
-      (lowerText.includes('factur') && faq.q.includes('facturación'))
-    );
+    // El bot solo debe responder mientras nadie humano ha tomado el chat.
+    // En cuanto un admin se asigna o cambia el estado (pendiente/resuelto),
+    // el bot se desactiva de inmediato para no competir con soporte humano.
+    const conv = db.chat_conversations[convIndex];
+    const botActive = !conv.assignedAdminEmail && conv.status === 'nuevo';
 
-    if (matchedFAQ) {
-      setTimeout(() => {
-        const updatedDb = getDB();
-        const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
-        if (freshIdx !== -1) {
-          updatedDb.chat_conversations[freshIdx].messages.push({
-            id: `MSG-${Date.now()}-bot`,
-            sender: 'bot',
-            text: matchedFAQ.a,
-            timestamp: new Date().toISOString()
-          });
-          saveDB(updatedDb);
-          loadConversations();
-        }
-      }, 1000);
-    } else {
-      // Standard placeholder reply if no match
-      setTimeout(() => {
-        const updatedDb = getDB();
-        const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
-        if (freshIdx !== -1) {
-          updatedDb.chat_conversations[freshIdx].messages.push({
-            id: `MSG-${Date.now()}-bot`,
-            sender: 'bot',
-            text: "Entiendo tu consulta. He asignado tu ticket a nuestro personal de soporte humano. Te atenderemos en el orden de la cola.",
-            timestamp: new Date().toISOString()
-          });
-          saveDB(updatedDb);
-          loadConversations();
-        }
-      }, 1500);
+    if (botActive) {
+      const lowerText = inputText.toLowerCase();
+      let matchedFAQ = FAQ_DATA.find(faq =>
+        lowerText.includes(faq.q.toLowerCase()) ||
+        lowerText.includes(faq.q.split(' ')[1]) || // simple keyword match
+        (lowerText.includes('garant') && faq.q.includes('garantía')) ||
+        (lowerText.includes('pago') && faq.q.includes('pago')) ||
+        (lowerText.includes('factur') && faq.q.includes('facturación'))
+      );
+
+      if (matchedFAQ) {
+        setTimeout(() => {
+          const updatedDb = getDB();
+          const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
+          const freshConv = updatedDb.chat_conversations[freshIdx];
+          if (freshIdx !== -1 && !freshConv.assignedAdminEmail && freshConv.status === 'nuevo') {
+            freshConv.messages.push({
+              id: `MSG-${Date.now()}-bot`,
+              sender: 'bot',
+              text: matchedFAQ.a,
+              timestamp: new Date().toISOString()
+            });
+            saveDB(updatedDb);
+            loadConversations();
+          }
+        }, 1000);
+      } else {
+        // Standard placeholder reply if no match
+        setTimeout(() => {
+          const updatedDb = getDB();
+          const freshIdx = updatedDb.chat_conversations.findIndex(c => c.id === activeConvId);
+          const freshConv = updatedDb.chat_conversations[freshIdx];
+          if (freshIdx !== -1 && !freshConv.assignedAdminEmail && freshConv.status === 'nuevo') {
+            freshConv.messages.push({
+              id: `MSG-${Date.now()}-bot`,
+              sender: 'bot',
+              text: "Entiendo tu consulta. He asignado tu ticket a nuestro personal de soporte humano. Te atenderemos en el orden de la cola.",
+              timestamp: new Date().toISOString()
+            });
+            saveDB(updatedDb);
+            loadConversations();
+          }
+        }, 1500);
+      }
     }
 
     saveDB(db);
@@ -263,7 +272,10 @@ export default function LiveChat() {
                         {msg.sender === 'bot' ? <Bot className="w-2.5 h-2.5" /> : <User className="w-2.5 h-2.5" />}
                         <span className="capitalize">{msg.sender === 'customer' ? 'Tú' : msg.sender === 'bot' ? 'Asistente' : 'Soporte Humano'}</span>
                       </div>
-                      <p className="whitespace-pre-wrap">{msg.text}</p>
+                      {msg.imageUrl && (
+                        <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-lg max-w-full mb-1.5 max-h-56 object-cover" loading="lazy" />
+                      )}
+                      {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
                     </div>
                   </div>
                 ))}
