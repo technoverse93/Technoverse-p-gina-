@@ -115,6 +115,8 @@ export interface ChatMessage {
   sender: 'customer' | 'support' | 'bot';
   text: string;
   timestamp: string;
+  imageUrl?: string;
+  isInternalNote?: boolean;
 }
 
 export interface ChatConversation {
@@ -122,8 +124,9 @@ export interface ChatConversation {
   customerName: string;
   customerEmail: string;
   messages: ChatMessage[];
-  status: 'active' | 'archived';
+  status: 'nuevo' | 'pendiente' | 'resuelto';
   unreadCount: number;
+  assignedAdminEmail?: string;
 }
 
 export interface AuditLog {
