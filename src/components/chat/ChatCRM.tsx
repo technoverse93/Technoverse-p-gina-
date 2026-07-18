@@ -33,7 +33,9 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
 
   useEffect(() => {
     let active = true;
-    supabase.from('profiles').select('email').in('role', ['Dueño', 'Empleado']).then(({ data }) => {
+    // Estrictamente cuentas Dueño reales (el rol Empleado quedó sin uso tras
+    // la eliminación del módulo de Nómina/RRHH y no debe listarse como staff).
+    supabase.from('profiles').select('email').eq('role', 'Dueño').then(({ data }) => {
       if (active && data) setStaffEmails(data.map((p: any) => p.email).filter(Boolean));
     });
     return () => { active = false; };
@@ -42,16 +44,23 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   const selectedConv = conversations.find(c => c.id === selectedConvId) || null;
   const filteredConversations = conversations.filter(c => statusFilter === 'todos' || c.status === statusFilter);
 
-  const persist = async (mutate: (db: ReturnType<typeof getDB>) => void) => {
+  const persist = async (mutate: (db: ReturnType<typeof getDB>) => void): Promise<boolean> => {
     const db = getDB();
     mutate(db);
-    await saveDB(db);
+    try {
+      await saveDB(db);
+    } catch (err: any) {
+      alert('No se pudo guardar el cambio en la base de datos. Detalle: ' + (err?.message || err));
+      loadConversations();
+      return false;
+    }
     loadConversations();
     onDataChanged?.();
+    return true;
   };
 
   const handleSendMessage = async (convId: string, payload: { text: string; imageUrl?: string; isInternalNote?: boolean }) => {
-    await persist(db => {
+    const ok = await persist(db => {
       const idx = db.chat_conversations.findIndex(c => c.id === convId);
       if (idx === -1) return;
       db.chat_conversations[idx].messages.push({
@@ -64,15 +73,15 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
       });
       db.chat_conversations[idx].unreadCount = 0;
     });
-    addAuditLog(currentUser?.email || 'admin', 'Soporte', payload.isInternalNote ? 'Nota Interna' : 'Respuesta Chat', `Conversación ${convId}`);
+    if (ok) addAuditLog(currentUser?.email || 'admin', 'Soporte', payload.isInternalNote ? 'Nota Interna' : 'Respuesta Chat', `Conversación ${convId}`);
   };
 
   const handleAssign = async (convId: string, email: string) => {
-    await persist(db => {
+    const ok = await persist(db => {
       const idx = db.chat_conversations.findIndex(c => c.id === convId);
       if (idx !== -1) db.chat_conversations[idx].assignedAdminEmail = email;
     });
-    addAuditLog(currentUser?.email || 'admin', 'Soporte', 'Asignar Responsable', `Conversación ${convId} asignada a ${email}`);
+    if (ok) addAuditLog(currentUser?.email || 'admin', 'Soporte', 'Asignar Responsable', `Conversación ${convId} asignada a ${email}`);
   };
 
   const handleChangeStatus = async (convId: string, status: 'nuevo' | 'pendiente') => {
@@ -130,4 +139,4 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
       </div>
     </div>
   );
-    }
+}
