@@ -560,15 +560,30 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
   const { added, modified, deleted } = diffArrays(oldConvs, newConvs, 'id');
   const errors: string[] = [];
 
+  // insertChatRow (no upsert): Postgres exige permiso de SELECT para resolver
+  // ON CONFLICT DO UPDATE (lo usa .upsert()) — incluso si al final no hay
+  // ningún conflicto real. Como el cliente anónimo del chat ya no tiene SELECT
+  // directo (solo lee por el RPC con token, para que nadie lea chats ajenos),
+  // CUALQUIER upsert suyo fallaba con "new row violates row-level security
+  // policy", en todos los navegadores (no solo Safari). Los mensajes nunca se
+  // editan y los IDs son aleatorios (uuid/timestamp+random), así que un
+  // INSERT plano es siempre correcto; una colisión real (código 23505,
+  // prácticamente imposible) se trata como éxito silencioso (ya existe).
+  async function insertChatRow(table: 'chat_conversations' | 'chat_messages', row: any): Promise<string | null> {
+    const { error } = await supabase.from(table).insert(row);
+    if (error && (error as any).code !== '23505') return error.message;
+    return null;
+  }
+
   for (const conv of added) {
-    const { error } = await supabase.from('chat_conversations').upsert(chatConvToRow(conv), { onConflict: 'id' });
-    if (error) errors.push(`crear conversación ${conv.id}: ${error.message}`);
+    const err = await insertChatRow('chat_conversations', chatConvToRow(conv));
+    if (err) errors.push(`crear conversación ${conv.id}: ${err}`);
     for (const msg of conv.messages || []) {
-      const { error: msgErr } = await supabase.from('chat_messages').upsert({
+      const msgErr = await insertChatRow('chat_messages', {
         id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp,
         image_url: msg.imageUrl || null, is_internal_note: !!msg.isInternalNote
-      }, { onConflict: 'id' });
-      if (msgErr) errors.push(`crear mensaje ${msg.id}: ${msgErr.message}`);
+      });
+      if (msgErr) errors.push(`crear mensaje ${msg.id}: ${msgErr}`);
     }
   }
 
@@ -580,11 +595,11 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
     const oldMsgIds = new Set((oldConv?.messages || []).map((m: ChatMessage) => m.id));
     const newMessages = (conv.messages || []).filter((m: ChatMessage) => !oldMsgIds.has(m.id));
     for (const msg of newMessages) {
-      const { error: msgErr } = await supabase.from('chat_messages').upsert({
+      const msgErr = await insertChatRow('chat_messages', {
         id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp,
         image_url: msg.imageUrl || null, is_internal_note: !!msg.isInternalNote
-      }, { onConflict: 'id' });
-      if (msgErr) errors.push(`crear mensaje ${msg.id}: ${msgErr.message}`);
+      });
+      if (msgErr) errors.push(`crear mensaje ${msg.id}: ${msgErr}`);
     }
   }
 
