@@ -361,40 +361,56 @@ export default function LiveChat() {
                   <div ref={messagesEndRef} />
                 </div>
 
-                {activeConv.messages.length < 5 && (
-                  <div className="p-3 bg-[var(--bg-surface)] border-t border-white/10 space-y-1.5 shrink-0">
-                    <span className="text-[10px] text-[var(--text-secondary)] font-bold block mb-1">Preguntas Frecuentes de la DGT / Ley Consumo:</span>
-                    <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
-                      {FAQ_DATA.map((faq, i) => (
-                        <button
-                          key={i}
-                          onClick={() => handleFAQClick(faq)}
-                          disabled={isSubmitting}
-                          className="text-[9px] bg-slate-900 border border-white/10 hover:border-emerald-500 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50 rounded-full px-2.5 py-1 text-[var(--text-secondary)] hover:text-emerald-300 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] transition duration-150 disabled:opacity-50"
-                        >
-                          {faq.q}
-                        </button>
-                      ))}
-                    </div>
+                {activeConv.status === 'resuelto' ? (
+                  /* Consulta cerrada: solo lectura. Para seguir, nueva consulta. */
+                  <div className="p-3 bg-[var(--bg-surface)] border-t border-white/10 shrink-0 flex flex-col items-center gap-2 text-center">
+                    <p className="text-[11px] text-[var(--text-secondary)]">Esta consulta fue cerrada por el equipo de soporte. Puedes revisarla, pero para seguir escribe una nueva.</p>
+                    <button
+                      onClick={handleNewConsulta}
+                      disabled={isSubmitting}
+                      className="flex items-center gap-2 bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] transition text-white dark:text-slate-950 text-[11px] font-bold py-2 px-3 rounded-xl uppercase tracking-wider disabled:opacity-50"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Nueva Consulta
+                    </button>
                   </div>
-                )}
+                ) : (
+                  <>
+                    {activeConv.messages.length < 5 && (
+                      <div className="p-3 bg-[var(--bg-surface)] border-t border-white/10 space-y-1.5 shrink-0">
+                        <span className="text-[10px] text-[var(--text-secondary)] font-bold block mb-1">Preguntas Frecuentes de la DGT / Ley Consumo:</span>
+                        <div className="flex flex-wrap gap-1.5 max-h-20 overflow-y-auto">
+                          {FAQ_DATA.map((faq, i) => (
+                            <button
+                              key={i}
+                              onClick={() => handleFAQClick(faq)}
+                              disabled={isSubmitting}
+                              className="text-[9px] bg-slate-900 border border-white/10 hover:border-emerald-500 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50 rounded-full px-2.5 py-1 text-[var(--text-secondary)] hover:text-emerald-300 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] transition duration-150 disabled:opacity-50"
+                            >
+                              {faq.q}
+                            </button>
+                          ))}
+                        </div>
+                      </div>
+                    )}
 
-                <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-white/10 flex gap-2 shrink-0">
-                  <input
-                    type="text"
-                    value={inputText}
-                    onChange={(e) => setInputText(e.target.value)}
-                    placeholder="Escribe tu mensaje aquí..."
-                    className="flex-1 bg-[var(--bg-surface)] border border-white/10 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
-                  />
-                  <button
-                    type="submit"
-                    disabled={isSubmitting}
-                    className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] transition p-2 rounded-xl text-white dark:text-slate-950 disabled:opacity-50"
-                  >
-                    <Send className="w-3.5 h-3.5" />
-                  </button>
-                </form>
+                    <form onSubmit={handleSendMessage} className="p-3 bg-slate-950 border-t border-white/10 flex gap-2 shrink-0">
+                      <input
+                        type="text"
+                        value={inputText}
+                        onChange={(e) => setInputText(e.target.value)}
+                        placeholder="Escribe tu mensaje aquí..."
+                        className="flex-1 bg-[var(--bg-surface)] border border-white/10 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
+                      />
+                      <button
+                        type="submit"
+                        disabled={isSubmitting}
+                        className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] transition p-2 rounded-xl text-white dark:text-slate-950 disabled:opacity-50"
+                      >
+                        <Send className="w-3.5 h-3.5" />
+                      </button>
+                    </form>
+                  </>
+                )}
               </>
             ) : (
               /* Registrado pero sin consulta activa */
