@@ -104,21 +104,20 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   };
 
   const handleResolve = async (convId: string) => {
-    if (!window.confirm('¿Marcar como Resuelto? Esto ejecutará un Hard Delete permanente de la conversación y todos sus mensajes en Supabase. Esta acción no se puede deshacer.')) return;
-    const db = getDB();
-    const conv = db.chat_conversations.find(c => c.id === convId);
-    db.chat_conversations = db.chat_conversations.filter(c => c.id !== convId);
-    try {
-      await saveDB(db);
-    } catch (err: any) {
-      if (isMountedRef.current) alert('No se pudo eliminar la conversación. Detalle: ' + (err?.message || err));
-      return;
+    if (!window.confirm('¿Marcar como Resuelto? La conversación se cerrará y saldrá de tu bandeja activa, pero NO se elimina: el cliente conserva su historial y podrás revisarla en el filtro "Todos".')) return;
+    const conv = getDB().chat_conversations.find(c => c.id === convId);
+    // Cierre suave (soft-close): en vez de borrar la conversación (lo que hacía
+    // que el cliente perdiera su historial), se marca como 'resuelto'. Así
+    // desaparece de la bandeja activa del admin pero se conserva para el cliente
+    // (aparece en su "Historial Cerrado") y para auditoría.
+    const ok = await persist(db => {
+      const idx = db.chat_conversations.findIndex(c => c.id === convId);
+      if (idx !== -1) db.chat_conversations[idx].status = 'resuelto';
+    });
+    if (ok) {
+      addAuditLog(currentUser?.email || 'admin', 'Soporte', 'Chat Resuelto (Cerrado)', `Conversación de ${conv?.customerName || convId} marcada como resuelta. Historial conservado.`);
+      if (isMountedRef.current && selectedConvId === convId) setSelectedConvId(null);
     }
-    addAuditLog(currentUser?.email || 'admin', 'Soporte', 'Chat Resuelto (Hard Delete)', `Conversación de ${conv?.customerName || convId} eliminada permanentemente junto con sus mensajes.`);
-    if (!isMountedRef.current) return;
-    if (selectedConvId === convId) setSelectedConvId(null);
-    loadConversations();
-    onDataChanged?.();
   };
 
   return (
