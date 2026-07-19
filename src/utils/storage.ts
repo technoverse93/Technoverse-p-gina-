@@ -63,18 +63,51 @@ if (typeof window !== 'undefined') {
 const CHAT_TOKEN_KEY = 'technoverse_chat_token';
 let authedSession: any = null;
 
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+// Genera un UUID v4 VÁLIDO en cualquier navegador. crypto.randomUUID() solo
+// existe en Safari 15.4+ y en contexto seguro; cuando falta, se construye con
+// crypto.getRandomValues (presente en Safari desde hace años). El respaldo
+// anterior producía un texto tipo "1784...-abc" que NO es un uuid válido, y la
+// columna customer_token (tipo uuid) rechazaba el INSERT → falso "sin conexión"
+// al crear un chat nuevo en Safari.
+function generateUUID(): string {
+  try {
+    if (typeof crypto !== 'undefined' && (crypto as any).randomUUID) {
+      return (crypto as any).randomUUID();
+    }
+  } catch { /* sigue al respaldo */ }
+  try {
+    if (typeof crypto !== 'undefined' && (crypto as any).getRandomValues) {
+      const b = (crypto as any).getRandomValues(new Uint8Array(16));
+      b[6] = (b[6] & 0x0f) | 0x40; // versión 4
+      b[8] = (b[8] & 0x3f) | 0x80; // variante
+      const h: string[] = [];
+      for (let i = 0; i < 16; i++) h.push(b[i].toString(16).padStart(2, '0'));
+      return `${h[0]}${h[1]}${h[2]}${h[3]}-${h[4]}${h[5]}-${h[6]}${h[7]}-${h[8]}${h[9]}-${h[10]}${h[11]}${h[12]}${h[13]}${h[14]}${h[15]}`;
+    }
+  } catch { /* sigue al respaldo */ }
+  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
+    const r = (Math.random() * 16) | 0;
+    const v = c === 'x' ? r : (r & 0x3) | 0x8;
+    return v.toString(16);
+  });
+}
+
 export function getCustomerChatToken(): string | null {
   try {
-    return typeof window !== 'undefined' ? window.localStorage.getItem(CHAT_TOKEN_KEY) : null;
+    const t = typeof window !== 'undefined' ? window.localStorage.getItem(CHAT_TOKEN_KEY) : null;
+    // Solo se acepta un uuid válido: un token viejo con formato inválido
+    // (generado por Safari con el respaldo anterior) se descarta para que
+    // ensureCustomerChatToken lo regenere correctamente.
+    return t && UUID_RE.test(t) ? t : null;
   } catch { return null; }
 }
 
 export function ensureCustomerChatToken(): string {
   let t = getCustomerChatToken();
   if (!t) {
-    t = (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
-      ? (crypto as any).randomUUID()
-      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    t = generateUUID();
     try { window.localStorage.setItem(CHAT_TOKEN_KEY, t); } catch { /* almacenamiento no disponible */ }
   }
   return t;
