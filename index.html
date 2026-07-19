@@ -4,6 +4,12 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
 
+    <!-- Content-Security-Policy: blindaje anti-inyeccion/XSS. Solo se permite
+         ejecutar codigo propio (self); cualquier script inyectado por un
+         atacante queda bloqueado. Las conexiones de datos se limitan a Supabase
+         (HTTPS/WSS). Sin costo de rendimiento. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co;" />
+
     <title>Technoverse Costa Rica — Tienda de Tecnología y Reparaciones</title>
     <meta name="description" content="Technoverse Costa Rica: tienda de tecnología y taller de reparaciones con garantía legal. Compra segura con SINPE Móvil y tarjeta, y facturación electrónica conforme a Hacienda." />
     <meta name="application-name" content="Technoverse Costa Rica" />
