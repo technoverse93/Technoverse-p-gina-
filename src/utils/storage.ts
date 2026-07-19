@@ -54,6 +54,32 @@ if (typeof window !== 'undefined') {
   }
 }
 
+// ===================== Identidad del cliente de chat (anónimo) =====================
+// El cliente del chat no tiene login: se le asigna un token secreto (uuid) que
+// vive en localStorage. Con él (a) el backend le devuelve SOLO sus propias
+// conversaciones (RPC get_customer_chat) y (b) puede recuperar su historial al
+// volver. authedSession indica si hay una sesión Supabase (staff/cliente
+// logueado); en ese caso se lee la tabla directo (RLS filtra), no por token.
+const CHAT_TOKEN_KEY = 'technoverse_chat_token';
+let authedSession: any = null;
+
+export function getCustomerChatToken(): string | null {
+  try {
+    return typeof window !== 'undefined' ? window.localStorage.getItem(CHAT_TOKEN_KEY) : null;
+  } catch { return null; }
+}
+
+export function ensureCustomerChatToken(): string {
+  let t = getCustomerChatToken();
+  if (!t) {
+    t = (typeof crypto !== 'undefined' && (crypto as any).randomUUID)
+      ? (crypto as any).randomUUID()
+      : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+    try { window.localStorage.setItem(CHAT_TOKEN_KEY, t); } catch { /* almacenamiento no disponible */ }
+  }
+  return t;
+}
+
 function notifyUpdate() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
@@ -401,14 +427,47 @@ let chatReady = false;
 let chatPending: { added: ChatConversation[]; modified: ChatConversation[]; deleted: ChatConversation[] }[] = [];
 
 function chatConvToRow(c: ChatConversation) {
-  return {
+  const row: any = {
     id: c.id, customer_name: c.customerName || '', customer_email: c.customerEmail || '',
     status: c.status || 'nuevo', unread_count: c.unreadCount || 0,
     assigned_admin_email: c.assignedAdminEmail || null
   };
+  // Solo se envía customer_token cuando la conversación lo tiene, para que un
+  // UPDATE nunca lo borre (omitir la columna preserva su valor en la BD).
+  if (c.customerToken) row.customer_token = c.customerToken;
+  return row;
 }
 
 async function refreshChatFromSupabase() {
+  const token = getCustomerChatToken();
+
+  // MODO CLIENTE (anónimo, sin sesión Supabase): lee SOLO sus conversaciones
+  // mediante el RPC seguro, filtradas por su token secreto. Así el cierre del
+  // SELECT público del chat no le impide ver su propio historial, y nadie más
+  // puede leer conversaciones ajenas.
+  if (token && !authedSession) {
+    const { data, error } = await supabase.rpc('get_customer_chat', { p_token: token });
+    if (error) {
+      notifySyncError(`No se pudo leer el chat: ${error.message}`);
+      return;
+    }
+    const conversations = ((data as any[]) || []).map((r: any): ChatConversation => ({
+      id: r.id, customerName: r.customer_name || '', customerEmail: r.customer_email || '',
+      status: r.status || 'nuevo', unreadCount: r.unread_count || 0,
+      assignedAdminEmail: r.assigned_admin_email || undefined,
+      customerToken: token,
+      messages: ((r.messages as any[]) || []).map((m: any): ChatMessage => ({
+        id: m.id, sender: m.sender, text: m.text, timestamp: m.created_at,
+        imageUrl: m.image_url || undefined, isInternalNote: !!m.is_internal_note
+      }))
+    }));
+    localCache.chat_conversations = conversations;
+    lastSyncedDb.chat_conversations = JSON.parse(JSON.stringify(conversations));
+    notifyUpdate();
+    return;
+  }
+
+  // MODO STAFF / CLIENTE LOGUEADO: lectura directa (RLS filtra por rol/correo).
   const { data: convRows, error: convError } = await supabase.from('chat_conversations').select('*');
   if (convError) {
     notifySyncError(`No se pudo leer chat_conversations: ${convError.message}`);
@@ -433,7 +492,8 @@ async function refreshChatFromSupabase() {
     id: r.id, customerName: r.customer_name || '', customerEmail: r.customer_email || '',
     status: r.status || 'nuevo',
     unreadCount: r.unread_count || 0, messages: messagesByConv[r.id] || [],
-    assignedAdminEmail: r.assigned_admin_email || undefined
+    assignedAdminEmail: r.assigned_admin_email || undefined,
+    customerToken: r.customer_token || undefined
   }));
   localCache.chat_conversations = conversations;
   lastSyncedDb.chat_conversations = JSON.parse(JSON.stringify(conversations));
@@ -630,7 +690,10 @@ export function initFirebaseSync() {
   // client_profiles). Se relee todo en esos momentos para reflejar lo que el
   // usuario ahora sí puede ver. Se ignora TOKEN_REFRESHED (no cambia permisos)
   // y el INITIAL_SESSION anónimo (ya cubierto por la carga inicial de arriba).
+  // Además se rastrea la sesión para que refreshChatFromSupabase sepa si debe
+  // leer el chat como staff (tabla directa) o como cliente anónimo (RPC+token).
   supabase.auth.onAuthStateChange((event, session) => {
+    authedSession = session || null;
     if (event === 'SIGNED_IN' || event === 'SIGNED_OUT' || (event === 'INITIAL_SESSION' && session)) {
       refreshAllTables();
     }
