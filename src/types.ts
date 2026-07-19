@@ -127,6 +127,9 @@ export interface ChatConversation {
   status: 'nuevo' | 'pendiente' | 'resuelto';
   unreadCount: number;
   assignedAdminEmail?: string;
+  // Secreto por cliente (anónimo): identifica de forma segura sus propias
+  // conversaciones. Se genera en el navegador y se guarda en localStorage.
+  customerToken?: string;
 }
 
 export interface AuditLog {
