@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { Order, RepairOrder, ClientProfile } from '../types';
+import { useToast, useConfirm } from './ui/Overlays';
 
 interface ComplianceModuleProps {
   onRefreshData?: () => void;
@@ -12,6 +13,8 @@ interface ComplianceModuleProps {
 }
 
 export default function ComplianceModule({ onRefreshData, activeUserEmail = 'oficial.cumplimiento@technoverse.com' }: ComplianceModuleProps) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [orders, setOrders] = useState<Order[]>([]);
   const [repairs, setRepairs] = useState<RepairOrder[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
@@ -97,10 +100,14 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
   };
 
   // Ley 8968: Right to be Forgotten (Derecho al Olvido)
-  const handleDeleteClientPersonalData = (clientId: string) => {
-    if (!window.confirm('¿Está completamente seguro de ejercer el Derecho al Olvido (Ley 8968) para este cliente? Se eliminarán irrevocablemente sus datos personales, direcciones y números de tarjeta, manteniendo únicamente los identificadores genéricos de facturas por obligaciones tributarias.')) {
-      return;
-    }
+  const handleDeleteClientPersonalData = async (clientId: string) => {
+    const ok = await confirm({
+      title: 'Derecho al Olvido (Ley 8968)',
+      message: '¿Está completamente seguro de ejercer el Derecho al Olvido para este cliente? Se eliminarán irrevocablemente sus datos personales, direcciones y números de tarjeta, manteniendo únicamente los identificadores genéricos de facturas por obligaciones tributarias.',
+      confirmText: 'Purgar datos',
+      variant: 'danger'
+    });
+    if (!ok) return;
 
     const db = getDB();
     const clientIdx = db.clients.findIndex(c => c.id === clientId);
@@ -131,7 +138,7 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
     saveDB(db);
     loadComplianceData();
     if (onRefreshData) onRefreshData();
-    alert('Datos personales purgados de manera segura conforme a la legislación de la PRODHAB.');
+    toast.success('Datos personales purgados de manera segura conforme a la legislación de la PRODHAB.');
   };
 
   // Ley 8968: Data Portability Export
@@ -225,7 +232,7 @@ export default function ComplianceModule({ onRefreshData, activeUserEmail = 'ofi
     saveDB(db);
     loadComplianceData();
     if (onRefreshData) onRefreshData();
-    alert(`Factura ${orderId} validada por la Dirección General de Tributación de Costa Rica y marcada como Aceptada.`);
+    toast.success(`Factura ${orderId} validada por la Dirección General de Tributación de Costa Rica y marcada como Aceptada.`);
   };
 
   return (

@@ -5,6 +5,7 @@ import {
 } from 'lucide-react';
 import { Product, InventoryMovement } from '../types';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
+import { useToast } from './ui/Overlays';
 
 interface InventarioMundo3DProps {
   onStockUpdated?: () => void;
@@ -12,6 +13,7 @@ interface InventarioMundo3DProps {
 }
 
 export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 'technoverse.admin@gmail.com' }: InventarioMundo3DProps) {
+  const toast = useToast();
   const [products, setProducts] = useState<Product[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
   const [maxStockLimit, setMaxStockLimit] = useState<number>(50);
@@ -93,7 +95,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
     const reason = auditReasons[productId]?.trim() || 'Ajuste por conteo físico rápido de inventario en casa';
 
     if (diff === 0) {
-      alert(`El stock físico coincide con el sistema (${prod.stock} un.). No se requieren ajustes.`);
+      toast.info(`El stock físico coincide con el sistema (${prod.stock} un.). No se requieren ajustes.`);
       return;
     }
 
@@ -123,7 +125,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
       `Ajuste por conteo de stock físico: ${prod.name} (SKU: ${prod.sku}). Cambió de ${prod.stock} a ${realQty} un. (${diff > 0 ? '+' : ''}${diff}). Motivo: ${reason}`
     );
 
-    alert('¡Conteo físico registrado y stock ajustado exitosamente!');
+    toast.success('¡Conteo físico registrado y stock ajustado exitosamente!');
     loadHomeInventoryData();
     if (onStockUpdated) onStockUpdated();
   };
@@ -143,7 +145,7 @@ export default function InventarioMundo3D({ onStockUpdated, activeUserEmail = 't
         'Ubicación Física',
         `Se cambió la ubicación en casa para "${db.products[pIdx].name}": de "${oldLoc}" a "${tempLocation.trim()}"`
       );
-      alert('Ubicación física en casa actualizada.');
+      toast.success('Ubicación física en casa actualizada.');
       setEditingLocationProductId(null);
       loadHomeInventoryData();
     }
