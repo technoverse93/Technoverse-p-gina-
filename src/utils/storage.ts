@@ -420,11 +420,18 @@ async function syncTableToSupabase(cfg: TableConfig<any>, added: any[], modified
 
   const errors: string[] = [];
   for (const item of added) {
-    // upsert (no insert): un doble clic/reenvío accidental con el mismo id
-    // no debe romper con un 409 de clave duplicada y hacer que se revierta
-    // toda la pantalla; simplemente sobreescribe con los mismos datos.
-    const { error } = await supabase.from(cfg.table).upsert(cfg.toRow(item), { onConflict: cfg.idKey });
-    if (error) errors.push(`crear en ${cfg.table} (${item[cfg.idKey]}): ${error.message}`);
+    // insert (no upsert): Postgres exige permiso de SELECT para resolver
+    // ON CONFLICT DO UPDATE (lo que genera .upsert()) — incluso si al final no
+    // hay ningún conflicto real. El checkout/registro de clientes anónimos no
+    // tiene SELECT directo en orders/client_profiles/logistics_deliveries (por
+    // diseño, para que nadie lea pedidos ajenos), así que CUALQUIER upsert
+    // suyo fallaba con "new row violates row-level security policy". Un
+    // INSERT plano no tiene ese requisito. Para seguir tolerando un doble
+    // clic/reenvío con el mismo id sin romper la pantalla, una colisión real
+    // (código 23505, muy rara con los ids usados) se trata como éxito
+    // silencioso: la fila ya existe, que es justo lo que se quería lograr.
+    const { error } = await supabase.from(cfg.table).insert(cfg.toRow(item));
+    if (error && (error as any).code !== '23505') errors.push(`crear en ${cfg.table} (${item[cfg.idKey]}): ${error.message}`);
   }
   for (const item of modified) {
     const { error } = await supabase.from(cfg.table).update(cfg.toRow(item)).eq(cfg.idKey, item[cfg.idKey]);
