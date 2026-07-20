@@ -16,6 +16,7 @@ import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
+import { useToast } from './ui/Overlays';
 
 import { User } from '../types';
 
@@ -152,8 +153,10 @@ export default function PublicStore({
   // Interactive product detail modal state
   const [selectedProductDetail, setSelectedProductDetail] = useState<Product | null>(null);
   const [detailQuantity, setDetailQuantity] = useState<number>(1);
-  const [showCartSuccessToast, setShowCartSuccessToast] = useState(false);
-  const [toastMessage, setToastMessage] = useState('');
+  // Avisos unificados vía el kit de superposiciones (top-center, capa
+  // pointer-events:none): reemplaza el toast propio fixed bottom-right z-[998]
+  // que se sobreponía a los menús (hojas inferiores) y bloqueaba el toque.
+  const toast = useToast();
 
   // Repair Request Form state
   const [repairDevice, setRepairDevice] = useState('');
@@ -270,9 +273,7 @@ export default function PublicStore({
     setIsLoginModalOpen(false);
     setLoginEmail('');
     setLoginPassword('');
-    setToastMessage(`Bienvenido, ${loggedUser.name}. Sesión iniciada con éxito.`);
-    setShowCartSuccessToast(true);
-    setTimeout(() => setShowCartSuccessToast(false), 3000);
+    toast.success(`Bienvenido, ${loggedUser.name}. Sesión iniciada con éxito.`);
   };
 
   const handleClientRegisterSubmit = async (e: React.FormEvent) => {
@@ -332,9 +333,7 @@ export default function PublicStore({
 
     onLogin(clientUser);
     setIsLoginModalOpen(false);
-    setToastMessage(`¡Cuenta creada con éxito! Bienvenido a Technoverse, ${regName.trim()}.`);
-    setShowCartSuccessToast(true);
-    setTimeout(() => setShowCartSuccessToast(false), 3000);
+    toast.success(`¡Cuenta creada con éxito! Bienvenido a Technoverse, ${regName.trim()}.`);
 
     setRegName('');
     setRegEmail('');
@@ -481,12 +480,8 @@ export default function PublicStore({
       setCart([...cart, { product: prod, quantity: qty }]);
     }
 
-    // Set toast confirmation message and show it
-    setToastMessage(`¡Añadido con éxito! ${qty} x ${prod.name}`);
-    setShowCartSuccessToast(true);
-    setTimeout(() => {
-      setShowCartSuccessToast(false);
-    }, 3000);
+    // Aviso de confirmación (unificado en el kit)
+    toast.success(`¡Añadido con éxito! ${qty} x ${prod.name}`);
 
     // Close the product modal and open the cart dropdown so they see it
     setSelectedProductDetail(null);
@@ -2207,19 +2202,6 @@ export default function PublicStore({
                 </div>
               </div>
             </div>
-          </div>
-        </div>
-      )}
-
-      {/* SUCCESS CONFIRMATION TOAST */}
-      {showCartSuccessToast && (
-        <div className="fixed bottom-28 right-6 z-[998] bg-[#1E293B]/95 border border-[var(--brand-gold-mid)]/50 text-white px-5 py-3 rounded-2xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300">
-          <div className="p-1 bg-[var(--brand-gold-mid)] rounded-lg">
-            <CheckCircle className="w-4 h-4 text-[#1a1408] dark:text-[#14100a]" />
-          </div>
-          <div>
-            <div className="text-[10px] text-[var(--brand-gold-mid)] font-bold uppercase tracking-wider">¡Éxito!</div>
-            <div className="text-sm font-sans text-slate-100">{toastMessage}</div>
           </div>
         </div>
       )}

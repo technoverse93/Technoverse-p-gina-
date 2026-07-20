@@ -56,6 +56,7 @@ export default function LiveChat() {
   const [drawerOpen, setDrawerOpen] = useState(false);
 
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const messagesContainerRef = useRef<HTMLDivElement>(null);
 
   // Al montar: recupera identidad guardada (token + datos) para restaurar el
   // historial del cliente sin que tenga que volver a registrarse.
@@ -92,9 +93,15 @@ export default function LiveChat() {
   };
 
   useEffect(() => {
-    if (messagesEndRef.current) {
-      messagesEndRef.current.scrollIntoView({ behavior: 'smooth' });
-    }
+    // Autoscroll al último mensaje limitado ESTRICTAMENTE al contenedor de
+    // mensajes. Antes usábamos messagesEndRef.scrollIntoView(), que desplaza
+    // TODOS los ancestros con scroll — incluida la página detrás del chat
+    // flotante — provocando que "todo el chat" saltara/subiera al abrirlo o
+    // enfocar el input. Manipular scrollTop del propio contenedor no toca la
+    // página ni el layout fijo.
+    const container = messagesContainerRef.current;
+    if (!container) return;
+    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
   }, [conversations, activeConvId, isOpen]);
 
   const persistNewConversation = async (name: string, email: string): Promise<boolean> => {
@@ -337,7 +344,7 @@ export default function LiveChat() {
             ) : activeConv ? (
               /* Chatting Screen */
               <>
-                <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
                   {activeConv.messages.filter(msg => !msg.isInternalNote).map(msg => (
                     <div key={msg.id} className={`flex ${msg.sender === 'customer' ? 'justify-end' : 'justify-start'}`}>
                       <div className={`max-w-[80%] rounded-xl p-3 text-xs ${
