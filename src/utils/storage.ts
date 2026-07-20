@@ -470,12 +470,19 @@ function chatConvToRow(c: ChatConversation) {
   const row: any = {
     id: c.id, customer_name: c.customerName || '', customer_email: c.customerEmail || '',
     status: c.status || 'nuevo', unread_count: c.unreadCount || 0,
-    assigned_admin_email: c.assignedAdminEmail || null,
-    admin_visible: c.adminVisible !== false
+    assigned_admin_email: c.assignedAdminEmail || null
   };
   // Solo se envía customer_token cuando la conversación lo tiene, para que un
   // UPDATE nunca lo borre (omitir la columna preserva su valor en la BD).
   if (c.customerToken) row.customer_token = c.customerToken;
+  // CRÍTICO: admin_visible SOLO lo escribe el staff, que sí conoce su valor
+  // (booleano real leído de la BD). El cliente lo recibe como undefined —su RPC
+  // get_customer_chat no devuelve esa columna— así que, al responder un chat,
+  // omitir la columna PRESERVA su valor en la BD. Antes se enviaba siempre
+  // (undefined !== false = true), lo que des-archivaba el chat resuelto y lo
+  // reinyectaba en el panel del admin. (La BD además lo blinda con un trigger
+  // que impide a roles no-staff cambiar esta columna.)
+  if (c.adminVisible !== undefined) row.admin_visible = c.adminVisible;
   return row;
 }
 
