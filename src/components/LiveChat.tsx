@@ -266,7 +266,7 @@ export default function LiveChat() {
 
       {/* Chat popup window */}
       {isOpen && (
-        <div className="fixed bottom-40 right-6 z-[45] w-[calc(100vw-3rem)] sm:w-96 h-[500px] max-h-[calc(100dvh-11rem)] bg-slate-950 border border-white/10 rounded-2xl shadow-sm flex flex-col text-white overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300" id="floating-chat-window">
+        <div className="fixed bottom-40 right-6 z-[45] w-[calc(100vw-3rem)] sm:w-96 h-[500px] max-h-[calc(100dvh-15rem)] bg-slate-950 border border-white/10 rounded-2xl shadow-sm flex flex-col text-white overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300" id="floating-chat-window">
           {/* Header */}
           <div className="p-4 bg-gradient-to-r from-emerald-500 to-teal-600 dark:bg-[var(--brand-gold-mid)] dark:bg-none flex items-center justify-between shadow-sm shrink-0">
             <div className="flex items-center gap-2 min-w-0">
