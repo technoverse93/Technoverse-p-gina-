@@ -4,6 +4,7 @@ import { RepairOrder, Product, ClientProfile } from '../types';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { processRepairAtomic } from '../utils/transactions';
 import { CustomSelect } from './CustomSelect';
+import { useToast } from './ui/Overlays';
 
 interface TallerKanbanProps {
   activeUserEmail?: string;
@@ -17,6 +18,7 @@ const KANBAN_COLUMNS: RepairOrder['status'][] = [
 const sparePartCategories = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
 
 export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.com', onRepairUpdated }: TallerKanbanProps) {
+  const toast = useToast();
   const [repairs, setRepairs] = useState<RepairOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
@@ -92,12 +94,12 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
   const handleCreateRepair = (e: React.FormEvent) => {
     e.preventDefault();
     if (!newCustomerName.trim() || !newCustomerEmail.trim() || !newDevice.trim() || !newDamageReported.trim()) {
-      alert('Por favor complete todos los datos requeridos.');
+      toast.warning('Por favor complete todos los datos requeridos.');
       return;
     }
 
     if (newWarrantyMonths === '' || newWarrantyMonths < 3) {
-      alert('La legislación de Costa Rica (Ley 7472) exige una garantía mínima de 3 meses para servicios de reparación.');
+      toast.warning('La legislación de Costa Rica (Ley 7472) exige una garantía mínima de 3 meses para servicios de reparación.');
       return;
     }
 
@@ -185,7 +187,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     const qtyToAdd = Number(selectedProductQty);
 
     if (availableStock < qtyToAdd) {
-      alert(`⚠️ STOCK INSUFICIENTE EN CASA: El repuesto "${prod.name}" no cuenta con las ${qtyToAdd} unidades requeridas (Stock actual en casa: ${availableStock} un.). El ticket de reparación cambiará automáticamente al estado "Esperando repuestos".`);
+      toast.warning(`STOCK INSUFICIENTE EN CASA: El repuesto "${prod.name}" no cuenta con las ${qtyToAdd} unidades requeridas (Stock actual en casa: ${availableStock} un.). El ticket de reparación cambiará automáticamente al estado "Esperando repuestos".`);
       
       if (selectedRepair) {
         const db = getDB();
@@ -241,7 +243,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     e.preventDefault();
     if (!selectedRepair) return;
     if (laborCost === '') {
-      alert('Por favor ingrese el costo de mano de obra.');
+      toast.warning('Por favor ingrese el costo de mano de obra.');
       return;
     }
 
@@ -271,7 +273,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
         const availableStock = productInDb.stock;
 
         if (additionalNeeded > 0 && availableStock < additionalNeeded) {
-          alert(`Stock insuficiente para repuesto: ${productInDb.name}. Necesario: ${additionalNeeded}, disponible: ${availableStock}`);
+          toast.error(`Stock insuficiente para repuesto: ${productInDb.name}. Necesario: ${additionalNeeded}, disponible: ${availableStock}`);
           stockValid = false;
         }
       }
@@ -303,7 +305,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     const result = await processRepairAtomic(originalRepair, repuestosSelected, activeUserEmail || 'admin', finalLaborCost, diagnosis, newRepairData);
     
     if (!result.success) {
-      alert(result.error);
+      toast.error(result.error);
       return;
     }
 
@@ -318,7 +320,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
     setSelectedRepair(null);
     if (onRepairUpdated) onRepairUpdated();
-    alert('Diagnóstico y presupuesto de reparación actualizados correctamente.');
+    toast.success('Diagnóstico y presupuesto de reparación actualizados correctamente.');
   };
 
   const handleUpdateStatus = (repairId: string, newStatus: RepairOrder['status']) => {
