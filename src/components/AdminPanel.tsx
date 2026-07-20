@@ -13,6 +13,7 @@ import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/s
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
 import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog, Banner } from '../types';
+import { useToast, useConfirm } from './ui/Overlays';
 
 // Cargados solo cuando se visita su pestaña: reduce el JS que el A12 tiene
 // que parsear/ejecutar en el arranque del panel.
@@ -58,6 +59,8 @@ export default function AdminPanel({
   theme,
   toggleTheme
 }: AdminPanelProps) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const isSavingConfigRef = useRef(false);
   const isSavingProductRef = useRef(false);
   const [isMounted, setIsMounted] = useState(false);
@@ -170,6 +173,9 @@ export default function AdminPanel({
   // Client form state
   const [editingClient, setEditingClient] = useState<ClientProfile | null>(null);
   const [isClientModalOpen, setIsClientModalOpen] = useState(false);
+  // Correo del cliente cuyo reseteo de contraseña está en curso; deshabilita
+  // su botón puntual mientras la Edge Function responde (evita doble envío).
+  const [resettingClientEmail, setResettingClientEmail] = useState<string | null>(null);
   const [clientForm, setClientForm] = useState<Partial<ClientProfile>>({
     name: '', email: '', phone: '', province: 'San José', addressDetail: '', notes: ''
   });
@@ -235,19 +241,19 @@ export default function AdminPanel({
   const handleSaveClient = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!clientForm.name) {
-      alert('El nombre del cliente es obligatorio.');
+      toast.warning('El nombre del cliente es obligatorio.');
       return;
     }
     if (!clientForm.email) {
-      alert('El correo electrónico es obligatorio.');
+      toast.warning('El correo electrónico es obligatorio.');
       return;
     }
     if (!clientForm.phone) {
-      alert('El teléfono es obligatorio.');
+      toast.warning('El teléfono es obligatorio.');
       return;
     }
     if (!clientForm.addressDetail) {
-      alert('La dirección exacta es obligatoria.');
+      toast.warning('La dirección exacta es obligatoria.');
       return;
     }
 
@@ -272,11 +278,42 @@ export default function AdminPanel({
     try {
       await saveDB(db);
     } catch (err: any) {
-      alert('No se pudo guardar el cliente en la base de datos. Detalle: ' + (err?.message || err));
+      toast.error('No se pudo guardar el cliente en la base de datos. Detalle: ' + (err?.message || err));
       return;
     }
     loadAllAdminData();
     setIsClientModalOpen(false);
+  };
+
+  // Forzar reseteo de contraseña de un cliente. La cuenta de Auth y el envío
+  // del correo de recuperación viven en la Edge Function 'admin-force-password-reset'
+  // (service_role, verifica que quien llama sea Dueño) — nunca se maneja la
+  // llave de servicio ni se toca la sesión del admin desde el navegador.
+  const handleForcePasswordReset = async (email: string, name: string) => {
+    if (!email || resettingClientEmail) return;
+    const ok = await confirm({
+      title: 'Forzar reseteo de contraseña',
+      message: `Se enviará un correo de restablecimiento de contraseña a ${name} (${email}). El cliente deberá seguir el enlace para definir una nueva contraseña.`,
+      confirmText: 'Enviar correo de reseteo'
+    });
+    if (!ok) return;
+
+    setResettingClientEmail(email);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-force-password-reset', {
+        body: { email }
+      });
+      if (error || !data?.success) {
+        toast.error('No se pudo forzar el reseteo. Detalle: ' + (data?.error || error?.message || 'error desconocido'));
+        return;
+      }
+      toast.success(`Correo de reseteo de contraseña enviado a ${email}.`);
+      addAuditLog(currentUser?.email || 'admin', 'CRM', 'Forzar Reseteo Contraseña', `Reseteo forzado para ${name} (${email}).`);
+    } catch (err: any) {
+      toast.error('No se pudo forzar el reseteo. Detalle: ' + (err?.message || err));
+    } finally {
+      setResettingClientEmail(null);
+    }
   };
 
   // Load Admin Data
@@ -376,7 +413,7 @@ export default function AdminPanel({
     });
 
     if (signInError || !signInData?.user) {
-      alert('Credenciales inválidas. Por favor verifique el correo y contraseña.');
+      toast.error('Credenciales inválidas. Por favor verifique el correo y contraseña.');
       addAuditLog(cleanEmail || 'anonimo', 'Seguridad', 'Intento Fallido', 'Intento de login con credenciales incorrectas.');
       return;
     }
@@ -389,7 +426,7 @@ export default function AdminPanel({
 
     if (profileError || !profile || profile.role === 'Cliente') {
       await supabase.auth.signOut();
-      alert('Esta cuenta no tiene acceso al panel de administración.');
+      toast.error('Esta cuenta no tiene acceso al panel de administración.');
       return;
     }
 
@@ -442,12 +479,12 @@ export default function AdminPanel({
       addAuditLog(currentUser?.email || 'admin', 'Configuración', 'Actualizar Ajustes', 'Ajustes fiscales, operativos y logo actualizados', db);
       await saveDB(db);
     } catch (err: any) {
-      alert('No se pudo guardar la configuración/logo en la base de datos. Detalle: ' + (err?.message || err));
+      toast.error('No se pudo guardar la configuración/logo en la base de datos. Detalle: ' + (err?.message || err));
       return;
     }
     setStoreLogoPreview(null);
     loadAllAdminData();
-    alert('Parámetros de facturación fiscal y de operación residencial guardados con éxito.');
+    toast.success('Parámetros de facturación fiscal y de operación residencial guardados con éxito.');
   };
 
   const handleLogout = async () => {
@@ -481,7 +518,7 @@ export default function AdminPanel({
 
   const handleProductSubmitInner = async () => {
     if (!prodName.trim() || prodPrice <= 0 || prodCost <= 0) {
-      alert('Por favor complete todos los datos con valores positivos.');
+      toast.warning('Por favor complete todos los datos con valores positivos.');
       return;
     }
 
@@ -539,7 +576,7 @@ export default function AdminPanel({
     try {
       await saveDB(db);
     } catch (err: any) {
-      alert('No se pudo guardar el producto en la base de datos. Detalle: ' + (err?.message || err));
+      toast.error('No se pudo guardar el producto en la base de datos. Detalle: ' + (err?.message || err));
       return;
     }
     loadAllAdminData();
@@ -573,13 +610,19 @@ export default function AdminPanel({
   };
 
   const handleDeleteProduct = async (prodId: string, name: string) => {
-    if (!window.confirm(`¿Seguro que desea eliminar el producto ${name}?`)) return;
+    const ok = await confirm({
+      title: 'Eliminar producto',
+      message: `¿Seguro que desea eliminar el producto ${name}?`,
+      confirmText: 'Eliminar',
+      variant: 'danger'
+    });
+    if (!ok) return;
     const db = getDB();
     db.products = db.products.filter(p => p && p.id !== prodId);
     try {
       await saveDB(db);
     } catch (err: any) {
-      alert('No se pudo eliminar el producto en la base de datos. Detalle: ' + (err?.message || err));
+      toast.error('No se pudo eliminar el producto en la base de datos. Detalle: ' + (err?.message || err));
       return;
     }
     addAuditLog(currentUser?.email || 'admin', 'Inventario', 'Eliminar Producto', `Artículo eliminado: ${name}`);
@@ -607,7 +650,7 @@ export default function AdminPanel({
       });
 
       if (fnError || !fnData?.success) {
-        alert('No se pudo crear el usuario. Detalle: ' + (fnData?.error || fnError?.message || 'error desconocido'));
+        toast.error('No se pudo crear el usuario. Detalle: ' + (fnData?.error || fnError?.message || 'error desconocido'));
         return;
       }
 
@@ -692,9 +735,12 @@ export default function AdminPanel({
   };
   // Credit Note returns
   const handleIssueCreditNote = async (orderId: string) => {
-    if (!window.confirm('¿Desea generar una Nota de Crédito fiscal (NC-001) para esta factura? Esto reintegrará automáticamente el stock a bodega.')) {
-      return;
-    }
+    const ok = await confirm({
+      title: 'Emitir Nota de Crédito',
+      message: '¿Desea generar una Nota de Crédito fiscal (NC-001) para esta factura? Esto reintegrará automáticamente el stock a bodega.',
+      confirmText: 'Emitir NC-001'
+    });
+    if (!ok) return;
 
     const db = getDB();
     const oIdx = db.orders.findIndex(o => o && o.id === orderId);
@@ -747,12 +793,12 @@ export default function AdminPanel({
     try {
       await saveDB(db);
     } catch (err: any) {
-      alert('No se pudo guardar la nota de crédito en la base de datos. Detalle: ' + (err?.message || err));
+      toast.error('No se pudo guardar la nota de crédito en la base de datos. Detalle: ' + (err?.message || err));
       return;
     }
     loadAllAdminData();
     if (onRefreshTrigger) onRefreshTrigger();
-    alert(`Nota de crédito emitida con éxito. Stock reintegrado.`);
+    toast.success(`Nota de crédito emitida con éxito. Stock reintegrado.`);
   };
 
   // Image pre-view upload simulation
@@ -811,7 +857,7 @@ export default function AdminPanel({
 
   const handleExportCSV = (data: any[], fileName: string) => {
     if (data.length === 0) {
-      alert('No hay datos para exportar.');
+      toast.warning('No hay datos para exportar.');
       return;
     }
     const headers = Object.keys(data[0]);
@@ -1464,9 +1510,19 @@ export default function AdminPanel({
                             )}
                           </td>
                           <td className="p-4 text-center">
-                            <button onClick={() => openClientModal(c)} className="p-1.5 hover:bg-[var(--bg-surface)] rounded-lg text-sky-400 dark:text-[var(--brand-gold-light)] transition" title="Editar Cliente">
-                              <Edit className="w-4 h-4" />
-                            </button>
+                            <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => openClientModal(c)} className="p-1.5 hover:bg-[var(--bg-surface)] rounded-lg text-sky-400 dark:text-[var(--brand-gold-light)] transition" title="Editar Cliente">
+                                <Edit className="w-4 h-4" />
+                              </button>
+                              <button
+                                onClick={() => handleForcePasswordReset(c.email, c.name)}
+                                disabled={resettingClientEmail === c.email}
+                                className="p-1.5 hover:bg-[var(--bg-surface)] rounded-lg text-amber-500 transition disabled:opacity-40 disabled:cursor-wait"
+                                title="Forzar reseteo de contraseña"
+                              >
+                                {resettingClientEmail === c.email ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
+                              </button>
+                            </div>
                           </td>
                          </tr> )} />
                 </table>
@@ -1833,7 +1889,7 @@ if (!del) return null;
                                 });
                                 saveDB(db);
                                 loadAllAdminData();
-                                alert('Entrega marcada como completada y registrada en bitácora.');
+                                toast.success('Entrega marcada como completada y registrada en bitácora.');
                               }
                             }}
                             className="block bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-[var(--text-primary)] font-bold px-3 py-1.5 rounded-xl transition font-sans text-[10px] uppercase tracking-wider"
