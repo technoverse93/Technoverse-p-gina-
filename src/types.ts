@@ -130,6 +130,10 @@ export interface ChatConversation {
   // Secreto por cliente (anónimo): identifica de forma segura sus propias
   // conversaciones. Se genera en el navegador y se guarda en localStorage.
   customerToken?: string;
+  // false = archivada por staff (oculta de la bandeja "Todos" del admin).
+  // Nunca afecta lo que ve el cliente: su historial se lee vía un camino
+  // aparte (get_customer_chat) que ignora esta columna. Por defecto true.
+  adminVisible?: boolean;
 }
 
 export interface AuditLog {
