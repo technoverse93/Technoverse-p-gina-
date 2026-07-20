@@ -6,3 +6,6 @@ coverage/
 *.log
 .env*
 !.env.example
+
+# Generado por build-android.yml (npx cap add android / npx cap sync android)
+android/
