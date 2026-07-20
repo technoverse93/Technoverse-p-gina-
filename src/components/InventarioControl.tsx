@@ -1054,15 +1054,16 @@ if (!m) return null;
   // useMemo: evita recorrer toda la lista de productos en cada render (buscar,
   // paginar, escribir un conteo) — clave para la fluidez en equipos como el
   // Galaxy A12. Además endurece el filtro para rechazar registros corruptos
-  // (nulos, sin id o sin sku), inactivos y — fuera del conteo — sin stock, de
-  // modo que ningún producto fantasma/huérfano se cuele en la vista.
+  // (nulos, sin id o sin sku), inactivos y sin stock, de modo que ningún
+  // producto fantasma/huérfano se cuele en la vista — incluido el Conteo
+  // Físico: solo carga inventario actual existente (stock > 0); lo faltante
+  // o nuevo se agrega manualmente vía auto-rellenado de SKU, no apareciendo
+  // aquí por sí solo.
   const filteredProducts = useMemo(() => products.filter(p => {
     // Guarda de integridad: sin objeto, sin id o sin sku = fila huérfana/basura.
     if (!p || !p.id || !p.sku) return false;
     if (p.active === false) return false;
-    // El inventario activo oculta stock agotado; el modo de conteo físico
-    // necesita seguir viendo estas filas para poder recontarlas.
-    if (!isCountingMode && Number(p.stock) <= 0) return false;
+    if (Number(p.stock) <= 0) return false;
 
     // Sub-tab logic
     const isSpare = p.category === 'Repuestos' || sparePartCategories.includes(p.category);
@@ -1082,7 +1083,7 @@ if (!m) return null;
       return nameMatch || skuMatch;
     }
     return true;
-  }), [products, isCountingMode, activeSubTab, categoryFilter, searchQuery]);
+  }), [products, activeSubTab, categoryFilter, searchQuery]);
   const { page: prodPage, setPage: setProdPage, totalPages: prodTotal, startIndex: prodStart, visibleItems: paginatedProducts } = usePagination(filteredProducts, 10);
 
   return (
