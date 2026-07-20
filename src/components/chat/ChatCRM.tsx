@@ -5,6 +5,7 @@ import { getDB, saveDB, addAuditLog } from '../../utils/storage';
 import { supabase } from '../../supabaseClient';
 import ChatInbox from './ChatInbox';
 import ChatThread from './ChatThread';
+import { useToast, useConfirm } from '../ui/Overlays';
 
 interface ChatCRMProps {
   currentUser: User | null;
@@ -14,6 +15,8 @@ interface ChatCRMProps {
 export type ChatStatusFilter = 'nuevo' | 'pendiente' | 'todos';
 
 export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
+  const toast = useToast();
+  const confirm = useConfirm();
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ChatStatusFilter>('nuevo');
@@ -59,7 +62,7 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
       await saveDB(db);
     } catch (err: any) {
       if (isMountedRef.current) {
-        alert('No se pudo guardar el cambio en la base de datos. Detalle: ' + (err?.message || err));
+        toast.error('No se pudo guardar el cambio en la base de datos. Detalle: ' + (err?.message || err));
         loadConversations();
       }
       return false;
@@ -104,7 +107,12 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   };
 
   const handleResolve = async (convId: string) => {
-    if (!window.confirm('¿Marcar como Resuelto? La conversación se cerrará y saldrá de tu bandeja activa, pero NO se elimina: el cliente conserva su historial y podrás revisarla en el filtro "Todos".')) return;
+    const confirmed = await confirm({
+      title: 'Marcar como Resuelto',
+      message: 'La conversación se cerrará y saldrá de tu bandeja activa, pero NO se elimina: el cliente conserva su historial y podrás revisarla en el filtro "Todos".',
+      confirmText: 'Marcar como Resuelto'
+    });
+    if (!confirmed) return;
     const conv = getDB().chat_conversations.find(c => c.id === convId);
     // Cierre suave (soft-close): en vez de borrar la conversación (lo que hacía
     // que el cliente perdiera su historial), se marca como 'resuelto'. Así
