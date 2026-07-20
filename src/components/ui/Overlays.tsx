@@ -585,4 +585,124 @@ export function Dropdown({ button, children, align = 'start', width }: DropdownP
             role="menu"
             className="fixed glass-panel rounded-xl p-1 overflow-hidden motion-safe:animate-in motion-safe:fade-in motion-safe:zoom-in-95 motion-safe:duration-150"
             style={{
-              zIndex: 
+              zIndex: Z.floating,
+              left: pos.left,
+              top: pos.top,
+              minWidth: pos.minWidth,
+            }}
+          >
+            {typeof children === 'function' ? children(close) : children}
+          </div>
+        </Portal>
+      )}
+    </>
+  );
+}
+
+export function DropdownItem({
+  children,
+  onSelect,
+  danger = false,
+  disabled = false,
+}: {
+  children: React.ReactNode;
+  onSelect?: () => void;
+  danger?: boolean;
+  disabled?: boolean;
+}) {
+  return (
+    <button
+      type="button"
+      role="menuitem"
+      disabled={disabled}
+      onClick={onSelect}
+      className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${
+        danger
+          ? 'text-rose-500 hover:bg-rose-500/10'
+          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]'
+      }`}
+    >
+      {children}
+    </button>
+  );
+}
+
+/* ══════════════════════════════════════════════════════════════════════════
+   TOOLTIP  (por Portal — reemplaza el atributo title="")
+   ══════════════════════════════════════════════════════════════════════════ */
+
+export interface TooltipProps {
+  content: React.ReactNode;
+  children: React.ReactElement;
+  side?: 'top' | 'bottom';
+}
+
+export function Tooltip({ content, children, side = 'top' }: TooltipProps) {
+  const anchorRef = useRef<HTMLElement | null>(null);
+  const [open, setOpen] = useState(false);
+  const [pos, setPos] = useState<{ left: number; top: number } | null>(null);
+  const id = useId();
+
+  const recompute = useCallback(() => {
+    if (!anchorRef.current) return;
+    const r = anchorRef.current.getBoundingClientRect();
+    const top = side === 'top' ? r.top - 8 : r.bottom + 8;
+    setPos({ left: r.left + r.width / 2, top });
+  }, [side]);
+
+  const openTip = useCallback(() => {
+    recompute();
+    setOpen(true);
+  }, [recompute]);
+  const closeTip = useCallback(() => setOpen(false), []);
+
+  const trigger = React.cloneElement(children as React.ReactElement<any>, {
+    ref: (node: HTMLElement | null) => {
+      anchorRef.current = node;
+      const { ref } = children as any;
+      if (typeof ref === 'function') ref(node);
+      else if (ref && typeof ref === 'object') (ref as any).current = node;
+    },
+    'aria-describedby': open ? id : undefined,
+    onMouseEnter: (e: React.MouseEvent) => {
+      (children.props as any).onMouseEnter?.(e);
+      openTip();
+    },
+    onMouseLeave: (e: React.MouseEvent) => {
+      (children.props as any).onMouseLeave?.(e);
+      closeTip();
+    },
+    onFocus: (e: React.FocusEvent) => {
+      (children.props as any).onFocus?.(e);
+      openTip();
+    },
+    onBlur: (e: React.FocusEvent) => {
+      (children.props as any).onBlur?.(e);
+      closeTip();
+    },
+  });
+
+  return (
+    <>
+      {trigger}
+      {open && pos && (
+        <Portal>
+          <div
+            id={id}
+            role="tooltip"
+            className="fixed max-w-[220px] px-2.5 py-1.5 rounded-lg text-[11px] font-medium leading-snug text-white bg-slate-900 dark:bg-slate-800 border border-white/10 shadow-lg pointer-events-none motion-safe:animate-in motion-safe:fade-in motion-safe:duration-100"
+            style={{
+              zIndex: Z.floating,
+              left: pos.left,
+              top: pos.top,
+              transform:
+                side === 'top' ? 'translate(-50%, -100%)' : 'translate(-50%, 0)',
+            }}
+          >
+            {content}
+          </div>
+        </Portal>
+      )}
+    </>
+  );
+}
