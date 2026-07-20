@@ -470,7 +470,8 @@ function chatConvToRow(c: ChatConversation) {
   const row: any = {
     id: c.id, customer_name: c.customerName || '', customer_email: c.customerEmail || '',
     status: c.status || 'nuevo', unread_count: c.unreadCount || 0,
-    assigned_admin_email: c.assignedAdminEmail || null
+    assigned_admin_email: c.assignedAdminEmail || null,
+    admin_visible: c.adminVisible !== false
   };
   // Solo se envía customer_token cuando la conversación lo tiene, para que un
   // UPDATE nunca lo borre (omitir la columna preserva su valor en la BD).
@@ -533,7 +534,8 @@ async function refreshChatFromSupabase() {
     status: r.status || 'nuevo',
     unreadCount: r.unread_count || 0, messages: messagesByConv[r.id] || [],
     assignedAdminEmail: r.assigned_admin_email || undefined,
-    customerToken: r.customer_token || undefined
+    customerToken: r.customer_token || undefined,
+    adminVisible: r.admin_visible !== false
   }));
   localCache.chat_conversations = conversations;
   lastSyncedDb.chat_conversations = JSON.parse(JSON.stringify(conversations));
