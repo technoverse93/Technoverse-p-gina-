@@ -14,9 +14,10 @@ interface ChatThreadProps {
   onAssign: (convId: string, email: string) => Promise<void>;
   onChangeStatus: (convId: string, status: 'nuevo' | 'pendiente') => Promise<void>;
   onResolve: (convId: string) => Promise<void>;
+  onRestore: (convId: string) => Promise<void>;
 }
 
-export default function ChatThread({ conversation, staffEmails, onBack, onSendMessage, onAssign, onChangeStatus, onResolve }: ChatThreadProps) {
+export default function ChatThread({ conversation, staffEmails, onBack, onSendMessage, onAssign, onChangeStatus, onResolve, onRestore }: ChatThreadProps) {
   const toast = useToast();
   const [inputText, setInputText] = useState('');
   const [noteMode, setNoteMode] = useState(false);
@@ -87,6 +88,11 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {conversation.adminVisible === false && (
+            <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-slate-500/15 text-slate-500 dark:text-slate-400 hidden sm:inline">
+              Archivada
+            </span>
+          )}
           {conversation.assignedAdminEmail && (
             <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hidden sm:inline truncate max-w-[140px]">
               {conversation.assignedAdminEmail}
@@ -103,6 +109,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
               onAssign={(email) => onAssign(conversation.id, email)}
               onChangeStatus={(status) => onChangeStatus(conversation.id, status)}
               onResolve={() => onResolve(conversation.id)}
+              onRestore={() => onRestore(conversation.id)}
             />
           )}
         </div>
