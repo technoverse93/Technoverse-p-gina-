@@ -3,8 +3,26 @@ import PublicStore from './components/PublicStore';
 import AdminPanel from './components/AdminPanel';
 import { User } from './types';
 import { initKeyboard } from './mobile/keyboard';
+import { OverlayProvider, useToast } from './components/ui/Overlays';
 
+/**
+ * App envuelve toda la aplicación en <OverlayProvider> para que cualquier
+ * componente (Store o Admin) pueda emitir toasts/confirmaciones a través de
+ * hooks, sin diálogos nativos bloqueantes del sistema operativo. La lógica de
+ * ruteo/sesión vive en <AppInner> porque los hooks del kit (useToast) deben
+ * ejecutarse DENTRO del provider.
+ */
 export default function App() {
+  return (
+    <OverlayProvider>
+      <AppInner />
+    </OverlayProvider>
+  );
+}
+
+function AppInner() {
+  const toast = useToast();
+
   const [currentView, setCurrentView] = useState<'store' | 'admin'>(
     window.location.pathname.startsWith('/admin') ? 'admin' : 'store'
   );
@@ -80,12 +98,12 @@ export default function App() {
         setCurrentView("store");
         setAutoOpenLogin(true);
       } else if (currentUser.role === 'Cliente') {
-        alert("Acceso denegado. Este panel está reservado para el personal administrativo y técnico de Technoverse.");
+        toast.error("Acceso denegado. Este panel está reservado para el personal administrativo y técnico de Technoverse.");
         window.history.replaceState(null, "", "/");
         setCurrentView("store");
       }
     }
-  }, [currentView, currentUser]);
+  }, [currentView, currentUser, toast]);
 
   useEffect(() => {
     const handlePopState = () => {
@@ -98,8 +116,8 @@ export default function App() {
   return (
     <div className="min-h-screen bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700 dark:selection:bg-[var(--brand-gold-mid)]/20 dark:selection:text-[var(--brand-gold-light)]" id="technoverse-application-container">
       {currentView === 'store' ? (
-        <PublicStore 
-          onNavigateToAdmin={() => { window.history.pushState(null, "", "/admin"); setCurrentView("admin"); }} 
+        <PublicStore
+          onNavigateToAdmin={() => { window.history.pushState(null, "", "/admin"); setCurrentView("admin"); }}
           onRefreshTrigger={refreshTrigger}
           currentUser={currentUser}
           isAuthenticated={isAuthenticated}
@@ -111,12 +129,12 @@ export default function App() {
           toggleTheme={toggleTheme}
         />
       ) : (
-        <AdminPanel 
+        <AdminPanel
           onNavigateToStore={() => {
-            window.history.pushState(null, "", "/"); 
-            setCurrentView("store"); 
+            window.history.pushState(null, "", "/");
+            setCurrentView("store");
             triggerRefresh();
-          }} 
+          }}
           onRefreshTrigger={triggerRefresh}
           currentUser={currentUser}
           isAuthenticated={isAuthenticated}
