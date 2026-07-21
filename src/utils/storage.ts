@@ -238,7 +238,8 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
       weight: p.weight ?? null, dimensions: p.dimensions || null, warehouse_row: p.row || null,
       shelf: p.shelf || null, physical_location: p.physicalLocation || null, warranty: p.warranty || null,
       is_double_stock: p.isDoubleStock || false, internal_stock: p.internalStock || 0,
-      client_stock: p.clientStock || 0, linked_spare_part_sku: p.linkedSparePartSku || null
+      client_stock: p.clientStock || 0, linked_spare_part_sku: p.linkedSparePartSku || null,
+      caabys: p.caabys || '8399000000000'
     }),
     fromRow: (r): Product => ({
       id: r.id, name: r.name, sku: r.sku, category: r.category, price: Number(r.price) || 0,
@@ -249,7 +250,8 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
       weight: r.weight ?? undefined, dimensions: r.dimensions || undefined, row: r.warehouse_row || undefined,
       shelf: r.shelf || undefined, physicalLocation: r.physical_location || undefined, warranty: r.warranty || undefined,
       isDoubleStock: r.is_double_stock || false, internalStock: r.internal_stock ?? 0,
-      clientStock: r.client_stock ?? 0, linkedSparePartSku: r.linked_spare_part_sku || undefined
+      clientStock: r.client_stock ?? 0, linkedSparePartSku: r.linked_spare_part_sku || undefined,
+      caabys: r.caabys || '8399000000000'
     })
   }),
   configFor<InventoryMovement>({
