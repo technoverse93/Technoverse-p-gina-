@@ -475,14 +475,10 @@ function chatConvToRow(c: ChatConversation) {
   // Solo se envía customer_token cuando la conversación lo tiene, para que un
   // UPDATE nunca lo borre (omitir la columna preserva su valor en la BD).
   if (c.customerToken) row.customer_token = c.customerToken;
-  // CRÍTICO: admin_visible SOLO lo escribe el staff, que sí conoce su valor
-  // (booleano real leído de la BD). El cliente lo recibe como undefined —su RPC
-  // get_customer_chat no devuelve esa columna— así que, al responder un chat,
-  // omitir la columna PRESERVA su valor en la BD. Antes se enviaba siempre
-  // (undefined !== false = true), lo que des-archivaba el chat resuelto y lo
-  // reinyectaba en el panel del admin. (La BD además lo blinda con un trigger
-  // que impide a roles no-staff cambiar esta columna.)
-  if (c.adminVisible !== undefined) row.admin_visible = c.adminVisible;
+  // updated_at NUNCA se envía desde aquí: un trigger en la BD la sobrescribe
+  // con now() en cada UPDATE, así que ningún cliente (ni un reloj local
+  // desincronizado) puede falsear la marca de tiempo que usa el filtro de
+  // rango temporal de "Resueltos" en el panel del admin.
   return row;
 }
 
@@ -542,7 +538,7 @@ async function refreshChatFromSupabase() {
     unreadCount: r.unread_count || 0, messages: messagesByConv[r.id] || [],
     assignedAdminEmail: r.assigned_admin_email || undefined,
     customerToken: r.customer_token || undefined,
-    adminVisible: r.admin_visible !== false
+    updatedAt: r.updated_at || r.created_at || undefined
   }));
   localCache.chat_conversations = conversations;
   lastSyncedDb.chat_conversations = JSON.parse(JSON.stringify(conversations));
