@@ -31,6 +31,9 @@ export interface Product {
   internalStock?: number;
   clientStock?: number;
   linkedSparePartSku?: string;
+  // Código de 13 dígitos del Catálogo de Bienes y Servicios (CAABYS) de
+  // Hacienda, requerido por línea en comprobantes electrónicos v4.3.
+  caabys?: string;
 }
 
 export interface InventoryMovement {
