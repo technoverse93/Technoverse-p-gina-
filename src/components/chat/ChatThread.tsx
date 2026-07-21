@@ -4,6 +4,7 @@ import { ChatConversation } from '../../types';
 import { compressImage } from '../../utils/storage';
 import { supabase } from '../../supabaseClient';
 import ChatActionsMenu from './ChatActionsMenu';
+import { useToast } from '../ui/Overlays';
 
 interface ChatThreadProps {
   conversation: ChatConversation;
@@ -16,6 +17,7 @@ interface ChatThreadProps {
 }
 
 export default function ChatThread({ conversation, staffEmails, onBack, onSendMessage, onAssign, onChangeStatus, onResolve }: ChatThreadProps) {
+  const toast = useToast();
   const [inputText, setInputText] = useState('');
   const [noteMode, setNoteMode] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -66,7 +68,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
       const { data } = supabase.storage.from('chat-images').getPublicUrl(path);
       await onSendMessage(conversation.id, { text: '', imageUrl: data.publicUrl });
     } catch (err: any) {
-      if (isMountedRef.current) alert('No se pudo subir la imagen. Detalle: ' + (err?.message || err));
+      if (isMountedRef.current) toast.error('No se pudo subir la imagen. Detalle: ' + (err?.message || err));
     } finally {
       if (isMountedRef.current) setUploading(false);
     }
@@ -85,6 +87,11 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {conversation.status === 'resuelto' && (
+            <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hidden sm:inline">
+              Resuelto
+            </span>
+          )}
           {conversation.assignedAdminEmail && (
             <span className="text-[9px] font-bold px-2 py-1 rounded-full bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 hidden sm:inline truncate max-w-[140px]">
               {conversation.assignedAdminEmail}

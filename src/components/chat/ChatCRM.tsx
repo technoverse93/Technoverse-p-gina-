@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { ChatConversation, User } from '../../types';
 import { getDB, saveDB, addAuditLog } from '../../utils/storage';
@@ -12,7 +12,16 @@ interface ChatCRMProps {
   onDataChanged?: () => void;
 }
 
-export type ChatStatusFilter = 'nuevo' | 'pendiente' | 'todos';
+// 'resueltos' reemplaza al antiguo 'archivados': ya no es una bandera booleana
+// mutable, sino una vista filtrada por rango temporal (ver ResolvedRange).
+export type ChatStatusFilter = 'nuevo' | 'pendiente' | 'todos' | 'resueltos';
+export type ResolvedRange = '1d' | '7d' | '30d';
+
+export const RESOLVED_RANGE_MS: Record<ResolvedRange, number> = {
+  '1d': 24 * 60 * 60 * 1000,
+  '7d': 7 * 24 * 60 * 60 * 1000,
+  '30d': 30 * 24 * 60 * 60 * 1000
+};
 
 export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   const toast = useToast();
@@ -20,6 +29,7 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
   const [statusFilter, setStatusFilter] = useState<ChatStatusFilter>('nuevo');
+  const [resolvedRange, setResolvedRange] = useState<ResolvedRange>('7d');
   const [staffEmails, setStaffEmails] = useState<string[]>([]);
   // Si el admin sale de la pestaña Chat CRM mientras una escritura (asignar,
   // cambiar estado, enviar mensaje, resolver) sigue en curso, no se debe
@@ -53,7 +63,27 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   }, []);
 
   const selectedConv = conversations.find(c => c.id === selectedConvId) || null;
-  const filteredConversations = conversations.filter(c => statusFilter === 'todos' || c.status === statusFilter);
+
+  // Filtro puro sobre (status, updatedAt): no depende de ninguna bandera
+  // paralela que un actor distinto pudiera desincronizar. Cada evento de
+  // Realtime dispara un refetch completo (loadConversations), y este cálculo
+  // se re-evalúa desde cero en cada render con los datos frescos — así un
+  // chat resuelto fuera del rango elegido NUNCA puede "colarse" de vuelta,
+  // sin importar en qué orden lleguen los eventos del WebSocket.
+  const filteredConversations = useMemo(() => {
+    if (statusFilter === 'resueltos') {
+      const cutoff = Date.now() - RESOLVED_RANGE_MS[resolvedRange];
+      return conversations.filter(c => {
+        if (c.status !== 'resuelto') return false;
+        const ts = c.updatedAt ? new Date(c.updatedAt).getTime() : 0;
+        return ts >= cutoff;
+      });
+    }
+    return conversations.filter(c => {
+      if (c.status === 'resuelto') return false;
+      return statusFilter === 'todos' || c.status === statusFilter;
+    });
+  }, [conversations, statusFilter, resolvedRange]);
 
   const persist = async (mutate: (db: ReturnType<typeof getDB>) => void): Promise<boolean> => {
     const db = getDB();
@@ -109,21 +139,21 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   const handleResolve = async (convId: string) => {
     const confirmed = await confirm({
       title: 'Marcar como Resuelto',
-      message: 'La conversación se cerrará y saldrá de tu bandeja activa, pero NO se elimina: el cliente conserva su historial y podrás revisarla en el filtro "Todos".',
+      message: 'La conversación saldrá de "Nuevos", "Pendientes" y "Todos", pero NO se elimina: el cliente conserva su historial completo. Quedará disponible en la pestaña "Resueltos", filtrable por 1 día, 1 semana o 1 mes. Para reabrirla, cambia su estado a Nuevo o Pendiente.',
       confirmText: 'Marcar como Resuelto'
     });
     if (!confirmed) return;
     const conv = getDB().chat_conversations.find(c => c.id === convId);
-    // Cierre suave (soft-close): en vez de borrar la conversación (lo que hacía
-    // que el cliente perdiera su historial), se marca como 'resuelto'. Así
-    // desaparece de la bandeja activa del admin pero se conserva para el cliente
-    // (aparece en su "Historial Cerrado") y para auditoría.
+    // Cierre suave (soft-close): en vez de borrar la conversación, se marca
+    // 'resuelto'. La marca de tiempo (updated_at) la fija automáticamente un
+    // trigger en la BD al hacer el UPDATE — es la base del filtro por rango
+    // temporal, y ningún cliente puede falsearla.
     const ok = await persist(db => {
       const idx = db.chat_conversations.findIndex(c => c.id === convId);
       if (idx !== -1) db.chat_conversations[idx].status = 'resuelto';
     });
     if (ok) {
-      addAuditLog(currentUser?.email || 'admin', 'Soporte', 'Chat Resuelto (Cerrado)', `Conversación de ${conv?.customerName || convId} marcada como resuelta. Historial conservado.`);
+      addAuditLog(currentUser?.email || 'admin', 'Soporte', 'Chat Resuelto', `Conversación de ${conv?.customerName || convId} marcada como resuelta. Historial conservado.`);
       if (isMountedRef.current && selectedConvId === convId) setSelectedConvId(null);
     }
   };
@@ -136,6 +166,8 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
           selectedConvId={selectedConvId}
           statusFilter={statusFilter}
           onFilterChange={setStatusFilter}
+          resolvedRange={resolvedRange}
+          onResolvedRangeChange={setResolvedRange}
           onSelect={setSelectedConvId}
         />
       </div>

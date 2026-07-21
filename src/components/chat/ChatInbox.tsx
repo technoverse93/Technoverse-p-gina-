@@ -1,19 +1,34 @@
 import React from 'react';
+import { Clock } from 'lucide-react';
 import { ChatConversation } from '../../types';
-import type { ChatStatusFilter } from './ChatCRM';
+import type { ChatStatusFilter, ResolvedRange } from './ChatCRM';
 
 interface ChatInboxProps {
   conversations: ChatConversation[];
   selectedConvId: string | null;
   statusFilter: ChatStatusFilter;
   onFilterChange: (filter: ChatStatusFilter) => void;
+  resolvedRange: ResolvedRange;
+  onResolvedRangeChange: (range: ResolvedRange) => void;
   onSelect: (id: string) => void;
 }
 
 const FILTERS: { id: ChatStatusFilter; label: string; dot: string }[] = [
   { id: 'nuevo', label: 'Nuevos', dot: 'bg-blue-500' },
   { id: 'pendiente', label: 'Pendientes', dot: 'bg-orange-500' },
-  { id: 'todos', label: 'Todos', dot: 'bg-slate-400' }
+  { id: 'todos', label: 'Todos', dot: 'bg-slate-400' },
+  { id: 'resueltos', label: 'Resueltos', dot: 'bg-emerald-500' }
+];
+
+// Componente propietario (sin <select> nativo del OS/navegador): segmented
+// control de pills, coherente con FILTERS de arriba, que se adapta con
+// flex-wrap tanto al ancho angosto del A12 como al panel de la Redmi Pad
+// SE 12" (el ancho del sidebar no cambia entre ambos: es md:max-w-sm), sin
+// overlays flotantes que puedan colisionar con otros elementos/z-index.
+const RESOLVED_RANGES: { id: ResolvedRange; label: string }[] = [
+  { id: '1d', label: '1 Día' },
+  { id: '7d', label: '1 Semana' },
+  { id: '30d', label: '1 Mes' }
 ];
 
 function lastPreview(conv: ChatConversation): string {
@@ -24,25 +39,54 @@ function lastPreview(conv: ChatConversation): string {
   return last.text;
 }
 
-export default function ChatInbox({ conversations, selectedConvId, statusFilter, onFilterChange, onSelect }: ChatInboxProps) {
+export default function ChatInbox({
+  conversations,
+  selectedConvId,
+  statusFilter,
+  onFilterChange,
+  resolvedRange,
+  onResolvedRangeChange,
+  onSelect
+}: ChatInboxProps) {
   return (
     <>
-      <div className="p-3 border-b border-[var(--border-color)]/60 flex gap-1.5" id="chat-inbox-filters">
-        {FILTERS.map(f => (
-          <button
-            key={f.id}
-            type="button"
-            onClick={() => onFilterChange(f.id)}
-            className={`flex-1 text-[11px] font-bold px-2 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 ${
-              statusFilter === f.id
-                ? 'bg-[var(--text-primary)] text-[var(--bg-surface)]'
-                : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--border-color)]/40'
-            }`}
-          >
-            <span className={`w-1.5 h-1.5 rounded-full ${f.dot}`} />
-            {f.label}
-          </button>
-        ))}
+      <div className="border-b border-[var(--border-color)]/60" id="chat-inbox-filters">
+        <div className="p-3 flex gap-1.5 flex-wrap">
+          {FILTERS.map(f => (
+            <button
+              key={f.id}
+              type="button"
+              onClick={() => onFilterChange(f.id)}
+              className={`flex-1 min-w-[70px] text-[11px] font-bold px-2 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 ${
+                statusFilter === f.id
+                  ? 'bg-[var(--text-primary)] text-[var(--bg-surface)]'
+                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--border-color)]/40'
+              }`}
+            >
+              <span className={`w-1.5 h-1.5 rounded-full ${f.dot}`} />
+              {f.label}
+            </button>
+          ))}
+        </div>
+        {statusFilter === 'resueltos' && (
+          <div className="px-3 pb-3 flex items-center gap-1.5 flex-wrap" id="chat-resolved-range">
+            <Clock className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
+            {RESOLVED_RANGES.map(r => (
+              <button
+                key={r.id}
+                type="button"
+                onClick={() => onResolvedRangeChange(r.id)}
+                className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition ${
+                  resolvedRange === r.id
+                    ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
+                    : 'bg-transparent border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
+                }`}
+              >
+                {r.label}
+              </button>
+            ))}
+          </div>
+        )}
       </div>
       <div className="flex-1 overflow-y-auto divide-y divide-[var(--border-color)]/40" id="chat-inbox-list">
         {conversations.length === 0 ? (
