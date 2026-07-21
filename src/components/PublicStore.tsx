@@ -17,8 +17,14 @@ import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
 import { useToast } from './ui/Overlays';
+import {
+  IdentificacionTipo, TipoDoc, MedioPago, validateCedula, computeInvoiceTotals,
+  buildInvoicePdfBlob, generateQrDataUrl, InvoiceData
+} from '../utils/invoicePdf';
 
 import { User } from '../types';
+
+const DEFAULT_CAABYS = '8399000000000';
 
 interface PublicStoreProps {
   onNavigateToAdmin: () => void;
@@ -146,6 +152,14 @@ export default function PublicStore({
   const [cardName, setCardName] = useState('');
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
 
+  // Datos fiscales (Facturación Electrónica CR v4.3 — registro interno)
+  const [fiscalTipoDoc, setFiscalTipoDoc] = useState<TipoDoc>('04');
+  const [fiscalIdType, setFiscalIdType] = useState<IdentificacionTipo>('01');
+  const [fiscalIdValue, setFiscalIdValue] = useState('');
+  const [fiscalEmail, setFiscalEmail] = useState('');
+  const [isSubmittingOrder, setIsSubmittingOrder] = useState(false);
+  const [invoiceInfo, setInvoiceInfo] = useState<{ id: string; clave: string; consecutivo: string; qrDataUrl: string; pdfUrl: string | null } | null>(null);
+
   // Marketing states
   const [couponCode, setCouponCode] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState<any>(null);
@@ -247,7 +261,7 @@ export default function PublicStore({
     });
 
     if (authError || !authData.user) {
-      alert('Credenciales inválidas. Por favor verifique el correo y contraseña.');
+      toast.error('Credenciales inválidas. Por favor verifique el correo y contraseña.');
       return;
     }
 
@@ -258,7 +272,7 @@ export default function PublicStore({
       .single();
 
     if (profileError || !profile) {
-      alert('No se pudo cargar el perfil de la cuenta. Contacte al administrador.');
+      toast.error('No se pudo cargar el perfil de la cuenta. Contacte al administrador.');
       return;
     }
 
@@ -279,7 +293,7 @@ export default function PublicStore({
   const handleClientRegisterSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!regName.trim() || !regEmail.trim() || !regPhone.trim() || !regAddress.trim() || !regPassword.trim()) {
-      alert('Por favor complete todos los datos.');
+      toast.warning('Por favor complete todos los datos.');
       return;
     }
 
@@ -305,11 +319,11 @@ export default function PublicStore({
     });
 
     if (authError) {
-      alert('Error creando la cuenta: ' + (authError.message || 'el correo ya podría estar registrado.'));
+      toast.error('Error creando la cuenta: ' + (authError.message || 'el correo ya podría estar registrado.'));
       return;
     }
     if (!authData.user) {
-      alert('No se pudo crear la cuenta. Intente de nuevo.');
+      toast.error('No se pudo crear la cuenta. Intente de nuevo.');
       return;
     }
 
@@ -317,7 +331,7 @@ export default function PublicStore({
     // hay sesión activa: se le pide confirmar antes de iniciar sesión. El
     // perfil comercial ya quedó creado por el trigger, así que no se pierde.
     if (!authData.session) {
-      alert(`¡Cuenta creada! Revisa tu correo (${cleanEmail}) para confirmarla antes de iniciar sesión.`);
+      toast.success(`¡Cuenta creada! Revisa tu correo (${cleanEmail}) para confirmarla antes de iniciar sesión.`);
       setIsLoginModalOpen(false);
       setIsRegisterMode(false);
       setRegName(''); setRegEmail(''); setRegPhone(''); setRegAddress(''); setRegPassword('');
@@ -441,14 +455,14 @@ export default function PublicStore({
 
   const handleAddToCart = (prod: Product) => {
     if (prod.stock <= 0) {
-      alert('¡Disculpe! Este producto se encuentra agotado.');
+      toast.warning('¡Disculpe! Este producto se encuentra agotado.');
       return;
     }
 
     const existingIdx = cart.findIndex(it => it.product.id === prod.id);
     if (existingIdx !== -1) {
       if (cart[existingIdx].quantity >= prod.stock) {
-        alert(`¡Lo sentimos! Solo hay ${prod.stock} unidades disponibles en stock de este artículo.`);
+        toast.warning(`¡Lo sentimos! Solo hay ${prod.stock} unidades disponibles en stock de este artículo.`);
         return;
       }
       setCart(cart.map((it, idx) => idx === existingIdx ? { ...it, quantity: it.quantity + 1 } : it));
@@ -460,11 +474,11 @@ export default function PublicStore({
 
   const handleAddToCartWithQty = (prod: Product, qty: number) => {
     if (prod.stock <= 0) {
-      alert('¡Disculpe! Este producto se encuentra agotado.');
+      toast.warning('¡Disculpe! Este producto se encuentra agotado.');
       return;
     }
     if (qty > prod.stock) {
-      alert(`¡Lo sentimos! Solo hay ${prod.stock} unidades disponibles en stock de este artículo.`);
+      toast.warning(`¡Lo sentimos! Solo hay ${prod.stock} unidades disponibles en stock de este artículo.`);
       return;
     }
 
@@ -472,7 +486,7 @@ export default function PublicStore({
     if (existingIdx !== -1) {
       const newTotalQty = cart[existingIdx].quantity + qty;
       if (newTotalQty > prod.stock) {
-        alert(`¡Lo sentimos! No puede superar el stock de ${prod.stock} unidades en total en su carrito.`);
+        toast.warning(`¡Lo sentimos! No puede superar el stock de ${prod.stock} unidades en total en su carrito.`);
         return;
       }
       setCart(cart.map((it, idx) => idx === existingIdx ? { ...it, quantity: newTotalQty } : it));
@@ -496,7 +510,7 @@ export default function PublicStore({
 
     const item = cart[idx];
     if (newQty > item.product.stock) {
-      alert(`Únicamente hay ${item.product.stock} unidades disponibles en stock.`);
+      toast.warning(`Únicamente hay ${item.product.stock} unidades disponibles en stock.`);
       return;
     }
 
@@ -533,11 +547,11 @@ export default function PublicStore({
     
     const coupon = db.marketing_campaigns?.find(c => c.code.toUpperCase() === couponCode.toUpperCase() && c.active);
     if (!coupon) {
-      alert("Cupón no encontrado o inactivo.");
+      toast.error("Cupón no encontrado o inactivo.");
       return;
     }
     if (coupon.used >= coupon.limit) {
-      alert("El cupón ha excedido su límite de usos.");
+      toast.warning("El cupón ha excedido su límite de usos.");
       return;
     }
     setAppliedCoupon(coupon);
@@ -549,31 +563,48 @@ export default function PublicStore({
     if (cart.length === 0) return;
 
     if (!recipientName.trim()) {
-      alert('El nombre del destinatario es obligatorio.');
+      toast.warning('El nombre del destinatario es obligatorio.');
       return;
     }
     if (!recipientPhone.trim()) {
-      alert('El número de teléfono es obligatorio.');
+      toast.warning('El número de teléfono es obligatorio.');
       return;
     }
     if (!shippingAddress.trim()) {
-      alert('La dirección de envío es obligatoria.');
+      toast.warning('La dirección de envío es obligatoria.');
       return;
     }
-
-    
+    if (!fiscalEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fiscalEmail.trim())) {
+      toast.warning('Ingrese un correo electrónico válido para el comprobante fiscal.');
+      return;
+    }
+    if (fiscalTipoDoc === '01') {
+      const cedulaError = validateCedula(fiscalIdType, fiscalIdValue);
+      if (cedulaError) {
+        toast.warning(cedulaError);
+        return;
+      }
+    } else if (fiscalIdValue.trim()) {
+      const cedulaError = validateCedula(fiscalIdType, fiscalIdValue);
+      if (cedulaError) {
+        toast.warning(cedulaError);
+        return;
+      }
+    }
 
     // Verify stock availability once more
     let isStockValid = true;
     cart.forEach(it => {
       const dbProd = db.products.find(p => p.id === it.product.id);
       if (!dbProd || dbProd.stock < it.quantity) {
-        alert(`¡Error! El stock del producto ${it.product.name} ha cambiado. Solo quedan ${dbProd?.stock || 0} disponibles.`);
+        toast.error(`¡Error! El stock del producto ${it.product.name} ha cambiado. Solo quedan ${dbProd?.stock || 0} disponibles.`);
         isStockValid = false;
       }
     });
 
     if (!isStockValid) return;
+
+    setIsSubmittingOrder(true);
 
     // Stock deduction is handled atomically by processSaleAtomic in Firestore.
     // Do NOT deduct stock locally here — that would conflict with the transaction.
@@ -586,7 +617,7 @@ export default function PublicStore({
       id: invoiceId,
       customerId: `CRM-${Math.floor(1000 + Math.random() * 9000)}`,
       customerName: recipientName.trim(),
-      customerEmail: 'cliente@technoverse.com',
+      customerEmail: fiscalEmail.trim(),
       items: cart.map(it => it && ({
         productId: it.product.id,
         productName: it.product.name,
@@ -613,7 +644,8 @@ export default function PublicStore({
     
     const result = await processSaleAtomic(cart, newOrder);
     if (!result.success) {
-      alert(result.error);
+      toast.error(result.error);
+      setIsSubmittingOrder(false);
       return;
     }
 
@@ -681,11 +713,82 @@ export default function PublicStore({
     try {
       await saveDB(freshDb);
     } catch (err: any) {
-      alert('La venta se procesó y el stock se descontó, pero la factura no se pudo registrar en la base de datos. Detalle: ' + (err?.message || err) + '. Por favor contacte a soporte indicando este número: ' + invoiceId);
+      toast.error('La venta se procesó y el stock se descontó, pero la factura no se pudo registrar en la base de datos. Detalle: ' + (err?.message || err) + '. Por favor contacte a soporte indicando este número: ' + invoiceId, 12000);
+      setIsSubmittingOrder(false);
       return;
     }
 
     addAuditLog('cliente@technoverse.com', 'Ventas', 'Crear Compra', `Factura ${invoiceId} emitida por un monto de ₡${cartTotal.toLocaleString()} para ${recipientName}`);
+
+    // Comprobante fiscal v4.3 (registro interno): la venta y el stock ya
+    // quedaron confirmados arriba, así que un fallo aquí NUNCA debe revertir
+    // ni bloquear la compra — solo se informa y queda pendiente de soporte.
+    try {
+      const medioPago: MedioPago = paymentMethod === 'Tarjeta' ? '02' : '04';
+      const { items: invoiceItems, subtotal: invSubtotal, ivaTotal: invIva, total: invTotal } = computeInvoiceTotals(
+        cart.map(it => ({
+          caabys: it.product.caabys || DEFAULT_CAABYS,
+          description: it.product.name,
+          qty: it.quantity,
+          unitPrice: getProductDiscountedPrice(it.product)
+        }))
+      );
+      const { data: issued, error: issueErr } = await supabase.rpc('issue_invoice', {
+        p_order_id: invoiceId,
+        p_tipo_doc: fiscalTipoDoc,
+        p_customer_identification_type: fiscalIdType,
+        p_customer_identification: fiscalIdValue.trim(),
+        p_customer_name: recipientName.trim(),
+        p_customer_email: fiscalEmail.trim(),
+        p_medio_pago: medioPago,
+        p_items: invoiceItems,
+        p_subtotal: invSubtotal,
+        p_iva_total: invIva,
+        p_total: invTotal
+      });
+      if (issueErr) throw issueErr;
+
+      const invoiceData: InvoiceData = {
+        id: issued.id,
+        clave: issued.clave,
+        consecutivo: issued.consecutivo,
+        tipoDoc: fiscalTipoDoc,
+        fechaISO: new Date().toISOString(),
+        emisorCedula: issued.emisorCedula,
+        emisorNombre: 'Technoverse Costa Rica S.A.',
+        customerIdentificationType: fiscalIdType,
+        customerIdentification: fiscalIdValue.trim(),
+        customerName: recipientName.trim(),
+        customerEmail: fiscalEmail.trim(),
+        medioPago,
+        items: invoiceItems,
+        subtotal: invSubtotal,
+        ivaTotal: invIva,
+        total: invTotal
+      };
+
+      const { blob, qrText } = await buildInvoicePdfBlob(invoiceData);
+      const pdfPath = `${issued.id}.pdf`;
+      const { error: uploadErr } = await supabase.storage.from('invoices').upload(pdfPath, blob, { contentType: 'application/pdf', upsert: true });
+      if (uploadErr) throw uploadErr;
+      const { data: pub } = supabase.storage.from('invoices').getPublicUrl(pdfPath);
+      await supabase.rpc('set_invoice_pdf', { p_invoice_id: issued.id, p_pdf_url: pub.publicUrl, p_qr_data: qrText });
+
+      const qrDataUrl = await generateQrDataUrl(qrText);
+      setInvoiceInfo({ id: issued.id, clave: issued.clave, consecutivo: issued.consecutivo, qrDataUrl, pdfUrl: pub.publicUrl });
+
+      // Envío de correo best-effort (Gmail SMTP vía Edge Function): si falla,
+      // la venta y el comprobante ya quedaron generados y descargables. La
+      // función relee destinatario/monto/PDF desde el propio registro en BD.
+      supabase.functions.invoke('send-invoice-email', {
+        body: { invoiceId: issued.id }
+      }).catch(() => {});
+    } catch (err: any) {
+      setInvoiceInfo(null);
+      toast.warning('La compra se procesó correctamente, pero el comprobante fiscal no se pudo generar. Detalle: ' + (err?.message || err) + '. Contacte a soporte indicando el número ' + invoiceId, 12000);
+    }
+
+    setIsSubmittingOrder(false);
     setConfirmedOrder(newOrder);
     setCheckoutStep(3); // Completed!
     setCart([]);
@@ -696,7 +799,7 @@ export default function PublicStore({
   const handleCreatePublicRepair = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!repairCustomerName.trim() || !repairCustomerEmail.trim() || !repairDevice.trim() || !repairDamage.trim()) {
-      alert('Por favor complete todos los datos.');
+      toast.warning('Por favor complete todos los datos.');
       return;
     }
 
@@ -733,7 +836,7 @@ export default function PublicStore({
     try {
       await saveDB(db);
     } catch (err: any) {
-      alert('No se pudo registrar el ticket de reparación. Detalle: ' + (err?.message || err));
+      toast.error('No se pudo registrar el ticket de reparación. Detalle: ' + (err?.message || err));
       return;
     }
 
@@ -1777,28 +1880,129 @@ export default function PublicStore({
                       <strong>Protección PRODHAB (Ley 8968):</strong> Los datos de pago son encriptados en tránsito (cifrado simulado AES-256) y tokenizados inmediatamente. Technoverse nunca almacena números completos de tarjetas.
                     </span>
                   </div>
+
+                  <div className="bg-[var(--bg-surface)] rounded-2xl p-4 border border-[var(--border-color)]/60 space-y-3">
+                    <h4 className="text-sm font-bold text-blue-600 dark:text-[var(--brand-gold-light)] uppercase tracking-wider">Datos Fiscales del Comprobante</h4>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <button
+                        type="button"
+                        onClick={() => setFiscalTipoDoc('04')}
+                        className={`py-2 text-center rounded-xl font-bold text-xs border transition cursor-pointer ${
+                          fiscalTipoDoc === '04'
+                            ? 'bg-blue-50 dark:bg-[var(--brand-gold-mid)]/10 border-blue-500 dark:border-[var(--brand-gold-dark)] text-blue-600 dark:text-[var(--brand-gold-light)]'
+                            : 'bg-[var(--bg-base)] border-[var(--border-color)] text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        Tiquete Electrónico
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setFiscalTipoDoc('01')}
+                        className={`py-2 text-center rounded-xl font-bold text-xs border transition cursor-pointer ${
+                          fiscalTipoDoc === '01'
+                            ? 'bg-blue-50 dark:bg-[var(--brand-gold-mid)]/10 border-blue-500 dark:border-[var(--brand-gold-dark)] text-blue-600 dark:text-[var(--brand-gold-light)]'
+                            : 'bg-[var(--bg-base)] border-[var(--border-color)] text-[var(--text-secondary)]'
+                        }`}
+                      >
+                        Factura Electrónica
+                      </button>
+                    </div>
+
+                    <div className="grid grid-cols-2 gap-2">
+                      <div>
+                        <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Tipo de Identificación</label>
+                        <CustomSelect
+                          value={fiscalIdType}
+                          onChange={(v) => setFiscalIdType(v as IdentificacionTipo)}
+                          options={[
+                            { value: '01', label: 'Cédula Física' },
+                            { value: '02', label: 'Cédula Jurídica' },
+                            { value: '03', label: 'DIMEX' },
+                            { value: '04', label: 'NITE' }
+                          ]}
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">
+                          Identificación{fiscalTipoDoc === '01' ? '' : ' (opcional)'}
+                        </label>
+                        <input
+                          type="text"
+                          value={fiscalIdValue}
+                          onChange={(e) => setFiscalIdValue(e.target.value.replace(/\D/g, ''))}
+                          placeholder="Solo números"
+                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
+                        />
+                      </div>
+                    </div>
+                    {(fiscalTipoDoc === '01' || fiscalIdValue.trim()) && validateCedula(fiscalIdType, fiscalIdValue) && (
+                      <p className="text-[10px] text-rose-500 font-medium -mt-1">{validateCedula(fiscalIdType, fiscalIdValue)}</p>
+                    )}
+
+                    <div>
+                      <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Correo para el Comprobante</label>
+                      <input
+                        type="email"
+                        required
+                        value={fiscalEmail}
+                        onChange={(e) => setFiscalEmail(e.target.value)}
+                        placeholder="correo@ejemplo.com"
+                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                      />
+                    </div>
+
+                    <p className="text-[9px] text-[var(--text-secondary)] leading-relaxed">
+                      Registro interno con el formato oficial de Hacienda (Clave de 50 dígitos, CAABYS, IVA desglosado). Aún no está conectado a la transmisión electrónica real ante el Ministerio de Hacienda.
+                    </p>
+                  </div>
                 </div>
               )}
 
               {checkoutStep === 3 && confirmedOrder && (
-                /* STEP 3: Order Confirmation & Fiscal downloads */
+                /* STEP 3: Order Confirmation & Fiscal receipt */
                 <div className="bg-emerald-50 border border-emerald-200 dark:border-[var(--brand-gold-dark)] rounded-2xl p-4 space-y-4 animate-in fade-in">
                   <div className="text-center space-y-1">
                     <CheckCircle className="w-10 h-10 text-emerald-500 dark:text-[var(--brand-gold-light)] mx-auto animate-bounce" />
-                    <h4 className="font-bold text-sm text-[var(--text-primary)]">¡Compra Fiscal Autorizada!</h4>
-                    <p className="text-[10px] text-[var(--text-secondary)]">Factura electrónica registrada exitosamente ante el Ministerio de Hacienda.</p>
+                    <h4 className="font-bold text-sm text-[var(--text-primary)]">¡Compra Confirmada!</h4>
+                    <p className="text-[10px] text-[var(--text-secondary)]">
+                      {invoiceInfo ? 'Comprobante fiscal (registro interno) generado correctamente.' : 'Su pedido quedó registrado. El comprobante fiscal está pendiente de generar.'}
+                    </p>
                   </div>
 
                   <div className="bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-color)] space-y-1.5 text-sm text-[var(--text-primary)] shadow-sm">
-                    <div>Consecutivo: <strong className="text-emerald-600 dark:text-[var(--brand-gold-light)] font-mono">{confirmedOrder.id}</strong></div>
+                    <div>Orden: <strong className="text-emerald-600 dark:text-[var(--brand-gold-light)] font-mono">{confirmedOrder.id}</strong></div>
                     <div>Fecha: <span className="font-mono text-[var(--text-secondary)]">{new Date(confirmedOrder.timestamp).toLocaleString()}</span></div>
                     <div>Receptor: <strong className="text-[var(--text-primary)]">{confirmedOrder.customerName}</strong></div>
                     <div>Impuesto IVA (13%): <strong className="font-mono text-[var(--text-primary)]">₡{confirmedOrder.taxAmount.toLocaleString()}</strong></div>
                     <div className="text-sm font-bold border-t border-[var(--border-color)] pt-2 mt-2">Total Pagado: <span className="text-emerald-600 dark:text-[var(--brand-gold-light)] font-mono">₡{confirmedOrder.total.toLocaleString()}</span></div>
                   </div>
 
+                  {invoiceInfo && (
+                    <div className="bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-color)] space-y-2 text-[11px] text-[var(--text-primary)] shadow-sm">
+                      <div className="flex items-center justify-between gap-3">
+                        <div className="space-y-1 min-w-0">
+                          <div>Comprobante: <strong className="font-mono">{invoiceInfo.id}</strong></div>
+                          <div className="break-all">Clave: <span className="font-mono text-[var(--text-secondary)]">{invoiceInfo.clave}</span></div>
+                          <div className="break-all">Consecutivo: <span className="font-mono text-[var(--text-secondary)]">{invoiceInfo.consecutivo}</span></div>
+                        </div>
+                        <img src={invoiceInfo.qrDataUrl} alt="Código QR de verificación interna" className="w-16 h-16 rounded-lg border border-[var(--border-color)] shrink-0" />
+                      </div>
+                      {invoiceInfo.pdfUrl && (
+                        <a
+                          href={invoiceInfo.pdfUrl}
+                          target="_blank"
+                          rel="noopener noreferrer"
+                          className="mt-1 inline-flex items-center gap-1.5 text-blue-600 dark:text-[var(--brand-gold-light)] font-bold"
+                        >
+                          <FileDown className="w-3.5 h-3.5" /> Descargar comprobante (PDF)
+                        </a>
+                      )}
+                    </div>
+                  )}
+
                   <div className="text-[10px] text-[var(--text-primary)] text-center leading-relaxed">
-                    Se ha generado el archivo XML firmado digitalmente de conformidad con la directriz <strong>DGT-R-48-2016</strong>. Puede ver y auditar su estructura en el módulo de Cumplimiento Técnico del Panel de Administración.
+                    Comprobante con el formato oficial de Hacienda v4.3 (Clave de 50 dígitos, CAABYS, IVA desglosado) para uso interno/contable. Aún no se transmite electrónicamente ante el Ministerio de Hacienda: eso requiere certificado digital y credenciales de ATV.
                   </div>
                 </div>
               )}
@@ -1876,15 +2080,15 @@ export default function PublicStore({
                     <button
                       onClick={() => {
                         if (!recipientName.trim()) {
-                          alert('El nombre del destinatario es obligatorio.');
+                          toast.warning('El nombre del destinatario es obligatorio.');
                           return;
                         }
                         if (!recipientPhone.trim()) {
-                          alert('El número de teléfono es obligatorio.');
+                          toast.warning('El número de teléfono es obligatorio.');
                           return;
                         }
                         if (!shippingAddress.trim()) {
-                          alert('La dirección de envío es obligatoria.');
+                          toast.warning('La dirección de envío es obligatoria.');
                           return;
                         }
                         setCheckoutStep(2);
@@ -1898,9 +2102,10 @@ export default function PublicStore({
                   {checkoutStep === 2 && (
                     <button
                       onClick={handleConfirmOrder}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-[#1a1408] dark:text-[#14100a] font-extrabold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition shadow-sm cursor-pointer"
+                      disabled={isSubmittingOrder}
+                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] disabled:opacity-60 text-[#1a1408] dark:text-[#14100a] font-extrabold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition shadow-sm cursor-pointer"
                     >
-                      Autorizar Transmisión Fiscal y Pagar
+                      {isSubmittingOrder ? 'Procesando...' : 'Confirmar Pago y Generar Comprobante'}
                     </button>
                   )}
                 </>
@@ -1912,6 +2117,9 @@ export default function PublicStore({
                     setConfirmedOrder(null);
                     setAppliedCoupon(null);
                     setCouponCode('');
+                    setInvoiceInfo(null);
+                    setFiscalIdValue('');
+                    setFiscalEmail('');
                   }}
                   className="w-full bg-slate-200 hover:bg-slate-300 text-[var(--text-primary)] font-bold text-sm py-3 rounded-xl transition uppercase cursor-pointer"
                 >
