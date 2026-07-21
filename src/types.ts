@@ -130,10 +130,10 @@ export interface ChatConversation {
   // Secreto por cliente (anónimo): identifica de forma segura sus propias
   // conversaciones. Se genera en el navegador y se guarda en localStorage.
   customerToken?: string;
-  // false = archivada por staff (oculta de la bandeja "Todos" del admin).
-  // Nunca afecta lo que ve el cliente: su historial se lee vía un camino
-  // aparte (get_customer_chat) que ignora esta columna. Por defecto true.
-  adminVisible?: boolean;
+  // Mantenida por trigger en la BD (nunca la escribe el cliente): última vez
+  // que cambió la fila. Es la base del filtro por rango temporal de chats
+  // resueltos (1 día / 1 semana / 1 mes) en el panel del admin.
+  updatedAt?: string;
 }
 
 export interface AuditLog {
