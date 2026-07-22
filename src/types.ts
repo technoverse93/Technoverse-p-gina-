@@ -55,8 +55,13 @@ export interface RepairOrder {
   customerId: string;
   customerName: string;
   customerEmail: string;
+  customerPhone?: string; // para notificación directa por WhatsApp
   device: string;
+  deviceCategory?: string; // Celular / Laptop / PC / Consola
+  deviceBrand?: string;
+  deviceModel?: string;
   damageReported: string;
+  damageCategory?: string; // categoría estructurada de la falla (filtro en cascada de recepción)
   diagnosisManual?: string;
   repuestos: {
     productId: string;
