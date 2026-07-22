@@ -359,7 +359,8 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
     }),
     fromRow: (r): MarketingCampaign => ({
       id: r.id, code: r.code, type: r.type, value: r.value || 0, limit: r.usage_limit || 0,
-      used: r.used || 0, applicableCategory: r.applicable_category || undefined, active: r.active !== false
+      used: r.used || 0, applicableCategory: r.applicable_category || undefined, active: r.active !== false,
+      expiresAt: r.expires_at || undefined
     })
   }),
   configFor<Banner>({
