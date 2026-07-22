@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Kanban, Search, Plus, Save, Clock, HelpCircle, FileText, CheckCircle2, ChevronRight, RefreshCw, Key } from 'lucide-react';
+import { Kanban, Search, Plus, Save, Clock, HelpCircle, FileText, CheckCircle2, ChevronRight, RefreshCw, Key, MessageCircle } from 'lucide-react';
 import { RepairOrder, Product, ClientProfile } from '../types';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { processRepairAtomic } from '../utils/transactions';
@@ -16,6 +16,61 @@ const KANBAN_COLUMNS: RepairOrder['status'][] = [
 ];
 
 const sparePartCategories = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
+
+// Filtros en cascada de recepción: Categoría -> Marca -> Modelo -> Categoría de Falla.
+const DEVICE_CATEGORIES = ['Celular', 'Laptop', 'PC', 'Consola'];
+
+const BRANDS_BY_CATEGORY: Record<string, string[]> = {
+  'Celular': ['Apple', 'Samsung', 'Xiaomi', 'Motorola', 'Huawei', 'Otra'],
+  'Laptop': ['Apple', 'Dell', 'HP', 'Lenovo', 'Asus', 'Acer', 'Otra'],
+  'PC': ['Ensamblado', 'HP', 'Dell', 'Lenovo', 'Otra'],
+  'Consola': ['Sony (PlayStation)', 'Microsoft (Xbox)', 'Nintendo', 'Otra'],
+};
+
+const MODELS_BY_BRAND: Record<string, string[]> = {
+  'Apple': ['iPhone 11', 'iPhone 12', 'iPhone 13', 'iPhone 14', 'iPhone 15', 'iPhone 16', 'MacBook Air', 'MacBook Pro', 'iMac', 'Otro modelo'],
+  'Samsung': ['Galaxy A12', 'Galaxy A54', 'Galaxy S22', 'Galaxy S23', 'Galaxy S24', 'Galaxy Note', 'Galaxy Tab', 'Otro modelo'],
+  'Xiaomi': ['Redmi Note 12', 'Redmi Note 13', 'Poco X5', 'Mi 11', 'Otro modelo'],
+  'Motorola': ['Moto G', 'Moto Edge', 'Otro modelo'],
+  'Huawei': ['P30', 'P40', 'Mate', 'Otro modelo'],
+  'Dell': ['Inspiron', 'XPS', 'Latitude', 'Otro modelo'],
+  'HP': ['Pavilion', 'Envy', 'ProBook', 'Otro modelo'],
+  'Lenovo': ['ThinkPad', 'IdeaPad', 'Legion', 'Otro modelo'],
+  'Asus': ['VivoBook', 'ZenBook', 'ROG', 'Otro modelo'],
+  'Acer': ['Aspire', 'Nitro', 'Otro modelo'],
+  'Ensamblado': ['Torre Gamer', 'Torre Oficina', 'Otro modelo'],
+  'Sony (PlayStation)': ['PS4', 'PS4 Slim', 'PS4 Pro', 'PS5', 'PS5 Slim', 'Otro modelo'],
+  'Microsoft (Xbox)': ['Xbox One', 'Xbox Series S', 'Xbox Series X', 'Otro modelo'],
+  'Nintendo': ['Switch', 'Switch Lite', 'Switch OLED', 'Otro modelo'],
+};
+const DEFAULT_MODELS = ['Otro modelo'];
+
+const DAMAGE_CATEGORIES = [
+  'Pantalla / LCD', 'Batería', 'Puerto de Carga', 'Cámara', 'Placa Lógica', 'Software / Sistema',
+  'Botones', 'Audio / Micrófono', 'Daño por Líquido', 'Otro'
+];
+
+/** Mensaje formateado para notificar al cliente por WhatsApp del estado de su orden. */
+function buildWhatsAppMessage(rep: RepairOrder): string {
+  const lines = [
+    `Hola ${rep.customerName}, le escribimos de *Technoverse Costa Rica* sobre su equipo:`,
+    '',
+    `Orden: ${rep.id} (Ticket ${rep.ticket})`,
+    `Equipo: ${rep.device}`,
+    `Estado actual: ${rep.status}`,
+  ];
+  if (rep.diagnosisManual) lines.push(`Diagnóstico: ${rep.diagnosisManual}`);
+  lines.push(`Monto: ₡${rep.totalCost.toLocaleString()}`);
+  lines.push('', 'Puede consultar el estado de su equipo cuando guste indicando su número de ticket en nuestro portal de Technoverse Costa Rica.');
+  return lines.join('\n');
+}
+
+/** Arma el enlace wa.me; asume Costa Rica (código 506) si el número viene sin código de país. */
+function buildWhatsAppUrl(phone: string, message: string): string {
+  const digits = phone.replace(/\D/g, '');
+  const withCountry = digits.length === 8 ? `506${digits}` : digits;
+  return `https://wa.me/${withCountry}?text=${encodeURIComponent(message)}`;
+}
 
 export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.com', onRepairUpdated }: TallerKanbanProps) {
   const toast = useToast();
@@ -36,7 +91,13 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
   const [showAddForm, setShowAddForm] = useState(false);
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerEmail, setNewCustomerEmail] = useState('');
-  const [newDevice, setNewDevice] = useState('');
+  const [newCustomerPhone, setNewCustomerPhone] = useState('');
+  // Filtros en cascada de recepción: Categoría -> Marca -> Modelo -> Categoría de Falla.
+  const [newDeviceCategory, setNewDeviceCategory] = useState('');
+  const [newDeviceBrand, setNewDeviceBrand] = useState('');
+  const [newDeviceModel, setNewDeviceModel] = useState('');
+  const [newDeviceModelOther, setNewDeviceModelOther] = useState('');
+  const [newDamageCategory, setNewDamageCategory] = useState('');
   const [newDamageReported, setNewDamageReported] = useState('');
   const [newWarrantyMonths, setNewWarrantyMonths] = useState<number | ''>(''); // Minimum is 3 by Costa Rican law
   const [newRepairLocation, setNewRepairLocation] = useState('Taller en casa');
@@ -93,8 +154,10 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
   const handleCreateRepair = (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCustomerName.trim() || !newCustomerEmail.trim() || !newDevice.trim() || !newDamageReported.trim()) {
-      toast.warning('Por favor complete todos los datos requeridos.');
+    const finalModel = newDeviceModel === 'Otro modelo' ? newDeviceModelOther.trim() : newDeviceModel;
+    if (!newCustomerName.trim() || !newCustomerEmail.trim() || !newCustomerPhone.trim()
+      || !newDeviceCategory || !newDeviceBrand || !finalModel || !newDamageCategory || !newDamageReported.trim()) {
+      toast.warning('Por favor complete todos los datos requeridos, incluyendo categoría, marca, modelo y categoría de falla del equipo.');
       return;
     }
 
@@ -104,11 +167,12 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     }
 
     const db = getDB();
-    
+
     // Generate order and ticket ID
     const number = Math.floor(100 + Math.random() * 900);
     const repairId = `GT-${number}`;
     const ticketId = `TKT-${number}`;
+    const deviceLabel = `${newDeviceBrand} ${finalModel} (${newDeviceCategory})`;
 
     const newRepair: RepairOrder = {
       id: repairId,
@@ -116,8 +180,13 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
       customerId: `CUST-${Math.floor(1000 + Math.random() * 9000)}`,
       customerName: newCustomerName.trim(),
       customerEmail: newCustomerEmail.trim().toLowerCase(),
-      device: newDevice.trim(),
+      customerPhone: newCustomerPhone.trim(),
+      device: deviceLabel,
+      deviceCategory: newDeviceCategory,
+      deviceBrand: newDeviceBrand,
+      deviceModel: finalModel,
       damageReported: newDamageReported.trim(),
+      damageCategory: newDamageCategory,
       repuestos: [],
       laborCost: 0,
       totalCost: 0,
@@ -143,7 +212,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
         id: newRepair.customerId,
         name: newCustomerName.trim(),
         email: newCustomerEmail.trim().toLowerCase(),
-        phone: '+506 8000 0000',
+        phone: newCustomerPhone.trim(),
         province: 'San José',
         addressDetail: 'Dirección a reportar',
         cardsTokenized: [],
@@ -161,7 +230,12 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     // Clean form
     setNewCustomerName('');
     setNewCustomerEmail('');
-    setNewDevice('');
+    setNewCustomerPhone('');
+    setNewDeviceCategory('');
+    setNewDeviceBrand('');
+    setNewDeviceModel('');
+    setNewDeviceModelOther('');
+    setNewDamageCategory('');
     setNewDamageReported('');
     setNewWarrantyMonths(3);
     setNewRepairLocation('Taller en casa');
@@ -193,8 +267,8 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
         const db = getDB();
         const idxRep = db.repair_orders.findIndex(r => r.id === selectedRepair.id);
         if (idxRep !== -1) {
-          db.repair_orders[repIdx].status = 'Esperando repuestos';
-          db.repair_orders[repIdx].bitacora.push({
+          db.repair_orders[idxRep].status = 'Esperando repuestos';
+          db.repair_orders[idxRep].bitacora.push({
             status: 'Esperando repuestos',
             notes: `Falta de repuesto: "${prod.name}" (se requerían ${qtyToAdd} un. pero solo hay ${prod.stock} en almacenamiento en casa).`,
             timestamp: new Date().toISOString(),
@@ -204,7 +278,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
           addAuditLog(activeUserEmail, 'Taller', 'Falta Repuesto', `Orden ${selectedRepair.id} pasó a "Esperando repuestos" por desabastecimiento de "${prod.name}"`);
           loadTallerData();
           if (onRepairUpdated) onRepairUpdated();
-          setSelectedRepair(db.repair_orders[repIdx]);
+          setSelectedRepair(db.repair_orders[idxRep]);
         }
       }
       return;
@@ -249,9 +323,9 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
     const db = getDB();
     const idxRep = db.repair_orders.findIndex(r => r.id === selectedRepair.id);
-    if (repIdx === -1) return;
+    if (idxRep === -1) return;
 
-    const originalRepair = db.repair_orders[repIdx];
+    const originalRepair = db.repair_orders[idxRep];
     const finalLaborCost = Number(laborCost);
     
     // We need to compare repuestos selection and handle physical inventory deductions
@@ -326,24 +400,24 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
   const handleUpdateStatus = (repairId: string, newStatus: RepairOrder['status']) => {
     const db = getDB();
     const idxRep = db.repair_orders.findIndex(r => r.id === repairId);
-    if (repIdx === -1) return;
+    if (idxRep === -1) return;
 
-    const rep = db.repair_orders[repIdx];
+    const rep = db.repair_orders[idxRep];
     const prevStatus = rep.status;
     if (prevStatus === newStatus) return;
 
-    db.repair_orders[repIdx].status = newStatus;
+    db.repair_orders[idxRep].status = newStatus;
 
     // Generate blockchain-like hash when transitioned to "Entregada"
     let hashMsg = "";
     if (newStatus === 'Entregada') {
       const randHex = Math.floor(1e12 + Math.random() * 9e12).toString(16);
       const blockchainHash = `SHA256-${randHex}-TECHNOVERSE-COSTA-RICA-WARRANTY-${rep.ticket}`;
-      db.repair_orders[repIdx].blockchainHash = blockchainHash;
+      db.repair_orders[idxRep].blockchainHash = blockchainHash;
       hashMsg = ` Garantía de ${rep.warrantyMonths} meses sellada en bloque con hash traceable: ${blockchainHash}`;
     }
 
-    db.repair_orders[repIdx].bitacora.push({
+    db.repair_orders[idxRep].bitacora.push({
       status: newStatus,
       notes: `Cambio de estado: de ${prevStatus} a ${newStatus}.${hashMsg}`,
       timestamp: new Date().toISOString(),
@@ -545,17 +619,20 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
             </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-            <div className="md:col-span-2">
-              <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Dispositivo (Marca, Modelo, Color)</label>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Teléfono / WhatsApp del Cliente</label>
               <input
-                type="text"
+                type="tel"
                 required
-                value={newDevice}
-                onChange={(e) => setNewDevice(e.target.value)}
-                placeholder="Ej. iPhone 14 Pro Max 256GB Grafito"
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                value={newCustomerPhone}
+                onChange={(e) => setNewCustomerPhone(e.target.value)}
+                placeholder="Ej. 8812 3456"
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)] font-mono"
               />
+              <span className="text-[8px] text-[var(--text-secondary)] block mt-1 leading-relaxed">
+                Se usa para notificarle por WhatsApp el estado de su orden.
+              </span>
             </div>
             <div>
               <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Garantía Ofrecida (Meses)</label>
@@ -571,6 +648,60 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
               <span className="text-[8px] text-amber-400 block mt-1 leading-relaxed">
                 *Min. de 3 meses de garantía obligatoria por Ley 7472.
               </span>
+            </div>
+          </div>
+
+          {/* Filtros en cascada: Categoría -> Marca -> Modelo -> Categoría de Falla */}
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Categoría de Equipo</label>
+              <CustomSelect
+                value={newDeviceCategory}
+                onChange={(val) => { setNewDeviceCategory(val); setNewDeviceBrand(''); setNewDeviceModel(''); setNewDeviceModelOther(''); }}
+                placeholder="-- Categoría --"
+                className="text-xs py-2"
+                options={DEVICE_CATEGORIES.map(c => ({ value: c, label: c }))}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Marca</label>
+              <CustomSelect
+                value={newDeviceBrand}
+                onChange={(val) => { setNewDeviceBrand(val); setNewDeviceModel(''); setNewDeviceModelOther(''); }}
+                placeholder={newDeviceCategory ? '-- Marca --' : 'Elija categoría primero'}
+                className="text-xs py-2"
+                options={(BRANDS_BY_CATEGORY[newDeviceCategory] || []).map(b => ({ value: b, label: b }))}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Modelo</label>
+              <CustomSelect
+                value={newDeviceModel}
+                onChange={setNewDeviceModel}
+                placeholder={newDeviceBrand ? '-- Modelo --' : 'Elija marca primero'}
+                className="text-xs py-2"
+                options={(MODELS_BY_BRAND[newDeviceBrand] || DEFAULT_MODELS).map(m => ({ value: m, label: m }))}
+              />
+              {newDeviceModel === 'Otro modelo' && (
+                <input
+                  type="text"
+                  required
+                  value={newDeviceModelOther}
+                  onChange={(e) => setNewDeviceModelOther(e.target.value)}
+                  placeholder="Especifique el modelo"
+                  className="w-full mt-2 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                />
+              )}
+            </div>
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Categoría de Falla</label>
+              <CustomSelect
+                value={newDamageCategory}
+                onChange={setNewDamageCategory}
+                placeholder="-- Categoría de falla --"
+                className="text-xs py-2"
+                options={DAMAGE_CATEGORIES.map(d => ({ value: d, label: d }))}
+              />
             </div>
           </div>
 
@@ -675,15 +806,27 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                         <div className="text-[10px] text-emerald-400 dark:text-[var(--brand-gold-light)] font-mono font-bold">₡{rep.totalCost.toLocaleString()}</div>
                         
                         {/* Quick state switcher */}
-                        <div className="flex justify-between items-center pt-1.5 border-t border-[var(--border-color)]/50">
+                        <div className="flex justify-between items-center pt-1.5 border-t border-[var(--border-color)]/50 gap-1.5">
                           <span className="text-[8px] text-[var(--text-secondary)]">Mover a:</span>
-                          <div className="w-28" onClick={(e) => e.stopPropagation()}>
-                            <CustomSelect
-                              value={rep.status}
-                              onChange={(val) => handleUpdateStatus(rep.id, val as RepairOrder['status'])}
-                              className="text-[9px] text-sky-600 dark:text-[var(--brand-gold-light)] px-1.5 py-0.5"
-                              options={KANBAN_COLUMNS.map(s => ({ value: s, label: s }))}
-                            />
+                          <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                            <div className="w-24">
+                              <CustomSelect
+                                value={rep.status}
+                                onChange={(val) => handleUpdateStatus(rep.id, val as RepairOrder['status'])}
+                                className="text-[9px] text-sky-600 dark:text-[var(--brand-gold-light)] px-1.5 py-0.5"
+                                options={KANBAN_COLUMNS.map(s => ({ value: s, label: s }))}
+                              />
+                            </div>
+                            {rep.customerPhone && (
+                              <button
+                                type="button"
+                                title="Notificar por WhatsApp"
+                                onClick={() => window.open(buildWhatsAppUrl(rep.customerPhone!, buildWhatsAppMessage(rep)), '_blank', 'noopener,noreferrer')}
+                                className="p-1.5 rounded-lg bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25 transition shrink-0"
+                              >
+                                <MessageCircle className="w-3.5 h-3.5" />
+                              </button>
+                            )}
                           </div>
                         </div>
                       </div>
@@ -707,19 +850,36 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 <h3 className="font-bold text-sm text-sky-400 dark:text-[var(--brand-gold-light)]">Administrar Orden de Reparación</h3>
                 <p className="text-[10px] text-[var(--text-secondary)]">Ticket: <strong className="font-mono">{selectedRepair.ticket}</strong> | Cliente: <strong>{selectedRepair.customerName}</strong></p>
               </div>
-              <button
-                onClick={() => setSelectedRepair(null)}
-                className="text-xs bg-[var(--bg-surface)] hover:bg-rose-600 px-2.5 py-1.5 rounded-lg transition"
-              >
-                Cerrar
-              </button>
+              <div className="flex items-center gap-2">
+                {selectedRepair.customerPhone && (
+                  <button
+                    type="button"
+                    onClick={() => window.open(buildWhatsAppUrl(selectedRepair.customerPhone!, buildWhatsAppMessage(selectedRepair)), '_blank', 'noopener,noreferrer')}
+                    className="flex items-center gap-1.5 text-xs bg-emerald-500/15 text-emerald-500 hover:bg-emerald-500/25 px-2.5 py-1.5 rounded-lg transition font-bold"
+                  >
+                    <MessageCircle className="w-3.5 h-3.5" /> Notificar por WhatsApp
+                  </button>
+                )}
+                <button
+                  onClick={() => setSelectedRepair(null)}
+                  className="text-xs bg-[var(--bg-surface)] hover:bg-rose-600 px-2.5 py-1.5 rounded-lg transition"
+                >
+                  Cerrar
+                </button>
+              </div>
             </div>
 
             {/* Content Form */}
             <form onSubmit={handleSaveDiagnosisAndCost} className="p-5 space-y-4 flex-1 overflow-y-auto max-h-[450px]">
               <div className="bg-[var(--bg-surface)] p-3 rounded-xl border border-[var(--border-color)]/50 text-xs space-y-1">
                 <div>Equipo: <strong className="text-[var(--text-primary)]">{selectedRepair.device}</strong></div>
+                {selectedRepair.damageCategory && (
+                  <div>Categoría de Falla: <strong className="text-sky-600 dark:text-[var(--brand-gold-light)]">{selectedRepair.damageCategory}</strong></div>
+                )}
                 <div>Daño Reportado: <span className="text-[var(--text-secondary)] italic">"{selectedRepair.damageReported}"</span></div>
+                {selectedRepair.customerPhone && (
+                  <div>Teléfono: <span className="text-[var(--text-secondary)] font-mono">{selectedRepair.customerPhone}</span></div>
+                )}
                 <div>Lugar de Trabajo: <strong className="text-sky-600 dark:text-[var(--brand-gold-light)]">{selectedRepair.repairLocation || 'Taller en casa'}</strong></div>
                 {selectedRepair.neededTools && (
                   <div>Herramientas: <span className="text-amber-400 font-medium">{selectedRepair.neededTools}</span></div>
