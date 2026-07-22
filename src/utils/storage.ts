@@ -273,7 +273,9 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
     key: 'repair_orders', table: 'repair_orders', idKey: 'id',
     toRow: (o) => ({
       id: o.id, ticket: o.ticket || '', customer_id: o.customerId || '', customer_name: o.customerName || '',
-      customer_email: o.customerEmail || '', device: o.device || '', damage_reported: o.damageReported || '',
+      customer_email: o.customerEmail || '', customer_phone: o.customerPhone || null,
+      device: o.device || '', device_category: o.deviceCategory || null, device_brand: o.deviceBrand || null,
+      device_model: o.deviceModel || null, damage_reported: o.damageReported || '', damage_category: o.damageCategory || null,
       diagnosis_manual: o.diagnosisManual || null, repuestos: o.repuestos || [], labor_cost: o.laborCost || 0,
       total_cost: o.totalCost || 0, status: o.status, warranty_months: o.warrantyMonths ?? 3,
       blockchain_hash: o.blockchainHash || null, bitacora: o.bitacora || [],
@@ -282,7 +284,9 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
     }),
     fromRow: (r): RepairOrder => ({
       id: r.id, ticket: r.ticket || '', customerId: r.customer_id || '', customerName: r.customer_name || '',
-      customerEmail: r.customer_email || '', device: r.device || '', damageReported: r.damage_reported || '',
+      customerEmail: r.customer_email || '', customerPhone: r.customer_phone || undefined,
+      device: r.device || '', deviceCategory: r.device_category || undefined, deviceBrand: r.device_brand || undefined,
+      deviceModel: r.device_model || undefined, damageReported: r.damage_reported || '', damageCategory: r.damage_category || undefined,
       diagnosisManual: r.diagnosis_manual || undefined, repuestos: r.repuestos || [], laborCost: r.labor_cost || 0,
       totalCost: r.total_cost || 0, status: r.status, warrantyMonths: r.warranty_months ?? 3,
       blockchainHash: r.blockchain_hash || undefined, bitacora: r.bitacora || [],
