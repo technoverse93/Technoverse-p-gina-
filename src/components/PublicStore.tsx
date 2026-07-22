@@ -784,8 +784,16 @@ export default function PublicStore({
       };
 
       const { blob, qrText } = await buildInvoicePdfBlob(invoiceData);
+      // pdfPath es único por comprobante (issued.id viene del consecutivo
+      // atómico de issue_invoice, nunca se repite), así que nunca hace falta
+      // sobrescribir un PDF ya subido — upsert:true convertía este insert en
+      // un INSERT ... ON CONFLICT DO UPDATE, y Postgres exige una política
+      // RLS de UPDATE para esa rama aunque el conflicto nunca ocurra en la
+      // práctica; como storage.objects solo tenía política de INSERT para
+      // el bucket "invoices", toda subida fallaba con "new row violates
+      // row-level security policy" pese a que la venta ya se había cobrado.
       const pdfPath = `${issued.id}.pdf`;
-      const { error: uploadErr } = await supabase.storage.from('invoices').upload(pdfPath, blob, { contentType: 'application/pdf', upsert: true });
+      const { error: uploadErr } = await supabase.storage.from('invoices').upload(pdfPath, blob, { contentType: 'application/pdf' });
       if (uploadErr) throw uploadErr;
       const { data: pub } = supabase.storage.from('invoices').getPublicUrl(pdfPath);
       await supabase.rpc('set_invoice_pdf', { p_invoice_id: issued.id, p_pdf_url: pub.publicUrl, p_qr_data: qrText });
