@@ -1,5 +1,6 @@
 // ============================================================================
-// Motor de comprobantes fiscales CR v4.3 (registro interno)
+// Motor de comprobantes fiscales CR v4.3 (registro interno) — plantilla única
+// Minimalista / Compacta (elegida como definitiva para producción).
 // ============================================================================
 // IMPORTANTE — alcance real: este módulo genera un PDF con el FORMATO correcto
 // de Hacienda (Clave de 50 dígitos, Consecutivo de 20, CAABYS, IVA 13%
@@ -69,6 +70,7 @@ export interface InvoiceLineInput {
   description: string;
   qty: number;
   unitPrice: number; // precio unitario SIN IVA
+  warranty?: string; // ej. "12 meses"; se muestra en la columna de garantía cuando aplica
 }
 
 export interface InvoiceLineComputed extends InvoiceLineInput {
@@ -121,10 +123,6 @@ export interface InvoiceData {
   total: number;
 }
 
-function formatColones(n: number): string {
-  return '₡' + n.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-}
-
 /** Texto plano codificado en el QR: respaldo interno, NO un enlace oficial de Hacienda. */
 export function buildQrPayload(data: InvoiceData): string {
   return [
@@ -145,139 +143,271 @@ export async function generateQrDataUrl(text: string): Promise<string> {
 }
 
 /**
- * Genera el PDF v4.3 (una página): header fiscal, datos del receptor, tabla
- * CAABYS/IVA, desglose financiero en ₡ y QR de respaldo. Devuelve el Blob
- * listo para subir a Storage/descargar, sin ninguna dependencia pesada
- * cargada por adelantado (jspdf/qrcode se traen aquí mismo, perezosos).
+ * Intenta cargar el logo oficial ya publicado en /logo.png (el mismo que usa
+ * el favicon/header del sitio — ver index.html). Nunca bloquea ni rompe la
+ * generación del comprobante: si falla (offline, ruta distinta, etc.) las
+ * plantillas simplemente omiten el logo y siguen con el nombre en texto.
  */
-export async function buildInvoicePdfBlob(data: InvoiceData): Promise<{ blob: Blob; qrText: string }> {
-  const [{ jsPDF }, QRCodeMod] = await Promise.all([
-    import('jspdf'),
-    import('qrcode')
-  ]);
-  const QRCode: any = (QRCodeMod as any).default || QRCodeMod;
+export async function fetchLogoDataUrl(): Promise<string | null> {
+  try {
+    const res = await fetch('/logo.png');
+    if (!res.ok) return null;
+    const blob = await res.blob();
+    return await new Promise<string>((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  } catch {
+    return null;
+  }
+}
 
+/**
+ * Dibuja un monto en colones con el símbolo ₡ construido VECTORIALMENTE (una
+ * "C" con dos líneas horizontales encima). Es necesario porque los 14 fuentes
+ * estándar de PDF (Helvetica/Times/Courier con WinAnsiEncoding) no tienen el
+ * glifo del colón costarricense (U+20A1): jsPDF lo termina mapeando al byte
+ * 0xA1 de WinAnsi, que es "¡" — así el comprobante mostraba "¡12.345" en vez
+ * de "₡12.345". La alternativa real (embeber una fuente Unicode completa)
+ * agrega cientos de KB al bundle solo por un símbolo; dibujarlo a mano cuesta
+ * cero bytes y es 100% fiel en cualquier lector de PDF.
+ */
+function drawColones(doc: any, amount: number, x: number, y: number, opts: { align?: 'left' | 'right'; color?: [number, number, number] } = {}): number {
+  const align = opts.align || 'left';
+  const text = amount.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const fontSize = doc.getFontSize();
+  const scale = doc.internal.scaleFactor;
+  const unit = fontSize / scale; // "em" en unidades del documento (mm)
+  const cWidth = (doc.getStringUnitWidth('C') * fontSize) / scale;
+  const gap = unit * 0.12;
+  const numWidth = (doc.getStringUnitWidth(text) * fontSize) / scale;
+  const totalWidth = cWidth + gap + numWidth;
+  const startX = align === 'right' ? x - totalWidth : x;
+
+  doc.text('C', startX, y);
+
+  const barInset = cWidth * 0.12;
+  const barX = startX + barInset;
+  const barWidth = Math.max(cWidth - barInset * 1.6, 0.5);
+  const capHeight = unit * 0.62;
+  const barY1 = y - capHeight * 0.62;
+  const barY2 = y - capHeight * 0.26;
+
+  const prevLineWidth = doc.getLineWidth();
+  if (opts.color) doc.setDrawColor(opts.color[0], opts.color[1], opts.color[2]);
+  doc.setLineWidth(Math.max(unit * 0.05, 0.12));
+  doc.line(barX, barY1, barX + barWidth, barY1);
+  doc.line(barX, barY2, barX + barWidth, barY2);
+  doc.setLineWidth(prevLineWidth);
+  if (opts.color) doc.setDrawColor(0, 0, 0);
+
+  doc.text(text, startX + cWidth + gap, y);
+  return totalWidth;
+}
+
+interface PreparedInvoice {
+  qrText: string;
+  qrDataUrl: string;
+  logoDataUrl: string | null;
+  docTitle: string;
+}
+
+async function prepareInvoice(data: InvoiceData): Promise<PreparedInvoice> {
   const qrText = buildQrPayload(data);
-  const qrDataUrl: string = await QRCode.toDataURL(qrText, { margin: 1, width: 220 });
+  const [qrDataUrl, logoDataUrl] = await Promise.all([
+    generateQrDataUrl(qrText),
+    fetchLogoDataUrl()
+  ]);
+  const docTitle = data.tipoDoc === '01' ? 'FACTURA ELECTRÓNICA' : 'TIQUETE ELECTRÓNICO';
+  return { qrText, qrDataUrl, logoDataUrl, docTitle };
+}
+
+const hasWarranty = (data: InvoiceData) => data.items.some(it => !!it.warranty);
+
+// ============================================================================
+// Plantilla Minimalista / Compacta: una sola columna, sin color ni cajas,
+// líneas finas de separación, tipografía condensada — la definitiva en producción.
+// ============================================================================
+async function buildInvoicePdfMinimalista(data: InvoiceData): Promise<{ blob: Blob; qrText: string }> {
+  const { jsPDF } = await import('jspdf');
+  const { qrText, qrDataUrl, logoDataUrl, docTitle } = await prepareInvoice(data);
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
-  const marginX = 14;
+  const marginX = 16;
   let y = 16;
 
-  // ---- Encabezado fiscal ----
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(14);
-  doc.text(data.emisorNombre, marginX, y);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  y += 6;
-  doc.text(`Cédula Jurídica: ${data.emisorCedula}`, marginX, y);
-  if (data.emisorDireccion) { y += 4.5; doc.text(data.emisorDireccion, marginX, y); }
-  if (data.emisorTelefono) { y += 4.5; doc.text(`Tel: ${data.emisorTelefono}`, marginX, y); }
-
-  const docTitle = data.tipoDoc === '01' ? 'FACTURA ELECTRÓNICA' : 'TIQUETE ELECTRÓNICO';
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(12);
-  doc.text(docTitle, pageWidth - marginX, 16, { align: 'right' });
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-  const rightLines = [
-    `Consecutivo: ${data.consecutivo}`,
-    `Fecha: ${new Date(data.fechaISO).toLocaleString('es-CR')}`,
-    `Clave:`,
-    data.clave
-  ];
-  let ry = 22;
-  rightLines.forEach(line => { doc.text(line, pageWidth - marginX, ry, { align: 'right' }); ry += 4.2; });
-
-  y = Math.max(y, ry) + 6;
-  doc.setDrawColor(180);
-  doc.line(marginX, y, pageWidth - marginX, y);
-  y += 6;
-
-  // ---- Receptor ----
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(9);
-  doc.text('Datos del Receptor', marginX, y);
-  y += 5;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text(`Nombre/Razón Social: ${data.customerName}`, marginX, y); y += 4.5;
-  doc.text(`${IDENTIFICACION_LABELS[data.customerIdentificationType]}: ${data.customerIdentification || 'N/A'}`, marginX, y); y += 4.5;
-  if (data.customerEmail) { doc.text(`Correo: ${data.customerEmail}`, marginX, y); y += 4.5; }
-  doc.text(`Medio de Pago: ${MEDIO_PAGO_LABELS[data.medioPago]}`, marginX, y); y += 8;
-
-  // ---- Tabla de líneas (CAABYS / IVA) ----
-  const colX = { n: marginX, caabys: marginX + 8, desc: marginX + 38, qty: pageWidth - 74, price: pageWidth - 58, iva: pageWidth - 40, total: pageWidth - 16 };
-  doc.setFillColor(30, 41, 59);
-  doc.rect(marginX, y, pageWidth - marginX * 2, 7, 'F');
-  doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
-  doc.setFontSize(7.5);
-  doc.text('#', colX.n + 2, y + 4.8);
-  doc.text('CAABYS', colX.caabys, y + 4.8);
-  doc.text('Descripción', colX.desc, y + 4.8);
-  doc.text('Cant.', colX.qty, y + 4.8, { align: 'right' });
-  doc.text('P. Unit', colX.price, y + 4.8, { align: 'right' });
-  doc.text('IVA 13%', colX.iva, y + 4.8, { align: 'right' });
-  doc.text('Total', colX.total, y + 4.8, { align: 'right' });
-  y += 7;
+  if (logoDataUrl) {
+    try { doc.addImage(logoDataUrl, 'PNG', marginX, y - 4, 12, 12, undefined, 'FAST'); } catch { /* logo opcional */ }
+  }
+  const textX = logoDataUrl ? marginX + 15 : marginX;
   doc.setTextColor(20, 20, 20);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(8);
-
-  data.items.forEach((it, idx) => {
-    if (y > 265) { doc.addPage(); y = 20; }
-    const rowH = 6.5;
-    if (idx % 2 === 0) {
-      doc.setFillColor(245, 246, 248);
-      doc.rect(marginX, y, pageWidth - marginX * 2, rowH, 'F');
-    }
-    doc.text(String(idx + 1), colX.n + 2, y + 4.4);
-    doc.text(it.caabys, colX.caabys, y + 4.4);
-    const descLines = doc.splitTextToSize(it.description, colX.qty - colX.desc - 4);
-    doc.text(descLines[0] || '', colX.desc, y + 4.4);
-    doc.text(String(it.qty), colX.qty, y + 4.4, { align: 'right' });
-    doc.text(formatColones(it.unitPrice), colX.price, y + 4.4, { align: 'right' });
-    doc.text(formatColones(it.lineIva), colX.iva, y + 4.4, { align: 'right' });
-    doc.text(formatColones(it.lineTotal), colX.total, y + 4.4, { align: 'right' });
-    y += rowH;
-  });
-
-  y += 4;
-  doc.setDrawColor(210);
-  doc.line(marginX, y, pageWidth - marginX, y);
-  y += 6;
-
-  // ---- Desglose financiero ----
-  const totalsX = pageWidth - marginX - 55;
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('Subtotal:', totalsX, y);
-  doc.text(formatColones(data.subtotal), pageWidth - marginX, y, { align: 'right' }); y += 5;
-  doc.text('IVA (13%):', totalsX, y);
-  doc.text(formatColones(data.ivaTotal), pageWidth - marginX, y, { align: 'right' }); y += 5;
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('TOTAL:', totalsX, y);
-  doc.text(formatColones(data.total), pageWidth - marginX, y, { align: 'right' });
-
-  // ---- QR + aviso de alcance ----
-  const qrSize = 32;
-  const qrY = y - 26;
-  doc.addImage(qrDataUrl, 'PNG', marginX, qrY, qrSize, qrSize);
+  doc.text(data.emisorNombre, textX, y);
   doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.text(docTitle, pageWidth - marginX, y, { align: 'right' });
+  y += 4.5;
+  doc.text(`Cédula Jurídica: ${data.emisorCedula}`, textX, y);
+  doc.text(`Consecutivo: ${data.consecutivo}`, pageWidth - marginX, y, { align: 'right' });
+  y += 4;
+  doc.text(`Fecha: ${new Date(data.fechaISO).toLocaleString('es-CR')}`, pageWidth - marginX, y, { align: 'right' });
+  y += 4;
   doc.setFontSize(6.5);
   doc.setTextColor(90, 90, 90);
-  const disclaimerLines = doc.splitTextToSize(
-    'Este código QR es un respaldo de verificación INTERNO de Technoverse (no oficial de Hacienda). ' +
-    'Comprobante de uso contable/interno mientras se activa la transmisión electrónica real ante el Ministerio de Hacienda.',
-    60
+  doc.text(`Clave: ${data.clave}`, textX, y);
+  y += 4;
+
+  doc.setDrawColor(160);
+  doc.setLineWidth(0.2);
+  doc.line(marginX, y, pageWidth - marginX, y);
+  y += 4;
+
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.setTextColor(20, 20, 20);
+  doc.text(`Receptor: ${data.customerName}`, marginX, y); y += 3.8;
+  doc.text(`${IDENTIFICACION_LABELS[data.customerIdentificationType]}: ${data.customerIdentification || 'N/A'}   |   Pago: ${MEDIO_PAGO_LABELS[data.medioPago]}`, marginX, y); y += 3.8;
+  if (data.customerEmail) { doc.text(`Correo: ${data.customerEmail}`, marginX, y); y += 3.8; }
+  y += 2;
+
+  // ---- Tabla de líneas (solo líneas, sin relleno) ----
+  y = renderItemsTable(doc, data, y, {
+    headerFill: null,
+    headerText: [20, 20, 20],
+    altRowFill: null,
+    borders: false,
+    compact: true,
+    warranty: hasWarranty(data)
+  });
+
+  y += 3;
+  doc.setDrawColor(160);
+  doc.line(marginX, y, pageWidth - marginX, y);
+  y += 5;
+
+  // ---- Totales (alineados a la derecha, sin caja) ----
+  const totalsX = pageWidth - marginX - 50;
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(7.5);
+  doc.text('Subtotal', totalsX, y);
+  drawColones(doc, data.subtotal, pageWidth - marginX, y, { align: 'right' }); y += 4.2;
+  doc.text('IVA (13%)', totalsX, y);
+  drawColones(doc, data.ivaTotal, pageWidth - marginX, y, { align: 'right' }); y += 4.2;
+  doc.setFont('helvetica', 'bold');
+  doc.setFontSize(9.5);
+  doc.text('TOTAL', totalsX, y);
+  drawColones(doc, data.total, pageWidth - marginX, y, { align: 'right' });
+
+  // ---- QR pequeño + aviso ----
+  const qrSize = 16;
+  const qrY = y - 12;
+  doc.addImage(qrDataUrl, 'PNG', marginX, qrY, qrSize, qrSize, undefined, 'FAST');
+  doc.setFont('helvetica', 'normal');
+  doc.setFontSize(5.8);
+  doc.setTextColor(120, 120, 120);
+  const disclaimer = doc.splitTextToSize(
+    'QR de verificación interna (no oficial de Hacienda). Uso contable mientras se activa la transmisión electrónica real.',
+    totalsX - marginX - qrSize - 6
   );
-  doc.text(disclaimerLines, marginX + qrSize + 4, qrY + 6);
+  doc.text(disclaimer, marginX + qrSize + 3, qrY + 4);
 
   const blob = doc.output('blob');
   return { blob, qrText };
+}
+
+// ============================================================================
+// Tabla de líneas compartida (CAABYS / Descripción / Garantía / Cant. /
+// P.Unit / IVA / Total): un solo renderer parametrizable para que las 3
+// plantillas mantengan la MISMA estructura fiscal exacta y solo cambien su
+// piel visual — evita triplicar la lógica de columnas/paginación.
+// ============================================================================
+function renderItemsTable(
+  doc: any,
+  data: InvoiceData,
+  startY: number,
+  style: {
+    headerFill: [number, number, number] | null;
+    headerText: [number, number, number];
+    altRowFill: [number, number, number] | null;
+    borders: boolean;
+    fontFamily?: string;
+    compact?: boolean;
+    warranty: boolean;
   }
-              
+): number {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const marginX = style.compact ? 16 : 14;
+  const usableW = pageWidth - marginX * 2;
+  const font = style.fontFamily || 'helvetica';
+  let y = startY;
+
+  // Anchos de columna (mm). "Garantía" solo aparece si algún ítem la trae.
+  const wN = 6, wCaabys = 20, wQty = 10, wPrice = 22, wIva = 20, wTotal = 24;
+  const wWarranty = style.warranty ? 16 : 0;
+  const wDesc = usableW - (wN + wCaabys + wQty + wPrice + wIva + wTotal + wWarranty);
+
+  const colX = { n: marginX, caabys: marginX + wN, desc: marginX + wN + wCaabys };
+  const descEnd = colX.desc + wDesc;
+  const warrantyX = descEnd;
+  const qtyX = warrantyX + wWarranty;
+  const priceX = qtyX + wQty;
+  const ivaX = priceX + wPrice;
+  const totalX = ivaX + wIva;
+
+  const headerH = style.compact ? 5.5 : 7;
+  if (style.headerFill) {
+    doc.setFillColor(...style.headerFill);
+    doc.rect(marginX, y, usableW, headerH, 'F');
+  }
+  if (style.borders) doc.rect(marginX, y, usableW, headerH);
+  doc.setTextColor(...style.headerText);
+  doc.setFont(font, 'bold');
+  doc.setFontSize(style.compact ? 6.5 : 7.2);
+  const headerBaseline = y + headerH - (style.compact ? 1.6 : 2.2);
+  doc.text('#', colX.n + 1.5, headerBaseline);
+  doc.text('CAABYS', colX.caabys, headerBaseline);
+  doc.text('Descripción', colX.desc, headerBaseline);
+  if (style.warranty) doc.text('Garantía', warrantyX, headerBaseline);
+  doc.text('Cant.', qtyX + wQty - 1.5, headerBaseline, { align: 'right' });
+  doc.text('P. Unit', priceX + wPrice - 1.5, headerBaseline, { align: 'right' });
+  doc.text('IVA 13%', ivaX + wIva - 1.5, headerBaseline, { align: 'right' });
+  doc.text('Total', totalX + wTotal - 1.5, headerBaseline, { align: 'right' });
+  y += headerH;
+
+  doc.setFont(font, 'normal');
+  doc.setFontSize(style.compact ? 6.8 : 7.5);
+  const rowH = style.compact ? 5.2 : 6.5;
+  const textColor: [number, number, number] = [20, 20, 20];
+
+  data.items.forEach((it, idx) => {
+    if (y > 265) { doc.addPage(); y = 20; }
+    if (style.altRowFill && idx % 2 === 0) {
+      doc.setFillColor(...style.altRowFill);
+      doc.rect(marginX, y, usableW, rowH, 'F');
+    }
+    if (style.borders) doc.rect(marginX, y, usableW, rowH);
+    doc.setTextColor(...textColor);
+    const baseline = y + rowH - (style.compact ? 1.4 : 2);
+    doc.text(String(idx + 1), colX.n + 1.5, baseline);
+    doc.text(it.caabys, colX.caabys, baseline);
+    const descLines = doc.splitTextToSize(it.description, wDesc - 2);
+    doc.text(descLines[0] || '', colX.desc, baseline);
+    if (style.warranty) doc.text(it.warranty || '—', warrantyX, baseline);
+    doc.text(String(it.qty), qtyX + wQty - 1.5, baseline, { align: 'right' });
+    drawColones(doc, it.unitPrice, priceX + wPrice - 1.5, baseline, { align: 'right' });
+    drawColones(doc, it.lineIva, ivaX + wIva - 1.5, baseline, { align: 'right' });
+    drawColones(doc, it.lineTotal, totalX + wTotal - 1.5, baseline, { align: 'right' });
+    y += rowH;
+  });
+
+  return y;
+}
+
+/** Punto de entrada usado por el checkout y las notas de crédito. */
+export async function buildInvoicePdfBlob(data: InvoiceData): Promise<{ blob: Blob; qrText: string }> {
+  return buildInvoicePdfMinimalista(data);
+}
