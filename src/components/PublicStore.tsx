@@ -606,6 +606,22 @@ export default function PublicStore({
 
     setIsSubmittingOrder(true);
 
+    // Redención atómica del cupón (1 solo uso): se hace aquí, al confirmar,
+    // no en "Aplicar" (que solo previsualiza el descuento) — así el cupón se
+    // consume una única vez aunque dos clientes lo apliquen casi al mismo
+    // tiempo, y si ya lo usaron/venció justo antes de este clic, se corta la
+    // compra ANTES de tocar stock u órdenes, en vez de dejar el descuento
+    // aplicado sin respaldo del lado del servidor.
+    if (appliedCoupon) {
+      const { error: couponError } = await supabase.rpc('redeem_coupon', { p_code: appliedCoupon.code });
+      if (couponError) {
+        toast.error('El cupón ya no está disponible (usado, inactivo o vencido). Quítelo para continuar.');
+        setAppliedCoupon(null);
+        setIsSubmittingOrder(false);
+        return;
+      }
+    }
+
     // Stock deduction is handled atomically by processSaleAtomic in Firestore.
     // Do NOT deduct stock locally here — that would conflict with the transaction.
 

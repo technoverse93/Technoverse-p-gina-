@@ -182,8 +182,11 @@ export default function AdminPanel({
 
   // Marketing states
   const [isCouponModalOpen, setIsCouponModalOpen] = useState(false);
+  // Regla fija del negocio: todo cupón nuevo es de un (1) solo uso y vence a
+  // los 60 días de creado (la fecha la calcula la BD; el límite se fuerza
+  // aquí y de nuevo en handleSaveCoupon para que no se pueda alterar).
   const [couponForm, setCouponForm] = useState<Partial<MarketingCampaign>>({
-    code: '', type: 'Porcentaje', value: 10, limit: 100, active: true
+    code: '', type: 'Porcentaje', value: 10, limit: 1, active: true
   });
   const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
   const [bannerForm, setBannerForm] = useState<Partial<Banner>>({
@@ -197,6 +200,7 @@ export default function AdminPanel({
     const newCoupon = {
       ...couponForm,
       id: `CAMP-${Date.now()}`,
+      limit: 1, // regla fija: un solo uso, sin importar lo que traiga el formulario
       used: 0
     } as MarketingCampaign;
     db.marketing_campaigns.push(newCoupon);
@@ -1661,9 +1665,10 @@ export default function AdminPanel({
                     </div>
                     <div>
                       <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Límite de Usos</label>
-                      <input required type="number" value={couponForm.limit} onChange={e => setCouponForm({...couponForm, limit: parseInt(e.target.value)})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)]" />
+                      <input disabled type="number" value={1} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-sm text-[var(--text-secondary)] opacity-70 cursor-not-allowed" />
                     </div>
                   </div>
+                  <p className="text-[9px] text-[var(--text-secondary)]">Regla fija: 1 solo uso por cupón, y vence automáticamente a los 60 días de creado.</p>
                   <div className="flex justify-end gap-2 pt-2">
                     <button type="button" onClick={() => setIsCouponModalOpen(false)} className="text-[10px] text-[var(--text-secondary)] hover:text-rose-500 px-3 py-1">Cancelar</button>
                     <button type="submit" className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-[var(--text-primary)] px-4 py-1.5 rounded-lg text-[10px] font-bold transition">Guardar Cupón</button>
@@ -1679,16 +1684,18 @@ export default function AdminPanel({
                       <th className="py-2">Tipo</th>
                       <th className="py-2 text-right">Valor</th>
                       <th className="py-2 text-center">Usos</th>
+                      <th className="py-2 text-center">Vence</th>
                       <th className="py-2 text-center">Estado</th>
                       <th className="py-2 text-center">Acciones</th>
                     </tr>
                   </thead>
-                  <PaginatedTbody items={campaigns} itemsPerPage={10} renderItem={(c) => ( 
+                  <PaginatedTbody items={campaigns} itemsPerPage={10} renderItem={(c) => (
                         <tr key={c.id}>
                           <td className="py-2 font-mono font-bold text-sky-400 dark:text-[var(--brand-gold-light)]">{c.code}</td>
                           <td className="py-2 text-[var(--text-primary)]">{c.type}</td>
                           <td className="py-2 text-right font-mono text-[var(--text-primary)]">{c.type === 'Porcentaje' ? `${c.value}%` : `₡${c.value.toLocaleString()}`}</td>
                           <td className="py-2 text-center text-[var(--text-secondary)]">{c.used} / {c.limit}</td>
+                          <td className="py-2 text-center text-[var(--text-secondary)]">{c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : '—'}</td>
                           <td className="py-2 text-center">
                             <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${c.active ? 'bg-emerald-500 dark:bg-[var(--brand-gold-mid)]/20 text-emerald-400 dark:text-[var(--brand-gold-light)]' : 'bg-rose-500/20 text-rose-400'}`}>
                               {c.active ? 'Activo' : 'Inactivo'}
