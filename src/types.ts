@@ -180,6 +180,9 @@ export interface MarketingCampaign {
   used: number;
   applicableCategory?: string; // e.g. "Fundas", "Todas"
   active: boolean;
+  // Caducidad automática (60 días desde la creación); mantenida por la BD,
+  // solo lectura desde el frontend.
+  expiresAt?: string;
 }
 
 export interface Banner {
