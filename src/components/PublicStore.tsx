@@ -538,10 +538,13 @@ export default function PublicStore({
   const subtotalAfterCoupon = Math.max(0, discountedSubtotal - couponDiscountAmount);
 
   const cartShipping = cart.length > 0 ? calculateShippingCost(shippingProvince) : 0;
-  
-  // IVA 13% Costa Rica applied to subtotal minus discounts
-  const cartTax = Math.round(subtotalAfterCoupon * 0.13);
-  const cartTotal = subtotalAfterCoupon + cartShipping + cartTax;
+
+  // Los precios del catálogo ya son el PRECIO FINAL con IVA incluido (así se
+  // le cobra al cliente) — el 13% NUNCA se suma aquí. cartTax es solo el
+  // desglose informativo/fiscal calculado hacia atrás: Neto = Total / 1.13,
+  // IVA = Total - Neto. El total a pagar es precio de catálogo + envío, nada más.
+  const cartTax = Math.round(subtotalAfterCoupon - subtotalAfterCoupon / 1.13);
+  const cartTotal = subtotalAfterCoupon + cartShipping;
 
   const handleApplyCoupon = () => {
     
@@ -746,7 +749,8 @@ export default function PublicStore({
           caabys: it.product.caabys || DEFAULT_CAABYS,
           description: it.product.name,
           qty: it.quantity,
-          unitPrice: getProductDiscountedPrice(it.product)
+          unitPrice: getProductDiscountedPrice(it.product),
+          warranty: it.product.warranty || undefined
         }))
       );
       const { data: issued, error: issueErr } = await supabase.rpc('issue_invoice', {
@@ -2082,7 +2086,7 @@ export default function PublicStore({
                       <span>₡{cartTax.toLocaleString()}</span>
                     </div>
                     <div className="flex justify-between text-[var(--text-primary)] font-extrabold text-sm border-t border-[var(--border-color)] pt-2">
-                      <span>Monto Total Neto:</span>
+                      <span>Total a Pagar:</span>
                       <span className="font-mono text-blue-600 dark:text-[var(--brand-gold-light)]">₡{cartTotal.toLocaleString()}</span>
                     </div>
                   </div>
