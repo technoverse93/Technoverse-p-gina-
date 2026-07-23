@@ -2,11 +2,16 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { Product, InventoryMovement } from '../types';
 import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
 import { CustomSelect } from './CustomSelect';
+import { useToast } from './ui/Overlays';
 import { 
   Package, Plus, Edit, Trash2, Search, Filter, History, MapPin, 
   Box, FileText, AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronRight, X, Image as ImageIcon, Save, Download,
   Upload, Check, AlertCircle, Sparkles
 } from 'lucide-react';
+
+// CAABYS genérico ("Otros servicios n.c.p."), respaldo mientras se clasifica
+// cada producto con su código real de 13 dígitos del catálogo de Hacienda.
+export const DEFAULT_CAABYS = '8399000000000';
 
 const TECHNOVERSE_PLACEHOLDER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNTAiIGhlaWdodD0iMTUwIiB2aWV3Qm94PSIwIDAgMTUwIDE1MCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTUwIiBmaWxsPSIjZjhmOWZhIi8+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzBmMTcyYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmF0LWJhc2VsaW5lPSJtaWRkbGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iIzM4YmRmZiI+VEVDSE5PVkVSU0U8L3RleHQ+PC9zdmc+";
 
@@ -66,6 +71,7 @@ function usePagination(items, itemsPerPage = 10) {
 }
 
 export default function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'productos', onTabChange }: InventarioControlProps) {
+  const toast = useToast();
   const [activeSubTab, setActiveSubTab] = useState<'productos' | 'movimientos' | 'reportes' | 'repuestos'>(defaultSubTab);
 
   useEffect(() => {
@@ -96,6 +102,11 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   const [prodClientStock, setProdClientStock] = useState<number | ''>('');
   const [prodLinkedSparePartSku, setProdLinkedSparePartSku] = useState('');
   const [prodWarranty, setProdWarranty] = useState('15 días');
+  // CAABYS (Catálogo de Bienes y Servicios de Hacienda): código de 13 dígitos
+  // requerido por línea en la Factura/Tiquete Electrónico v4.3. '8399000000000'
+  // ("Otros servicios n.c.p.") es el respaldo genérico mientras se clasifica
+  // cada producto real; coincide con el DEFAULT de la columna en Supabase.
+  const [prodCaabys, setProdCaabys] = useState('');
   const [showSkuSuggestions, setShowSkuSuggestions] = useState(false);
   const [formError, setFormError] = useState<string | null>(null);
   const [skuLoadedFromHistory, setSkuLoadedFromHistory] = useState<string | null>(null);
@@ -690,9 +701,34 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     return true;
   });
 
-  const matchedHistoricalSku = prodSku.trim() && (!skuLoadedFromHistory || (skuLoadedFromHistory && skuLoadedFromHistory.toLowerCase() !== prodSku.toLowerCase().trim()))
+  // Al editar un producto existente NO se ofrece "recuperar del histórico":
+  // su propio SKU ahora vive en el catálogo (el autorrelleno lo conserva) y
+  // mostrar el aviso sobre el mismo producto que se edita sería confuso.
+  const matchedHistoricalSku = !editingProductId && prodSku.trim() && (!skuLoadedFromHistory || (skuLoadedFromHistory && skuLoadedFromHistory.toLowerCase() !== prodSku.toLowerCase().trim()))
     ? historicalSkus.find(h => h && h.sku && h.sku.toLowerCase() === prodSku.toLowerCase().trim())
     : null;
+
+  // Registra/actualiza un producto en el catálogo histórico (fuente del
+  // autorrelleno por SKU). Es un UPSERT: si el SKU ya está, refresca sus
+  // datos; si no, lo agrega. NUNCA borra. Así el autorrelleno conserva de
+  // forma permanente todo lo que se ha agregado, y deja de "encogerse".
+  const upsertHistoricalSku = (db: any, p: any) => {
+    if (!p || !p.sku) return;
+    if (!db.historical_skus) db.historical_skus = [];
+    const entry = {
+      sku: p.sku,
+      name: p.name || '',
+      category: p.category || '',
+      price: p.price || 0,
+      cost: p.cost || 0,
+      imageUrl: p.imageUrl || ''
+    };
+    const hIdx = db.historical_skus.findIndex(
+      (h: any) => h && h.sku && h.sku.toLowerCase() === String(p.sku).toLowerCase()
+    );
+    if (hIdx === -1) db.historical_skus.push(entry);
+    else db.historical_skus[hIdx] = { ...db.historical_skus[hIdx], ...entry };
+  };
 
   const handleProductSubmit = (e: React.FormEvent) => {
     e.preventDefault();
@@ -777,7 +813,8 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             physicalLocation: locationValue,
             imageUrl: prodImage || TECHNOVERSE_PLACEHOLDER,
             discountPercent: prodApplyDiscount ? finalDiscount : 0,
-            warranty: prodWarranty
+            warranty: prodWarranty,
+            caabys: prodCaabys.trim() || DEFAULT_CAABYS
           };
           
           // Cascading stock update if this is a spare part
@@ -808,6 +845,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             });
           }
           
+          upsertHistoricalSku(db, db.products[idx]);
           addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Editar Producto', `Producto modificado: ${prodName} (SKU: ${prodSku})`, db);
         }
       } else {
@@ -847,7 +885,8 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             imageUrl: prodImage || TECHNOVERSE_PLACEHOLDER,
             discountPercent: prodApplyDiscount ? finalDiscount : 0,
             active: finalStock > 0,
-            warranty: prodWarranty
+            warranty: prodWarranty,
+            caabys: prodCaabys.trim() || DEFAULT_CAABYS
           };
           db.products[idx] = newProduct;
         } else {
@@ -866,7 +905,8 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             imageUrl: prodImage || TECHNOVERSE_PLACEHOLDER,
             discountPercent: prodApplyDiscount ? finalDiscount : 0,
             active: finalStock > 0,
-            warranty: prodWarranty
+            warranty: prodWarranty,
+            caabys: prodCaabys.trim() || DEFAULT_CAABYS
           };
           db.products.push(newProduct);
         }
@@ -887,11 +927,12 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         }
         addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Crear Producto', `Producto creado: ${prodName} (SKU: ${newSku})`, db);
 
-        // El SKU ya se reintegró como producto: se elimina del histórico
-        // para no seguir contando como pendiente de depuración.
-        if (db.historical_skus) {
-          db.historical_skus = db.historical_skus.filter(h => h && h.sku.toLowerCase() !== newSku.toLowerCase().trim());
-        }
+        // Se registra en el catálogo histórico (autorrelleno por SKU) SIN
+        // borrar nada. Antes aquí se ELIMINABA del histórico el SKU recién
+        // creado: por eso, cada vez que se agregaba/reintegraba un producto,
+        // el autorrelleno perdía una entrada y la lista se iba vaciando. Ahora
+        // el catálogo solo crece/actualiza y conserva todo lo agregado.
+        upsertHistoricalSku(db, newProduct);
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('product:created', { detail: newProduct }));
@@ -918,19 +959,9 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     const db = getDB();
     const idx = db.products.findIndex(x => x && x.id === p.id);
     if (idx !== -1) {
-      // Store in historical (archivo para autorrelleno por SKU) antes de eliminar
-      if (!db.historical_skus) db.historical_skus = [];
-      if (!db.historical_skus.find(h => h.sku === p.sku)) {
-        db.historical_skus.push({
-          sku: p.sku,
-          name: p.name,
-          category: p.category,
-          price: p.price,
-          cost: p.cost,
-          imageUrl: p.imageUrl,
-          deletedAt: new Date().toISOString()
-        });
-      }
+      // Se conserva en el catálogo histórico (autorrelleno por SKU) antes de
+      // eliminar, para poder re-agregarlo luego. Upsert: nunca se pierde.
+      upsertHistoricalSku(db, p);
 
       // Hard Delete en cascada de repuestos vinculados (prohibido dejar productos fantasma)
       const idsToRemove = [p.id];
@@ -948,7 +979,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     try {
       await saveDB(db);
     } catch (err: any) {
-      alert('No se pudo eliminar el producto en la base de datos. Detalle: ' + (err?.message || err));
+      toast.error('No se pudo eliminar el producto en la base de datos. Detalle: ' + (err?.message || err));
       return;
     }
     loadData();
@@ -1006,9 +1037,9 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       saveDB(db);
       loadData();
       onDataChanged();
-      alert(`Conteo finalizado. Se ajustaron ${adjustmentsMade} productos.`);
+      toast.success(`Conteo finalizado. Se ajustaron ${adjustmentsMade} productos.`);
     } else {
-      alert('Conteo finalizado. No hubo diferencias en el stock.');
+      toast.info('Conteo finalizado. No hubo diferencias en el stock.');
     }
     
     setIsCountingMode(false);
@@ -1175,6 +1206,7 @@ if (!m) return null;
                     setProdInternalStock('');
                     setProdClientStock('');
                     setProdLinkedSparePartSku('');
+                    setProdCaabys('');
                     setProdCategory(activeSubTab === 'repuestos' ? 'LCD' : 'Fundas');
                     setSkuLoadedFromHistory(null);
                     setSkuAutoGenerated(true);
@@ -1286,6 +1318,7 @@ if (!m) return null;
                                       setProdLocation(p.physicalLocation || '');
                                       setProdImage(p.imageUrl);
                                       setProdWarranty(p.warranty || '15 días');
+                                      setProdCaabys(p.caabys || '');
                                       setProdApplyDiscount(p.discountPercent > 0);
                                       setProdDiscount(p.discountPercent || 0);
                                       setProdDoubleStock(p.isDoubleStock || false);
@@ -1575,6 +1608,24 @@ if (!m) return null;
                         className="text-xs py-2"
                         options={['15 días', '60 días', '90 días', '12 meses'].map(w => ({ value: w, label: w }))}
                       />
+                    </div>
+
+                    <div>
+                      <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">
+                        CAABYS (13 dígitos, catálogo Hacienda)
+                      </label>
+                      <input
+                        type="text"
+                        inputMode="numeric"
+                        maxLength={13}
+                        value={prodCaabys}
+                        onChange={e => setProdCaabys(e.target.value.replace(/\D/g, '').slice(0, 13))}
+                        placeholder={DEFAULT_CAABYS + ' (genérico si se deja vacío)'}
+                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                      />
+                      <p className="text-[9px] text-[var(--text-muted)] mt-1">
+                        Requerido por línea en comprobantes electrónicos v4.3. Sin clasificar aún, se usa el genérico "Otros servicios n.c.p.".
+                      </p>
                     </div>
 
                     <div>
