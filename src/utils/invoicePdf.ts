@@ -69,7 +69,7 @@ export interface InvoiceLineInput {
   caabys: string;
   description: string;
   qty: number;
-  unitPrice: number; // precio unitario SIN IVA
+  unitPrice: number; // precio unitario FINAL, el mismo que se anuncia en la tienda (IVA incluido)
   warranty?: string; // ej. "12 meses"; se muestra en la columna de garantía cuando aplica
 }
 
@@ -81,7 +81,15 @@ export interface InvoiceLineComputed extends InvoiceLineInput {
 
 const IVA_RATE = 0.13;
 
-/** Calcula el desglose fiscal (subtotal/IVA 13%/total) por línea y global. */
+/**
+ * Calcula el desglose fiscal (subtotal/IVA 13%/total) por línea y global.
+ * `unitPrice` es el precio FINAL anunciado (el que realmente paga el
+ * cliente) — el desglose para Hacienda se calcula HACIA ATRÁS a partir de
+ * ese total, nunca sumando un 13% adicional encima:
+ *   lineTotal    = qty * unitPrice          (exactamente lo anunciado)
+ *   lineSubtotal = lineTotal / 1.13         (base imponible/neto)
+ *   lineIva      = lineTotal - lineSubtotal (por resta exacta: subtotal + iva === total siempre)
+ */
 export function computeInvoiceTotals(lines: InvoiceLineInput[]): {
   items: InvoiceLineComputed[];
   subtotal: number;
@@ -90,15 +98,16 @@ export function computeInvoiceTotals(lines: InvoiceLineInput[]): {
 } {
   let subtotal = 0;
   let ivaTotal = 0;
+  let total = 0;
   const items: InvoiceLineComputed[] = lines.map(l => {
-    const lineSubtotal = round2(l.qty * l.unitPrice);
-    const lineIva = round2(lineSubtotal * IVA_RATE);
-    const lineTotal = round2(lineSubtotal + lineIva);
+    const lineTotal = round2(l.qty * l.unitPrice);
+    const lineSubtotal = round2(lineTotal / (1 + IVA_RATE));
+    const lineIva = round2(lineTotal - lineSubtotal);
     subtotal = round2(subtotal + lineSubtotal);
     ivaTotal = round2(ivaTotal + lineIva);
+    total = round2(total + lineTotal);
     return { ...l, lineSubtotal, lineIva, lineTotal };
   });
-  const total = round2(subtotal + ivaTotal);
   return { items, subtotal, ivaTotal, total };
 }
 
