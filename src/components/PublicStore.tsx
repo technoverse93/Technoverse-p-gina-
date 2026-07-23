@@ -139,8 +139,10 @@ export default function PublicStore({
   const [isCartOpen, setIsCartOpen] = useState(false);
 
   // Checkout process state
-  const [checkoutStep, setCheckoutStep] = useState<number>(0); // 0 = cart, 1 = delivery, 2 = payment, 3 = confirmed
-  const [shippingProvince, setShippingProvince] = useState<string>('San José');
+  const [checkoutStep, setCheckoutStep] = useState<number>(0); // 0 = cart, 1 = contacto, 2 = payment, 3 = confirmed
+  // La entrega se coordina 100% manual contactando al cliente: no hay
+  // selección de provincia, tarifa de envío ni estados de rastreo. Solo se
+  // captura una ubicación/nota base para que el administrador coordine.
   const [shippingAddress, setShippingAddress] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
@@ -450,9 +452,6 @@ export default function PublicStore({
 
   const getProductDiscountedPrice = (prod: Product) => prod.price;
 
-  // Shipping calculation based on destination province
-  const calculateShippingCost = (prov: string) => prov === 'San José' ? 2500 : 4000;
-
   const handleAddToCart = (prod: Product) => {
     if (prod.stock <= 0) {
       toast.warning('¡Disculpe! Este producto se encuentra agotado.');
@@ -537,14 +536,13 @@ export default function PublicStore({
 
   const subtotalAfterCoupon = Math.max(0, discountedSubtotal - couponDiscountAmount);
 
-  const cartShipping = cart.length > 0 ? calculateShippingCost(shippingProvince) : 0;
-
   // Los precios del catálogo ya son el PRECIO FINAL con IVA incluido (así se
   // le cobra al cliente) — el 13% NUNCA se suma aquí. cartTax es solo el
   // desglose informativo/fiscal calculado hacia atrás: Neto = Total / 1.13,
-  // IVA = Total - Neto. El total a pagar es precio de catálogo + envío, nada más.
+  // IVA = Total - Neto. La entrega es manual/gratuita: no se suma envío,
+  // el total a pagar es exactamente el precio de catálogo.
   const cartTax = Math.round(subtotalAfterCoupon - subtotalAfterCoupon / 1.13);
-  const cartTotal = subtotalAfterCoupon + cartShipping;
+  const cartTotal = subtotalAfterCoupon;
 
   const handleApplyCoupon = () => {
     
@@ -574,7 +572,7 @@ export default function PublicStore({
       return;
     }
     if (!shippingAddress.trim()) {
-      toast.warning('La dirección de envío es obligatoria.');
+      toast.warning('La ubicación / dirección de contacto es obligatoria.');
       return;
     }
     if (!fiscalEmail.trim() || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(fiscalEmail.trim())) {
@@ -646,7 +644,7 @@ export default function PublicStore({
       })),
       subtotal: cartSubtotal,
       membershipDiscount: 0,
-      shippingCost: cartShipping,
+      shippingCost: 0,
       taxAmount: cartTax,
       total: cartTotal,
       paymentMethod: paymentMethod,
@@ -700,7 +698,7 @@ export default function PublicStore({
         name: recipientName.trim(),
         email: `${recipientName.replace(/\s+/g, '').toLowerCase()}@correo.cr`,
         phone: recipientPhone.trim(),
-        province: shippingProvince as any,
+        province: '' as any,
         addressDetail: shippingAddress.trim(),
         cardsTokenized: paymentMethod === 'Tarjeta' ? [{ last4: cardNumber.slice(-4), brand: 'Visa' }] : [],
         balance: 0,
@@ -708,14 +706,15 @@ export default function PublicStore({
       });
     }
 
-    // Register logistics delivery
+    // Snapshot de contacto/ubicación por orden para que el administrador
+    // coordine la entrega de forma directa y manual (sin tarifas ni rastreo).
     if (!db.deliveries) db.deliveries = [];
     db.deliveries.unshift({
       id: invoiceId,
       type: 'Orden',
       recipientName: recipientName.trim(),
       recipientPhone: recipientPhone.trim(),
-      province: shippingProvince,
+      province: '',
       addressDetail: shippingAddress.trim(),
       status: 'Pendiente',
       incidences: []
@@ -1703,7 +1702,7 @@ export default function PublicStore({
               {/* Stepper indicators */}
               <div className="grid grid-cols-4 gap-1 text-[9px] font-bold text-center uppercase tracking-wider border-b border-[var(--border-color)] pb-3">
                 <div className={checkoutStep >= 0 ? 'text-blue-600 dark:text-[var(--brand-gold-light)] font-extrabold' : 'text-[var(--text-primary)]'}>1. Resumen</div>
-                <div className={checkoutStep >= 1 ? 'text-blue-600 dark:text-[var(--brand-gold-light)] font-extrabold' : 'text-[var(--text-primary)]'}>2. Envío</div>
+                <div className={checkoutStep >= 1 ? 'text-blue-600 dark:text-[var(--brand-gold-light)] font-extrabold' : 'text-[var(--text-primary)]'}>2. Contacto</div>
                 <div className={checkoutStep >= 2 ? 'text-blue-600 dark:text-[var(--brand-gold-light)] font-extrabold' : 'text-[var(--text-primary)]'}>3. Pago</div>
                 <div className={checkoutStep >= 3 ? 'text-emerald-600 dark:text-[var(--brand-gold-light)] font-extrabold' : 'text-[var(--text-primary)]'}>4. Autorizado</div>
               </div>
@@ -1760,10 +1759,13 @@ export default function PublicStore({
               )}
 
               {checkoutStep === 1 && (
-                /* STEP 1: Delivery Information */
+                /* STEP 1: Datos de contacto (entrega manual, sin envío) */
                 <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-blue-600 dark:text-[var(--brand-gold-light)] uppercase tracking-wider">Detalles de Envío</h4>
-                  
+                  <h4 className="text-sm font-bold text-blue-600 dark:text-[var(--brand-gold-light)] uppercase tracking-wider">Datos de Contacto</h4>
+                  <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed -mt-1">
+                    Coordinamos la entrega de forma directa contactándote. Déjanos tu nombre, teléfono y una referencia de ubicación.
+                  </p>
+
                   <div>
                     <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Nombre Completo del Receptor</label>
                     <input
@@ -1788,31 +1790,14 @@ export default function PublicStore({
                     />
                   </div>
 
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Provincia</label>
-                      <CustomSelect
-                        value={shippingProvince}
-                        onChange={setShippingProvince}
-                        options={COSTA_RICA_PROVINCES.filter(Boolean).map(prov => ({ value: prov, label: prov }))}
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Tarifa de Envío</label>
-                      <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl px-4 py-3 text-sm text-blue-600 dark:text-[var(--brand-gold-light)] font-bold font-mono">
-                        ₡{calculateShippingCost(shippingProvince).toLocaleString()}
-                      </div>
-                    </div>
-                  </div>
-
                   <div>
-                    <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Dirección Exacta de Entrega</label>
+                    <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Ubicación / Notas de Entrega</label>
                     <textarea
                       required
                       rows={2}
                       value={shippingAddress}
                       onChange={(e) => setShippingAddress(e.target.value)}
-                      placeholder="Ej. De la iglesia católica 200m oeste y 50m norte, portón verde."
+                      placeholder="Ej. Cartago centro, de la iglesia católica 200m oeste y 50m norte, portón verde."
                       className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none resize-none transition"
                     />
                   </div>
@@ -2077,11 +2062,7 @@ export default function PublicStore({
                       </div>
                     )}
 
-                    <div className="flex justify-between text-[var(--text-secondary)] mt-2 border-t border-[var(--border-color)] pt-2">
-                      <span>Envío ({shippingProvince}):</span>
-                      <span className="font-mono">₡{cartShipping.toLocaleString()}</span>
-                    </div>
-                    <div className="flex justify-between text-[var(--text-secondary)] font-mono">
+                    <div className="flex justify-between text-[var(--text-secondary)] font-mono mt-2 border-t border-[var(--border-color)] pt-2">
                       <span>IVA Desglosado (13%):</span>
                       <span>₡{cartTax.toLocaleString()}</span>
                     </div>
@@ -2100,7 +2081,7 @@ export default function PublicStore({
                       disabled={cart.length === 0}
                       className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] dark:text-[#14100a] font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
                     >
-                      Continuar a Envío <ArrowRight className="w-4 h-4" />
+                      Continuar a Contacto <ArrowRight className="w-4 h-4" />
                     </button>
                   )}
 
@@ -2116,7 +2097,7 @@ export default function PublicStore({
                           return;
                         }
                         if (!shippingAddress.trim()) {
-                          toast.warning('La dirección de envío es obligatoria.');
+                          toast.warning('La ubicación / dirección de contacto es obligatoria.');
                           return;
                         }
                         setCheckoutStep(2);
