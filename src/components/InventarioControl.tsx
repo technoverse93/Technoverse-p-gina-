@@ -730,7 +730,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     else db.historical_skus[hIdx] = { ...db.historical_skus[hIdx], ...entry };
   };
 
-  const handleProductSubmit = (e: React.FormEvent) => {
+  const handleProductSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setFormError(null);
 
@@ -851,45 +851,50 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       } else {
         const newSku = prodSku.trim() || `${prodCategory.substring(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
 
-        // Prevent active SKU duplicate conflicts
-        const activeDuplicate = db.products.find(p => p && p.active !== false && p.sku && p.sku.toLowerCase() === newSku.toLowerCase().trim());
-        if (activeDuplicate) {
-          setFormError(`El SKU "${newSku}" ya está siendo utilizado por otro producto activo ("${activeDuplicate.name}").`);
-          return;
-        }
-
-        // El SKU es único en la base de datos (incluye productos inactivos/
-        // eliminados, que solo se marcan active:false pero conservan su fila).
-        // Si el SKU viene del histórico y corresponde a un producto ya
-        // desactivado, hay que REACTIVAR esa misma fila, no crear una nueva:
-        // insertar un producto nuevo con un SKU que ya existe en otra fila
-        // (aunque esté inactiva) viola la restricción UNIQUE y la base de
-        // datos rechaza el guardado — por eso el producto "aparecía y
-        // desaparecía" al reintegrar desde el histórico.
-        const inactiveMatch = db.products.find(p => p && p.active === false && p.sku && p.sku.toLowerCase() === newSku.toLowerCase().trim());
+        // DIAGNÓSTICO del fallo al Guardar un SKU autorrellenado: el flujo de
+        // creación (a) si el SKU pertenecía a un producto ACTIVO, cortaba con
+        // un error "SKU ya utilizado" y NO guardaba nada; y (b) en cualquier
+        // caso, insertar una fila nueva con un SKU repetido viola la
+        // restricción UNIQUE de Supabase → excepción de duplicidad.
+        //
+        // SOLUCIÓN: si el SKU YA EXISTE (activo o inactivo) no se inserta una
+        // fila nueva — se ACTUALIZA la fila existente (mismo product_id, un
+        // UPDATE, no un INSERT) y se SUMA el stock ingresado como entrada de
+        // inventario. Solo cuando el SKU no existe se crea un registro nuevo.
+        const existing = db.products.find(p => p && p.sku && p.sku.toLowerCase() === newSku.toLowerCase().trim());
 
         let newProduct: Product;
-        if (inactiveMatch) {
-          const idx = db.products.findIndex(p => p.id === inactiveMatch.id);
+        const addedStock = finalStock;
+        let movementNote = 'Inventario inicial';
+
+        if (existing) {
+          // FLUJO B — SKU existente: actualizar datos + incrementar stock.
+          const idx = db.products.findIndex(p => p.id === existing.id);
+          const resultingStock = (existing.stock || 0) + addedStock;
           newProduct = {
-            ...inactiveMatch,
+            ...existing,
             name: prodName.trim(),
             description: prodDesc.trim(),
             category: prodCategory,
             price: finalPrice,
             cost: finalCost,
-            stock: finalStock,
+            stock: resultingStock,
             minStock: finalMinStock,
             linkedSparePartSku: sparePartCategories.includes(prodCategory) ? undefined : prodLinkedSparePartSku,
             physicalLocation: locationValue,
-            imageUrl: prodImage || TECHNOVERSE_PLACEHOLDER,
+            imageUrl: prodImage || existing.imageUrl || TECHNOVERSE_PLACEHOLDER,
             discountPercent: prodApplyDiscount ? finalDiscount : 0,
-            active: finalStock > 0,
+            active: resultingStock > 0,
             warranty: prodWarranty,
             caabys: prodCaabys.trim() || DEFAULT_CAABYS
           };
           db.products[idx] = newProduct;
+          movementNote = existing.active === false
+            ? 'Reintegro de producto desde catálogo (SKU existente)'
+            : 'Ingreso de inventario a producto existente (SKU en catálogo)';
+          addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Ingreso Inventario', `Stock actualizado (+${addedStock}) para ${prodName} (SKU: ${newSku}). Total: ${resultingStock}`, db);
         } else {
+          // FLUJO A — producto totalmente nuevo.
           newProduct = {
             id: `PROD-${Date.now()}`,
             name: prodName.trim(),
@@ -909,42 +914,38 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             caabys: prodCaabys.trim() || DEFAULT_CAABYS
           };
           db.products.push(newProduct);
+          addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Crear Producto', `Producto creado: ${prodName} (SKU: ${newSku})`, db);
         }
 
-        // Register initial stock movement if > 0
-        if (finalStock > 0) {
+        // Movimiento de stock (entrada) si se ingresaron unidades.
+        if (addedStock > 0) {
           db.inventory_movements.unshift({
             id: `MOV-${Date.now()}`,
             productId: newProduct.id,
             productName: newProduct.name,
-            quantityChange: finalStock,
+            quantityChange: addedStock,
             type: 'Entrada manual',
-            notes: inactiveMatch ? 'Reintegro de producto desde histórico' : 'Inventario inicial',
+            notes: movementNote,
             timestamp: new Date().toISOString(),
             userEmail: currentUser?.email || 'technoverse.admin@gmail.com',
-            resultingStock: finalStock
+            resultingStock: newProduct.stock
           });
         }
-        addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Crear Producto', `Producto creado: ${prodName} (SKU: ${newSku})`, db);
 
-        // Se registra en el catálogo histórico (autorrelleno por SKU) SIN
-        // borrar nada. Antes aquí se ELIMINABA del histórico el SKU recién
-        // creado: por eso, cada vez que se agregaba/reintegraba un producto,
-        // el autorrelleno perdía una entrada y la lista se iba vaciando. Ahora
-        // el catálogo solo crece/actualiza y conserva todo lo agregado.
+        // Catálogo histórico (autorrelleno por SKU): upsert, nunca borra.
         upsertHistoricalSku(db, newProduct);
 
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('product:created', { detail: newProduct }));
-          if (prodStock > 0) {
-            window.dispatchEvent(new CustomEvent('stock:update', { 
-              detail: { productId: newProduct.id, newStock: prodStock }
+          if (newProduct.stock > 0) {
+            window.dispatchEvent(new CustomEvent('stock:update', {
+              detail: { productId: newProduct.id, newStock: newProduct.stock }
             }));
           }
         }
       }
 
-      saveDB(db);
+      await saveDB(db);
       loadData();
       onDataChanged();
       setShowProductForm(false);
