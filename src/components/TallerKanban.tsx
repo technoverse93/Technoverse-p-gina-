@@ -27,23 +27,52 @@ const BRANDS_BY_CATEGORY: Record<string, string[]> = {
   'Consola': ['Sony (PlayStation)', 'Microsoft (Xbox)', 'Nintendo', 'Otra'],
 };
 
-const MODELS_BY_BRAND: Record<string, string[]> = {
-  'Apple': ['iPhone 11', 'iPhone 12', 'iPhone 13', 'iPhone 14', 'iPhone 15', 'iPhone 16', 'MacBook Air', 'MacBook Pro', 'iMac', 'Otro modelo'],
-  'Samsung': ['Galaxy A12', 'Galaxy A54', 'Galaxy S22', 'Galaxy S23', 'Galaxy S24', 'Galaxy Note', 'Galaxy Tab', 'Otro modelo'],
-  'Xiaomi': ['Redmi Note 12', 'Redmi Note 13', 'Poco X5', 'Mi 11', 'Otro modelo'],
-  'Motorola': ['Moto G', 'Moto Edge', 'Otro modelo'],
-  'Huawei': ['P30', 'P40', 'Mate', 'Otro modelo'],
-  'Dell': ['Inspiron', 'XPS', 'Latitude', 'Otro modelo'],
-  'HP': ['Pavilion', 'Envy', 'ProBook', 'Otro modelo'],
-  'Lenovo': ['ThinkPad', 'IdeaPad', 'Legion', 'Otro modelo'],
-  'Asus': ['VivoBook', 'ZenBook', 'ROG', 'Otro modelo'],
-  'Acer': ['Aspire', 'Nitro', 'Otro modelo'],
-  'Ensamblado': ['Torre Gamer', 'Torre Oficina', 'Otro modelo'],
-  'Sony (PlayStation)': ['PS4', 'PS4 Slim', 'PS4 Pro', 'PS5', 'PS5 Slim', 'Otro modelo'],
-  'Microsoft (Xbox)': ['Xbox One', 'Xbox Series S', 'Xbox Series X', 'Otro modelo'],
-  'Nintendo': ['Switch', 'Switch Lite', 'Switch OLED', 'Otro modelo'],
+// Modelos indexados por CATEGORÍA + MARCA (no solo por marca). Antes 'Apple'
+// compartía UNA sola lista, así que en Celular -> Apple aparecían MacBooks/iMac
+// mezclados con los iPhone (y viceversa en Laptop). Ahora cada categoría tiene
+// su propio conjunto de modelos por marca, eliminando la contaminación. Listas
+// enfocadas al mercado de Costa Rica (equipos de venta/importación común).
+// Toda lista termina en 'Otro' para habilitar ingreso manual sin bloquear.
+const MODELS_BY_CATEGORY_BRAND: Record<string, Record<string, string[]>> = {
+  'Celular': {
+    'Apple': ['iPhone 7', 'iPhone 7 Plus', 'iPhone 8', 'iPhone 8 Plus', 'iPhone X', 'iPhone XR', 'iPhone XS', 'iPhone XS Max', 'iPhone 11', 'iPhone 11 Pro', 'iPhone 11 Pro Max', 'iPhone 12', 'iPhone 12 Mini', 'iPhone 12 Pro', 'iPhone 12 Pro Max', 'iPhone 13', 'iPhone 13 Mini', 'iPhone 13 Pro', 'iPhone 13 Pro Max', 'iPhone 14', 'iPhone 14 Plus', 'iPhone 14 Pro', 'iPhone 14 Pro Max', 'iPhone 15', 'iPhone 15 Plus', 'iPhone 15 Pro', 'iPhone 15 Pro Max', 'iPhone 16', 'iPhone 16 Plus', 'iPhone 16 Pro', 'iPhone 16 Pro Max', 'Otro'],
+    'Samsung': ['Galaxy A03', 'Galaxy A04', 'Galaxy A05', 'Galaxy A14', 'Galaxy A15', 'Galaxy A24', 'Galaxy A34', 'Galaxy A54', 'Galaxy S20', 'Galaxy S21', 'Galaxy S22', 'Galaxy S23', 'Galaxy S23 Ultra', 'Galaxy S24', 'Galaxy S24 Ultra', 'Galaxy Z Flip', 'Galaxy Z Fold', 'Galaxy Note 20', 'Otro'],
+    'Xiaomi': ['Redmi A2', 'Redmi 12', 'Redmi 13C', 'Redmi Note 11', 'Redmi Note 12', 'Redmi Note 13', 'Redmi Note 13 Pro', 'Poco X5', 'Poco X6', 'Mi 11', 'Otro'],
+    'Motorola': ['Moto E13', 'Moto G13', 'Moto G23', 'Moto G54', 'Moto G84', 'Moto Edge 40', 'Otro'],
+    'Huawei': ['Y9', 'P30', 'P40', 'Mate 20', 'Mate 30', 'Nova 11', 'Otro'],
+    'Otra': ['Otro'],
+  },
+  'Laptop': {
+    'Apple': ['MacBook Air M1', 'MacBook Air M2', 'MacBook Air M3', 'MacBook Pro 13"', 'MacBook Pro 14"', 'MacBook Pro 16"', 'Otro'],
+    'Dell': ['Inspiron', 'XPS', 'Latitude', 'Vostro', 'Otro'],
+    'HP': ['Pavilion', 'Envy', 'ProBook', 'EliteBook', 'Victus', 'Otro'],
+    'Lenovo': ['ThinkPad', 'IdeaPad', 'Legion', 'Yoga', 'Otro'],
+    'Asus': ['VivoBook', 'ZenBook', 'ROG', 'TUF Gaming', 'Otro'],
+    'Acer': ['Aspire', 'Nitro', 'Predator', 'Swift', 'Otro'],
+    'Otra': ['Otro'],
+  },
+  'PC': {
+    'Ensamblado': ['Torre Gamer', 'Torre Oficina', 'Torre Diseño', 'Otro'],
+    'HP': ['Pavilion Desktop', 'All-in-One', 'Elite Tower', 'Otro'],
+    'Dell': ['OptiPlex', 'Inspiron Desktop', 'Vostro Desktop', 'Otro'],
+    'Lenovo': ['IdeaCentre', 'ThinkCentre', 'Otro'],
+    'Otra': ['Otro'],
+  },
+  'Consola': {
+    'Sony (PlayStation)': ['PS4', 'PS4 Slim', 'PS4 Pro', 'PS5', 'PS5 Slim', 'Otro'],
+    'Microsoft (Xbox)': ['Xbox One', 'Xbox One S', 'Xbox Series S', 'Xbox Series X', 'Otro'],
+    'Nintendo': ['Switch', 'Switch Lite', 'Switch OLED', 'Otro'],
+    'Otra': ['Otro'],
+  },
 };
-const DEFAULT_MODELS = ['Otro modelo'];
+const DEFAULT_MODELS = ['Otro'];
+
+/** Modelos válidos para la combinación categoría+marca; siempre incluye 'Otro'. */
+function getModelsFor(category: string, brand: string): string[] {
+  const byBrand = MODELS_BY_CATEGORY_BRAND[category];
+  if (!byBrand) return DEFAULT_MODELS;
+  return byBrand[brand] || DEFAULT_MODELS;
+}
 
 const DAMAGE_CATEGORIES = [
   'Pantalla / LCD', 'Batería', 'Puerto de Carga', 'Cámara', 'Placa Lógica', 'Software / Sistema',
@@ -154,7 +183,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
   const handleCreateRepair = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalModel = newDeviceModel === 'Otro modelo' ? newDeviceModelOther.trim() : newDeviceModel;
+    const finalModel = newDeviceModel === 'Otro' ? newDeviceModelOther.trim() : newDeviceModel;
     if (!newCustomerName.trim() || !newCustomerEmail.trim() || !newCustomerPhone.trim()
       || !newDeviceCategory || !newDeviceBrand || !finalModel || !newDamageCategory || !newDamageReported.trim()) {
       toast.warning('Por favor complete todos los datos requeridos, incluyendo categoría, marca, modelo y categoría de falla del equipo.');
@@ -680,9 +709,9 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 onChange={setNewDeviceModel}
                 placeholder={newDeviceBrand ? '-- Modelo --' : 'Elija marca primero'}
                 className="text-xs py-2"
-                options={(MODELS_BY_BRAND[newDeviceBrand] || DEFAULT_MODELS).map(m => ({ value: m, label: m }))}
+                options={getModelsFor(newDeviceCategory, newDeviceBrand).map(m => ({ value: m, label: m }))}
               />
-              {newDeviceModel === 'Otro modelo' && (
+              {newDeviceModel === 'Otro' && (
                 <input
                   type="text"
                   required
