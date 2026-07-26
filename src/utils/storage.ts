@@ -162,6 +162,37 @@ function diffArrays<T extends Record<string, any>>(oldArr: T[], newArr: T[], key
   return { added, modified, deleted };
 }
 
+// Detecta si el lienzo contiene algún pixel no opaco. Se recorre el canal
+// alfa completo (1 de cada 4 bytes); en una imagen de 600×600 son ~360 000
+// lecturas, unos pocos milisegundos, y en cuanto encuentra el primer pixel
+// transparente corta.
+function canvasHasTransparency(ctx: CanvasRenderingContext2D, width: number, height: number): boolean {
+  try {
+    const { data } = ctx.getImageData(0, 0, width, height);
+    for (let i = 3; i < data.length; i += 4) {
+      if (data[i] < 255) return true;
+    }
+    return false;
+  } catch {
+    // Si el lienzo estuviera contaminado (imagen de otro origen) no se puede
+    // leer: se asume que sí hay transparencia para no destruirla.
+    return true;
+  }
+}
+
+/**
+ * Reescala una imagen manteniendo su transparencia.
+ *
+ * FALLO CORREGIDO: esta función devolvía SIEMPRE `canvas.toDataURL('image/jpeg')`.
+ * El formato JPEG no tiene canal alfa, así que cada PNG recortado que se subía
+ * al catálogo perdía la transparencia en el momento de guardarlo — el fondo se
+ * rellenaba de negro o blanco y ninguna clase de CSS podía recuperarlo, porque
+ * el dato ya venía aplanado desde la base.
+ *
+ * Ahora se decide el formato según el contenido real:
+ *   - con píxeles transparentes → PNG (sin pérdida, conserva el alfa)
+ *   - completamente opaca       → JPEG (mucho más liviana para fotos)
+ */
 export function compressImage(dataUrl: string, maxWidth = 500, maxHeight = 500, quality = 0.7): Promise<string> {
   return new Promise((resolve) => {
     if (!dataUrl || !dataUrl.startsWith('data:')) {
@@ -191,9 +222,18 @@ export function compressImage(dataUrl: string, maxWidth = 500, maxHeight = 500, 
         resolve(dataUrl);
         return;
       }
+      // El lienzo arranca totalmente transparente y NO se pinta ningún fondo:
+      // así el alfa del origen llega intacto al resultado.
       ctx.drawImage(img, 0, 0, width, height);
       try {
-        resolve(canvas.toDataURL('image/jpeg', quality));
+        if (canvasHasTransparency(ctx, width, height)) {
+          const png = canvas.toDataURL('image/png');
+          // Un PNG grande no compensa: si supera ~1,2 MB se prefiere el
+          // original tal cual, que suele venir mejor comprimido de origen.
+          resolve(png.length > 1_200_000 && dataUrl.length < png.length ? dataUrl : png);
+        } else {
+          resolve(canvas.toDataURL('image/jpeg', quality));
+        }
       } catch (err) {
         resolve(dataUrl);
       }
@@ -781,43 +821,90 @@ export async function saveDB(newDb: Database) {
   lastSyncedDb = JSON.parse(JSON.stringify(newDb));
   notifyUpdate();
 
-  const tasks: { label: string; run: () => Promise<void> }[] = [];
+  // Tablas que apuntan a "products" con clave foránea. Deben escribirse
+  // DESPUÉS de que el producto exista, o Postgres rechaza la fila.
+  const DEPENDIENTES_DE_PRODUCTS = new Set(['inventory_movements', 'repair_orders', 'orders']);
+
+  type Tarea = { label: string; key?: keyof Database; run: () => Promise<void> };
+  const fasePadres: Tarea[] = [];
+  const faseHijas: Tarea[] = [];
 
   TABLE_CONFIGS.forEach((cfg) => {
     const oldArr = (oldDb as any)[cfg.key] || [];
     const newArr = (newDb as any)[cfg.key] || [];
     const { added, modified, deleted } = diffArrays(oldArr, newArr, cfg.idKey);
     if (added.length === 0 && modified.length === 0 && deleted.length === 0) return;
-    tasks.push({ label: cfg.table, run: () => syncTableToSupabase(cfg, added, modified, deleted) });
+    const tarea: Tarea = {
+      label: cfg.table,
+      key: cfg.key,
+      run: () => syncTableToSupabase(cfg, added, modified, deleted)
+    };
+    if (DEPENDIENTES_DE_PRODUCTS.has(cfg.table)) faseHijas.push(tarea);
+    else fasePadres.push(tarea);
   });
 
   const oldChat = oldDb.chat_conversations || [];
   const newChat = newDb.chat_conversations || [];
   if (JSON.stringify(oldChat) !== JSON.stringify(newChat)) {
-    tasks.push({ label: 'chat', run: () => syncChatToSupabase(oldChat, newChat) });
+    fasePadres.push({ label: 'chat', key: 'chat_conversations', run: () => syncChatToSupabase(oldChat, newChat) });
   }
 
   if (JSON.stringify(oldDb.settings) !== JSON.stringify(newDb.settings)) {
-    tasks.push({ label: 'configuracion', run: () => syncSettingsToSupabase(newDb.settings || DEFAULT_SETTINGS) });
+    fasePadres.push({ label: 'configuracion', run: () => syncSettingsToSupabase(newDb.settings || DEFAULT_SETTINGS) });
   }
 
-  if (tasks.length === 0) return;
+  if (fasePadres.length === 0 && faseHijas.length === 0) return;
 
-  const results = await Promise.allSettled(tasks.map(t => t.run()));
-  const failures: string[] = [];
-  results.forEach((r, i) => {
-    if (r.status === 'rejected') {
-      const reason: any = r.reason;
-      failures.push(`${tasks[i].label}: ${reason?.message || reason}`);
-    }
-  });
+  // FALLO CORREGIDO: antes las tablas se escribían TODAS en paralelo con un
+  // único Promise.allSettled. Cuando se creaba un producto nuevo, el INSERT en
+  // "inventory_movements" podía llegar antes que el INSERT en "products" y
+  // Postgres lo rechazaba con
+  //   violates foreign key constraint "inventory_movements_product_id_fkey".
+  // Ahora se escribe primero el padre (products y demás tablas raíz) y solo si
+  // eso salió bien se escriben las tablas que lo referencian.
+  const fallos: string[] = [];
+  const clavesFallidas = new Set<keyof Database>();
 
-  if (failures.length > 0) {
-    // Revierte la vista optimista: si algo falló, no debe verse como guardado.
-    localCache = JSON.parse(JSON.stringify(oldDb));
-    lastSyncedDb = JSON.parse(JSON.stringify(oldDb));
+  const ejecutarFase = async (fase: Tarea[]) => {
+    if (fase.length === 0) return;
+    const results = await Promise.allSettled(fase.map(t => t.run()));
+    results.forEach((r, i) => {
+      if (r.status === 'rejected') {
+        const reason: any = r.reason;
+        fallos.push(`${fase[i].label}: ${reason?.message || reason}`);
+        if (fase[i].key) clavesFallidas.add(fase[i].key!);
+      }
+    });
+  };
+
+  await ejecutarFase(fasePadres);
+
+  if (fallos.length === 0) {
+    await ejecutarFase(faseHijas);
+  } else {
+    // El padre falló: las hijas se marcan como no escritas sin intentarlo,
+    // porque su clave foránea no podría resolverse.
+    faseHijas.forEach(t => { if (t.key) clavesFallidas.add(t.key); });
+  }
+
+  if (fallos.length > 0) {
+    // FALLO CORREGIDO: antes se revertía la copia local ENTERA al estado
+    // anterior, incluidas las tablas que SÍ se habían guardado. El producto
+    // quedaba escrito en Supabase pero desaparecía de la vista local, así que
+    // al reintentar "Guardar" el formulario ya no lo reconocía como nuevo,
+    // entraba por la rama de "SKU existente" y SUMABA el stock otra vez: por
+    // eso 1 unidad terminaba siendo 2.
+    //
+    // Ahora la reversión es por tabla: solo vuelven atrás las que fallaron. Lo
+    // que se guardó de verdad permanece visible y un reintento no duplica nada.
+    const reconciliado: any = JSON.parse(JSON.stringify(newDb));
+    clavesFallidas.forEach((k) => {
+      reconciliado[k] = JSON.parse(JSON.stringify((oldDb as any)[k]));
+    });
+    localCache = reconciliado;
+    lastSyncedDb = JSON.parse(JSON.stringify(reconciliado));
     notifyUpdate();
-    throw new Error(failures.join(' | '));
+    throw new Error(fallos.join(' | '));
   }
 }
 
