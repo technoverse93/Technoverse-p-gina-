@@ -180,6 +180,25 @@ function canvasHasTransparency(ctx: CanvasRenderingContext2D, width: number, hei
   }
 }
 
+/** True si la imagen contiene al menos un pixel no opaco. */
+export function imageHasTransparency(dataUrl: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    if (!dataUrl || !dataUrl.startsWith('data:')) { resolve(false); return; }
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      canvas.width = img.width;
+      canvas.height = img.height;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) { resolve(false); return; }
+      ctx.drawImage(img, 0, 0);
+      resolve(canvasHasTransparency(ctx, img.width, img.height));
+    };
+    img.onerror = () => resolve(false);
+    img.src = dataUrl;
+  });
+}
+
 /**
  * Reescala una imagen manteniendo su transparencia.
  *
@@ -241,6 +260,113 @@ export function compressImage(dataUrl: string, maxWidth = 500, maxHeight = 500, 
     img.onerror = () => {
       resolve(dataUrl);
     };
+    img.src = dataUrl;
+  });
+}
+
+/**
+ * Convierte en transparente el fondo plano o cuadriculado de una imagen.
+ *
+ * Para qué sirve: muchos bancos de imágenes (pngwing y similares) entregan una
+ * VISTA PREVIA en la que el damero gris que representa la transparencia está
+ * dibujado dentro de los píxeles. Ese archivo es 100 % opaco, así que no hay
+ * nada que preservar al guardarlo — el damero se ve tal cual sobre la tarjeta
+ * del producto. Esta función recupera la transparencia real.
+ *
+ * Cómo trabaja:
+ *   1. Recorre el borde de la imagen y se queda con los colores que ocupan más
+ *      del 5 % de ese contorno (hasta cuatro). Un damero aporta dos tonos; un
+ *      fondo blanco liso, uno solo.
+ *   2. Rellena desde los bordes hacia adentro (flood fill) marcando como
+ *      transparente todo lo que esté dentro de la tolerancia de esos colores.
+ *      Al avanzar por conexión y no por color suelto, un blanco que forme parte
+ *      del producto —el interior de un conector, por ejemplo— no se borra.
+ *   3. Suaviza el contorno bajando la opacidad de los píxeles que quedaron
+ *      rodeados de transparencia, para que no se vea aserrado.
+ *
+ * Siempre devuelve PNG: es el único formato del navegador que guarda el canal
+ * alfa. Ante cualquier problema devuelve la imagen original sin tocar.
+ */
+export function removeFlatBackground(dataUrl: string, tolerance = 26): Promise<string> {
+  return new Promise((resolve) => {
+    if (!dataUrl || !dataUrl.startsWith('data:')) { resolve(dataUrl); return; }
+    const img = new Image();
+    img.onload = () => {
+      const w = img.width, h = img.height;
+      const canvas = document.createElement('canvas');
+      canvas.width = w; canvas.height = h;
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) { resolve(dataUrl); return; }
+      ctx.drawImage(img, 0, 0);
+      let imageData: ImageData;
+      try { imageData = ctx.getImageData(0, 0, w, h); } catch { resolve(dataUrl); return; }
+      const d = imageData.data;
+      const idx = (x: number, y: number) => (y * w + x) * 4;
+
+      const conteo = new Map();
+      const anotar = (x: number, y: number) => {
+        const i = idx(x, y);
+        const clave = `${d[i] >> 3},${d[i + 1] >> 3},${d[i + 2] >> 3}`;
+        conteo.set(clave, (conteo.get(clave) || 0) + 1);
+      };
+      for (let x = 0; x < w; x++) { anotar(x, 0); anotar(x, h - 1); }
+      for (let y = 0; y < h; y++) { anotar(0, y); anotar(w - 1, y); }
+
+      const totalBorde = 2 * (w + h);
+      const fondo = [...conteo.entries()]
+        .filter(([, n]) => n / totalBorde > 0.05)
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 4)
+        .map(([k]) => k.split(',').map(v => (parseInt(v, 10) << 3) + 4) as number[]);
+
+      if (fondo.length === 0) { resolve(dataUrl); return; }
+
+      const esFondo = (i: number) => {
+        for (const [r, g, b] of fondo) {
+          if (Math.abs(d[i] - r) <= tolerance &&
+              Math.abs(d[i + 1] - g) <= tolerance &&
+              Math.abs(d[i + 2] - b) <= tolerance) return true;
+        }
+        return false;
+      };
+
+      const visitado = new Uint8Array(w * h);
+      const pila: number[] = [];
+      for (let x = 0; x < w; x++) { pila.push(x, 0, x, h - 1); }
+      for (let y = 0; y < h; y++) { pila.push(0, y, w - 1, y); }
+
+      while (pila.length) {
+        const y = pila.pop(), x = pila.pop();
+        if (x < 0 || y < 0 || x >= w || y >= h) continue;
+        const p = y * w + x;
+        if (visitado[p]) continue;
+        const i = p * 4;
+        if (!esFondo(i)) continue;
+        visitado[p] = 1;
+        d[i + 3] = 0;
+        pila.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
+      }
+
+      for (let y = 1; y < h - 1; y++) {
+        for (let x = 1; x < w - 1; x++) {
+          const p = y * w + x;
+          if (visitado[p]) continue;
+          const i = p * 4;
+          if (d[i + 3] === 0) continue;
+          let vecinosTransparentes = 0;
+          if (visitado[p - 1]) vecinosTransparentes++;
+          if (visitado[p + 1]) vecinosTransparentes++;
+          if (visitado[p - w]) vecinosTransparentes++;
+          if (visitado[p + w]) vecinosTransparentes++;
+          if (vecinosTransparentes >= 3) d[i + 3] = 90;
+          else if (vecinosTransparentes === 2) d[i + 3] = 160;
+        }
+      }
+
+      ctx.putImageData(imageData, 0, 0);
+      try { resolve(canvas.toDataURL('image/png')); } catch { resolve(dataUrl); }
+    };
+    img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
   });
 }
