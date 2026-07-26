@@ -260,10 +260,14 @@ img, svg, video, canvas { max-width: 100%; }
    Barra de navegación inferior (móvil)
    ========================================================================== */
 .bottom-nav-bar {
+  /* SIN `display` a propósito. El marcado ya trae `flex items-stretch`, y las
+     utilidades de visibilidad (`lg:hidden` / `md:hidden`) también actúan sobre
+     `display`. Como este archivo se carga DESPUÉS de Tailwind, declarar
+     `display:flex` aquí anulaba ese `hidden` y la barra inferior aparecía
+     también en escritorio, encima del sidebar: los menús duplicados. */
   position: fixed;
   left: 0; right: 0; bottom: 0;
   z-index: 40;
-  display: flex;
   background: var(--bg-surface);
   border-top: 1px solid var(--border-color);
   box-shadow: 0 -2px 14px -8px rgba(15, 23, 42, 0.2);
@@ -393,8 +397,11 @@ header .font-display,
 /* ==========================================================================
    Iconografía y objetivos táctiles
    ========================================================================== */
-svg.lucide { width: 20px !important; height: 20px !important; }
-svg.lucide.w-6, svg.lucide.h-6, svg.lucide-lg { width: 24px !important; height: 24px !important; }
+/* Tamaño por defecto SOLO para iconos sin medida propia. Antes esta regla
+   era `!important` sobre todos los `svg.lucide`, así que aplastaba a 20px los
+   iconos con medida explícita — por eso los de categoría, declarados `w-8 h-8`
+   (32px), se veían encogidos y fuera de proporción. */
+svg.lucide:not([class*="w-"]):not([class*="h-"]) { width: 20px; height: 20px; }
 
 button:has(> svg.lucide),
 .icon-button,
