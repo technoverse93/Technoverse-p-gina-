@@ -978,8 +978,10 @@ export default function AdminPanel({
             </span>
           </div>
 
-          {/* Navigation Items (Center-Left) */}
-          <nav className="flex items-center gap-1 sm:gap-1.5 flex-1 min-w-0">
+          {/* Navigation Items (Center-Left) — SOLO escritorio (lg+). En móvil y
+              tablet la navegación vive únicamente en la bottom nav, para que
+              nunca se vean los mismos enlaces arriba y abajo a la vez. */}
+          <nav className="hidden lg:flex items-center gap-1 sm:gap-1.5 flex-1 min-w-0">
             {/* Dashboard */}
             {(isOwner || hasPermission('dashboard')) && (
               <button
