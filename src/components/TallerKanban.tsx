@@ -964,11 +964,25 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                         className="text-xs py-2"
                         options={[
                           { value: '', label: '-- Seleccionar Repuesto en Casa --' },
-                          ...products.filter(p => sparePartCategories.includes(p.category) && p.active !== false).map(p => ({
-                            value: p.id,
-                            label: `${p.name} (Stock: ${p.stock} un. en "${p.physicalLocation || 'Sin ubicar'}" | ₡${p.price.toLocaleString()})`,
-                            disabled: p.stock <= 0
-                          }))
+                          // Se listan TODOS los artículos activos del inventario, no
+                          // solo los de las categorías de repuesto. El filtro anterior
+                          // exigía categorías fijas (LCD, Flex, Conector…) que ningún
+                          // producto real usaba, así que el desplegable salía siempre
+                          // vacío y era imposible vincular un repuesto. Los repuestos
+                          // se ordenan primero para que sigan quedando a mano.
+                          ...products
+                            .filter(p => p && p.active !== false)
+                            .sort((a, b) => {
+                              const aRep = sparePartCategories.includes(a.category) ? 0 : 1;
+                              const bRep = sparePartCategories.includes(b.category) ? 0 : 1;
+                              if (aRep !== bRep) return aRep - bRep;
+                              return a.name.localeCompare(b.name, 'es');
+                            })
+                            .map(p => ({
+                              value: p.id,
+                              label: `${p.name} — ${p.category} (Stock: ${p.stock} un.${p.physicalLocation ? ` en "${p.physicalLocation}"` : ''} | ₡${p.price.toLocaleString()})`,
+                              disabled: p.stock <= 0
+                            }))
                         ]}
                       />
                     </div>

@@ -1717,7 +1717,7 @@ export default function PublicStore({
                       <div key={idx} className="bg-[var(--bg-surface)] p-3 rounded-2xl border border-[var(--border-color)]/40 flex gap-3 text-sm justify-between items-center">
                         <div className="flex gap-2.5 truncate items-center">
                           {it.product.imageUrl ? (
-                            <img src={it.product.imageUrl} alt="" className="w-12 h-12 object-contain bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg p-1" />
+                            <img src={it.product.imageUrl} alt="" className="w-12 h-12 object-contain bg-transparent border border-[var(--border-color)] rounded-lg p-1" />
                           ) : (
                             <div className="w-12 h-12 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg flex items-center justify-center text-sm">📱</div>
                           )}

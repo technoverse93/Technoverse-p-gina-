@@ -47,7 +47,10 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
       className="glass-card overflow-hidden flex flex-col group relative cursor-pointer h-full"
     >
       {/* ------------------------------ Imagen ------------------------------ */}
-      <div className="relative flex items-center justify-center h-32 sm:h-36 p-4 bg-[var(--bg-sunken)]">
+      {/* Sin fondo propio: los PNG con transparencia dejan ver el fondo real
+          de la tarjeta, así el producto se integra con el tema claro u oscuro
+          en vez de quedar recortado sobre un rectángulo gris. */}
+      <div className="relative flex items-center justify-center h-32 sm:h-36 p-4 bg-transparent">
         {prod.imageUrl ? (
           <img
             src={prod.imageUrl}
