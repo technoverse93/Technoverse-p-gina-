@@ -629,3 +629,37 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 @media (min-width: 1024px) {
   #product-bento-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 }
+
+/* ==========================================================================
+   Remapeo de azules heredados (sky-* / blue-*) al acento del tema
+   El panel admin y el taller traen utilidades sky/blue escritas antes del
+   rediseño retail; chocaban con la propuesta (marino en claro, dorado en
+   oscuro). Igual que con emerald, se reconducen aquí en vez de reescribir
+   componentes con lógica: mismo look del mockup en TODA la plataforma.
+   ========================================================================== */
+.bg-sky-500, .bg-sky-600, .bg-blue-500, .bg-blue-600 {
+  background-color: var(--accent) !important;
+  color: var(--accent-ink) !important;
+}
+.bg-sky-500 *, .bg-sky-600 *, .bg-blue-500 *, .bg-blue-600 * { color: inherit !important; }
+.hover\:bg-sky-600:hover, .hover\:bg-blue-600:hover, .hover\:bg-blue-700:hover {
+  background-color: var(--accent-hover) !important;
+}
+.bg-sky-50, .bg-blue-50, .hover\:bg-sky-100:hover, .hover\:bg-blue-50:hover,
+.bg-sky-500\/10, .bg-blue-500\/10 {
+  background-color: rgba(var(--accent-rgb), 0.10) !important;
+}
+.text-sky-300, .text-sky-400, .text-sky-500, .text-sky-600,
+.text-blue-500, .text-blue-600, .text-blue-700,
+.hover\:text-blue-600:hover, .hover\:text-sky-400:hover {
+  color: var(--accent) !important;
+}
+/* En claro el acento es marino oscuro: legible. En oscuro es dorado: legible. */
+.border-sky-500, .border-blue-500, .border-blue-100,
+.focus\:border-sky-500:focus, .focus\:border-blue-500:focus {
+  border-color: var(--accent) !important;
+}
+.focus\:ring-sky-500:focus, .focus\:ring-blue-500:focus, .ring-blue-500\/20 {
+  --tw-ring-color: rgba(var(--accent-rgb), 0.25) !important;
+}
+.to-blue-600 { --tw-gradient-to: var(--accent) !important; }
