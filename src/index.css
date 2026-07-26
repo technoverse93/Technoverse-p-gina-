@@ -449,6 +449,68 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   overscroll-behavior-x: contain;
 }
 
+/* ===================== Vitrina de producto (.product-media) =====================
+   Problema: con PNG transparentes, un producto negro —audífonos, cables,
+   fundas— desaparecía sobre el fondo oscuro del tema.
+
+   La imagen NO se toca: nada de invertir colores ni de rellenar el fondo, que
+   arruinaría la transparencia y falsearía el color real del artículo. El
+   contraste se construye DETRÁS y ALREDEDOR del producto, en tres capas:
+
+     1. Placa neutra elevada — un gris apenas más claro que la superficie de la
+        tarjeta, para que la silueta negra caiga sobre algo y no sobre el vacío.
+     2. Foco radial suave — luz tenue centrada donde se apoya el producto; imita
+        la iluminación de una vitrina y despega el objeto del plano.
+     3. Halo de contorno — drop-shadow blanco de 1px. Como el filtro respeta el
+        canal alfa, dibuja el borde EXACTO del producto, no un rectángulo. Es lo
+        que hace legible un audífono negro sobre gris oscuro.
+
+   En modo claro no se aplica ninguna de las tres: ahí el fondo es blanco y un
+   producto negro ya tiene todo el contraste que necesita. */
+.product-media {
+  position: relative;
+  background-color: transparent;
+  isolation: isolate;
+}
+
+.product-media > * {
+  position: relative;
+  z-index: 1;
+}
+
+.dark .product-media {
+  background-color: var(--bg-elevated);
+}
+
+.dark .product-media::before {
+  content: '';
+  position: absolute;
+  inset: 0;
+  z-index: 0;
+  pointer-events: none;
+  background: radial-gradient(
+    circle at 50% 44%,
+    rgba(255, 255, 255, 0.13) 0%,
+    rgba(255, 255, 255, 0.05) 42%,
+    rgba(255, 255, 255, 0) 70%
+  );
+}
+
+.dark .product-media img {
+  filter:
+    drop-shadow(0 0 1px rgba(255, 255, 255, 0.42))
+    drop-shadow(0 2px 5px rgba(0, 0, 0, 0.55));
+}
+
+/* Miniaturas donde el propio <img> es el contenedor y no admite ::before:
+   solo placa elevada + halo de contorno, sin foco radial. */
+.product-thumb { background-color: transparent; }
+
+.dark .product-thumb {
+  background-color: var(--bg-elevated);
+  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.42));
+}
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
     animation-duration: 0.01ms !important;
