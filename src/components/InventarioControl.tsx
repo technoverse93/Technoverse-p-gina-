@@ -30,7 +30,7 @@ function ProductImage({ src, alt, className = "w-10 h-10" }: { src?: string, alt
     <img 
       src={src} 
       alt={alt} 
-      className={`${className} rounded-lg object-contain p-0.5 border border-[var(--border-color)]/80 bg-transparent`}
+      className={`${className} product-thumb rounded-lg object-contain p-0.5 border border-[var(--border-color)]/80`}
       onError={() => setError(true)}
       referrerPolicy="no-referrer"
     />

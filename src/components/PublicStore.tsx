@@ -1302,7 +1302,7 @@ export default function PublicStore({
                     ) : (
                       cart.map((it, idx) => (
                         <div key={idx} className="flex gap-4 group/item">
-                          <div className="w-16 h-16 bg-transparent rounded-xl border border-[var(--border-color)] flex-shrink-0 flex items-center justify-center overflow-hidden p-1">
+                          <div className="product-media w-16 h-16 rounded-xl border border-[var(--border-color)] flex-shrink-0 flex items-center justify-center overflow-hidden p-1">
                             {it.product.imageUrl ? (
                               <img src={it.product.imageUrl} alt="" className="w-full h-full object-contain group-hover/item:scale-110 transition-transform duration-300" />
                             ) : (
@@ -2294,7 +2294,7 @@ export default function PublicStore({
             id="product-detail-modal"
           >
             {/* Left side: Photo */}
-            <div className="md:w-1/2 bg-transparent flex items-center justify-center p-6 relative min-h-[220px]">
+            <div className="product-media md:w-1/2 flex items-center justify-center p-6 relative min-h-[220px]">
               {selectedProductDetail.imageUrl ? (
                 <img 
                   src={selectedProductDetail.imageUrl} 
