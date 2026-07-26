@@ -1,4 +1,4 @@
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Gloock&display=swap');
 @import "tailwindcss";
 @custom-variant dark (&:where(.dark, .dark *));
 
@@ -24,218 +24,249 @@
   --font-size-sm: clamp(0.8rem, 0.78rem + 0.15vw, 0.875rem);
   --font-size-base: clamp(0.9rem, 0.85rem + 0.25vw, 1rem);
   --font-size-lg: clamp(1rem, 0.95rem + 0.3vw, 1.125rem);
-  --font-size-xl: clamp(1.15rem, 1.05rem + 0.5vw, 1.375rem);
-  --font-size-2xl: clamp(1.35rem, 1.2rem + 0.75vw, 1.75rem);
-  --font-size-3xl: clamp(1.6rem, 1.4rem + 1vw, 2.25rem);
-  --font-size-4xl: clamp(1.6rem, 1.4rem + 1vw, 2.25rem);
-  --font-size-5xl: clamp(1.6rem, 1.4rem + 1vw, 2.25rem);
+  --font-size-xl: clamp(1.1rem, 1.02rem + 0.4vw, 1.3rem);
+  --font-size-2xl: clamp(1.2rem, 1.08rem + 0.6vw, 1.5rem);
+  --font-size-3xl: clamp(1.35rem, 1.18rem + 0.8vw, 1.85rem);
+  --font-size-4xl: clamp(1.35rem, 1.18rem + 0.8vw, 1.85rem);
+  --font-size-5xl: clamp(1.35rem, 1.18rem + 0.8vw, 1.85rem);
 }
 
 /* ==========================================================================
-   Sistema de diseño — "Structured Premium" (navy + dorado), superficies
-   planas de alto contraste. Sin desenfoque de vidrio: la jerarquía viene
-   de bordes de 1px y una sombra suave reservada solo para capas flotantes
-   (menús, dropdowns, modales) que se posan sobre el contenido.
-   --bg-base:     fondo de página
-   --bg-surface:  tarjetas y paneles apoyados sobre la página (elevación 1)
-   --bg-elevated: menús, dropdowns, modales — flotan sobre todo (elevación 2)
+   SISTEMA DE DISEÑO — "RETAIL LIMPIO" (Opción C)
+   --------------------------------------------------------------------------
+   Regla que corrige el bug del modo claro: los grises son NEUTROS, sin tinte.
+   El azul marino y el dorado del logo se usan SOLO como acento —nunca como
+   color de fondo general ni de texto corrido—, que era exactamente lo que
+   teñía de dorado toda la interfaz.
+
+     claro  → acción principal = azul marino  (se lee sobre blanco)
+     oscuro → acción principal = dorado       (se lee sobre gris profundo)
+
+   Toda la piel vive aquí: los componentes conservan sus nombres de clase, así
+   que la lógica de Supabase, autenticación, carrito, IVA y facturación no se
+   toca en absoluto.
    ========================================================================== */
 
 @layer base {
   :root {
-    --bg-base: #EFF1F5;
-    --bg-surface: #ffffff;
-    --bg-elevated: #ffffff;
-    --text-primary: #182239;
-    --text-secondary: #49546E;
-    --text-muted: #878FA1;
-    --border-color: #E0E3EB;
+    --bg-base: #F8FAFC;
+    --bg-surface: #FFFFFF;
+    --bg-elevated: #FFFFFF;
+    --bg-sunken: #F1F4F8;
+    --text-primary: #0F172A;
+    --text-secondary: #55617A;
+    --text-muted: #8792A8;
+    --border-color: #E4E8EF;
+    --border-soft: #EEF1F6;
 
-    --brand-navy: #121C30;
-    --brand-gold-dark: #8F7C5B;
-    --brand-gold-mid: #BDAB7F;
-    --brand-gold-light: #CABB91;
-    --brand-gold-rgb: 189, 171, 127;
+    --brand-navy: #14243F;
+    --brand-navy-hover: #1D3357;
+    --brand-gold-dark: #A87F33;
+    --brand-gold-mid: #C09A4E;
+    --brand-gold-light: #D9BC7C;
+    --brand-gold-rgb: 168, 127, 51;
+    --gold-soft: #FBF4E4;
+    --gold-line: #EADFC2;
 
-    /* Sombra reservada para capas flotantes (dropdowns, modales, bottom nav) —
-       una sola capa, radio de difuminado corto: económica para el compositor. */
-    --float-shadow: 0 4px 12px -4px rgba(18, 28, 48, 0.18);
-    --float-shadow-lg: 0 8px 20px -6px rgba(18, 28, 48, 0.22);
+    /* Acento funcional: lo que pinta botones, focos y estados activos. */
+    --accent: var(--brand-navy);
+    --accent-hover: var(--brand-navy-hover);
+    --accent-ink: #FFFFFF;
+    --accent-rgb: 20, 36, 63;
+
+    --ok: #197A4B;
+    --ok-soft: #E8F6EF;
+
+    --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
+    --float-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 26px -14px rgba(15, 23, 42, 0.20);
+    --float-shadow-lg: 0 2px 4px rgba(15, 23, 42, 0.05), 0 20px 44px -20px rgba(15, 23, 42, 0.26);
+
+    --radius-card: 14px;
+    --radius-lg: 16px;
+
+    /* Chat: burbujas neutras en ambos modos. Nada de verde. */
+    --bubble-in: #F1F4F8;
+    --bubble-in-ink: #0F172A;
+    --bubble-out: #14243F;
+    --bubble-out-ink: #FFFFFF;
   }
 
-  /* Tema oscuro — carbón/azulado profundamente desaturado (sin negros puros
-     ni tonos saturados), acentos dorados atenuados y profesionales. */
   .dark {
-    --bg-base: #13151B;
-    --bg-surface: #1C1F26;
-    --bg-elevated: #252931;
-    --text-primary: #EEEFF1;
-    --text-secondary: #B6BAC3;
-    --text-muted: #868C98;
-    --border-color: rgba(255, 255, 255, 0.08);
+    --bg-base: #0F1217;
+    --bg-surface: #171B22;
+    --bg-elevated: #1D222B;
+    --bg-sunken: #13171D;
+    --text-primary: #E9ECF1;
+    --text-secondary: #A7AFBD;
+    --text-muted: #79828F;
+    --border-color: rgba(255, 255, 255, 0.09);
+    --border-soft: rgba(255, 255, 255, 0.06);
 
-    --brand-navy: #121C30;
-    --brand-gold-dark: #998666;
-    --brand-gold-mid: #C5B58C;
-    --brand-gold-light: #DCD0A8;
-    --brand-gold-rgb: 220, 208, 168;
+    --brand-navy: #0E1830;
+    --brand-navy-hover: #16233F;
+    --brand-gold-dark: #BFA469;
+    --brand-gold-mid: #D9C48E;
+    --brand-gold-light: #E8D9AE;
+    --brand-gold-rgb: 217, 196, 142;
+    --gold-soft: rgba(217, 196, 142, 0.10);
+    --gold-line: rgba(217, 196, 142, 0.28);
 
-    --float-shadow: 0 4px 12px -4px rgba(0, 0, 0, 0.4);
-    --float-shadow-lg: 0 8px 20px -6px rgba(0, 0, 0, 0.5);
+    --accent: #D9C48E;
+    --accent-hover: #E6D3A6;
+    --accent-ink: #151107;
+    --accent-rgb: 217, 196, 142;
+
+    --ok: #5FBF8E;
+    --ok-soft: rgba(95, 191, 142, 0.12);
+
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --float-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 12px 30px -16px rgba(0, 0, 0, 0.7);
+    --float-shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.45), 0 24px 50px -22px rgba(0, 0, 0, 0.8);
+
+    --bubble-in: #232932;
+    --bubble-in-ink: #E9ECF1;
+    --bubble-out: #33404F;
+    --bubble-out-ink: #FFFFFF;
   }
 }
 
 html {
   background-color: var(--bg-base);
+  /* Evita el rebote horizontal en móvil si algún hijo se pasa de ancho. */
+  overflow-x: hidden;
 }
 
 body {
   background-color: var(--bg-base);
   color: var(--text-primary);
   font-family: var(--font-sans);
-  transition: background-color 0.25s ease, color 0.25s ease;
+  overflow-x: hidden;
+  transition: background-color 0.2s ease, color 0.2s ease;
 }
 
-/* Aísla el árbol de cada shell principal en su propio contexto de apilamiento
-   (sin crear containing block para descendientes fixed, a diferencia de
-   transform) — evita que el compositor mezcle sus capas con el resto de la
-   página durante el scroll. */
 #store-page-root,
-#admin-panel-root {
-  isolation: isolate;
-}
+#admin-panel-root { isolation: isolate; }
 
-/* Custom scrollbars */
-::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
-}
-::-webkit-scrollbar-track {
-  background: transparent;
-}
+/* Ninguna imagen puede desbordar su contenedor. */
+img, svg, video, canvas { max-width: 100%; }
+
+::-webkit-scrollbar { width: 8px; height: 8px; }
+::-webkit-scrollbar-track { background: transparent; }
 ::-webkit-scrollbar-thumb {
-  background: var(--brand-gold-dark);
+  background: var(--text-muted);
   border-radius: 9999px;
-  opacity: 0.5;
+  opacity: 0.4;
 }
-::-webkit-scrollbar-thumb:hover {
-  background: var(--brand-gold-mid);
-}
+::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
 
 /* ==========================================================================
-   Superficies planas y capas flotantes ("Structured Premium")
-
-   Escala de z-index (evita colisiones de stacking en móvil):
-     40  → chrome fijo permanente (navbar superior, bottom nav bar)
-     70  → capas flotantes transitorias (dropdowns, popovers, hojas móviles)
-     100 → modales de pantalla completa (siempre por encima de todo)
-
-   Aislamiento de capas: los contenedores fijos/flotantes se promueven a su
-   propia capa de composición (transform: translateZ(0) + backface-visibility)
-   para que el navegador no tenga que repintarlos junto con el contenido que
-   hace scroll debajo — evita el "tearing"/estática en GPUs móviles.
+   Superficies
    ========================================================================== */
 
-/* Panel flotante genérico: dropdowns, modales — superficie sólida + borde + sombra suave */
 .glass-panel {
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
+  border-radius: var(--radius-card);
   box-shadow: var(--float-shadow);
-  transform: translateZ(0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
 }
 
-/* Variante para modales grandes (checkout, formularios largos) */
 .glass-panel-strong {
   background: var(--bg-elevated);
   border: 1px solid var(--border-color);
+  border-radius: var(--radius-lg);
   box-shadow: var(--float-shadow-lg);
-  transform: translateZ(0);
-  -webkit-backface-visibility: hidden;
-  backface-visibility: hidden;
 }
 
-/* Barra de navegación superior: superficie sólida + línea inferior, sin sombra.
-   Nota: sin transform/translateZ aquí — este header contiene los paneles
-   flotantes de cuenta/carrito, que en móvil usan position:fixed anclado al
-   viewport; promover el header a su propia capa rompería ese anclaje. */
 .glass-nav {
   background: var(--bg-surface);
   border-bottom: 1px solid var(--border-color);
 }
 
-/* Tarjeta de producto: superficie plana, sin sombra en reposo, acento dorado al hover */
 .glass-card {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
-  box-shadow: none;
+  border-radius: var(--radius-card);
+  box-shadow: var(--shadow-sm);
   contain: layout style;
-  transition: transform 0.3s cubic-bezier(0.16, 1, 0.3, 1), box-shadow 0.3s ease, border-color 0.3s ease;
+  /* Solo se animan transform y sombra: son propiedades que el compositor
+     resuelve sin recalcular el layout, así el hover no produce saltos. */
+  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
+              box-shadow 0.18s ease,
+              border-color 0.18s ease;
 }
-.glass-card:hover {
-  box-shadow: var(--float-shadow);
-  border-color: rgba(var(--brand-gold-rgb), 0.5);
+@media (hover: hover) {
+  .glass-card:hover {
+    transform: translateY(-2px);
+    box-shadow: var(--float-shadow);
+  }
 }
+.glass-card:active { transform: translateY(0); }
 
-/* Pastilla plana para badges, filtros y botones de icono */
 .glass-pill {
   background: var(--bg-surface);
   border: 1px solid var(--border-color);
+  border-radius: 999px;
+  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
 }
+.glass-pill:hover { background: var(--bg-sunken); }
+.glass-pill:active { transform: scale(0.96); }
 
-/* Botón dorado primario — plano, con borde definido, sin resplandor de vidrio */
 .btn-glass-primary {
-  background: linear-gradient(135deg, var(--brand-gold-mid), var(--brand-gold-dark));
-  color: #1a1408;
-  border: 1px solid rgba(var(--brand-gold-rgb), 0.6);
-  box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.3);
-  transition: transform 0.15s ease, box-shadow 0.15s ease, filter 0.15s ease;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 1px solid var(--accent);
+  border-radius: 10px;
+  font-weight: 700;
+  box-shadow: none;
+  transition: background 0.18s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.dark .btn-glass-primary {
-  color: #14100a;
-}
+.dark .btn-glass-primary { color: var(--accent-ink); }
 .btn-glass-primary:hover {
-  filter: brightness(1.06);
-  transform: translateY(-1px);
+  background: var(--accent-hover);
+  border-color: var(--accent-hover);
 }
-.btn-glass-primary:active {
-  transform: translateY(0);
-  filter: brightness(0.98);
-}
+.btn-glass-primary:active { transform: scale(0.96); }
+.btn-glass-primary:disabled { opacity: 0.45; pointer-events: none; }
 
-/* Campos de formulario — superficie plana */
 .glass-input {
-  background: var(--bg-base);
+  background: var(--bg-sunken);
   border: 1px solid var(--border-color);
+  border-radius: 10px;
+  color: var(--text-primary);
+  transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
-.dark .glass-input {
-  background: rgba(255, 255, 255, 0.04);
-}
+.dark .glass-input { background: rgba(255, 255, 255, 0.04); }
 .glass-input:focus {
-  border-color: rgba(var(--brand-gold-rgb), 0.7);
-  box-shadow: 0 0 0 3px rgba(var(--brand-gold-rgb), 0.18);
   outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.16);
+}
+.glass-input::placeholder { color: var(--text-muted); }
+
+.glass-gold {
+  background: var(--gold-soft);
+  border: 1px solid var(--gold-line);
+  border-radius: var(--radius-card);
 }
 
-/* Alias existente, mismo sistema plano con borde dorado sutil */
-.glass-gold {
-  background: var(--bg-surface);
-  border: 1px solid rgba(var(--brand-gold-rgb), 0.35);
+/* Foco visible por teclado en toda la interfaz (accesibilidad). */
+:where(a, button, input, select, textarea, [tabindex]):focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: 6px;
 }
 
 /* ==========================================================================
-   Barra de navegación inferior (móvil) — patrón global de la plataforma
+   Barra de navegación inferior (móvil)
    ========================================================================== */
 .bottom-nav-bar {
   position: fixed;
-  left: 0;
-  right: 0;
-  bottom: 0;
+  left: 0; right: 0; bottom: 0;
   z-index: 40;
+  display: flex;
   background: var(--bg-surface);
   border-top: 1px solid var(--border-color);
-  box-shadow: var(--float-shadow);
+  box-shadow: 0 -2px 14px -8px rgba(15, 23, 42, 0.2);
   padding-bottom: env(safe-area-inset-bottom, 0px);
   transform: translateZ(0);
   -webkit-backface-visibility: hidden;
@@ -248,116 +279,123 @@ body {
   justify-content: center;
   gap: 3px;
   flex: 1;
-  padding: 8px 4px 7px;
+  min-width: 0;
+  /* 48px de alto real: objetivo táctil cómodo también en la APK. */
+  padding: 8px 2px 7px;
+  min-height: 48px;
   color: var(--text-muted);
   font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.01em;
+  font-weight: 600;
+  line-height: 1.2;
+  text-align: center;
   transition: color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
 }
-.bottom-nav-item.active {
-  color: var(--brand-gold-dark);
+.bottom-nav-item > span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
-.dark .bottom-nav-item.active {
-  color: var(--brand-gold-light);
-}
+.bottom-nav-item.active { color: var(--accent); }
 .bottom-nav-item .bn-icon-wrap {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
+  width: 32px;
   height: 26px;
   border-radius: 9px;
+  transition: background 0.15s ease, transform 0.15s ease;
 }
-.bottom-nav-item.active .bn-icon-wrap {
-  background: rgba(var(--brand-gold-rgb), 0.16);
-}
+.bottom-nav-item:active .bn-icon-wrap { transform: scale(0.92); }
+.bottom-nav-item.active .bn-icon-wrap { background: rgba(var(--accent-rgb), 0.12); }
 
-/* Panel flotante anclado sobre la barra inferior (catálogo/cuenta en móvil) */
 .floating-sheet-mobile {
   position: fixed;
-  left: 12px;
-  right: 12px;
-  bottom: calc(64px + env(safe-area-inset-bottom, 0px));
+  left: 12px; right: 12px;
+  bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   z-index: 70;
-  max-height: 70vh;
+  max-height: 68vh;
   overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
+  border-radius: var(--radius-lg);
   transform: translateZ(0);
   -webkit-backface-visibility: hidden;
   backface-visibility: hidden;
-  will-change: transform, opacity;
 }
 
-/* Smooth keyframe for bouncing cart */
-@keyframes cartBounce {
-  0%, 100% { transform: scale(1); }
-  50% { transform: scale(1.15); }
+/* ==========================================================================
+   Tipografía
+   Los tamaños máximos bajaron respecto al sistema anterior: los titulares
+   grandes desbordaban horizontalmente en pantallas de 360–412 px.
+   ========================================================================== */
+h1, h2, h3, h4, h5 {
+  color: var(--text-primary);
+  text-wrap: balance;
+  overflow-wrap: break-word;
 }
-
-.animate-cart-bounce {
-  animation: cartBounce 200ms ease-in-out;
-}
-.hide-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.hide-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* Responsive Headings & Standard Sizes */
 h1, .text-4xl, .text-5xl {
-  font-size: clamp(1.6rem, 1.4rem + 1vw, 2.25rem) !important; /* text-3xl token */
-  line-height: 1.1;
+  font-size: clamp(1.35rem, 1.18rem + 0.8vw, 1.85rem) !important;
+  line-height: 1.18;
+  letter-spacing: -0.022em;
+  font-weight: 700;
 }
-
 h2, .text-3xl {
-  font-size: clamp(1.6rem, 1.4rem + 1vw, 2.25rem) !important; /* text-3xl token */
-  line-height: 1.2;
+  font-size: clamp(1.25rem, 1.1rem + 0.7vw, 1.6rem) !important;
+  line-height: 1.22;
+  letter-spacing: -0.02em;
+  font-weight: 700;
 }
-
 h3, .text-2xl {
-  font-size: clamp(1.35rem, 1.2rem + 0.75vw, 1.75rem) !important; /* text-2xl token */
+  font-size: clamp(1.1rem, 1rem + 0.5vw, 1.35rem) !important;
   line-height: 1.3;
+  letter-spacing: -0.014em;
 }
-
 h4, .text-xl {
-  font-size: clamp(1.15rem, 1.05rem + 0.5vw, 1.375rem) !important; /* text-xl token */
-  line-height: 1.3;
+  font-size: clamp(1rem, 0.95rem + 0.3vw, 1.15rem) !important;
+  line-height: 1.35;
 }
-
 h5, .text-lg {
-  font-size: clamp(1rem, 0.95rem + 0.3vw, 1.125rem) !important; /* text-lg token */
+  font-size: clamp(0.95rem, 0.9rem + 0.25vw, 1.05rem) !important;
   line-height: 1.4;
 }
 
-/* Token replacements for custom pixel size classes */
 .text-\[8px\],
 .text-\[9px\],
 .text-\[10px\],
 [class*="text-[10px]"] {
   font-size: clamp(0.72rem, 0.7rem + 0.1vw, 0.75rem) !important;
 }
+.text-\[11px\] { font-size: clamp(0.8rem, 0.78rem + 0.15vw, 0.875rem) !important; }
 
-.text-\[11px\] {
-  font-size: clamp(0.8rem, 0.78rem + 0.15vw, 0.875rem) !important;
+/* Cifras alineadas en columnas de precios y totales. */
+.font-mono { font-variant-numeric: tabular-nums; }
+
+/* ==========================================================================
+   WORDMARK — serif elegante de alto contraste con degradado sutil.
+   Se aplica sobre el marcado existente: ningún .tsx cambia por esto.
+   ========================================================================== */
+header .font-display,
+.brand-wordmark {
+  font-family: 'Gloock', var(--font-display), Georgia, serif;
+  font-weight: 400;
+  font-size: 1.2rem !important;
+  letter-spacing: 0.004em;
+  text-transform: none;
+  white-space: nowrap;
+  background: linear-gradient(104deg, var(--text-primary) 0%, var(--text-primary) 40%, var(--brand-gold-dark) 100%);
+  -webkit-background-clip: text;
+  background-clip: text;
+  color: transparent;
 }
 
-/* FORCE ALL INTERACTIVE/NON-INTERACTIVE ICONS TO BE EITHER 20px OR 24px GLYPH SIZE */
-svg.lucide {
-  width: 20px !important;
-  height: 20px !important;
-}
+/* ==========================================================================
+   Iconografía y objetivos táctiles
+   ========================================================================== */
+svg.lucide { width: 20px !important; height: 20px !important; }
+svg.lucide.w-6, svg.lucide.h-6, svg.lucide-lg { width: 24px !important; height: 24px !important; }
 
-/* Unless they are explicitly defined with w-6/h-6 or are larger, which maps to 24px */
-svg.lucide.w-6,
-svg.lucide.h-6,
-svg.lucide-lg {
-  width: 24px !important;
-  height: 24px !important;
-}
-
-/* Force standard touch target of 40px - 44px for icon buttons and interactive elements */
 button:has(> svg.lucide),
 .icon-button,
 [role="button"]:has(> svg.lucide) {
@@ -368,22 +406,149 @@ button:has(> svg.lucide),
   justify-content: center;
 }
 
-/* ==========================================================================
-   Elevación de tema oscuro — Login y Tienda
-   ========================================================================== */
-
-.dark #store-page-root {
-  --bg-base: #13151B !important;
-  --bg-surface: #1C1F26 !important;
-  --text-primary: #EEEFF1 !important;
-  --text-secondary: #B6BAC3 !important;
-  --border-color: rgba(255, 255, 255, 0.08) !important;
-
-  background-color: #13151B !important;
-  color: #EEEFF1 !important;
+/* En pantallas táctiles el objetivo mínimo sube a 44 px (guía de Apple). */
+@media (pointer: coarse) {
+  button:has(> svg.lucide),
+  .icon-button,
+  [role="button"]:has(> svg.lucide) {
+    min-width: 44px !important;
+    min-height: 44px !important;
+  }
 }
 
-/* Modals and Dropdowns (Elevated Surfaces) */
+button { transition: transform 0.15s cubic-bezier(0.16, 1, 0.3, 1); }
+button:active { transform: scale(0.97); }
+/* El resalte azul del tap en Android/iOS ensucia el diseño: se apaga y en su
+   lugar queda el propio :active, que ya da respuesta visual. */
+button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
+
+@keyframes cartBounce {
+  0%, 100% { transform: scale(1); }
+  50% { transform: scale(1.15); }
+}
+.animate-cart-bounce { animation: cartBounce 200ms ease-in-out; }
+
+.hide-scrollbar::-webkit-scrollbar { display: none; }
+.hide-scrollbar {
+  -ms-overflow-style: none;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior-x: contain;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
+   CHAT DEL TALLER — corrección del verde
+   Los componentes de chat (LiveChat, ChatInbox, ChatThread) traen ~37
+   utilidades `emerald-*` heredadas. En vez de reescribir esos archivos —con el
+   riesgo de tocar su lógica de mensajes— se remapean aquí a la paleta de
+   marca. El verde queda reservado únicamente al punto de "en línea".
+   ========================================================================== */
+.bg-emerald-500.bg-emerald-500,
+.bg-emerald-600.bg-emerald-600,
+.bg-emerald-400.bg-emerald-400 {
+  background-color: var(--bubble-out) !important;
+  color: var(--bubble-out-ink) !important;
+}
+/* Cualquier texto anidado dentro de una burbuja hereda el color de la burbuja.
+   Sin esto, utilidades como `text-emerald-100` (pensadas para fondo verde)
+   pintaban el texto oscuro sobre el azul marino y quedaba ilegible. */
+.bg-emerald-500.bg-emerald-500 *,
+.bg-emerald-600.bg-emerald-600 *,
+.bg-emerald-400.bg-emerald-400 * { color: inherit !important; }
+
+.hover\:bg-emerald-600:hover { background-color: var(--accent-hover) !important; }
+
+.bg-emerald-50.bg-emerald-50,
+.bg-emerald-950.bg-emerald-950,
+.bg-emerald-500\/10.bg-emerald-500\/10,
+.bg-emerald-500\/15.bg-emerald-500\/15,
+.bg-emerald-600\/20.bg-emerald-600\/20 {
+  background-color: var(--bubble-in) !important;
+  color: var(--bubble-in-ink) !important;
+}
+.bg-emerald-50.bg-emerald-50 *,
+.bg-emerald-950.bg-emerald-950 *,
+.bg-emerald-500\/10.bg-emerald-500\/10 *,
+.bg-emerald-500\/15.bg-emerald-500\/15 *,
+.bg-emerald-600\/20.bg-emerald-600\/20 * { color: inherit !important; }
+.hover\:bg-emerald-500\/25:hover { background-color: var(--bg-sunken) !important; }
+
+/* Texto verde suelto (estados tipo "en línea", "entregado"): se conserva el
+   significado con un verde que contrasta bien en los dos modos. */
+.text-emerald-500,
+.text-emerald-600,
+.text-emerald-700,
+.text-emerald-800,
+.text-emerald-100,
+.text-emerald-300,
+.text-emerald-400,
+.dark\:text-emerald-400 { color: var(--ok) !important; }
+.hover\:text-emerald-100:hover,
+.hover\:text-emerald-300:hover { color: var(--ok) !important; }
+
+.border-emerald-200,
+.border-emerald-500,
+.border-emerald-500\/30,
+.border-emerald-500\/40,
+.border-emerald-500\/50 { border-color: var(--border-color) !important; }
+
+.ring-emerald-500 { --tw-ring-color: var(--accent) !important; }
+.shadow-emerald-500\/10 { box-shadow: var(--shadow-sm) !important; }
+.from-emerald-500 { --tw-gradient-from: var(--accent) !important; }
+
+
+/* ==========================================================================
+   Utilidades planas heredadas
+   Varios componentes traen bg-white / bg-slate-* escritos antes de este
+   sistema. En modo oscuro se reconducen a las superficies del tema para que
+   no aparezcan bloques blancos.
+   ========================================================================== */
+.dark .bg-white,
+.dark .bg-slate-50,
+.dark .bg-gray-50 { background-color: var(--bg-surface) !important; }
+.dark .bg-slate-100,
+.dark .bg-slate-200,
+.dark .bg-gray-100,
+.dark .bg-gray-200 {
+  background-color: var(--bg-sunken) !important;
+  color: var(--text-primary);
+}
+.dark .bg-blue-50 { background-color: rgba(var(--accent-rgb), 0.12) !important; }
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-gray-100,
+.dark .border-gray-200 { border-color: var(--border-color) !important; }
+.dark .text-slate-900,
+.dark .text-gray-900,
+.dark .text-slate-800 { color: var(--text-primary) !important; }
+.dark .text-slate-500,
+.dark .text-slate-600,
+.dark .text-gray-500,
+.dark .text-gray-600 { color: var(--text-secondary) !important; }
+
+/* ==========================================================================
+   Elevación en tema oscuro — Tienda y Login
+   ========================================================================== */
+.dark #store-page-root {
+  --bg-base: #0F1217 !important;
+  --bg-surface: #171B22 !important;
+  --text-primary: #E9ECF1 !important;
+  --text-secondary: #A7AFBD !important;
+  --border-color: rgba(255, 255, 255, 0.09) !important;
+
+  background-color: var(--bg-base) !important;
+  color: var(--text-primary) !important;
+}
+
 .dark #store-page-root #catalog-dropdown,
 .dark #store-page-root #search-suggestions-dropdown,
 .dark #store-page-root #account-dropdown,
@@ -392,15 +557,15 @@ button:has(> svg.lucide),
 .dark #store-page-root #product-detail-modal,
 .dark #store-page-root #checkout-cart-modal-container,
 .dark #store-page-root #floating-chat-window {
-  --bg-surface: #252931 !important;
-  --bg-base: #252931 !important;
-  background-color: #252931 !important;
-  border: 1px solid rgba(255, 255, 255, 0.1) !important;
+  --bg-surface: #1D222B !important;
+  --bg-base: #1D222B !important;
+  background-color: #1D222B !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  border-radius: var(--radius-lg) !important;
   box-shadow: var(--float-shadow-lg) !important;
-  color: #EEEFF1 !important;
+  color: #E9ECF1 !important;
 }
 
-/* Ensure secondary text elements inside elevated components use the correct color variables */
 .dark #store-page-root #catalog-dropdown *,
 .dark #store-page-root #search-suggestions-dropdown *,
 .dark #store-page-root #account-dropdown *,
@@ -409,11 +574,10 @@ button:has(> svg.lucide),
 .dark #store-page-root #product-detail-modal *,
 .dark #store-page-root #checkout-cart-modal-container *,
 .dark #store-page-root #floating-chat-window * {
-  --text-primary: #EEEFF1 !important;
-  --text-secondary: #B6BAC3 !important;
+  --text-primary: #E9ECF1 !important;
+  --text-secondary: #A7AFBD !important;
 }
 
-/* Active elements, input fields, and hover states inside Elevated Surfaces */
 .dark #store-page-root #catalog-dropdown a:hover,
 .dark #store-page-root #catalog-dropdown button:hover,
 .dark #store-page-root #search-suggestions-dropdown button:hover,
@@ -424,11 +588,10 @@ button:has(> svg.lucide),
 .dark #store-page-root #checkout-cart-modal-container button:hover,
 .dark #store-page-root #checkout-cart-modal-container a:hover,
 .dark #store-page-root #product-detail-modal button:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-  color: #EEEFF1 !important;
+  background-color: rgba(255, 255, 255, 0.06) !important;
+  color: #E9ECF1 !important;
 }
 
-/* Inputs, Textareas, and Selects in Elevated Surfaces */
 .dark #store-page-root #account-dropdown input,
 .dark #store-page-root #account-dropdown select,
 .dark #store-page-root #login-register-modal input,
@@ -437,22 +600,32 @@ button:has(> svg.lucide),
 .dark #store-page-root #product-detail-modal select,
 .dark #store-page-root #checkout-cart-modal-container input,
 .dark #store-page-root #checkout-cart-modal-container select {
-  background-color: rgba(255, 255, 255, 0.06) !important;
-  border: 1px solid rgba(255, 255, 255, 0.12) !important;
-  color: #EEEFF1 !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  border: 1px solid rgba(255, 255, 255, 0.10) !important;
+  border-radius: 10px !important;
+  color: #E9ECF1 !important;
 }
 
-/* Handle specific buttons and badges inside these modules to use warm white text and appropriate borders */
-.dark #store-page-root .hover\:bg-slate-50:hover {
-  background-color: rgba(255, 255, 255, 0.06) !important;
-}
-
-.dark #store-page-root .bg-slate-200,
+.dark #store-page-root .hover\:bg-slate-50:hover { background-color: rgba(255, 255, 255, 0.06) !important; }
 .dark #store-page-root .disabled\:bg-slate-200:disabled {
-  background-color: rgba(255, 255, 255, 0.08) !important;
-  color: #EEEFF1 !important;
+  background-color: rgba(255, 255, 255, 0.05) !important;
+  color: var(--text-muted) !important;
 }
+.dark #store-page-root .hover\:bg-slate-200:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
 
-.dark #store-page-root .hover\:bg-slate-200:hover {
-  background-color: rgba(255, 255, 255, 0.08) !important;
+/* ==========================================================================
+   Grilla de productos — retail ordenada
+   2 columnas en teléfono, 3 en tablet (Redmi Pad SE ≈ 800 px de ancho útil),
+   4 en escritorio. Sin bloques asimétricos: catálogo parejo y escaneable.
+   ========================================================================== */
+#product-bento-grid {
+  display: grid;
+  gap: 12px;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+@media (min-width: 640px) {
+  #product-bento-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
+}
+@media (min-width: 1024px) {
+  #product-bento-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
 }
