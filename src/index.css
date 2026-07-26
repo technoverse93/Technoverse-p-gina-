@@ -61,18 +61,22 @@
 
     --brand-navy: #14243F;
     --brand-navy-hover: #1D3357;
-    --brand-gold-dark: #A87F33;
-    --brand-gold-mid: #C09A4E;
-    --brand-gold-light: #D9BC7C;
-    --brand-gold-rgb: 168, 127, 51;
-    --gold-soft: #FBF4E4;
-    --gold-line: #EADFC2;
+    --brand-gold-dark: #C2410C;
+    --brand-gold-mid: #EA6A1E;
+    --brand-gold-light: #F59E5B;
+    --brand-gold-rgb: 194, 65, 12;
+    /* Estas variables conservan su nombre (los componentes ya las usan) pero
+       ahora apuntan al naranja, para que no queden detalles dorados sueltos. */
+    --gold-soft: #FFF1E8;
+    --gold-line: #F6D7C2;
 
-    /* Acento funcional: lo que pinta botones, focos y estados activos. */
-    --accent: var(--brand-navy);
-    --accent-hover: var(--brand-navy-hover);
+    /* Acento funcional: lo que pinta botones, focos y estados activos.
+       Naranja de marca. En claro se usa un tono profundo (orange-700) porque
+       sobre blanco un naranja claro no alcanza contraste de lectura. */
+    --accent: #C2410C;
+    --accent-hover: #9A330A;
     --accent-ink: #FFFFFF;
-    --accent-rgb: 20, 36, 63;
+    --accent-rgb: 194, 65, 12;
 
     --ok: #197A4B;
     --ok-soft: #E8F6EF;
@@ -87,7 +91,7 @@
     /* Chat: burbujas neutras en ambos modos. Nada de verde. */
     --bubble-in: #F1F4F8;
     --bubble-in-ink: #0F172A;
-    --bubble-out: #14243F;
+    --bubble-out: #C2410C;
     --bubble-out-ink: #FFFFFF;
   }
 
@@ -104,17 +108,19 @@
 
     --brand-navy: #0E1830;
     --brand-navy-hover: #16233F;
-    --brand-gold-dark: #BFA469;
-    --brand-gold-mid: #D9C48E;
-    --brand-gold-light: #E8D9AE;
-    --brand-gold-rgb: 217, 196, 142;
-    --gold-soft: rgba(217, 196, 142, 0.10);
-    --gold-line: rgba(217, 196, 142, 0.28);
+    --brand-gold-dark: #FB923C;
+    --brand-gold-mid: #FDBA74;
+    --brand-gold-light: #FED7AA;
+    --brand-gold-rgb: 251, 146, 60;
+    --gold-soft: rgba(251, 146, 60, 0.12);
+    --gold-line: rgba(251, 146, 60, 0.30);
 
-    --accent: #D9C48E;
-    --accent-hover: #E6D3A6;
-    --accent-ink: #151107;
-    --accent-rgb: 217, 196, 142;
+    /* Gris oscuro de fondo + naranja de acento. Sobre gris profundo el
+       naranja claro (orange-400) es el que mantiene el contraste. */
+    --accent: #FB923C;
+    --accent-hover: #FDBA74;
+    --accent-ink: #1A1206;
+    --accent-rgb: 251, 146, 60;
 
     --ok: #5FBF8E;
     --ok-soft: rgba(95, 191, 142, 0.12);
@@ -125,8 +131,8 @@
 
     --bubble-in: #232932;
     --bubble-in-ink: #E9ECF1;
-    --bubble-out: #33404F;
-    --bubble-out-ink: #FFFFFF;
+    --bubble-out: #7C3A12;
+    --bubble-out-ink: #FFEFE4;
   }
 }
 
