@@ -252,21 +252,33 @@ export default function LiveChat() {
 
   return (
     <>
-      {/* Floating Button */}
-      <button
-        onClick={() => setIsOpen(true)}
-        className="fixed bottom-24 right-6 z-[45] w-11 h-11 max-w-11 max-h-11 bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] shadow-lg text-[#1a1408] dark:text-[#14100a] rounded-full flex items-center justify-center transition hover:scale-105 active:scale-95 border-2 border-white"
-        id="btn-floating-chat"
-      >
-        <MessageSquare className="w-5 h-5" />
-        {conversations.some(c => c.unreadCount > 0) && (
-          <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center text-[10px] font-bold">!</span>
-        )}
-      </button>
+      {/* Floating Button — se oculta mientras el chat está abierto para que la
+          ventana pueda usar todo el alto disponible sin encimarse con el FAB. */}
+      {!isOpen && (
+        <button
+          onClick={() => setIsOpen(true)}
+          className="fixed bottom-24 right-6 z-[45] w-11 h-11 max-w-11 max-h-11 bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] shadow-lg text-[#1a1408] dark:text-[#14100a] rounded-full flex items-center justify-center transition hover:scale-105 active:scale-95 border-2 border-white"
+          id="btn-floating-chat"
+        >
+          <MessageSquare className="w-5 h-5" />
+          {conversations.some(c => c.unreadCount > 0) && (
+            <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center text-[10px] font-bold">!</span>
+          )}
+        </button>
+      )}
 
-      {/* Chat popup window */}
+      {/* Chat popup window
+          Posicionamiento robusto para todos los formatos (móvil vertical,
+          tablet horizontal, APK):
+          - Offset inferior pequeño (bottom-6) → aprovecha el alto disponible en
+            pantallas bajas/horizontales, evitando que se vea "comprimida".
+          - Alto flexible: crece hasta 600px pero nunca más de (100dvh − 7rem),
+            de modo que el borde SUPERIOR siempre queda por debajo de la barra
+            de navegación fija (top-0, h-16 = 4rem) con margen, sin taparla.
+          - 100dvh (viewport dinámico) para respetar la barra del navegador
+            móvil y el teclado en APK. */}
       {isOpen && (
-        <div className="fixed bottom-40 right-6 z-[45] w-[calc(100vw-3rem)] sm:w-96 h-[500px] max-h-[calc(100dvh-15rem)] bg-slate-950 border border-white/10 rounded-2xl shadow-sm flex flex-col text-white overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300" id="floating-chat-window">
+        <div className="fixed bottom-6 right-4 sm:right-6 z-[45] w-[calc(100vw-2rem)] sm:w-96 h-[600px] max-h-[calc(100dvh-7rem)] bg-slate-950 border border-white/10 rounded-2xl shadow-sm flex flex-col text-white overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300" id="floating-chat-window">
           {/* Header */}
           <div className="p-4 bg-gradient-to-r from-emerald-500 to-teal-600 dark:bg-[var(--brand-gold-mid)] dark:bg-none flex items-center justify-between shadow-sm shrink-0">
             <div className="flex items-center gap-2 min-w-0">
