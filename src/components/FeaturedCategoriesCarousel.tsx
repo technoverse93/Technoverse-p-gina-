@@ -1,48 +1,70 @@
 import React, { useRef } from 'react';
-import {
-  ChevronLeft,
-  ChevronRight,
-  Smartphone,
-  Headphones,
-  BatteryCharging,
-  Shield,
-  Wrench,
-  Watch,
-  Laptop,
-  Cable,
-  Package,
-} from 'lucide-react';
+import { ChevronLeft, ChevronRight } from 'lucide-react';
 
 /**
  * Carrusel de categorías destacadas — maqueta "Opción C / Retail limpio".
  *
- * Cada categoría es una tarjeta cuadrada de esquinas redondeadas (56 px) con el
- * icono centrado y la etiqueta debajo, desplazándose en un riel horizontal.
+ * Los iconos son EMOJI a color, exactamente como en la maqueta aprobada:
  *
- * Los iconos NO llevan color fijo: heredan `currentColor` del contenedor, que a
- * su vez usa las variables del tema. Por eso cambian solos entre el azul marino
- * del modo claro y el dorado del modo oscuro, sin lógica de JavaScript ni
- * clases duplicadas por tema.
+ *   <div class="cat"><i>📱</i><span>Dispositivos</span></div>
+ *   .cat i { width:56px; height:56px; border-radius:14px; font-size:22px;
+ *            background:var(--surface); border:1px solid var(--line); }
+ *
+ * Antes se usaban iconos SVG monocromáticos (lucide) que heredaban el color del
+ * tema; por eso las capturas no coincidían con la maqueta. El emoji trae su
+ * propio color y es lo que da el aspecto de tienda comercial.
+ *
+ * Nota honesta: el emoji lo dibuja la fuente del sistema, así que se ve algo
+ * distinto en Android, iOS y Windows. Es el mismo comportamiento que tenía la
+ * maqueta que aprobaste.
  */
 
-const ICON_CLASS = 'w-6 h-6';
-
-const CATEGORY_ICONS: Record<string, React.ReactNode> = {
-  'Dispositivos': <Smartphone className={ICON_CLASS} />,
-  'Celulares': <Smartphone className={ICON_CLASS} />,
-  'Estuches': <Shield className={ICON_CLASS} />,
-  'Fundas': <Shield className={ICON_CLASS} />,
-  'Audio': <Headphones className={ICON_CLASS} />,
-  'Audífonos': <Headphones className={ICON_CLASS} />,
-  'Cargadores': <BatteryCharging className={ICON_CLASS} />,
-  'Cables': <Cable className={ICON_CLASS} />,
-  'Repuestos': <Wrench className={ICON_CLASS} />,
-  'Wearables': <Watch className={ICON_CLASS} />,
-  'Relojes': <Watch className={ICON_CLASS} />,
-  'Laptops': <Laptop className={ICON_CLASS} />,
-  'Computadoras': <Laptop className={ICON_CLASS} />,
-  'Otros': <Package className={ICON_CLASS} />,
+const CATEGORY_EMOJI: Record<string, string> = {
+  // Nombres exactos de la maqueta
+  'Dispositivos': '📱',
+  'Estuches': '🛡️',
+  'Cargadores': '🔌',
+  'Audio': '🎧',
+  'Repuestos': '🔧',
+  'Wearables': '⌚',
+  // Variantes reales del catálogo
+  'Celulares': '📱',
+  'Teléfonos': '📱',
+  'Fundas': '🛡️',
+  'Protectores': '🛡️',
+  'Vidrios': '🛡️',
+  'Audífonos': '🎧',
+  'Parlantes': '🔊',
+  'Cables': '🔌',
+  'Baterías': '🔋',
+  'Relojes': '⌚',
+  'Laptops': '💻',
+  'Computadoras': '💻',
+  'Tablets': '📲',
+  'Accesorios': '🎒',
+  'Memorias': '💾',
+  'Gaming': '🎮',
+  'Cámaras': '📷',
+  'Otros': '📦',
+  'Otro': '📦',
 };
+
+const FALLBACK_EMOJI = '📦';
+
+/** Búsqueda tolerante: exacta, luego sin acentos/mayúsculas, luego por raíz. */
+function emojiFor(cat: string): string {
+  if (CATEGORY_EMOJI[cat]) return CATEGORY_EMOJI[cat];
+
+  const norm = (s: string) =>
+    s.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+
+  const target = norm(cat);
+  for (const [key, emoji] of Object.entries(CATEGORY_EMOJI)) {
+    const k = norm(key);
+    if (k === target || target.includes(k) || k.includes(target)) return emoji;
+  }
+  return FALLBACK_EMOJI;
+}
 
 interface FeaturedCategoriesCarouselProps {
   categories: string[];
@@ -122,10 +144,10 @@ export function FeaturedCategoriesCarousel({
               className="flex-none w-[78px] flex flex-col items-center gap-[7px] cursor-pointer group/cat"
               style={{ scrollSnapAlign: 'start' }}
             >
-              {/* Tarjeta del icono. El SVG hereda el color de este contenedor
-                  (currentColor), así que sigue al tema sin clases extra. */}
+              {/* Tarjeta del icono: 56×56, radio 14, emoji a 22px. */}
               <span
-                className={`w-14 h-14 rounded-[14px] grid place-items-center border text-[var(--accent)] transition-[transform,border-color,background-color] duration-200 ${
+                aria-hidden="true"
+                className={`w-14 h-14 rounded-[14px] grid place-items-center border text-[22px] leading-none select-none transition-[transform,border-color,background-color] duration-200 ${
                   isSelected
                     ? 'border-[var(--accent)]'
                     : 'border-[var(--border-color)] bg-[var(--bg-surface)] group-hover/cat:border-[var(--accent)] group-hover/cat:-translate-y-0.5'
@@ -139,7 +161,7 @@ export function FeaturedCategoriesCarousel({
                     : { boxShadow: 'var(--shadow-sm)' }
                 }
               >
-                {CATEGORY_ICONS[cat] || <Package className={ICON_CLASS} />}
+                {emojiFor(cat)}
               </span>
 
               <span

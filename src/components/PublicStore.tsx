@@ -1050,7 +1050,7 @@ export default function PublicStore({
                     className="w-full text-left p-4 hover:bg-[var(--bg-surface)] transition-colors flex items-center justify-between border-b border-slate-50 last:border-0"
                   >
                     <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-[var(--border-color)] rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
+                      <div className="w-10 h-10 bg-transparent border border-[var(--border-color)] rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
                         {p.imageUrl ? (
                           <img src={p.imageUrl} alt="" className="w-full h-full object-contain" />
                         ) : (
@@ -1302,7 +1302,7 @@ export default function PublicStore({
                     ) : (
                       cart.map((it, idx) => (
                         <div key={idx} className="flex gap-4 group/item">
-                          <div className="w-16 h-16 bg-[var(--bg-surface)] rounded-xl border border-[var(--border-color)] flex-shrink-0 flex items-center justify-center overflow-hidden p-1">
+                          <div className="w-16 h-16 bg-transparent rounded-xl border border-[var(--border-color)] flex-shrink-0 flex items-center justify-center overflow-hidden p-1">
                             {it.product.imageUrl ? (
                               <img src={it.product.imageUrl} alt="" className="w-full h-full object-contain group-hover/item:scale-110 transition-transform duration-300" />
                             ) : (
@@ -2294,7 +2294,7 @@ export default function PublicStore({
             id="product-detail-modal"
           >
             {/* Left side: Photo */}
-            <div className="md:w-1/2 bg-[var(--bg-surface)] flex items-center justify-center p-6 relative min-h-[220px]">
+            <div className="md:w-1/2 bg-transparent flex items-center justify-center p-6 relative min-h-[220px]">
               {selectedProductDetail.imageUrl ? (
                 <img 
                   src={selectedProductDetail.imageUrl} 
@@ -2309,7 +2309,7 @@ export default function PublicStore({
                 </div>
               )}
               {/* Category tag */}
-              <span className="absolute top-4 left-4 bg-slate-900 border border-slate-800 text-[var(--brand-gold-mid)] px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider">
+              <span className="absolute top-4 left-4 bg-[var(--gold-soft)] border border-[var(--gold-line)] text-[var(--brand-gold-dark)] px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider">
                 {selectedProductDetail.category}
               </span>
             </div>
