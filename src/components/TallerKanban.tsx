@@ -413,12 +413,92 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     }
 
     addAuditLog(activeUserEmail || 'admin', 'Taller', 'Actualizar Diagnóstico', `Diagnóstico de ticket ${selectedRepair.ticket} guardado.`);
-    
+
     // UI Update immediately for snappy feel
     if (idxRep !== -1) {
        db.repair_orders[idxRep] = newRepairData;
     }
-    
+
+    // Trazabilidad de la cadena Inventario ↔ Taller.
+    //
+    // El descuento físico ya lo hizo processRepairAtomic con la función atómica
+    // adjust_stock de Supabase (bloqueo de fila, todo o nada). Lo que faltaba
+    // era dejar constancia del consumo en "inventory_movements", que es la
+    // tabla que alimenta el historial y la trazabilidad del módulo Inventario:
+    // sin esto el stock bajaba pero no había forma de saber qué orden lo gastó.
+    //
+    // Se registra el DELTA (lo consumido de más o devuelto al editar la orden),
+    // nunca la cantidad total, para que reabrir y guardar la misma orden no
+    // vuelva a descontar.
+    if (!db.inventory_movements) db.inventory_movements = [];
+    let movimientosRegistrados = 0;
+
+    repuestosSelected.forEach((rep) => {
+      const previamenteConsumido = (originalRepair.repuestos || [])
+        .find(pr => pr.productId === rep.productId)?.quantity || 0;
+      const delta = rep.quantity - previamenteConsumido;
+      if (delta === 0) return;
+
+      const idxProd = db.products.findIndex(p => p && p.id === rep.productId);
+      if (idxProd === -1) return;
+
+      // Se refleja el nuevo stock también en la copia local para que el módulo
+      // de Inventario y el catálogo público lo vean sin esperar al Realtime.
+      const stockResultante = Math.max(0, db.products[idxProd].stock - delta);
+      db.products[idxProd].stock = stockResultante;
+      if (stockResultante <= 0) db.products[idxProd].active = false;
+
+      db.inventory_movements.unshift({
+        id: `MOV-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        productId: rep.productId,
+        productName: rep.productName,
+        quantityChange: -delta,
+        type: 'Consumo en reparación',
+        notes: `Consumido en la orden de taller ${originalRepair.ticket} (${originalRepair.device}).`,
+        timestamp: new Date().toISOString(),
+        userEmail: activeUserEmail || 'admin',
+        resultingStock: stockResultante
+      });
+      movimientosRegistrados++;
+    });
+
+    // Órdenes que devuelven repuestos al quitarlos de la selección.
+    (originalRepair.repuestos || []).forEach((prev) => {
+      const sigueAsignado = repuestosSelected.some(r => r.productId === prev.productId);
+      if (sigueAsignado) return;
+
+      const idxProd = db.products.findIndex(p => p && p.id === prev.productId);
+      if (idxProd === -1) return;
+
+      const stockResultante = db.products[idxProd].stock + prev.quantity;
+      db.products[idxProd].stock = stockResultante;
+      if (stockResultante > 0) db.products[idxProd].active = true;
+
+      db.inventory_movements.unshift({
+        id: `MOV-${Date.now()}-${Math.floor(Math.random() * 10000)}`,
+        productId: prev.productId,
+        productName: prev.productName,
+        quantityChange: prev.quantity,
+        type: 'Devolución',
+        notes: `Repuesto liberado de la orden ${originalRepair.ticket} al quitarlo del diagnóstico.`,
+        timestamp: new Date().toISOString(),
+        userEmail: activeUserEmail || 'admin',
+        resultingStock: stockResultante
+      });
+      movimientosRegistrados++;
+    });
+
+    if (movimientosRegistrados > 0) {
+      try {
+        await saveDB(db);
+      } catch (err: any) {
+        // El stock físico ya se ajustó de forma atómica en Supabase; si acá
+        // falla, lo único que se pierde es la línea del historial. Se avisa sin
+        // bloquear el guardado del diagnóstico, que sí quedó bien.
+        toast.warning('El stock se descontó correctamente, pero no se pudo registrar el movimiento en el historial de inventario: ' + (err?.message || err));
+      }
+    }
+
     loadTallerData();
 
     setSelectedRepair(null);
@@ -871,7 +951,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
       {/* DIAGNOSTIC DETAILS MODAL */}
       {selectedRepair && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 animate-in fade-in" id="repair-detail-modal">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden shadow-sm w-full max-w-xl text-[var(--text-primary)] flex flex-col">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden shadow-sm w-full max-w-xl text-[var(--text-primary)] flex flex-col max-h-[92dvh]">
             
             {/* Header */}
             <div className="p-4 bg-[var(--bg-surface)] border-b border-[var(--border-color)]/80 flex justify-between items-center">
@@ -899,7 +979,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
             </div>
 
             {/* Content Form */}
-            <form onSubmit={handleSaveDiagnosisAndCost} className="p-5 space-y-4 flex-1 overflow-y-auto max-h-[450px]">
+            <form onSubmit={handleSaveDiagnosisAndCost} className="p-5 space-y-4 flex-1 overflow-y-auto min-h-0">
               <div className="bg-[var(--bg-surface)] p-3 rounded-xl border border-[var(--border-color)]/50 text-xs space-y-1">
                 <div>Equipo: <strong className="text-[var(--text-primary)]">{selectedRepair.device}</strong></div>
                 {selectedRepair.damageCategory && (
@@ -951,10 +1031,30 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 </div>
               </div>
 
-              {/* SPARE PARTS SELECTOR FROM DOMESTIC STOCK */}
-              <div className="border-t border-[var(--border-color)]/50 pt-3 space-y-3">
-                <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] block">Repuestos Disponibles en Inventario Doméstico</span>
-                
+              {/* SPARE PARTS SELECTOR FROM DOMESTIC STOCK
+                  Esta sección se muestra SIEMPRE, incluso con el inventario
+                  vacío o todo en cero: antes se confundía con "no existe la
+                  función" cuando en realidad solo no había nada que listar.
+                  El recuadro con borde la separa del resto del formulario para
+                  que no pase desapercibida al desplazarse. */}
+              <div className="border border-[var(--border-color)]/70 rounded-xl p-3 space-y-3 bg-[var(--bg-sunken)]">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] block">
+                    Vincular Repuesto del Inventario
+                  </span>
+                  <span className="text-[9px] font-mono text-[var(--text-muted)]">
+                    {products.filter(p => p && p.active !== false).length} artículo(s) · {products.filter(p => p && p.active !== false && p.stock > 0).length} con stock
+                  </span>
+                </div>
+
+                {products.filter(p => p && p.active !== false).length === 0 && (
+                  <div className="text-[10px] leading-relaxed text-[var(--text-secondary)] border border-dashed border-[var(--border-color)] rounded-lg px-3 py-2.5">
+                    Todavía no hay artículos en el inventario. Creá el repuesto en
+                    <strong className="text-[var(--text-primary)]"> Inventario → Agregar Producto</strong> y
+                    aparecerá aquí automáticamente para vincularlo a esta orden.
+                  </div>
+                )}
+
                 <div className="flex gap-2">
                     <div className="flex-1">
                       <CustomSelect
