@@ -15,9 +15,16 @@ jobs:
         uses: actions/setup-node@v4
         with:
           node-version: 22
+          # Cachea ~/.npm entre corridas: sin esto cada deploy vuelve a
+          # descargar todas las dependencias desde cero.
+          cache: npm
 
+      # `npm ci` en vez de `npm install`: instala EXACTAMENTE las versiones
+      # fijadas en package-lock.json. `npm install` puede resolver versiones
+      # nuevas por su cuenta, así que dos deploys del mismo commit podían
+      # producir bundles distintos — justo lo que no se quiere en producción.
       - name: Install dependencies
-        run: npm install
+        run: npm ci
 
       - name: Build web app
         run: npm run build
