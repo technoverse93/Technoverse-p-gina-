@@ -158,7 +158,12 @@ export interface ClientProfile {
   name: string;
   email: string;
   phone: string;
-  province: 'San José' | 'Alajuela' | 'Cartago' | 'Heredia' | 'Guanacaste' | 'Puntarenas' | 'Limón';
+  // Opcional: desde que la entrega se coordina manualmente (sin módulo de
+  // envío), el checkout ya no pide provincia. La columna en Supabase acepta
+  // NULL, pero tiene un CHECK que rechaza cualquier texto que no sea una de
+  // estas 7 — por eso NUNCA se debe enviar '' (cadena vacía viola el CHECK,
+  // ausente/NULL no).
+  province?: 'San José' | 'Alajuela' | 'Cartago' | 'Heredia' | 'Guanacaste' | 'Puntarenas' | 'Limón';
   addressDetail: string;
   cardsTokenized: {
     last4: string;
