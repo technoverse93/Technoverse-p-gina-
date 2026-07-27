@@ -698,7 +698,11 @@ export default function PublicStore({
         name: recipientName.trim(),
         email: `${recipientName.replace(/\s+/g, '').toLowerCase()}@correo.cr`,
         phone: recipientPhone.trim(),
-        province: '' as any,
+        // Sin provincia: la entrega se coordina manualmente. `province` es
+        // opcional (ver types.ts) precisamente para no tener que forzar un
+        // valor aquí — mandar '' violaba el CHECK de client_profiles y
+        // tumbaba el guardado de la factura aunque la venta ya se hubiera
+        // procesado (FAC-0014).
         addressDetail: shippingAddress.trim(),
         cardsTokenized: paymentMethod === 'Tarjeta' ? [{ last4: cardNumber.slice(-4), brand: 'Visa' }] : [],
         balance: 0,
@@ -767,6 +771,14 @@ export default function PublicStore({
       });
       if (issueErr) throw issueErr;
 
+      // FALLO CORREGIDO: el pie de la factura nunca recibía teléfono ni
+      // dirección — esos dos campos ni siquiera se llenaban aquí, así que
+      // salían en blanco en TODAS las facturas emitidas. Se leen ahora,
+      // frescos (no desde una copia vieja de `db` capturada al montar el
+      // componente), directo de Configuración → el mismo teléfono oficial
+      // vigente que el admin tiene cargado en ese momento, nunca uno viejo.
+      const settingsActuales = getDB().settings;
+
       const invoiceData: InvoiceData = {
         id: issued.id,
         clave: issued.clave,
@@ -775,6 +787,8 @@ export default function PublicStore({
         fechaISO: new Date().toISOString(),
         emisorCedula: issued.emisorCedula,
         emisorNombre: 'Technoverse Costa Rica S.A.',
+        emisorTelefono: settingsActuales?.companyPhone || undefined,
+        emisorDireccion: settingsActuales?.companyAddress || undefined,
         customerIdentificationType: fiscalIdType,
         customerIdentification: fiscalIdValue.trim(),
         customerName: recipientName.trim(),
