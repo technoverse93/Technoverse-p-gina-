@@ -3,7 +3,7 @@ import {
   User, Product, InventoryMovement, RepairOrder, Order,
   ChatConversation, ChatMessage,
   AuditLog, ClientProfile, LogisticsDelivery, MarketingCampaign,
-  AppSettings, Banner, HistoricalSku
+  AppSettings, Banner, HistoricalSku, MarketingRequest
 } from '../types';
 
 // Toda la base de datos vive en Supabase (Postgres + Realtime). Firebase ya
@@ -25,20 +25,21 @@ interface Database {
   clients: ClientProfile[];
   deliveries: LogisticsDelivery[];
   marketing_campaigns: MarketingCampaign[];
+  marketing_requests: MarketingRequest[];
   banners: Banner[];
   settings?: AppSettings;
   historical_skus?: HistoricalSku[];
 }
 
 const DEFAULT_BANNERS: Banner[] = [{ id: 'BAN-001', title: 'Reparación desde Casa', description: 'Ahorre tiempo', type: 'Servicios', active: true }];
-const DEFAULT_SETTINGS: AppSettings = { cedulaJuridica: '', companyPhone: '', companyAddress: '', workshopAddress: '', pickupHours: '', maxStockLimit: 50 };
+const DEFAULT_SETTINGS: AppSettings = { cedulaJuridica: '', companyPhone: '', companyAddress: '', workshopAddress: '', pickupHours: '', maxStockLimit: 50, instagramWebhookUrl: '' };
 
 function getDefaultDB(): Database {
   return {
     users: [{ id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' }],
     products: [], inventory_movements: [], repair_orders: [], orders: [],
     chat_conversations: [],
-    audit_log: [], clients: [], deliveries: [], marketing_campaigns: [],
+    audit_log: [], clients: [], deliveries: [], marketing_campaigns: [], marketing_requests: [],
     banners: DEFAULT_BANNERS, settings: DEFAULT_SETTINGS, historical_skus: []
   };
 }
@@ -533,6 +534,23 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
       expiresAt: r.expires_at || undefined
     })
   }),
+  configFor<MarketingRequest>({
+    key: 'marketing_requests', table: 'marketing_requests', idKey: 'id',
+    toRow: (m) => ({
+      id: m.id, product_id: m.productId || null, product_name: m.productName || '',
+      product_sku: m.productSku || null, price: m.price || 0, caption: m.caption || null,
+      image_url: m.imageUrl || null, status: m.status, scheduled_at: m.scheduledAt,
+      error_detail: m.errorDetail || null, created_by: m.createdBy || null,
+      created_at: m.createdAt || new Date().toISOString()
+    }),
+    fromRow: (r): MarketingRequest => ({
+      id: r.id, productId: r.product_id || '', productName: r.product_name || '',
+      productSku: r.product_sku || undefined, price: Number(r.price) || 0,
+      caption: r.caption || undefined, imageUrl: r.image_url || undefined, status: r.status,
+      scheduledAt: r.scheduled_at, errorDetail: r.error_detail || undefined,
+      createdBy: r.created_by || undefined, createdAt: r.created_at
+    })
+  }),
   configFor<Banner>({
     key: 'banners', table: 'banners', idKey: 'id',
     toRow: (b) => ({
@@ -812,7 +830,7 @@ function settingsToRow(s: AppSettings) {
     cedula_juridica: s.cedulaJuridica || '', company_phone: s.companyPhone || '',
     company_address: s.companyAddress || '', workshop_address: s.workshopAddress || '',
     pickup_hours: s.pickupHours || '', max_stock_limit: s.maxStockLimit || 50,
-    store_logo: s.storeLogo || null
+    store_logo: s.storeLogo || null, instagram_webhook_url: s.instagramWebhookUrl || null
   };
 }
 
@@ -821,7 +839,7 @@ function settingsFromRow(r: any): AppSettings {
     cedulaJuridica: r.cedula_juridica || '', companyPhone: r.company_phone || '',
     companyAddress: r.company_address || '', workshopAddress: r.workshop_address || '',
     pickupHours: r.pickup_hours || '', maxStockLimit: r.max_stock_limit || 50,
-    storeLogo: r.store_logo || undefined
+    storeLogo: r.store_logo || undefined, instagramWebhookUrl: r.instagram_webhook_url || undefined
   };
 }
 
@@ -949,7 +967,7 @@ export async function saveDB(newDb: Database) {
 
   // Tablas que apuntan a "products" con clave foránea. Deben escribirse
   // DESPUÉS de que el producto exista, o Postgres rechaza la fila.
-  const DEPENDIENTES_DE_PRODUCTS = new Set(['inventory_movements', 'repair_orders', 'orders']);
+  const DEPENDIENTES_DE_PRODUCTS = new Set(['inventory_movements', 'repair_orders', 'orders', 'marketing_requests']);
 
   type Tarea = { label: string; key?: keyof Database; run: () => Promise<void> };
   const fasePadres: Tarea[] = [];
