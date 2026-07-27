@@ -496,7 +496,13 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
     key: 'clients', table: 'client_profiles', idKey: 'id',
     toRow: (c) => ({
       id: c.id, profile_id: (c as any).profileId || null, name: c.name || '', email: c.email || '',
-      phone: c.phone || '', province: c.province, address_detail: c.addressDetail || '',
+      // FALLO CORREGIDO: esto mandaba `c.province` tal cual, así que un
+      // checkout sin provincia (el módulo de envío se quitó) enviaba ''.
+      // client_profiles_province_check rechaza '' — solo acepta una de las 7
+      // provincias o NULL — y la venta quedaba con el stock ya descontado
+      // pero sin factura guardada. `|| null` convierte '' / undefined en
+      // NULL, que el CHECK sí permite.
+      phone: c.phone || '', province: c.province || null, address_detail: c.addressDetail || '',
       cards_tokenized: c.cardsTokenized || [],
       balance: c.balance || 0, notes: c.notes || '', pickup_in_person: c.pickupInPerson || false
     }),
