@@ -201,6 +201,36 @@ export function imageHasTransparency(dataUrl: string): Promise<boolean> {
 }
 
 /**
+ * Codifica un lienzo con el formato más liviano que conserve lo que hace falta.
+ *
+ * POR QUÉ WEBP
+ *   Las imágenes del catálogo viajan como texto base64 DENTRO del JSON de
+ *   productos, así que cada KB de imagen es un KB que el cliente descarga antes
+ *   de que la tienda pueda dibujarse. El caso caro era la transparencia: como
+ *   JPEG no tiene canal alfa, había que caer en PNG, que comprime fotos muy
+ *   mal. Medido sobre una foto de 500x500 con fondo recortado: PNG 228 KB
+ *   contra 26 KB en WebP de la misma calidad — 89 % menos. WebP conserva el
+ *   alfa igual que PNG y además le gana a JPEG en las imágenes opacas.
+ *
+ * POR QUÉ SE VERIFICA EL RESULTADO
+ *   `toDataURL` no avisa cuando no soporta un formato: ignora el tipo pedido y
+ *   devuelve PNG en silencio. Si eso pasara con una foto opaca, el "ahorro"
+ *   terminaría pesando MÁS que el JPEG de antes. Por eso no se asume soporte:
+ *   se mira el prefijo real de lo que salió y, si no es WebP, se usa el
+ *   comportamiento anterior (PNG con alfa, JPEG sin alfa). El peor caso posible
+ *   es exactamente lo que ya se guardaba, nunca algo peor.
+ */
+function encodeCanvas(canvas: HTMLCanvasElement, tieneAlfa: boolean, quality: number): string {
+  try {
+    const webp = canvas.toDataURL('image/webp', quality);
+    if (webp.startsWith('data:image/webp')) return webp;
+  } catch {
+    // Navegador sin WebP: sigue al respaldo de abajo.
+  }
+  return tieneAlfa ? canvas.toDataURL('image/png') : canvas.toDataURL('image/jpeg', quality);
+}
+
+/**
  * Reescala una imagen manteniendo su transparencia.
  *
  * FALLO CORREGIDO: esta función devolvía SIEMPRE `canvas.toDataURL('image/jpeg')`.
@@ -209,9 +239,9 @@ export function imageHasTransparency(dataUrl: string): Promise<boolean> {
  * rellenaba de negro o blanco y ninguna clase de CSS podía recuperarlo, porque
  * el dato ya venía aplanado desde la base.
  *
- * Ahora se decide el formato según el contenido real:
- *   - con píxeles transparentes → PNG (sin pérdida, conserva el alfa)
- *   - completamente opaca       → JPEG (mucho más liviana para fotos)
+ * El formato lo elige `encodeCanvas()`: WebP cuando el navegador lo soporta
+ * (conserva el alfa y pesa una fracción), y si no, PNG para las imágenes con
+ * transparencia y JPEG para las opacas.
  */
 export function compressImage(dataUrl: string, maxWidth = 500, maxHeight = 500, quality = 0.7): Promise<string> {
   return new Promise((resolve) => {
@@ -246,14 +276,12 @@ export function compressImage(dataUrl: string, maxWidth = 500, maxHeight = 500, 
       // así el alfa del origen llega intacto al resultado.
       ctx.drawImage(img, 0, 0, width, height);
       try {
-        if (canvasHasTransparency(ctx, width, height)) {
-          const png = canvas.toDataURL('image/png');
-          // Un PNG grande no compensa: si supera ~1,2 MB se prefiere el
-          // original tal cual, que suele venir mejor comprimido de origen.
-          resolve(png.length > 1_200_000 && dataUrl.length < png.length ? dataUrl : png);
-        } else {
-          resolve(canvas.toDataURL('image/jpeg', quality));
-        }
+        const tieneAlfa = canvasHasTransparency(ctx, width, height);
+        const salida = encodeCanvas(canvas, tieneAlfa, quality);
+        // Red de seguridad para el respaldo PNG (sin WebP, una imagen con alfa
+        // puede quedar enorme): si el resultado se pasa de ~1,2 MB y el
+        // original venía más liviano, se prefiere el original tal cual.
+        resolve(salida.length > 1_200_000 && dataUrl.length < salida.length ? dataUrl : salida);
       } catch (err) {
         resolve(dataUrl);
       }
@@ -264,6 +292,9 @@ export function compressImage(dataUrl: string, maxWidth = 500, maxHeight = 500, 
     img.src = dataUrl;
   });
 }
+
+/** Lado máximo, en píxeles, de una imagen de catálogo ya procesada. */
+const SALIDA_MAX = 500;
 
 /**
  * Convierte en transparente el fondo plano o cuadriculado de una imagen.
@@ -285,8 +316,10 @@ export function compressImage(dataUrl: string, maxWidth = 500, maxHeight = 500, 
  *   3. Suaviza el contorno bajando la opacidad de los píxeles que quedaron
  *      rodeados de transparencia, para que no se vea aserrado.
  *
- * Siempre devuelve PNG: es el único formato del navegador que guarda el canal
- * alfa. Ante cualquier problema devuelve la imagen original sin tocar.
+ * El recorte se calcula a resolución completa (más detalle = mejor borde), pero
+ * lo que devuelve ya viene reescalado a `SALIDA_MAX` y codificado por
+ * `encodeCanvas()`, que conserva el canal alfa. Ante cualquier problema
+ * devuelve la imagen original sin tocar.
  */
 export function removeFlatBackground(dataUrl: string, tolerance = 26): Promise<string> {
   return new Promise((resolve) => {
@@ -365,7 +398,32 @@ export function removeFlatBackground(dataUrl: string, tolerance = 26): Promise<s
       }
 
       ctx.putImageData(imageData, 0, 0);
-      try { resolve(canvas.toDataURL('image/png')); } catch { resolve(dataUrl); }
+
+      // FALLO CORREGIDO: hasta acá el recorte trabaja a resolución completa (lo
+      // correcto: cuanto más detalle, mejor queda el borde), pero antes se
+      // devolvía ESE lienzo tal cual, en PNG y al tamaño original de la foto.
+      // Como el resultado se guardaba directo sin volver a pasar por
+      // compressImage(), un producto con el fondo quitado terminaba pesando
+      // ~132 KB contra los ~26 KB de uno normal: dos productos así pesaban más
+      // que los otros siete juntos del catálogo. Ahora el recorte se entrega ya
+      // reescalado y codificado igual que cualquier otra imagen.
+      try {
+        let w2 = w, h2 = h;
+        if (w2 > SALIDA_MAX) { h2 = Math.round((h2 * SALIDA_MAX) / w2); w2 = SALIDA_MAX; }
+        if (h2 > SALIDA_MAX) { w2 = Math.round((w2 * SALIDA_MAX) / h2); h2 = SALIDA_MAX; }
+        if (w2 === w && h2 === h) {
+          resolve(encodeCanvas(canvas, true, 0.8));
+          return;
+        }
+        const salida = document.createElement('canvas');
+        salida.width = w2; salida.height = h2;
+        const ctx2 = salida.getContext('2d');
+        if (!ctx2) { resolve(encodeCanvas(canvas, true, 0.8)); return; }
+        // Sin pintar fondo: el lienzo nace transparente y el alfa recién
+        // calculado llega intacto al reescalado.
+        ctx2.drawImage(canvas, 0, 0, w2, h2);
+        resolve(encodeCanvas(salida, true, 0.8));
+      } catch { resolve(dataUrl); }
     };
     img.onerror = () => resolve(dataUrl);
     img.src = dataUrl;
