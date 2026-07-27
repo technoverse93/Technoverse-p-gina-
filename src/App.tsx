@@ -1,9 +1,23 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, Suspense, lazy } from 'react';
 import PublicStore from './components/PublicStore';
-import AdminPanel from './components/AdminPanel';
 import { User } from './types';
 import { initKeyboard } from './mobile/keyboard';
 import { OverlayProvider, useToast } from './components/ui/Overlays';
+
+// AdminPanel carga recharts, motion y toda la lógica de taller/inventario/CRM:
+// era el bloque más pesado del bundle principal (>300 KB gzip) y se estaba
+// descargando SIEMPRE, incluso para un cliente que solo entra a comprar en
+// 4G. Como el catálogo público es la ruta que más tráfico recibe, separarlo
+// aquí es la optimización de mayor impacto: nadie fuera de /admin lo paga.
+const AdminPanel = lazy(() => import('./components/AdminPanel'));
+
+function AdminPanelFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-base,#0F1217)]">
+      <div className="w-8 h-8 rounded-full border-2 border-current border-t-transparent animate-spin opacity-60" />
+    </div>
+  );
+}
 
 /**
  * App envuelve toda la aplicación en <OverlayProvider> para que cualquier
@@ -129,20 +143,22 @@ function AppInner() {
           toggleTheme={toggleTheme}
         />
       ) : (
-        <AdminPanel
-          onNavigateToStore={() => {
-            window.history.pushState(null, "", "/");
-            setCurrentView("store");
-            triggerRefresh();
-          }}
-          onRefreshTrigger={triggerRefresh}
-          currentUser={currentUser}
-          isAuthenticated={isAuthenticated}
-          onLogin={handleLogin}
-          onLogout={handleLogout}
-          theme={theme}
-          toggleTheme={toggleTheme}
-        />
+        <Suspense fallback={<AdminPanelFallback />}>
+          <AdminPanel
+            onNavigateToStore={() => {
+              window.history.pushState(null, "", "/");
+              setCurrentView("store");
+              triggerRefresh();
+            }}
+            onRefreshTrigger={triggerRefresh}
+            currentUser={currentUser}
+            isAuthenticated={isAuthenticated}
+            onLogin={handleLogin}
+            onLogout={handleLogout}
+            theme={theme}
+            toggleTheme={toggleTheme}
+          />
+        </Suspense>
       )}
     </div>
   );

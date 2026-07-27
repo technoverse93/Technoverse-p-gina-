@@ -455,15 +455,19 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 
    La imagen NO se toca: nada de invertir colores ni de rellenar el fondo, que
    arruinaría la transparencia y falsearía el color real del artículo. El
-   contraste se construye DETRÁS y ALREDEDOR del producto, en tres capas:
+   contraste se construye DETRÁS y ALREDEDOR del producto, con la misma lógica
+   de una foto de producto real (softbox cenital + sombra de contacto), no con
+   un foco circular centrado — ESA era la versión anterior y se veía forzada,
+   como un recorte de sticker con un aro blanco parejo en todo el contorno.
 
      1. Placa neutra elevada — un gris apenas más claro que la superficie de la
         tarjeta, para que la silueta negra caiga sobre algo y no sobre el vacío.
-     2. Foco radial suave — luz tenue centrada donde se apoya el producto; imita
-        la iluminación de una vitrina y despega el objeto del plano.
-     3. Halo de contorno — drop-shadow blanco de 1px. Como el filtro respeta el
-        canal alfa, dibuja el borde EXACTO del producto, no un rectángulo. Es lo
-        que hace legible un audífono negro sobre gris oscuro.
+     2. Luz ambiental asimétrica — más intensa arriba (como si la luz cayera
+        desde afuera del encuadre) y una sombra de contacto tenue abajo, en vez
+        de un halo circular perfectamente centrado.
+     3. Borde casi imperceptible — drop-shadow blanco de 1px SIN desenfoque y
+        con muy poca opacidad: alcanza para separar un producto negro del
+        fondo oscuro sin leerse como un contorno dibujado.
 
    En modo claro no se aplica ninguna de las tres: ahí el fondo es blanco y un
    producto negro ya tiene todo el contraste que necesita. */
@@ -488,27 +492,25 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   inset: 0;
   z-index: 0;
   pointer-events: none;
-  background: radial-gradient(
-    circle at 50% 44%,
-    rgba(255, 255, 255, 0.13) 0%,
-    rgba(255, 255, 255, 0.05) 42%,
-    rgba(255, 255, 255, 0) 70%
-  );
+  background:
+    radial-gradient(ellipse 85% 55% at 50% 6%, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 68%),
+    radial-gradient(ellipse 65% 32% at 50% 100%, rgba(0, 0, 0, 0.30) 0%, rgba(0, 0, 0, 0) 72%);
 }
 
 .dark .product-media img {
   filter:
-    drop-shadow(0 0 1px rgba(255, 255, 255, 0.42))
-    drop-shadow(0 2px 5px rgba(0, 0, 0, 0.55));
+    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.11))
+    drop-shadow(0 10px 18px rgba(0, 0, 0, 0.38));
 }
 
 /* Miniaturas donde el propio <img> es el contenedor y no admite ::before:
-   solo placa elevada + halo de contorno, sin foco radial. */
+   solo placa elevada + borde sutil, sin luz ambiental (no hay espacio para
+   que se note el degradado en un recuadro de 40-64px). */
 .product-thumb { background-color: transparent; }
 
 .dark .product-thumb {
   background-color: var(--bg-elevated);
-  filter: drop-shadow(0 0 1px rgba(255, 255, 255, 0.42));
+  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.11));
 }
 
 @media (prefers-reduced-motion: reduce) {

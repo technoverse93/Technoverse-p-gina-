@@ -224,6 +224,36 @@ export interface AppSettings {
   pickupHours: string;
   maxStockLimit: number;
   storeLogo?: string;
+  // URL del "Catch Hook" de Zapier (Webhook -> Instagram Publish Photo).
+  // Se configura una sola vez; de ahí en adelante el cron de Supabase la usa
+  // para publicar solo las piezas programadas, sin intervención manual.
+  instagramWebhookUrl?: string;
+}
+
+/**
+ * Solicitud de publicación promocional en Instagram, creada desde el
+ * formulario de "Agregar Producto" en Inventario.
+ *
+ * La GENERACIÓN de la imagen (vía Canva) todavía requiere criterio humano —
+ * hoy la hace el equipo desde el chat con Claude, porque Canva no tiene una
+ * API que este backend pueda invocar solo. Lo que SÍ corre sin intervención
+ * es la PUBLICACIÓN: una vez que `imageUrl` está lleno, el cron de Supabase
+ * dispara la publicación exactamente en `scheduledAt`, sin que nadie tenga
+ * que hacer clic en ese momento.
+ */
+export interface MarketingRequest {
+  id: string;
+  productId: string;
+  productName: string;
+  productSku?: string;
+  price: number;
+  caption?: string;
+  imageUrl?: string;
+  status: 'pendiente_imagen' | 'programado' | 'publicado' | 'error';
+  scheduledAt: string;
+  errorDetail?: string;
+  createdBy?: string;
+  createdAt: string;
 }
 
 export interface HistoricalSku {
