@@ -1,3 +1,25 @@
+# Cabeceras servidas por Cloudflare para todo el sitio.
+# ---------------------------------------------------------------------------
+# Los assets de /assets/* llevan hash en el nombre (index-a1b2c3.js), así que
+# nunca cambian de contenido bajo el mismo nombre: se pueden cachear para
+# siempre. index.html en cambio NO debe cachearse — es el que apunta a los
+# hashes nuevos después de cada deploy; si el navegador se queda con uno viejo
+# pide archivos que ya no existen (el error "Failed to fetch dynamically
+# imported module" que ya se maneja también en src/main.tsx).
+
+/*
+  # Impide que el navegador "adivine" el tipo de un archivo e interprete como
+  # script algo que se sirvió como imagen o texto.
+  X-Content-Type-Options: nosniff
+  # No permite que el sitio se incruste en un <iframe> de otro dominio
+  # (defensa contra clickjacking sobre el panel de administración).
+  X-Frame-Options: DENY
+  # Al salir hacia otro sitio solo se envía el dominio, nunca la ruta completa
+  # (evita filtrar URLs internas del panel en la cabecera Referer).
+  Referrer-Policy: strict-origin-when-cross-origin
+  # La app no usa cámara, micrófono ni geolocalización: se apagan de raíz.
+  Permissions-Policy: camera=(), microphone=(), geolocation=()
+
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
 
