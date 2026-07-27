@@ -173,57 +173,63 @@ export async function fetchLogoDataUrl(): Promise<string | null> {
   }
 }
 
+// Nombre con el que se registra la fuente incrustada dentro del documento.
+const FONT = 'WorkSans';
+
 /**
- * Dibuja un monto en colones con el símbolo ₡ construido VECTORIALMENTE (una
- * "C" con un trazo diagonal). Es necesario porque los 14 fuentes estándar de
- * PDF (Helvetica/Times/Courier con WinAnsiEncoding) no tienen el glifo del
- * colón costarricense (U+20A1): jsPDF lo termina mapeando al byte 0xA1 de
- * WinAnsi, que es "¡" — así el comprobante mostraba "¡12.345" en vez de
- * "₡12.345". La alternativa real (embeber una fuente Unicode completa) agrega
- * cientos de KB al bundle solo por un símbolo; dibujarlo a mano cuesta cero
- * bytes y es fiel en cualquier lector de PDF.
+ * Registra Work Sans (recortada, ver src/utils/invoiceFont.ts) dentro del
+ * documento y la deja activa.
  *
- * FALLO CORREGIDO: la versión anterior dibujaba la "C" con DOS barras
- * HORIZONTALES — esa es la construcción del signo de EURO (€), no la del
- * colón. El glifo real de ₡ es una "C" con UN solo trazo DIAGONAL que la
- * atraviesa (la misma familia de "letra + trazo" que ¢ o ₱, no la de € o ₩).
- * Lo confirmé renderizando el carácter Unicode real (₡) con una fuente
- * completa y comparándolo lado a lado con € — por eso el comprobante se veía
- * con "moneda incorrecta" aunque el texto decía "colones".
+ * Esta es la corrección DEFINITIVA del problema de tipografía/codificación:
+ * con una fuente Unicode real incrustada, el símbolo ₡ y todos los acentos
+ * del español se escriben como TEXTO normal — seleccionable, copiable y
+ * buscable en cualquier lector de PDF. Antes se dibujaban con líneas
+ * vectoriales, lo que producía un glifo que no correspondía al colón y dejaba
+ * los montos como dibujo en vez de texto.
+ *
+ * La fuente se importa de forma dinámica junto a jsPDF, así que sus 20 KB solo
+ * viajan cuando se genera un comprobante — nunca en la carga de la tienda.
+ */
+async function registerFont(doc: any): Promise<void> {
+  const { WORK_SANS_REGULAR_B64, WORK_SANS_BOLD_B64 } = await import('./invoiceFont');
+  doc.addFileToVFS('WorkSans-Regular.ttf', WORK_SANS_REGULAR_B64);
+  doc.addFont('WorkSans-Regular.ttf', FONT, 'normal');
+  doc.addFileToVFS('WorkSans-Bold.ttf', WORK_SANS_BOLD_B64);
+  doc.addFont('WorkSans-Bold.ttf', FONT, 'bold');
+  doc.setFont(FONT, 'normal');
+}
+
+/**
+ * Formatea un monto con el formato monetario ESTRICTO de Costa Rica:
+ *   - separador de MILES  = punto      (₡1.234.567,89)
+ *   - separador DECIMAL   = coma
+ *   - siempre 2 decimales (exigido por Hacienda por línea y en totales)
+ *
+ * No se usa `toLocaleString('es-CR')` a secas porque su resultado depende del
+ * motor de Intl del dispositivo: en algunos Android el locale es-CR no está
+ * instalado y cae a en-US, invirtiendo los separadores (₡1,234,567.89). En un
+ * documento fiscal eso no es aceptable, así que el formato se construye a mano
+ * y queda idéntico en web, APK y en el PDF.
+ */
+export function formatCRC(amount: number): string {
+  const negativo = amount < 0;
+  const fixed = Math.abs(amount).toFixed(2);
+  const [entero, decimales] = fixed.split('.');
+  const conMiles = entero.replace(/\B(?=(\d{3})+(?!\d))/g, '.');
+  return `${negativo ? '-' : ''}₡${conMiles},${decimales}`;
+}
+
+/**
+ * Escribe un monto en colones como texto real de la fuente incrustada.
+ * Devuelve el ancho ocupado, por compatibilidad con los llamados existentes.
  */
 function drawColones(doc: any, amount: number, x: number, y: number, opts: { align?: 'left' | 'right'; color?: [number, number, number] } = {}): number {
-  const align = opts.align || 'left';
-  const text = amount.toLocaleString('es-CR', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  const fontSize = doc.getFontSize();
-  const scale = doc.internal.scaleFactor;
-  const unit = fontSize / scale; // "em" en unidades del documento (mm)
-  const cWidth = (doc.getStringUnitWidth('C') * fontSize) / scale;
-  const gap = unit * 0.12;
-  const numWidth = (doc.getStringUnitWidth(text) * fontSize) / scale;
-  const totalWidth = cWidth + gap + numWidth;
-  const startX = align === 'right' ? x - totalWidth : x;
-
-  doc.text('C', startX, y);
-
-  // Trazo diagonal único, de esquina inferior-izquierda a superior-derecha,
-  // sobresaliendo un poco de la "C" en ambos extremos — así se ve como el
-  // glifo real en vez de una simple línea recortada dentro de la letra.
-  const capHeight = unit * 0.62;
-  const protrude = cWidth * 0.12;
-  const x1 = startX - protrude;
-  const x2 = startX + cWidth + protrude;
-  const y1 = y + unit * 0.08;
-  const y2 = y - capHeight - unit * 0.08;
-
-  const prevLineWidth = doc.getLineWidth();
-  if (opts.color) doc.setDrawColor(opts.color[0], opts.color[1], opts.color[2]);
-  doc.setLineWidth(Math.max(unit * 0.06, 0.14));
-  doc.line(x1, y1, x2, y2);
-  doc.setLineWidth(prevLineWidth);
-  if (opts.color) doc.setDrawColor(0, 0, 0);
-
-  doc.text(text, startX + cWidth + gap, y);
-  return totalWidth;
+  const text = formatCRC(amount);
+  const prev = doc.getTextColor?.();
+  if (opts.color) doc.setTextColor(opts.color[0], opts.color[1], opts.color[2]);
+  doc.text(text, x, y, { align: opts.align || 'left' });
+  if (opts.color && prev) doc.setTextColor(prev);
+  return (doc.getStringUnitWidth(text) * doc.getFontSize()) / doc.internal.scaleFactor;
 }
 
 interface PreparedInvoice {
@@ -263,7 +269,7 @@ const PANEL: [number, number, number] = [247, 248, 250];
  */
 function drawChip(doc: any, text: string, x: number, y: number, opts: { align?: 'left' | 'right'; fill: [number, number, number]; textColor: [number, number, number]; fontSize?: number } ) {
   const fontSize = opts.fontSize || 7;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(FONT, 'bold');
   doc.setFontSize(fontSize);
   const scale = doc.internal.scaleFactor;
   const unit = fontSize / scale; // 1 em, en mm
@@ -293,6 +299,10 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
   const { qrText, qrDataUrl, logoDataUrl, docTitle } = await prepareInvoice(data);
 
   const doc = new jsPDF({ unit: 'mm', format: 'a4' });
+  // Debe ir ANTES de cualquier doc.text(): registra la fuente Unicode y la
+  // deja activa, para que ₡ y los acentos salgan como texto real.
+  await registerFont(doc);
+
   const pageWidth = doc.internal.pageSize.getWidth();
   const marginX = 16;
   let y = 0;
@@ -311,24 +321,24 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
   }
   const textX = logoDataUrl ? marginX + 18 : marginX;
   doc.setTextColor(255, 255, 255);
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(FONT, 'bold');
   doc.setFontSize(13);
   doc.text(data.emisorNombre, textX, 15);
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(FONT, 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(255, 235, 225);
   doc.text(`Cédula Jurídica ${data.emisorCedula}`, textX, 20.5);
   if (data.emisorTelefono) doc.text(data.emisorTelefono, textX, 24.5);
 
   drawChip(doc, docTitle, pageWidth - marginX, 8, { align: 'right', fill: [255, 255, 255], textColor: BRAND, fontSize: 8 });
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(FONT, 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(255, 235, 225);
   doc.text(`Consecutivo: ${data.consecutivo}`, pageWidth - marginX, 18.5, { align: 'right' });
   doc.text(new Date(data.fechaISO).toLocaleString('es-CR'), pageWidth - marginX, 22.5, { align: 'right' });
 
   y = bandH + 6;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(FONT, 'normal');
   doc.setFontSize(6);
   doc.setTextColor(...INK_SOFT);
   doc.text(`Clave: ${data.clave}`, marginX, y);
@@ -343,17 +353,17 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
 
   const padIn = 5;
   let ry = y + 6;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(FONT, 'bold');
   doc.setFontSize(6.5);
   doc.setTextColor(...INK_SOFT);
   doc.text('FACTURADO A', marginX + padIn, ry);
   ry += 4.2;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(FONT, 'bold');
   doc.setFontSize(9);
   doc.setTextColor(...INK);
   doc.text(data.customerName, marginX + padIn, ry);
   ry += 4.4;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(FONT, 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(...INK_SOFT);
   doc.text(`${IDENTIFICACION_LABELS[data.customerIdentificationType]}: ${data.customerIdentification || 'N/A'}`, marginX + padIn, ry);
@@ -364,7 +374,7 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
   y += panelH + 7;
 
   // ------------------------------------------------------------- Tabla ---
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(FONT, 'bold');
   doc.setFontSize(8);
   doc.setTextColor(...INK);
   doc.text('Detalle de la compra', marginX, y);
@@ -387,7 +397,7 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
   doc.setDrawColor(...LINE);
   doc.roundedRect(marginX, qrY, qrSize + 6, qrSize + 6, 2, 2, 'D');
   doc.addImage(qrDataUrl, 'PNG', marginX + 3, qrY + 3, qrSize, qrSize, undefined, 'FAST');
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(FONT, 'normal');
   doc.setFontSize(5.6);
   doc.setTextColor(...INK_SOFT);
   const disclaimer = doc.splitTextToSize(
@@ -404,7 +414,7 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
   doc.roundedRect(boxX, qrY, boxW, boxH, 2, 2, 'FD');
   const padBox = 6;
   let ty = qrY + 8;
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(FONT, 'normal');
   doc.setFontSize(8);
   doc.setTextColor(...INK_SOFT);
   doc.text('Subtotal', boxX + padBox, ty);
@@ -416,7 +426,7 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
   doc.setDrawColor(...LINE);
   doc.line(boxX + padBox, ty, boxX + boxW - padBox, ty);
   ty += 6.5;
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(FONT, 'bold');
   doc.setFontSize(8.5);
   doc.setTextColor(...INK);
   doc.text('TOTAL', boxX + padBox, ty);
@@ -429,12 +439,12 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
   doc.setLineWidth(0.6);
   doc.line(marginX, footerY, pageWidth - marginX, footerY);
 
-  doc.setFont('helvetica', 'bold');
+  doc.setFont(FONT, 'bold');
   doc.setFontSize(9.5);
   doc.setTextColor(...INK);
   doc.text('¡Gracias por su compra en Technoverse Costa Rica!', pageWidth / 2, footerY + 7, { align: 'center' });
 
-  doc.setFont('helvetica', 'normal');
+  doc.setFont(FONT, 'normal');
   doc.setFontSize(6.8);
   doc.setTextColor(...INK_SOFT);
   const contactBits = [data.emisorTelefono, data.emisorDireccion].filter(Boolean).join('  ·  ');
@@ -475,7 +485,7 @@ function renderItemsTable(
   const pageWidth = doc.internal.pageSize.getWidth();
   const marginX = style.compact ? 16 : 14;
   const usableW = pageWidth - marginX * 2;
-  const font = style.fontFamily || 'helvetica';
+  const font = style.fontFamily || FONT;
   let y = startY;
 
   // Anchos de columna (mm). "Garantía" solo aparece si algún ítem la trae.
