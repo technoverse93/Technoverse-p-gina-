@@ -1,12 +1,12 @@
 import React, { useState, useEffect, useMemo } from 'react';
-import { Product, InventoryMovement } from '../types';
+import { Product, InventoryMovement, MarketingRequest } from '../types';
 import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
 import { 
   Package, Plus, Edit, Trash2, Search, Filter, History, MapPin, 
   Box, FileText, AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronRight, X, Image as ImageIcon, Save, Download,
-  Upload, Check, AlertCircle, Sparkles
+  Upload, Check, AlertCircle, Sparkles, Send
 } from 'lucide-react';
 
 // CAABYS genérico ("Otros servicios n.c.p."), respaldo mientras se clasifica
@@ -81,6 +81,8 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   // Database
   const [products, setProducts] = useState<Product[]>([]);
   const [movements, setMovements] = useState<InventoryMovement[]>([]);
+  const [marketingRequests, setMarketingRequests] = useState<MarketingRequest[]>([]);
+  const [igImageDraft, setIgImageDraft] = useState<Record<string, string>>({});
 
   // Product Form State
   const [showProductForm, setShowProductForm] = useState(false);
@@ -97,6 +99,12 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   const [prodImage, setProdImage] = useState('');
   const [prodApplyDiscount, setProdApplyDiscount] = useState(false);
   const [prodDiscount, setProdDiscount] = useState<number | ''>('');
+
+  // Publicación promocional en Instagram al guardar el producto.
+  const [prodCreateIgPost, setProdCreateIgPost] = useState(false);
+  const [igScheduleMode, setIgScheduleMode] = useState<'manana' | 'tarde' | 'personalizado'>('manana');
+  const [igScheduleDate, setIgScheduleDate] = useState('');
+  const [igScheduleTime, setIgScheduleTime] = useState('');
   const [prodDoubleStock, setProdDoubleStock] = useState(false);
   const [prodInternalStock, setProdInternalStock] = useState<number | ''>('');
   const [prodClientStock, setProdClientStock] = useState<number | ''>('');
@@ -181,7 +189,22 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     const db = getDB();
     setProducts(db.products || []);
     setMovements(db.inventory_movements || []);
+    setMarketingRequests(db.marketing_requests || []);
   };
+
+  /** "Mañana"/"Tarde" son horarios fijos (9 a.m. / 3 p.m.) del día siguiente;
+   *  si esa hora ya pasó hoy, igual apunta a mañana para no programar en el
+   *  pasado. "Personalizado" usa la fecha/hora exactas que eligió el admin. */
+  function calcularFechaProgramada(modo: 'manana' | 'tarde' | 'personalizado', fecha: string, hora: string): string {
+    if (modo === 'personalizado' && fecha) {
+      const d = new Date(`${fecha}T${hora || '09:00'}:00`);
+      if (!isNaN(d.getTime())) return d.toISOString();
+    }
+    const base = new Date();
+    base.setDate(base.getDate() + 1);
+    base.setHours(modo === 'tarde' ? 15 : 9, 0, 0, 0);
+    return base.toISOString();
+  }
 
   useEffect(() => {
     loadData();
@@ -811,6 +834,9 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       }
       let isNew = !editingProductId;
       const locationValue = prodLocation.trim() || 'Estudio';
+      // Referencia al producto guardado (edición o creación), para poder
+      // encolar la solicitud de Instagram con su id/nombre/precio reales.
+      let savedProduct: Product | null = null;
 
       const finalPrice = Number(prodPrice) || 0;
       const finalCost = Number(prodCost) || 0;
@@ -872,6 +898,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
           
           upsertHistoricalSku(db, db.products[idx]);
           addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Editar Producto', `Producto modificado: ${prodName} (SKU: ${prodSku})`, db);
+          savedProduct = db.products[idx];
         }
       } else {
         const newSku = prodSku.trim() || `${prodCategory.substring(0, 3).toUpperCase()}-${Math.floor(1000 + Math.random() * 9000)}`;
@@ -968,6 +995,26 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             }));
           }
         }
+        savedProduct = newProduct;
+      }
+
+      // Solicitud de publicación en Instagram: se encola con el producto ya
+      // guardado, para que quede con su id/nombre/precio reales.
+      if (prodCreateIgPost && savedProduct) {
+        if (!db.marketing_requests) db.marketing_requests = [];
+        const scheduledAt = calcularFechaProgramada(igScheduleMode, igScheduleDate, igScheduleTime);
+        const prodRef = savedProduct as Product;
+        db.marketing_requests.unshift({
+          id: `MKT-${Date.now()}`,
+          productId: prodRef.id,
+          productName: prodRef.name,
+          productSku: prodRef.sku,
+          price: prodRef.price,
+          status: 'pendiente_imagen',
+          scheduledAt,
+          createdBy: currentUser?.email || 'technoverse.admin@gmail.com',
+          createdAt: new Date().toISOString()
+        });
       }
 
       await saveDB(db);
@@ -975,6 +1022,10 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       onDataChanged();
       setShowProductForm(false);
       setFormError(null);
+      setProdCreateIgPost(false);
+      setIgScheduleMode('manana');
+      setIgScheduleDate('');
+      setIgScheduleTime('');
     } catch (error: any) {
       console.error(error);
       setFormError(`Error al guardar en la base de datos: ${error.message || error}`);
@@ -1173,6 +1224,94 @@ if (!m) return null;
         </div>
       </div>
 
+      {(activeSubTab === 'productos' || activeSubTab === 'repuestos') && marketingRequests.length > 0 && (
+        <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h4 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <Send className="w-3.5 h-3.5 text-[var(--accent)]" /> Publicaciones de Instagram
+            </h4>
+            <span className="text-[10px] font-mono text-[var(--text-muted)]">{marketingRequests.length} solicitud(es)</span>
+          </div>
+
+          <div className="space-y-2">
+            {marketingRequests.map(req => {
+              const badge: Record<MarketingRequest['status'], { label: string; cls: string }> = {
+                pendiente_imagen: { label: 'Falta imagen', cls: 'bg-amber-500/15 text-amber-500 border-amber-500/30' },
+                programado: { label: 'Programado', cls: 'bg-[var(--gold-soft)] text-[var(--brand-gold-dark)] border-[var(--gold-line)]' },
+                publicado: { label: 'Publicado', cls: 'bg-[var(--ok-soft)] text-[var(--ok)] border-transparent' },
+                error: { label: 'Error al publicar', cls: 'bg-rose-500/15 text-rose-500 border-rose-500/30' },
+              };
+              const b = badge[req.status];
+              const fecha = new Date(req.scheduledAt).toLocaleString('es-CR', { dateStyle: 'medium', timeStyle: 'short' });
+
+              return (
+                <div key={req.id} className="border border-[var(--border-color)]/60 rounded-lg p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="min-w-0">
+                      <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{req.productName}</p>
+                      <p className="text-[10px] font-mono text-[var(--text-muted)]">₡{req.price.toLocaleString()} · Programado para {fecha}</p>
+                    </div>
+                    <div className="flex items-center gap-2 flex-shrink-0">
+                      <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${b.cls}`}>{b.label}</span>
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          const db = getDB();
+                          db.marketing_requests = (db.marketing_requests || []).filter(r => r.id !== req.id);
+                          try { await saveDB(db); loadData(); } catch (err: any) { toast.error('No se pudo quitar: ' + (err?.message || err)); }
+                        }}
+                        className="text-[var(--text-muted)] hover:text-rose-500 transition"
+                        title="Quitar de la cola"
+                      >
+                        <X className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+
+                  {req.status === 'pendiente_imagen' && (
+                    <div className="flex gap-2">
+                      <input
+                        type="url"
+                        placeholder="Pegar URL pública de la imagen ya generada…"
+                        value={igImageDraft[req.id] || ''}
+                        onChange={e => setIgImageDraft(prev => ({ ...prev, [req.id]: e.target.value }))}
+                        className="flex-1 bg-[var(--bg-sunken)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-primary)]"
+                      />
+                      <button
+                        type="button"
+                        disabled={!igImageDraft[req.id]?.trim()}
+                        onClick={async () => {
+                          const url = (igImageDraft[req.id] || '').trim();
+                          if (!url) return;
+                          const db = getDB();
+                          const idx = (db.marketing_requests || []).findIndex(r => r.id === req.id);
+                          if (idx === -1) return;
+                          db.marketing_requests[idx] = { ...db.marketing_requests[idx], imageUrl: url, status: 'programado' };
+                          try {
+                            await saveDB(db);
+                            loadData();
+                            setIgImageDraft(prev => { const n = { ...prev }; delete n[req.id]; return n; });
+                            toast.success('Publicación programada. Se publicará sola en la fecha elegida.');
+                          } catch (err: any) {
+                            toast.error('No se pudo programar: ' + (err?.message || err));
+                          }
+                        }}
+                        className="px-3 py-1.5 rounded-lg text-[11px] font-bold bg-[var(--accent)] text-[var(--accent-ink)] disabled:opacity-40 disabled:cursor-not-allowed"
+                      >
+                        Programar
+                      </button>
+                    </div>
+                  )}
+
+                  {req.status === 'error' && req.errorDetail && (
+                    <p className="text-[10px] text-rose-500">{req.errorDetail}</p>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {(activeSubTab === 'productos' || activeSubTab === 'repuestos') && (
         <div className="space-y-4">
@@ -1832,6 +1971,77 @@ if (!m) return null;
                             onChange={e => setProdDiscount(e.target.value === '' ? '' : Number(e.target.value))} 
                             className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)]" 
                           />
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Publicación promocional en Instagram.
+                        La GENERACIÓN de la pieza gráfica todavía requiere a
+                        Claude (Canva no tiene una API que la app pueda llamar
+                        sola), así que esta casilla deja la solicitud en cola
+                        con estado "pendiente_imagen" — alguien del equipo la
+                        completa subiendo la imagen. Lo que SÍ queda 100%
+                        automático es la PUBLICACIÓN: el cron de Supabase
+                        dispara sola la publicación en la fecha/hora elegida,
+                        sin que nadie tenga que volver a tocar nada. */}
+                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 p-4 rounded-xl space-y-3">
+                      <div className="flex items-center gap-2">
+                        <input type="checkbox" id="createIgPost" checked={prodCreateIgPost} onChange={e => setProdCreateIgPost(e.target.checked)} className="rounded border-white/20 bg-[var(--bg-surface)]" />
+                        <label htmlFor="createIgPost" className="text-xs text-[var(--text-secondary)]">¿Crear imagen y publicación promocional para Instagram?</label>
+                      </div>
+                      {prodCreateIgPost && (
+                        <div className="space-y-3 pl-1">
+                          <div>
+                            <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1.5">¿Cuándo publicar?</label>
+                            <div className="flex gap-2 flex-wrap">
+                              {([
+                                ['manana', 'Mañana (9:00 a.m.)'],
+                                ['tarde', 'Tarde (3:00 p.m.)'],
+                                ['personalizado', 'Fecha y hora específica'],
+                              ] as const).map(([value, label]) => (
+                                <button
+                                  key={value}
+                                  type="button"
+                                  onClick={() => setIgScheduleMode(value)}
+                                  className={`px-3 py-1.5 rounded-lg text-[11px] font-semibold border transition ${
+                                    igScheduleMode === value
+                                      ? 'bg-[var(--accent)] border-[var(--accent)] text-[var(--accent-ink)]'
+                                      : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--accent)]'
+                                  }`}
+                                >
+                                  {label}
+                                </button>
+                              ))}
+                            </div>
+                          </div>
+
+                          {igScheduleMode === 'personalizado' && (
+                            <div className="grid grid-cols-2 gap-3">
+                              <div>
+                                <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Fecha</label>
+                                <input
+                                  type="date"
+                                  value={igScheduleDate}
+                                  min={new Date().toISOString().slice(0, 10)}
+                                  onChange={e => setIgScheduleDate(e.target.value)}
+                                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)]"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Hora</label>
+                                <input
+                                  type="time"
+                                  value={igScheduleTime}
+                                  onChange={e => setIgScheduleTime(e.target.value)}
+                                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)]"
+                                />
+                              </div>
+                            </div>
+                          )}
+
+                          <p className="text-[10px] leading-relaxed text-[var(--text-secondary)] border border-dashed border-[var(--border-color)] rounded-lg px-3 py-2">
+                            Al guardar, esta solicitud queda en la cola de <strong className="text-[var(--text-primary)]">Publicaciones de Instagram</strong> (abajo en Inventario). La generación de la imagen se completa con el equipo; la publicación en la fecha elegida es automática.
+                          </p>
                         </div>
                       )}
                     </div>

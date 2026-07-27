@@ -167,6 +167,9 @@ export default function AdminPanel({
   const [companyPhone, setCompanyPhone] = useState('');
   const [companyAddress, setCompanyAddress] = useState('');
   const [pickupHours, setPickupHours] = useState('');
+  // URL del "Catch Hook" de Zapier que dispara el cron de publicaciones
+  // programadas de Instagram (ver marketing_requests en storage.ts).
+  const [instagramWebhookUrl, setInstagramWebhookUrl] = useState('');
   const [storeLogo, setStoreLogo] = useState('');
   const [storeLogoPreview, setStoreLogoPreview] = useState<string | null>(null);
 
@@ -373,6 +376,7 @@ export default function AdminPanel({
       setCompanyPhone(db.settings.companyPhone || '');
       setCompanyAddress(db.settings.companyAddress || '');
       setPickupHours(db.settings.pickupHours || '');
+      setInstagramWebhookUrl(db.settings.instagramWebhookUrl || '');
       setStoreLogo(db.settings.storeLogo || '');
     }
     setClients(db.clients || []);
@@ -479,6 +483,7 @@ export default function AdminPanel({
       db.settings.companyPhone = companyPhone;
       db.settings.companyAddress = companyAddress;
       db.settings.pickupHours = pickupHours;
+      db.settings.instagramWebhookUrl = instagramWebhookUrl.trim();
 
       addAuditLog(currentUser?.email || 'admin', 'Configuración', 'Actualizar Ajustes', 'Ajustes fiscales, operativos y logo actualizados', db);
       await saveDB(db);
@@ -2030,6 +2035,22 @@ if (!del) return null;
                     placeholder="Ej. Lunes a viernes, 1pm a 6pm"
                     className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] dark:text-zinc-100 focus:outline-none placeholder:text-[var(--text-muted)]"
                   />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-1 gap-4">
+                <div>
+                  <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Webhook de Instagram (Zapier)</label>
+                  <input
+                    type="url"
+                    value={instagramWebhookUrl}
+                    onChange={(e) => setInstagramWebhookUrl(e.target.value)}
+                    placeholder="https://hooks.zapier.com/hooks/catch/…"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] dark:text-zinc-100 focus:outline-none font-mono placeholder:text-[var(--text-muted)]"
+                  />
+                  <p className="mt-1.5 text-[10px] text-[var(--text-secondary)] leading-relaxed">
+                    URL del "Catch Hook" de un Zap (Webhook → Instagram Publish Photo). Con esto configurado, las publicaciones que se programan desde Inventario salen solas en la fecha elegida, sin que nadie tenga que abrir la app en ese momento.
+                  </p>
                 </div>
               </div>
 
