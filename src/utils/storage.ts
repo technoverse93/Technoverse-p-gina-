@@ -319,8 +319,21 @@ const SALIDA_MAX = 500;
 //     tocar nada: una etiqueta <img> acepta las dos formas igual.
 const BUCKET_IMAGENES = 'productos';
 
-/** Umbral por debajo del cual no compensa el viaje de red y conviene dejarla incrustada. */
-const MINIMO_PARA_SUBIR = 8 * 1024;
+/**
+ * Umbral por debajo del cual no compensa el viaje de red y conviene dejar la
+ * imagen incrustada.
+ *
+ * CALIBRADO MAL LA PRIMERA VEZ: estaba en 8 KB, pensado para las fotos de
+ * 26-50 KB que producía el catálogo antes. Pero al pasar a WebP las fotos
+ * bajaron a ~8 KB, así que quedaban JUSTO por debajo del corte y no subía
+ * ninguna: la primera foto de prueba pesó 8.099 bytes contra un umbral de
+ * 8.192 y se guardó incrustada. El umbral desactivaba la función entera.
+ *
+ * Ahora está en 2 KB, que es lo que corresponde al propósito real: evitar el
+ * viaje solo para cosas triviales —un ícono SVG de 500 bytes, por ejemplo—.
+ * Cualquier foto de producto de verdad queda muy por encima y va al depósito.
+ */
+const MINIMO_PARA_SUBIR = 2 * 1024;
 
 /**
  * Huella corta y estable del contenido (FNV-1a de 32 bits).
@@ -372,7 +385,14 @@ async function subirImagenADeposito(dataUrl: string, carpeta: string, id: string
       .upload(ruta, bytes, { contentType: tipo, upsert: true, cacheControl: '31536000' });
     // "ya existe" no es un fallo: significa que esta misma foto ya estaba
     // subida y se puede reutilizar el archivo tal cual.
-    if (error && !/exists/i.test(error.message)) return dataUrl;
+    if (error && !/exists/i.test(error.message)) {
+      // Se deja rastro a propósito. Cuando la subida falla, la foto se queda
+      // incrustada — que es exactamente lo que se ve cuando la subida NI SE
+      // INTENTÓ. Sin este aviso los dos casos son indistinguibles desde afuera
+      // y se diagnostica a ciegas.
+      console.warn('[Imágenes] No se pudo subir a Storage, queda incrustada:', error.message);
+      return dataUrl;
+    }
 
     const { data } = supabase.storage.from(BUCKET_IMAGENES).getPublicUrl(ruta);
     return data?.publicUrl || dataUrl;
