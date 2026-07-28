@@ -296,6 +296,112 @@ export function compressImage(dataUrl: string, maxWidth = 500, maxHeight = 500, 
 /** Lado máximo, en píxeles, de una imagen de catálogo ya procesada. */
 const SALIDA_MAX = 500;
 
+// ===================== Imágenes en Supabase Storage =====================
+//
+// POR QUÉ EXISTE ESTO
+//   Hasta ahora la foto de cada producto viajaba como texto base64 DENTRO de la
+//   fila, y por lo tanto dentro del JSON que la tienda descarga al abrirse. Con
+//   eso las imágenes son BLOQUEANTES: el catálogo no puede dibujarse hasta que
+//   haya llegado el último byte de la última foto. Medido sobre el catálogo
+//   real: 8 productos = 401 KB que el cliente baja antes de ver nada, y crece
+//   en línea recta (200 productos serían unos 9 MB).
+//
+//   Guardando la foto en Storage, en la fila queda una URL de ~100 bytes. El
+//   JSON del catálogo pasa a pesar un par de KB y se dibuja al instante; las
+//   fotos llegan después, cada una por su lado, y el navegador las cachea. La
+//   diferencia deja de depender de cuántos productos haya.
+//
+// POR QUÉ NO ROMPE NADA
+//   · Si la subida falla por lo que sea (sin señal, permisos, bucket caído) se
+//     devuelve el base64 original y todo sigue funcionando exactamente como
+//     antes. El peor caso es el comportamiento de hoy.
+//   · Las filas viejas que todavía tengan "data:..." se siguen mostrando sin
+//     tocar nada: una etiqueta <img> acepta las dos formas igual.
+const BUCKET_IMAGENES = 'productos';
+
+/** Umbral por debajo del cual no compensa el viaje de red y conviene dejarla incrustada. */
+const MINIMO_PARA_SUBIR = 8 * 1024;
+
+/**
+ * Huella corta y estable del contenido (FNV-1a de 32 bits).
+ *
+ * Sirve para que la MISMA imagen reutilice siempre el mismo archivo, y para que
+ * una imagen distinta estrene nombre. Eso último importa: si se reescribiera el
+ * mismo nombre, las cachés del navegador y de la CDN seguirían sirviendo la
+ * foto vieja. No se usa criptografía a propósito — acá solo hace falta
+ * distinguir contenidos, y esto corre en cualquier navegador sin depender de
+ * crypto.subtle ni de contexto seguro.
+ */
+function huellaContenido(texto: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < texto.length; i++) {
+    h ^= texto.charCodeAt(i);
+    h = Math.imul(h, 0x01000193) >>> 0;
+  }
+  return h.toString(36);
+}
+
+const EXTENSION_POR_TIPO: Record<string, string> = {
+  'image/webp': 'webp', 'image/png': 'png', 'image/jpeg': 'jpg', 'image/svg+xml': 'svg',
+};
+
+/**
+ * Sube una imagen en base64 al bucket y devuelve su URL pública.
+ * Ante cualquier problema devuelve el base64 recibido, sin lanzar excepción:
+ * guardar el producto nunca puede fallar por culpa de la foto.
+ */
+async function subirImagenADeposito(dataUrl: string, carpeta: string, id: string): Promise<string> {
+  try {
+    if (!dataUrl.startsWith('data:image/')) return dataUrl;
+    if (dataUrl.length < MINIMO_PARA_SUBIR) return dataUrl;
+
+    const coma = dataUrl.indexOf(',');
+    const cabecera = dataUrl.slice(5, coma);           // ej. "image/webp;base64"
+    if (!cabecera.includes(';base64')) return dataUrl;
+    const tipo = cabecera.split(';')[0];
+    const ext = EXTENSION_POR_TIPO[tipo];
+    if (!ext) return dataUrl;
+
+    const crudo = atob(dataUrl.slice(coma + 1));
+    const bytes = new Uint8Array(crudo.length);
+    for (let i = 0; i < crudo.length; i++) bytes[i] = crudo.charCodeAt(i);
+
+    const ruta = `${carpeta}/${id}-${huellaContenido(dataUrl)}.${ext}`;
+    const { error } = await supabase.storage
+      .from(BUCKET_IMAGENES)
+      .upload(ruta, bytes, { contentType: tipo, upsert: true, cacheControl: '31536000' });
+    // "ya existe" no es un fallo: significa que esta misma foto ya estaba
+    // subida y se puede reutilizar el archivo tal cual.
+    if (error && !/exists/i.test(error.message)) return dataUrl;
+
+    const { data } = supabase.storage.from(BUCKET_IMAGENES).getPublicUrl(ruta);
+    return data?.publicUrl || dataUrl;
+  } catch {
+    return dataUrl;
+  }
+}
+
+/**
+ * Recorre el borrador que está por guardarse y reemplaza cada foto incrustada
+ * por su URL en Storage. Modifica el objeto recibido a propósito: así la copia
+ * en memoria y la fila que se escribe quedan con la URL, y en el próximo
+ * guardado ya no hay nada que subir.
+ */
+async function subirImagenesEmbebidas(db: Database): Promise<void> {
+  const pendientes: Promise<void>[] = [];
+  const revisar = (fila: any, carpeta: string, id: string) => {
+    if (!fila || typeof fila.imageUrl !== 'string' || !fila.imageUrl.startsWith('data:')) return;
+    const original = fila.imageUrl;
+    pendientes.push(
+      subirImagenADeposito(original, carpeta, id).then((url) => { fila.imageUrl = url; })
+    );
+  };
+  (db.products || []).forEach((p: any) => revisar(p, 'catalogo', String(p.id)));
+  (db.historical_skus || []).forEach((h: any) => revisar(h, 'skus', String(h.sku)));
+  (db.banners || []).forEach((b: any) => revisar(b, 'banners', String(b.id)));
+  if (pendientes.length) await Promise.all(pendientes);
+}
+
 /**
  * Convierte en transparente el fondo plano o cuadriculado de una imagen.
  *
@@ -1082,6 +1188,18 @@ let lastSyncedDb: Database = getDefaultDB();
 export async function saveDB(newDb: Database) {
   const oldDb = lastSyncedDb;
   localCache = newDb;
+  // Se avisa a la interfaz ANTES de subir nada: el panel muestra el producto de
+  // inmediato con la foto que ya tiene en memoria, igual que siempre. La subida
+  // ocurre a continuación y no se le hace esperar al usuario.
+  notifyUpdate();
+
+  // Cambia las fotos incrustadas por URLs de Storage. Va antes de calcular las
+  // diferencias para que a la fila se escriba la URL y no el base64. Si alguna
+  // subida falla, esa foto se queda incrustada y el guardado sigue normal.
+  await subirImagenesEmbebidas(newDb);
+
+  // La foto de referencia se toma DESPUÉS de subir, ya con las URLs puestas:
+  // así el próximo guardado no vuelve a intentar subir lo mismo.
   lastSyncedDb = JSON.parse(JSON.stringify(newDb));
   notifyUpdate();
 
