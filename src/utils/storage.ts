@@ -31,7 +31,19 @@ interface Database {
   historical_skus?: HistoricalSku[];
 }
 
-const DEFAULT_BANNERS: Banner[] = [{ id: 'BAN-001', title: 'Reparación desde Casa', description: 'Ahorre tiempo', type: 'Servicios', active: true }];
+// FALLO CORREGIDO — el "banner fantasma".
+//
+// Acá había un banner de ejemplo escrito a mano ("Reparación desde Casa /
+// Ahorre tiempo") que se usaba como contenido inicial. El problema es que ese
+// banner NO existe en la base: la tienda lo dibujaba de entrada, encima del
+// carrusel de categorías, y en cuanto llegaba la respuesta de Supabase —con
+// cero banners— desaparecía. El resultado era un cartel que aparecía y se iba
+// en un parpadeo cada vez que alguien abría la página.
+//
+// El arranque tiene que reflejar lo que hay de verdad: si todavía no se leyó
+// la base, no hay banners que mostrar. Cuando se cargue uno real desde el
+// panel, se dibuja solo y sin parpadeo.
+const DEFAULT_BANNERS: Banner[] = [];
 const DEFAULT_SETTINGS: AppSettings = { cedulaJuridica: '', companyPhone: '', companyAddress: '', workshopAddress: '', pickupHours: '', maxStockLimit: 50, instagramWebhookUrl: '' };
 
 function getDefaultDB(): Database {
