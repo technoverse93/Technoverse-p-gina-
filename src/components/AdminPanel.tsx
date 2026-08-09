@@ -426,9 +426,18 @@ export default function AdminPanel({
       return;
     }
 
+    // FALLO CORREGIDO: acá se pedía la columna `employee_role`, que ya no
+    // existe en `profiles` desde que se eliminó el sistema de empleados.
+    // PostgREST no ignora una columna desconocida: devuelve error. Y como el
+    // bloque de abajo trata cualquier `profileError` como "no tiene permiso",
+    // el panel cerraba la sesión y respondía "Esta cuenta no tiene acceso al
+    // panel de administración" — incluso al administrador legítimo. En la
+    // práctica el formulario de acceso del panel estaba inutilizado, y solo se
+    // podía entrar iniciando sesión desde la tienda (que pide `select('*')` y
+    // por eso nunca falló). Se piden únicamente las columnas que existen.
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
-      .select('role, employee_role, name')
+      .select('role, name')
       .eq('id', signInData.user.id)
       .maybeSingle();
 
