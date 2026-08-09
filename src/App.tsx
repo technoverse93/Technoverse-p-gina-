@@ -1,4 +1,4 @@
-import React, { useState, useEffect, Suspense, lazy } from 'react';
+import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import PublicStore from './components/PublicStore';
 import { User } from './types';
 import { initKeyboard } from './mobile/keyboard';
@@ -126,6 +126,36 @@ function AppInner() {
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
   }, []);
+
+  // ---- Avisos de fallo al guardar contra Supabase --------------------------
+  //
+  // FALLO CORREGIDO: storage.ts ya emitía el evento 'technoverse_sync_error'
+  // cada vez que un guardado contra la base fracasaba... pero NADIE lo estaba
+  // escuchando. El aviso se disparaba al vacío, así que un fallo de guardado
+  // era completamente silencioso: la pantalla mostraba el cambio aplicado, el
+  // servidor no lo tenía, y nadie se enteraba hasta que faltaba un dato.
+  //
+  // El mensaje dice que el cambio SE DESCARTÓ, y eso es literal: cuando la
+  // escritura falla, storage.ts llama a refreshTableFromSupabase() y vuelve a
+  // leer del servidor, con lo cual la modificación local se pierde. Decir
+  // "quedó guardado en este dispositivo" sería mentira y llevaría a alguien a
+  // confiarse.
+  const avisosMostrados = useRef<Map<string, number>>(new Map());
+  useEffect(() => {
+    const alFallarGuardado = (e: any) => {
+      const detalle = String(e?.detail?.message || 'motivo desconocido');
+      // Un solo guardado puede disparar varios fallos a la vez (por ejemplo,
+      // varias imágenes de golpe). Sin este freno el usuario recibiría una
+      // pila de avisos idénticos encima del otro.
+      const ahora = Date.now();
+      const visto = avisosMostrados.current.get(detalle) || 0;
+      if (ahora - visto < 8000) return;
+      avisosMostrados.current.set(detalle, ahora);
+      toast.error(`No se guardó en el servidor y el cambio se descartó. Revisá la conexión y volvé a intentarlo. Detalle: ${detalle}`);
+    };
+    window.addEventListener('technoverse_sync_error', alFallarGuardado);
+    return () => window.removeEventListener('technoverse_sync_error', alFallarGuardado);
+  }, [toast]);
 
   return (
     <div className="min-h-screen bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700 dark:selection:bg-[var(--brand-gold-mid)]/20 dark:selection:text-[var(--brand-gold-light)]" id="technoverse-application-container">
