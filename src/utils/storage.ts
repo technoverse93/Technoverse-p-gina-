@@ -371,20 +371,25 @@ const EXTENSION_POR_TIPO: Record<string, string> = {
 };
 
 /**
- * Deja constancia en la bitácora de cómo le fue a una subida.
+ * Anota en la bitácora un PROBLEMA al subir una imagen.
  *
- * POR QUÉ EN LA BASE Y NO EN LA CONSOLA
- *   Cuando una subida falla, la foto se queda incrustada — que es exactamente
- *   lo que se ve cuando la subida NI SE INTENTÓ (por ejemplo, si el navegador
- *   todavía tiene cargada una versión anterior de la app). Los dos casos son
- *   indistinguibles mirando la fila del producto, y desde un celular no hay
- *   forma cómoda de abrir la consola. Escribiéndolo en la bitácora, el rastro
- *   queda donde se puede consultar después y sin depender del dispositivo.
+ * POR QUÉ SOLO LOS PROBLEMAS
+ *   Cuando una subida falla, la foto se queda incrustada en la fila — que es
+ *   exactamente lo que se ve cuando la subida ni se intentó. Los dos casos son
+ *   indistinguibles mirando los datos, y desde un celular no hay forma cómoda
+ *   de abrir la consola del navegador. Por eso el rastro va a la base.
+ *
+ *   Pero solo el rastro que sirve. Durante la puesta a punto esto registraba
+ *   también los aciertos y el inicio de cada recorrido, y con eso una sola
+ *   carga de producto dejaba ocho líneas. Multiplicado por el uso diario, la
+ *   bitácora del negocio quedaba enterrada en ruido técnico. Ahora la regla es
+ *   simple: **si hay una línea acá, algo necesita atención**. Los aciertos se
+ *   ven en el resultado mismo (la fila guarda una URL en vez de la foto).
  *
  * Escribe directo a la tabla en vez de usar addAuditLog() a propósito: esa
  * función termina llamando a saveDB(), y esto corre DENTRO de saveDB.
  */
-function anotarResultadoSubida(acción: string, detalle: string) {
+function anotarProblemaSubida(acción: string, detalle: string) {
   try {
     // OJO CON ESTA LÍNEA — acá estuvo un error que costó varias rondas de
     // diagnóstico. Antes decía:
@@ -428,21 +433,20 @@ function anotarResultadoSubida(acción: string, detalle: string) {
 async function subirImagenADeposito(dataUrl: string, carpeta: string, id: string): Promise<string> {
   try {
     if (!dataUrl.startsWith('data:image/')) return dataUrl;
-    if (dataUrl.length < MINIMO_PARA_SUBIR) {
-      anotarResultadoSubida('Omitida por tamaño', `${id} — ${dataUrl.length} bytes, mínimo ${MINIMO_PARA_SUBIR}`);
-      return dataUrl;
-    }
+    // Quedarse incrustada por ser diminuta es el comportamiento buscado, no un
+    // problema: no se anota.
+    if (dataUrl.length < MINIMO_PARA_SUBIR) return dataUrl;
 
     const coma = dataUrl.indexOf(',');
     const cabecera = dataUrl.slice(5, coma);           // ej. "image/webp;base64"
     if (!cabecera.includes(';base64')) {
-      anotarResultadoSubida('Omitida, no es base64', `${id} — cabecera "${cabecera}"`);
+      anotarProblemaSubida('Formato inesperado', `${id} — cabecera "${cabecera}"`);
       return dataUrl;
     }
     const tipo = cabecera.split(';')[0];
     const ext = EXTENSION_POR_TIPO[tipo];
     if (!ext) {
-      anotarResultadoSubida('Omitida, tipo no admitido', `${id} — tipo "${tipo}"`);
+      anotarProblemaSubida('Tipo no admitido', `${id} — tipo "${tipo}"`);
       return dataUrl;
     }
 
@@ -458,19 +462,21 @@ async function subirImagenADeposito(dataUrl: string, carpeta: string, id: string
     // subida y se puede reutilizar el archivo tal cual.
     if (error && !/exists/i.test(error.message)) {
       console.warn('[Imágenes] No se pudo subir a Storage, queda incrustada:', error.message);
-      anotarResultadoSubida('Subida fallida', `${ruta} — ${error.message}`);
+      anotarProblemaSubida('Subida fallida', `${ruta} — ${error.message}`);
       return dataUrl;
     }
 
     const { data } = supabase.storage.from(BUCKET_IMAGENES).getPublicUrl(ruta);
     if (!data?.publicUrl) {
-      anotarResultadoSubida('Sin URL pública', ruta);
+      anotarProblemaSubida('Sin URL pública', ruta);
       return dataUrl;
     }
-    anotarResultadoSubida('Subida correcta', `${ruta} — ${bytes.length} bytes`);
+    // El acierto no se anota en la bitácora: ya se nota en que la fila queda
+    // con una URL en lugar de la imagen entera. En consola sí, que es gratis.
+    console.info('[Imágenes] Subida a Storage:', ruta, `${bytes.length} bytes`);
     return data.publicUrl;
   } catch (err: any) {
-    anotarResultadoSubida('Excepción al subir', String(err?.message || err));
+    anotarProblemaSubida('Excepción al subir', String(err?.message || err));
     return dataUrl;
   }
 }
@@ -494,10 +500,7 @@ async function subirImagenesEmbebidas(db: Database): Promise<void> {
   (db.historical_skus || []).forEach((h: any) => revisar(h, 'skus', String(h.sku)));
   (db.banners || []).forEach((b: any) => revisar(b, 'banners', String(b.id)));
   if (pendientes.length) {
-    // Constancia de que este recorrido llegó a ejecutarse. Sin ella, "falló la
-    // subida" y "nunca se intentó" son indistinguibles mirando los datos, que
-    // fue exactamente lo que complicó el diagnóstico anterior.
-    anotarResultadoSubida('Recorrido iniciado', `${pendientes.length} imagen(es) por subir`);
+    console.info(`[Imágenes] Subiendo ${pendientes.length} imagen(es) a Storage…`);
     await Promise.all(pendientes);
   }
 }
