@@ -28,3 +28,23 @@
 
 /
   Cache-Control: no-cache, no-store, must-revalidate
+
+# HUECO CORREGIDO — la ruta /admin quedaba fuera.
+#
+# La app no usa una librería de rutas, pero sí cambia la dirección a mano:
+#   src/App.tsx →  window.history.pushState(null, "", "/admin")
+#
+# Como wrangler.jsonc usa not_found_handling: "single-page-application",
+# entrar directo a /admin (por marcador o escribiéndolo) devuelve el contenido
+# de index.html, pero la URL de esa respuesta es /admin. Las reglas de arriba
+# apuntan a "/index.html" y a "/", así que NINGUNA la alcanzaba: la pantalla de
+# administración —la más usada a diario— era la única que podía quedar servida
+# desde una copia vieja del navegador, con las referencias a archivos que ya no
+# existen.
+#
+# Se cubren las dos formas (con y sin barra final, y cualquier subruta).
+/admin
+  Cache-Control: no-cache, no-store, must-revalidate
+
+/admin/*
+  Cache-Control: no-cache, no-store, must-revalidate
