@@ -386,15 +386,37 @@ const EXTENSION_POR_TIPO: Record<string, string> = {
  */
 function anotarResultadoSubida(acción: string, detalle: string) {
   try {
-    void supabase.from('audit_logs').insert({
+    // OJO CON ESTA LÍNEA — acá estuvo un error que costó varias rondas de
+    // diagnóstico. Antes decía:
+    //
+    //     void supabase.from('audit_logs').insert({ ... });
+    //
+    // La intención era "mandalo y no me hagas esperar". Pero en Supabase,
+    // `.from(...).insert(...)` NO envía nada: devuelve un constructor de
+    // consulta PEREZOSO, y la petición recién sale cuando alguien le hace
+    // `await` o `.then()`. Con `void` no la esperaba nadie, así que la consulta
+    // se armaba y se tiraba sin ejecutarse jamás.
+    //
+    // El resultado fue el peor posible para diagnosticar: el registro que tenía
+    // que delatar los fallos de subida no escribía NUNCA, ni cuando fallaba ni
+    // cuando funcionaba. Parecía que este código entero no se ejecutaba.
+    //
+    // Con `.then()` explícito la petición sale de verdad y sigue sin bloquear
+    // el guardado, que era lo que se buscaba.
+    supabase.from('audit_logs').insert({
       id: `LOG-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
       user_email: 'sistema',
       module: 'Imágenes',
       action: acción,
       detail: detalle.slice(0, 500),
-    });
+    }).then(
+      ({ error }: any) => {
+        if (error) console.warn('[Imágenes] No se pudo anotar el diagnóstico:', error.message);
+      },
+      () => { /* el diagnóstico jamás puede tumbar un guardado */ }
+    );
   } catch {
-    // El diagnóstico jamás puede tumbar un guardado.
+    // Ídem: cualquier problema acá se traga en silencio.
   }
 }
 
@@ -471,7 +493,13 @@ async function subirImagenesEmbebidas(db: Database): Promise<void> {
   (db.products || []).forEach((p: any) => revisar(p, 'catalogo', String(p.id)));
   (db.historical_skus || []).forEach((h: any) => revisar(h, 'skus', String(h.sku)));
   (db.banners || []).forEach((b: any) => revisar(b, 'banners', String(b.id)));
-  if (pendientes.length) await Promise.all(pendientes);
+  if (pendientes.length) {
+    // Constancia de que este recorrido llegó a ejecutarse. Sin ella, "falló la
+    // subida" y "nunca se intentó" son indistinguibles mirando los datos, que
+    // fue exactamente lo que complicó el diagnóstico anterior.
+    anotarResultadoSubida('Recorrido iniciado', `${pendientes.length} imagen(es) por subir`);
+    await Promise.all(pendientes);
+  }
 }
 
 /**
