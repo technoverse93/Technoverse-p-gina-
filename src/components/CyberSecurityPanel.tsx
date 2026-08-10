@@ -439,4 +439,380 @@ export default function CyberSecurityPanel({
             ) : (
               <p className="text-xs text-[var(--text-secondary)] italic">Averiguando la dirección de esta conexión…</p>
             )}
-            {/* Adve
+            {/* Advertencia honesta: en datos móviles la IP cambia sola. */}
+            <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed mt-3 pt-3 border-t border-[var(--border-color)]/40">
+              Tenga presente que en datos móviles la dirección IP cambia con frecuencia, y varias personas del mismo
+              operador comparten una misma dirección. La lista blanca sirve de verdad para una conexión fija (la casa o
+              el local); en el celular puede dejar de coincidir de un día para otro.
+            </p>
+          </div>
+
+          {/* Cómo funciona */}
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-3 border-b border-[var(--border-color)]/50 pb-2">
+              Reglas activas
+            </h4>
+            <ul className="text-xs text-[var(--text-secondary)] space-y-1.5 leading-relaxed">
+              <li>· <strong className="text-[var(--text-primary)]">3 intentos fallidos en 15 minutos</strong> bloquean la conexión.</li>
+              <li>· El castigo sube solo: <strong className="text-[var(--text-primary)]">30 minutos</strong>, luego <strong className="text-[var(--text-primary)]">2 horas</strong>, luego <strong className="text-[var(--text-primary)]">24 horas</strong>.</li>
+              <li>· Un ingreso correcto reinicia el contador.</li>
+              <li>· Los errores de contraseña de <strong className="text-[var(--text-primary)]">clientes de la tienda</strong> se registran pero no bloquean, para no dejar sin comprar a quienes comparten IP con ellos.</li>
+              <li>· Si el sistema de vigilancia se cae, el acceso sigue funcionando: nunca lo deja fuera de su propio panel.</li>
+            </ul>
+          </div>
+        </div>
+      )}
+
+      {/* =============== ACCESOS =============== */}
+      {seccion === 'accesos' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex gap-1.5 flex-wrap">
+              {([
+                { id: 'todos',      label: 'Todos' },
+                { id: 'exitosos',   label: 'Correctos' },
+                { id: 'fallidos',   label: 'Fallidos' },
+                { id: 'bloqueados', label: 'Rechazados' },
+              ] as { id: FiltroAccesos; label: string }[]).map(f => (
+                <button
+                  key={f.id}
+                  onClick={() => setFiltro(f.id)}
+                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase transition border ${
+                    filtro === f.id
+                      ? 'bg-[var(--brand-gold-mid)]/15 border-[var(--brand-gold-mid)]/50 text-[var(--brand-gold-mid)]'
+                      : 'bg-transparent border-[var(--border-color)]/60 text-[var(--text-secondary)]'
+                  }`}
+                >
+                  {f.label}
+                </button>
+              ))}
+            </div>
+            <button
+              onClick={purgarHistorial}
+              className="text-[11px] text-rose-400 hover:text-rose-300 font-bold px-3 py-1.5 rounded-lg border border-[var(--border-color)]/60 hover:bg-rose-500/10 transition flex items-center gap-1.5"
+            >
+              <Trash2 className="w-3.5 h-3.5" /> Depurar +90 días
+            </button>
+          </div>
+
+          {accesosFiltrados.length === 0 ? (
+            <div className="bg-[var(--bg-surface)] border border-dashed border-[var(--border-color)]/60 rounded-2xl py-12 text-center text-xs text-[var(--text-secondary)] italic">
+              {cargando ? 'Cargando el registro de accesos…' : 'No hay intentos registrados con este filtro.'}
+            </div>
+          ) : (
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
+              <div className="overflow-x-auto overflow-y-auto max-h-[520px]">
+                <table className="w-full min-w-[760px] text-left text-sm border-collapse leading-relaxed">
+                  <thead>
+                    <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)]">
+                      <th className="p-3 text-[10px] uppercase">Resultado</th>
+                      <th className="p-3 text-[10px] uppercase">Fecha</th>
+                      <th className="p-3 text-[10px] uppercase">Correo</th>
+                      <th className="p-3 text-[10px] uppercase">Ubicación</th>
+                      <th className="p-3 text-[10px] uppercase">IP / Operador</th>
+                      <th className="p-3 text-[10px] uppercase">Dispositivo</th>
+                    </tr>
+                  </thead>
+                  <PaginatedTbody
+                    items={accesosFiltrados}
+                    itemsPerPage={12}
+                    renderItem={(a: Acceso) => (
+                      <tr
+                        key={a.id}
+                        onClick={() => setDetalle(a)}
+                        className="hover:bg-[var(--bg-base)] cursor-pointer border-b border-[var(--border-color)]/30"
+                      >
+                        <td className="p-3">
+                          {a.bloqueado ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase bg-rose-500/10 border border-rose-500/40 text-rose-500 px-2 py-0.5 rounded">
+                              <Ban className="w-3 h-3" /> Rechazado
+                            </span>
+                          ) : a.exito ? (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] px-2 py-0.5 rounded">
+                              <CheckCircle className="w-3 h-3" /> Correcto
+                            </span>
+                          ) : (
+                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase bg-amber-500/10 border border-amber-500/40 text-amber-500 px-2 py-0.5 rounded">
+                              <XCircle className="w-3 h-3" /> Fallido
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-[11px] text-[var(--text-secondary)] whitespace-nowrap">{fechaCorta(a.ocurrido_en)}</td>
+                        <td className="p-3 text-[11px] text-[var(--text-primary)] max-w-[180px] truncate">{a.email || '—'}</td>
+                        <td className="p-3 text-[11px] text-[var(--text-primary)]">
+                          <span className="mr-1.5 text-sm leading-none">{bandera(a.codigo_pais)}</span>
+                          {ubicacionTexto(a)}
+                        </td>
+                        <td className="p-3 text-[10px] font-mono text-[var(--text-secondary)]">
+                          <div className="text-[var(--text-primary)]">{a.ip || '—'}</div>
+                          {a.proveedor && <div className="truncate max-w-[150px]">{a.proveedor}</div>}
+                        </td>
+                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">{resumirDispositivo(a.user_agent)}</td>
+                      </tr>
+                    )}
+                  />
+                </table>
+              </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =============== BLOQUEOS =============== */}
+      {seccion === 'bloqueos' && (
+        <div className="space-y-4">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border-color)]/50 pb-2">
+              Bloquear una conexión a mano
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              <input
+                type="text"
+                value={nuevaIpBloqueo}
+                onChange={e => setNuevaIpBloqueo(e.target.value)}
+                placeholder="Dirección IP (ej. 190.10.20.30)"
+                className="flex-1 min-w-[200px] bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none placeholder:text-[var(--text-muted)]"
+              />
+              <button
+                onClick={() => bloquearManual(nuevaIpBloqueo, false)}
+                className="bg-amber-500/10 border border-amber-500/40 text-amber-500 hover:bg-amber-500/20 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5"
+              >
+                <Lock className="w-3.5 h-3.5" /> 30 minutos
+              </button>
+              <button
+                onClick={() => bloquearManual(nuevaIpBloqueo, true)}
+                className="bg-rose-500/10 border border-rose-500/40 text-rose-500 hover:bg-rose-500/20 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5"
+              >
+                <Ban className="w-3.5 h-3.5" /> Permanente
+              </button>
+            </div>
+          </div>
+
+          {bloqueos.length === 0 ? (
+            <div className="bg-[var(--bg-surface)] border border-dashed border-[var(--border-color)]/60 rounded-2xl py-12 text-center text-xs text-[var(--text-secondary)] italic">
+              {cargando ? 'Cargando…' : 'No hay ninguna conexión bloqueada. Todo tranquilo.'}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {bloqueos.map(b => {
+                const restantes = minutosRestantes(b.bloqueado_hasta);
+                const activo = !b.desbloqueado_en && (b.permanente || restantes > 0);
+                return (
+                  <div
+                    key={b.ip}
+                    className={`bg-[var(--bg-surface)] border rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 ${
+                      activo ? 'border-rose-500/40' : 'border-[var(--border-color)]/60 opacity-70'
+                    }`}
+                  >
+                    <div className="space-y-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="font-mono font-bold text-sm text-[var(--text-primary)]">{b.ip}</span>
+                        {activo ? (
+                          <span className="text-[9px] uppercase font-bold bg-rose-500/10 border border-rose-500/40 text-rose-500 px-2 py-0.5 rounded">
+                            {b.permanente ? 'Permanente' : `${restantes} min restantes`}
+                          </span>
+                        ) : (
+                          <span className="text-[9px] uppercase font-bold bg-[var(--bg-base)] border border-[var(--border-color)]/60 text-[var(--text-secondary)] px-2 py-0.5 rounded">
+                            {b.desbloqueado_en ? 'Levantado' : 'Vencido'}
+                          </span>
+                        )}
+                        {b.nivel > 0 && !b.permanente && (
+                          <span className="text-[9px] uppercase font-bold text-[var(--text-secondary)]">Nivel {b.nivel}</span>
+                        )}
+                      </div>
+                      <div className="text-[11px] text-[var(--text-secondary)]">
+                        {ubicacionTexto(b)} · {b.intentos_fallidos} intento(s)
+                      </div>
+                      {b.ultimo_email && (
+                        <div className="text-[10px] text-[var(--text-secondary)] font-mono truncate max-w-[280px]">
+                          Último correo probado: {b.ultimo_email}
+                        </div>
+                      )}
+                      <div className="text-[10px] text-[var(--text-secondary)]">{b.motivo} · {fechaCorta(b.actualizado_en)}</div>
+                    </div>
+                    {activo && (
+                      <button
+                        onClick={() => desbloquear(b.ip)}
+                        className="bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--ok)] hover:bg-[var(--ok-soft)] text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 flex-shrink-0"
+                      >
+                        <Unlock className="w-3.5 h-3.5" /> Desbloquear
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =============== LISTA BLANCA =============== */}
+      {seccion === 'blanca' && (
+        <div className="space-y-4">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border-color)]/50 pb-2">
+              Agregar conexión de confianza
+            </h4>
+            <div className="flex flex-wrap gap-2">
+              <input
+                type="text"
+                value={nuevaIpBlanca}
+                onChange={e => setNuevaIpBlanca(e.target.value)}
+                placeholder={miIp ? `Su IP actual: ${miIp}` : 'Dirección IP'}
+                className="flex-1 min-w-[180px] bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none placeholder:text-[var(--text-muted)]"
+              />
+              <input
+                type="text"
+                value={nuevaDescripcion}
+                onChange={e => setNuevaDescripcion(e.target.value)}
+                placeholder="Descripción (ej. casa, local)"
+                className="flex-1 min-w-[180px] bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
+              />
+              <button
+                onClick={() => agregarConfianza(nuevaIpBlanca || miIp || '', nuevaDescripcion)}
+                className="bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] hover:brightness-110 text-xs font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" /> Agregar
+              </button>
+            </div>
+          </div>
+
+          {confianza.length === 0 ? (
+            <div className="bg-[var(--bg-surface)] border border-dashed border-[var(--border-color)]/60 rounded-2xl py-12 text-center text-xs text-[var(--text-secondary)] italic">
+              {cargando ? 'Cargando…' : 'No hay conexiones de confianza registradas.'}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {confianza.map(c => (
+                <div key={c.ip} className="bg-[var(--bg-surface)] border border-[var(--ok)]/40 rounded-2xl p-4 flex items-center justify-between gap-3">
+                  <div className="min-w-0">
+                    <div className="font-mono font-bold text-sm text-[var(--text-primary)]">{c.ip}</div>
+                    <div className="text-[11px] text-[var(--text-secondary)] truncate">{c.descripcion || 'Sin descripción'}</div>
+                    <div className="text-[10px] text-[var(--text-secondary)]">Agregada el {fechaCorta(c.creado_en)}</div>
+                  </div>
+                  <button
+                    onClick={() => quitarConfianza(c.ip)}
+                    className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 p-2 rounded-xl transition flex-shrink-0"
+                    title="Quitar de la lista blanca"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =============== BITÁCORA OPERATIVA (absorbida) =============== */}
+      {seccion === 'bitacora' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap justify-between items-center gap-2">
+            <p className="text-xs text-[var(--text-secondary)] max-w-lg leading-relaxed">
+              Registro de las acciones hechas dentro del sistema (ventas, ajustes, inventario). Es distinto del registro
+              de accesos: aquí queda lo que se <strong className="text-[var(--text-primary)]">hizo</strong>, allá quién{' '}
+              <strong className="text-[var(--text-primary)]">entró</strong>.
+            </p>
+            <button
+              onClick={limpiarBitacora}
+              className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-rose-400 hover:text-rose-300 hover:bg-rose-500/15 text-sm font-bold px-3 py-1.5 rounded-xl transition flex-shrink-0"
+            >
+              Limpiar Bitácora
+            </button>
+          </div>
+
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto overflow-y-auto max-h-[500px]">
+              <table className="w-full min-w-[600px] text-left text-sm border-collapse font-mono leading-relaxed">
+                <thead>
+                  <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)]">
+                    <th className="p-3">ID / Fecha</th>
+                    <th className="p-3">Usuario</th>
+                    <th className="p-3 text-center">Módulo</th>
+                    <th className="p-3 text-center">Acción</th>
+                    <th className="p-3">Detalle Técnico</th>
+                  </tr>
+                </thead>
+                <PaginatedTbody
+                  items={auditLog}
+                  itemsPerPage={10}
+                  renderItem={(log: AuditLog) => (
+                    <tr key={log.id} className="hover:bg-[var(--bg-base)]">
+                      <td className="p-3">
+                        <div className="text-[10px] text-[var(--text-secondary)]">{log.id}</div>
+                        <div className="text-[9px] text-[var(--text-secondary)]">{new Date(log.timestamp).toLocaleString()}</div>
+                      </td>
+                      <td className="p-3 font-medium text-[var(--text-primary)]">{log.userEmail}</td>
+                      <td className="p-3 text-center">
+                        <span className="bg-blue-50 text-blue-600 dark:text-[var(--brand-gold-light)] border border-blue-100 px-2 py-0.5 rounded text-[10px] uppercase font-bold dark:bg-[var(--brand-gold-mid)] dark:border-[var(--brand-gold-dark)]">
+                          {log.module}
+                        </span>
+                      </td>
+                      <td className="p-3 text-center text-[var(--text-primary)] font-bold text-[10px] uppercase">{log.action}</td>
+                      <td className="p-3 text-[var(--text-primary)] max-w-sm whitespace-pre-wrap">{log.detail}</td>
+                    </tr>
+                  )}
+                />
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =============== DETALLE DE UN INTENTO =============== */}
+      {detalle && (
+        <div
+          className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setDetalle(null)}
+        >
+          <div
+            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto p-5 space-y-3"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border-color)]/50 pb-3">
+              <h4 className="font-bold text-[var(--text-primary)]">Detalle del intento</h4>
+              <button onClick={() => setDetalle(null)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xl leading-none px-2">×</button>
+            </div>
+            {[
+              ['Resultado',   detalle.bloqueado ? 'Rechazado por bloqueo' : detalle.exito ? 'Ingreso correcto' : 'Intento fallido'],
+              ['Motivo',      detalle.motivo || '—'],
+              ['Fecha',       fechaCorta(detalle.ocurrido_en)],
+              ['Correo',      detalle.email || '—'],
+              ['IP',          detalle.ip || '—'],
+              ['País',        `${bandera(detalle.codigo_pais)} ${detalle.pais || '—'}`],
+              ['Región',      detalle.region || '—'],
+              ['Ciudad',      detalle.ciudad || '—'],
+              ['Coordenadas', detalle.latitud != null && detalle.longitud != null ? `${detalle.latitud}, ${detalle.longitud}` : '—'],
+              ['Zona horaria', detalle.zona_horaria || '—'],
+              ['Operador',    detalle.proveedor || '—'],
+              ['Origen',      detalle.origen || '—'],
+              ['Dispositivo', resumirDispositivo(detalle.user_agent)],
+            ].map(([k, v]) => (
+              <div key={k as string} className="flex justify-between gap-4 text-xs border-b border-[var(--border-color)]/30 pb-1.5">
+                <span className="text-[var(--text-secondary)] uppercase font-bold text-[10px] flex-shrink-0">{k}</span>
+                <span className="text-[var(--text-primary)] text-right break-all">{v}</span>
+              </div>
+            ))}
+            {detalle.latitud != null && detalle.longitud != null && (
+              <a
+                href={`https://www.google.com/maps?q=${detalle.latitud},${detalle.longitud}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--brand-gold-mid)] text-xs font-bold px-4 py-2.5 rounded-xl transition hover:bg-[var(--bg-surface)]"
+              >
+                Ver la ubicación aproximada en el mapa
+              </a>
+            )}
+            <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed pt-1">
+              La ubicación se deduce de la dirección IP: es aproximada (suele acertar la ciudad, no la dirección exacta)
+              y puede estar equivocada si la persona usa VPN o datos móviles.
+            </p>
+            <div className="text-[10px] text-[var(--text-secondary)] break-all pt-2 border-t border-[var(--border-color)]/30">
+              <span className="uppercase font-bold">User-Agent completo:</span> {detalle.user_agent || '—'}
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
