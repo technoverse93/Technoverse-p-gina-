@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, InventoryMovement, MarketingRequest } from '../types';
 import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
-import { CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO } from '../utils/categorias';
+import { CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria } from '../utils/categorias';
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
 import { 
@@ -363,28 +363,26 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         name = `Producto ${sku}`;
       }
 
-      let category = 'Otros';
+      // La categoría que se adivina del nombre tiene que ser una de las que
+      // la tienda sabe mostrar (src/utils/categorias.ts). Antes se asignaban
+      // aquí nombres viejos —Fundas, Cables, Otros— y el producto importado
+      // nacía con una categoría que el catálogo público no reconocía.
+      let category = 'Accesorios';
       const lowerName = name.toLowerCase();
-      if (lowerName.includes('funda')) category = 'Fundas';
-      else if (lowerName.includes('cable')) category = 'Cables';
-      else if (lowerName.includes('cargador')) category = 'Cargadores';
-      else if (lowerName.includes('protector')) category = 'Protectores';
-      else if (lowerName.includes('teclado')) category = 'Teclados';
-      else if (lowerName.includes('mouse')) category = 'Mouse';
-      else if (lowerName.includes('audífono') || lowerName.includes('audifono')) category = 'Audífonos';
+      if (lowerName.includes('funda') || lowerName.includes('protector') || lowerName.includes('carcasa') || lowerName.includes('estuche')) category = 'Estuches';
+      else if (lowerName.includes('cable') || lowerName.includes('cargador')) category = 'Cargadores';
+      else if (lowerName.includes('teclado') || lowerName.includes('mouse') || lowerName.includes('laptop') || lowerName.includes('celular')) category = 'Dispositivos';
+      else if (lowerName.includes('audífono') || lowerName.includes('audifono') || lowerName.includes('parlante')) category = 'Audio';
       else if (lowerName.includes('repuesto') || lowerName.includes('pantalla') || lowerName.includes('batería') || lowerName.includes('bateria') || lowerName.includes('flex')) category = 'Repuestos';
 
       if (!sku) {
         let prefix = 'GEN';
-        if (category === 'Fundas') prefix = 'FND';
-        else if (category === 'Cables') prefix = 'CBL';
+        if (category === 'Estuches') prefix = 'EST';
         else if (category === 'Cargadores') prefix = 'CRG';
-        else if (category === 'Protectores') prefix = 'PRT';
-        else if (category === 'Teclados') prefix = 'TCL';
-        else if (category === 'Mouse') prefix = 'MSE';
-        else if (category === 'Audífonos') prefix = 'ADF';
-        else if (sparePartCategories.includes(category)) prefix = 'RPT';
-        else prefix = 'OTR';
+        else if (category === 'Dispositivos') prefix = 'DSP';
+        else if (category === 'Audio') prefix = 'AUD';
+        else if (category === 'Repuestos' || sparePartCategories.includes(category)) prefix = 'RPT';
+        else prefix = 'ACC';
         sku = `${prefix}-${Math.round(Math.random() * 100000)}`;
       }
 
@@ -1185,7 +1183,10 @@ if (!m) return null;
     }
     // movimientos and reportes see all
 
-    if (categoryFilter !== 'Todas' && p.category && p.category.toLowerCase().trim() !== categoryFilter.toLowerCase().trim()) return false;
+    // Se compara con la misma regla que usa la tienda: así un producto viejo
+    // guardado como "Fundas" sigue apareciendo al filtrar por "Estuches", sin
+    // tener que tocar nada en la base de datos.
+    if (categoryFilter !== 'Todas' && p.category && !coincideCategoria(p.category, categoryFilter)) return false;
 
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
@@ -1351,7 +1352,9 @@ if (!m) return null;
                       className="text-xs py-2"
                       options={[
                         { value: 'Todas', label: 'Todas las categorías' },
-                        ...['Fundas', 'Cables', 'Cargadores', 'Protectores', 'Teclados', 'Mouse', 'Audífonos', 'Repuestos', 'Otros'].map(c => ({ value: c, label: c }))
+                        // Mismas categorías que la tienda. Los repuestos no van
+                        // aquí: esta pestaña ya los excluye por su cuenta.
+                        ...CATEGORIAS_TIENDA.map(c => ({ value: c, label: c }))
                       ]}
                     />
                   </div>
@@ -1375,7 +1378,7 @@ if (!m) return null;
                     setProdClientStock('');
                     setProdLinkedSparePartSku('');
                     setProdCaabys('');
-                    setProdCategory(activeSubTab === 'repuestos' ? 'LCD' : 'Fundas');
+                    setProdCategory(activeSubTab === 'repuestos' ? 'LCD' : 'Accesorios');
                     setSkuLoadedFromHistory(null);
                     setSkuAutoGenerated(true);
                     setSkuSeed(Math.floor(1000 + Math.random() * 9000));
@@ -2667,7 +2670,9 @@ if (!m) return null;
                                     value={row.category}
                                     onChange={(val) => handleCategoryChange(index, val)}
                                     className="text-xs py-1"
-                                    options={['Fundas', 'Cables', 'Cargadores', 'Protectores', 'Teclados', 'Mouse', 'Audífonos', 'Repuestos', 'Otros'].map(c => ({ value: c, label: c }))}
+                                    // Importación masiva: las mismas categorías de
+                                    // la tienda, más "Repuestos" para lo de taller.
+                                    options={[...CATEGORIAS_TIENDA, 'Repuestos'].map(c => ({ value: c, label: c }))}
                                   />
                                 </td>
 
