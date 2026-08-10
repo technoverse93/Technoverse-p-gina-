@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, InventoryMovement, MarketingRequest } from '../types';
 import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
+import { CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO } from '../utils/categorias';
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
 import { 
@@ -90,7 +91,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   const [prodName, setProdName] = useState('');
   const [prodSku, setProdSku] = useState('');
   const [prodDesc, setProdDesc] = useState('');
-  const [prodCategory, setProdCategory] = useState('Fundas');
+  const [prodCategory, setProdCategory] = useState<string>('Accesorios');
   const [prodPrice, setProdPrice] = useState<number | ''>('');
   const [prodCost, setProdCost] = useState<number | ''>('');
   const [prodStock, setProdStock] = useState<number | ''>('');
@@ -152,7 +153,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   
   // Modals
   const [traceProductModal, setTraceProductModal] = useState<Product | null>(null);
-  const sparePartCategories = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
+  const sparePartCategories = CATEGORIAS_REPUESTO;
   const [deleteProductModal, setDeleteProductModal] = useState<Product | null>(null);
 
   // Toast System
@@ -1724,7 +1725,12 @@ if (!m) return null;
                           options={
                             (activeSubTab === 'repuestos' || sparePartCategories.includes(prodCategory) || prodCategory === 'Repuestos'
                               ? sparePartCategories
-                              : ['Fundas', 'Cables', 'Cargadores', 'Protectores', 'Teclados', 'Mouse', 'Audífonos', 'Otros']
+                              // HOMOLOGADO con la tienda: esta es la MISMA lista que ve el
+                              // cliente en el catálogo (src/utils/categorias.ts). Antes había
+                              // aquí una lista propia — Fundas, Cables, Otros… — que la tienda
+                              // no sabía mostrar, y los productos guardados como "Otros"
+                              // desaparecían al filtrar por categoría.
+                              : [...CATEGORIAS_TIENDA]
                             ).map(c => ({ value: c, label: c }))
                           }
                         />
