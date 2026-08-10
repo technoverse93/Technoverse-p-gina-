@@ -20,9 +20,9 @@ import { useToast, useConfirm } from './ui/Overlays';
 // que parsear/ejecutar en el arranque del panel.
 const TallerKanban = lazy(() => import('./TallerKanban'));
 const InventarioControl = lazy(() => import('./InventarioControl'));
-const ComplianceModule = lazy(() => import('./ComplianceModule'));
 const ChatCRM = lazy(() => import('./chat/ChatCRM'));
 const CyberSecurityPanel = lazy(() => import('./CyberSecurityPanel'));
+const ClienteFicha = lazy(() => import('./ClienteFicha'));
 
 const TabLoadingFallback = () => (
   <div className="flex items-center justify-center py-24 text-[var(--text-muted)] text-sm gap-2">
@@ -84,6 +84,10 @@ export default function AdminPanel({
       // del Centro de Ciberseguridad. Sin esta traducción, un enlace o un
       // marcador viejo a /admin/bitacora abriría el panel en blanco.
       if (tab === 'bitacora') return 'ciberseguridad';
+      // 'cumplimiento' y 'logistica' se retiraron del panel. Sin esta
+      // traducción, un enlace o un marcador viejo a esas rutas abriría el
+      // panel en blanco, sin menú y sin ningún mensaje.
+      if (tab === 'cumplimiento' || tab === 'logistica') return 'dashboard';
       return tab || 'dashboard';
     }
     return 'dashboard';
@@ -185,6 +189,9 @@ export default function AdminPanel({
   // Correo del cliente cuyo reseteo de contraseña está en curso; deshabilita
   // su botón puntual mientras la Edge Function responde (evita doble envío).
   const [resettingClientEmail, setResettingClientEmail] = useState<string | null>(null);
+  // Cliente cuya ficha completa está abierta (historial, contraseña,
+  // correo, activo/inactivo y los derechos de la Ley 8968).
+  const [clienteFicha, setClienteFicha] = useState<ClientProfile | null>(null);
   const [clientForm, setClientForm] = useState<Partial<ClientProfile>>({
     name: '', email: '', phone: '', province: 'San José', addressDetail: '', notes: ''
   });
@@ -945,9 +952,7 @@ export default function AdminPanel({
     } else {
       const items = [
         { id: 'facturacion', label: 'Contabilidad y FAC', icon: FileSpreadsheet },
-        { id: 'cumplimiento', label: 'Cumplimiento Legal', icon: ShieldCheck },
         { id: 'marketing', label: 'Marketing y Banners', icon: Megaphone },
-        { id: 'logistica', label: 'Logística Entregas', icon: Truck },
         // La antigua pestaña "Bitácora de Auditoría" quedó absorbida dentro
         // del Centro de Ciberseguridad, como una de sus secciones. Es la
         // misma tabla con el mismo botón de limpiar: no se perdió nada, solo
@@ -987,9 +992,7 @@ export default function AdminPanel({
       title: "Servicios & Finanzas",
       items: [
         { id: 'facturacion', label: 'Contabilidad y FAC', icon: FileSpreadsheet },
-        { id: 'cumplimiento', label: 'Cumplimiento Legal', icon: ShieldCheck },
         { id: 'marketing', label: 'Marketing y Banners', icon: Megaphone },
-        { id: 'logistica', label: 'Logística Entregas', icon: Truck },
         // La antigua pestaña "Bitácora de Auditoría" quedó absorbida dentro
         // del Centro de Ciberseguridad, como una de sus secciones. Es la
         // misma tabla con el mismo botón de limpiar: no se perdió nada, solo
@@ -1563,6 +1566,9 @@ export default function AdminPanel({
                           </td>
                           <td className="p-4 text-center">
                             <div className="flex items-center justify-center gap-1">
+                              <button onClick={() => setClienteFicha(c)} className="px-2 py-1 hover:bg-[var(--bg-base)] rounded-lg text-[var(--brand-gold-mid)] border border-[var(--brand-gold-mid)]/40 text-[10px] font-bold uppercase transition" title="Ficha completa del cliente">
+                                Ver ficha
+                              </button>
                               <button onClick={() => openClientModal(c)} className="p-1.5 hover:bg-[var(--bg-surface)] rounded-lg text-sky-400 dark:text-[var(--brand-gold-light)] transition" title="Editar Cliente">
                                 <Edit className="w-4 h-4" />
                               </button>
@@ -1580,6 +1586,18 @@ export default function AdminPanel({
                 </table>
               </div>
             </div>
+
+            {clienteFicha && (
+              <Suspense fallback={null}>
+                <ClienteFicha
+                  cliente={clienteFicha}
+                  pedidos={orders}
+                  adminEmail={currentUser?.email}
+                  onCerrar={() => setClienteFicha(null)}
+                  onCambios={loadAllAdminData}
+                />
+              </Suspense>
+            )}
           </div>
 
         )}
@@ -1654,18 +1672,6 @@ export default function AdminPanel({
                 </table>
               </div>
             </div>
-          </div>
-
-        )}
-        {activeTab === 'cumplimiento' && (
-          /* MODULE L: CUMPLIMIENTO LEGAL (EMBEDDED NATIVELY) */
-          <div className="space-y-4" id="view-cumplimiento">
-            <Suspense fallback={<TabLoadingFallback />}>
-              <ComplianceModule
-                onRefreshData={loadAllAdminData}
-                activeUserEmail={currentUser?.email}
-              />
-            </Suspense>
           </div>
 
         )}
@@ -1852,114 +1858,6 @@ export default function AdminPanel({
               </div>
             </div>
           </div>
-        )}
-        {activeTab === 'logistica' && (
-          /* MODULE I: LOGÍSTICA ENTREGAS */
-          <div className="space-y-6" id="view-logistica">
-            <div className="flex justify-between items-center border-b border-[var(--border-color)]/50 pb-3">
-              <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <Truck className="w-5 h-5 text-sky-500 dark:text-[var(--brand-gold-light)]" /> Despacho de Envíos y Logística
-              </h3>
-            </div>
-
-            {/* Home business logistics explanation */}
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 space-y-3">
-              <h4 className="text-sm font-bold uppercase text-sky-400 dark:text-[var(--brand-gold-light)]">Canal de Distribución Residencial</h4>
-              <p className="text-[11px] text-[var(--text-primary)] leading-relaxed">
-                Dado que Technoverse opera como microempresa familiar desde la vivienda del CEO, no se cuenta con muelles de carga pesada ni silos de distribución masiva. Despachamos todos los envíos utilizando canales profesionales integrados:
-              </p>
-              <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1 text-[10px] font-sans">
-                <div className="bg-[var(--bg-surface)] p-3 rounded-xl border border-[var(--border-color)]/50">
-                  <span className="font-bold text-sky-400 dark:text-[var(--brand-gold-light)] block mb-1">📬 Correos de Costa Rica</span>
-                  Envíos a todo el país fuera de la GAM. Despachados de lunes a viernes a las 4:00 PM con número de tracking oficial.
-                </div>
-                <div className="bg-[var(--bg-surface)] p-3 rounded-xl border border-[var(--border-color)]/50">
-                  <span className="font-bold text-emerald-400 dark:text-[var(--brand-gold-light)] block mb-1">🏍️ Mensajería Express GAM</span>
-                  Servicios de mensajería motorizada tercerizada para entregas prioritarias (en menos de 24 horas) en San José, Heredia y Alajuela.
-                </div>
-                <div className="bg-[var(--bg-surface)] p-3 rounded-xl border border-[var(--border-color)]/50">
-                  <span className="font-bold text-amber-400 block mb-1">🏠 Retiro en Residencia</span>
-                  Los clientes pueden retirar sus dispositivos reparados o repuestos en el domicilio del CEO de lunes a viernes con cita programada.
-                </div>
-              </div>
-            </div>
-
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden p-5">
-              <span className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] block mb-4">Lista de Entregas Activas</span>
-              <div className="space-y-3">
-                {deliveries.length === 0 ? (
-                  <div className="text-center py-6 text-sm text-[var(--text-secondary)] italic">No hay pedidos pendientes de entrega física de mensajería en Costa Rica en este momento.</div>
-                ) : (
-                  deliveries.map(del => {
-                      if (!del || !del.addressDetail) return null; 
-if (!del) return null;
-                    const addrLower = del.addressDetail.toLowerCase();
-                    const isPickup = addrLower.includes('retiro') || addrLower.includes('residencia') || addrLower.includes('oficina') || addrLower.includes('casa');
-                    const isGAM = del.province ? ['san jose', 'sanjose', 'heredia', 'alajuela', 'cartago'].includes(del.province.toLowerCase().trim()) : false;
-                    
-                    let channelLabel = "Correos de Costa Rica (Socio Nacional)";
-                    let channelColor = "bg-[var(--brand-gold-mid)]/10 text-sky-400 dark:text-[var(--brand-gold-light)] border-sky-500 dark:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/20";
-                    
-                    if (isPickup) {
-                      channelLabel = "Retiro Programado en Residencia";
-                      channelColor = "bg-amber-500/10 text-amber-400 border-amber-500/20";
-                    } else if (isGAM) {
-                      channelLabel = "Mensajería Express GAM (Motorizado)";
-                      channelColor = "bg-emerald-500 dark:bg-[var(--brand-gold-mid)]/10 text-emerald-400 dark:text-[var(--brand-gold-light)] border-emerald-500 dark:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/20";
-                    }
-
-                    return (
-                      <div key={del.id} className="bg-[var(--bg-surface)] p-4 border border-[var(--border-color)]/50 rounded-xl flex flex-col md:flex-row md:items-center justify-between gap-4 text-sm font-mono">
-                        <div className="space-y-1">
-                          <div className="flex items-center gap-2">
-                            <span className="font-bold text-[var(--text-primary)]">{del.id} ({del.type})</span>
-                            <span className={`px-2 py-0.5 rounded text-[8px] font-sans font-bold uppercase border ${channelColor}`}>
-                              {channelLabel}
-                            </span>
-                          </div>
-                          <div className="text-[var(--text-secondary)] font-sans">{del.recipientName} | Tel: {del.recipientPhone}</div>
-                          <div className="text-[var(--text-secondary)] font-sans">{del.province}, {del.addressDetail}</div>
-                        </div>
-                        <div className="text-right space-y-1.5 self-end md:self-center">
-                          <div className="flex justify-end gap-2 items-center">
-                            <span className="text-[10px] text-[var(--text-secondary)]">Estado:</span>
-                            <span className="bg-amber-50 border border-amber-200 text-amber-700 font-bold px-2 py-0.5 rounded text-[10px]">
-                              {del.status}
-                            </span>
-                          </div>
-                          <button
-                            onClick={() => {
-                              const db = getDB();
-                              const idx = db.deliveries.findIndex(d => d && d.id === del.id);
-                              if (idx !== -1) {
-                                db.deliveries[idx].status = 'Entregado';
-                                db.deliveries[idx].digitalSignature = 'Firma-Confirmada-Mensajero';
-                                db.audit_log.unshift({
-                                  id: `LOG-${Date.now()}`,
-                                  userEmail: currentUser?.email || 'admin',
-                                  module: 'Logística',
-                                  action: 'Entregado',
-                                  detail: `Pedido ${del.id} entregado y firmado digitalmente mediante canal: ${channelLabel}.`,
-                                  timestamp: new Date().toISOString()
-                                });
-                                saveDB(db);
-                                loadAllAdminData();
-                                toast.success('Entrega marcada como completada y registrada en bitácora.');
-                              }
-                            }}
-                            className="block bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-[var(--text-primary)] font-bold px-3 py-1.5 rounded-xl transition font-sans text-[10px] uppercase tracking-wider"
-                          >
-                            Confirmar Firma Digital / Entrega
-                          </button>
-                        </div>
-                      </div>
-                    );
-                  })
-                )}
-              </div>
-            </div>
-          </div>
-
         )}
         {activeTab === 'ciberseguridad' && (
           /* MODULE J: CENTRO DE CIBERSEGURIDAD

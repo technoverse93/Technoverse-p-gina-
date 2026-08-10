@@ -67,7 +67,6 @@ export default function PublicStore({
   toggleTheme
 }: PublicStoreProps) {
   const [products, setProducts] = useState<Product[]>([]);
-  const [banners, setBanners] = useState<any[]>([]);
   const [dbInstance, setDbInstance] = useState<any>(null);
   const [storeLogo, setStoreLogo] = useState<string | null>(null);
   const db = getDB();
@@ -448,7 +447,6 @@ export default function PublicStore({
     // Filter out spare part categories from public store
     const SPARE_PART_CATEGORIES = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
     setProducts((freshDb.products || []).filter(p => p && p.active !== false && Number(p.stock) > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
-    setBanners(freshDb.banners ? freshDb.banners.filter(b => b && b.active) : []);
   };
 
   // Search input autocompletion logic in Spanish
@@ -1542,25 +1540,6 @@ export default function PublicStore({
         {activeTab === 'store' ? (
           /* PUBLIC STORE VIEW */
           <>
-            {/* Banner Carousel (Amazon-inspired) */}
-            {banners.length > 0 && (
-              <div className="relative h-44 bg-gradient-to-r from-blue-500/5 via-white to-[#D4AF37]/5 dark:bg-[var(--bg-surface)] dark:bg-none rounded-3xl border border-[var(--border-color)] flex items-center justify-between p-8 overflow-hidden shadow-sm mb-8">
-                <div className="space-y-2 max-w-md z-10">
-                  <span className="text-[10px] bg-[var(--brand-gold-mid)] text-[#1a1408] dark:text-[#14100a] px-2.5 py-0.5 rounded-full font-bold uppercase tracking-wider">{banners[0].type}</span>
-                  <h2 className="text-xl md:text-2xl font-extrabold text-[var(--text-primary)] tracking-tight leading-none">
-                    {banners[0].title}
-                  </h2>
-                  <p className="text-sm text-[var(--text-secondary)] font-sans">
-                    {banners[0].description}
-                  </p>
-                </div>
-                <div className="relative hidden md:block">
-                  <Smartphone className="w-24 h-24 text-blue-500 dark:text-[var(--brand-gold-light)]/10 absolute -top-12 -right-12 animate-pulse" />
-                  <Sparkles className="w-16 h-16 text-[var(--brand-gold-mid)]/10 animate-bounce" />
-                </div>
-              </div>
-            )}
-
             {/* Featured Categories Carousel */}
             <FeaturedCategoriesCarousel 
               categories={CATEGORIES} 
