@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import {
-  X, Key, Mail, Power, Download, Trash2, ShoppingBag, RefreshCw, Save, AlertTriangle
+  X, Key, Mail, Power, Download, Trash2, ShoppingBag, RefreshCw, Save, AlertTriangle, ShieldOff
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
@@ -52,6 +52,8 @@ export default function ClienteFicha({ cliente, pedidos, adminEmail, onCerrar, o
   const [ocupado, setOcupado] = useState<string | null>(null);
   const [nuevaClave, setNuevaClave] = useState('');
   const [nuevoCorreo, setNuevoCorreo] = useState('');
+  const [penalizado, setPenalizado] = useState<boolean | null>(null);
+  const [motivoBaneo, setMotivoBaneo] = useState('');
 
   // `activo` no viaja en el objeto del CRM: se dejó fuera del mapeo de
   // storage.ts para que el formulario de siempre no lo pise sin querer.
@@ -66,6 +68,20 @@ export default function ClienteFicha({ cliente, pedidos, adminEmail, onCerrar, o
       .then(({ data }) => { if (vigente) setActivo(data?.activo ?? true); });
     return () => { vigente = false; };
   }, [cliente.id]);
+
+  // ¿Tiene un baneo total vigente? Se pregunta por el correo porque esa
+  // es la llave de la lista de penalizados: un cliente puede existir en
+  // el CRM sin tener todavía cuenta de acceso.
+  useEffect(() => {
+    let vigente = true;
+    supabase
+      .from('blocked_users_list')
+      .select('email, levantado_en')
+      .eq('email', (cliente.email || '').toLowerCase())
+      .maybeSingle()
+      .then(({ data }) => { if (vigente) setPenalizado(!!data && !data.levantado_en); });
+    return () => { vigente = false; };
+  }, [cliente.email]);
 
   // Historial de compras. Se cruza por correo porque es lo que queda
   // guardado en el pedido; el id del cliente no siempre viaja en él.
@@ -183,6 +199,71 @@ export default function ClienteFicha({ cliente, pedidos, adminEmail, onCerrar, o
       addAuditLog(adminEmail || 'admin', 'Clientes', apagar ? 'Desactivar cuenta' : 'Reactivar cuenta',
         `Cuenta de ${cliente.email} ${apagar ? 'desactivada' : 'reactivada'}`);
       toast.success(apagar ? 'Cuenta desactivada. Ya no puede iniciar sesión.' : 'Cuenta reactivada.');
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  // ---- Baneo total ---------------------------------------------------
+  //
+  // Distinto de "desactivar la cuenta": aquella solo cierra el inicio de
+  // sesión, y la persona puede seguir navegando la tienda como anónima.
+  // El baneo total le cierra el sitio entero —tienda, catálogo y carrito—
+  // y además bloquea las IPs desde las que se le vio entrar.
+  //
+  // Todo el trabajo lo hace la función `banear_cliente_total` en la base
+  // de datos. Si se hiciera desde aquí en varias llamadas sueltas, una
+  // que fallara a medias dejaría la cuenta bloqueada por un lado y libre
+  // por el otro.
+  const aplicarBaneoTotal = async () => {
+    const ok = await confirm({
+      title: 'Aplicar baneo total',
+      message: `${cliente.name} perderá el acceso a TODA la plataforma: no podrá entrar, ver el catálogo ni comprar, y se bloquearán las direcciones IP desde las que se le ha visto. Sus pedidos y facturas anteriores se conservan intactos. ¿Continuar?`,
+      confirmText: 'Aplicar baneo total',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    setOcupado('baneo');
+    try {
+      const { data, error } = await supabase.rpc('banear_cliente_total', {
+        p_email: cliente.email,
+        p_motivo: motivoBaneo.trim() || null,
+        p_bloquear_user_agent: false,
+      });
+      if (error) { toast.error('No se pudo aplicar el baneo: ' + error.message); return; }
+      const total = (data as any)?.total_ips ?? 0;
+      setPenalizado(true);
+      setActivo(false);
+      addAuditLog(adminEmail || 'admin', 'Seguridad', 'Baneo total',
+        `Cuenta ${cliente.email} penalizada. IPs bloqueadas: ${total}. Motivo: ${motivoBaneo.trim() || 'sin detallar'}`);
+      toast.success(
+        'Baneo total aplicado.' + (total > 0 ? ` Se bloquearon ${total} ${total === 1 ? 'dirección IP' : 'direcciones IP'}.` : '')
+      );
+      onCambios?.();
+    } finally {
+      setOcupado(null);
+    }
+  };
+
+  const quitarBaneoTotal = async () => {
+    const ok = await confirm({
+      title: 'Levantar el baneo total',
+      message: `${cliente.name} volverá a poder entrar y comprar. Se liberarán las IPs que se bloquearon por este baneo; las que estén bloqueadas por otro motivo se quedan como están. ¿Continuar?`,
+      confirmText: 'Levantar',
+    });
+    if (!ok) return;
+
+    setOcupado('baneo');
+    try {
+      const { error } = await supabase.rpc('levantar_baneo_cliente', { p_email: cliente.email });
+      if (error) { toast.error('No se pudo levantar: ' + error.message); return; }
+      setPenalizado(false);
+      setActivo(true);
+      addAuditLog(adminEmail || 'admin', 'Seguridad', 'Levantar baneo total',
+        `Penalización de ${cliente.email} levantada`);
+      toast.success('Baneo levantado. El cliente ya puede volver a entrar.');
+      onCambios?.();
     } finally {
       setOcupado(null);
     }
@@ -421,6 +502,55 @@ export default function ClienteFicha({ cliente, pedidos, adminEmail, onCerrar, o
               {trabajando('activo') ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
               {activo === false ? 'Reactivar cuenta' : 'Desactivar cuenta'}
             </button>
+          </section>
+
+          {/* ---- Baneo total ---- */}
+          <section className={`border rounded-2xl p-4 space-y-3 ${
+            penalizado
+              ? 'bg-rose-500/10 border-rose-500/40'
+              : 'bg-[var(--bg-base)] border-[var(--border-color)]/60'
+          }`}>
+            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
+              <ShieldOff className="w-4 h-4" /> Baneo total
+              {penalizado && (
+                <span className="text-[9px] bg-rose-500/20 text-rose-400 border border-rose-500/40 px-2 py-0.5 rounded normal-case tracking-normal">
+                  Vigente
+                </span>
+              )}
+            </h4>
+            <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+              No es lo mismo que desactivar la cuenta. Desactivarla solo cierra el inicio de sesión: la persona puede
+              seguir viendo la tienda como visitante anónimo. El baneo total le cierra{' '}
+              <strong className="text-[var(--text-primary)]">la plataforma entera</strong> —tienda, catálogo y carrito—
+              y bloquea las direcciones IP desde las que se le ha visto entrar. Es para fraude, abuso o falta de
+              respeto, no para una discusión por un pedido.
+            </p>
+
+            {!penalizado && (
+              <input
+                value={motivoBaneo}
+                onChange={e => setMotivoBaneo(e.target.value)}
+                placeholder="Motivo (queda registrado)"
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand-gold-mid)]"
+              />
+            )}
+
+            <button
+              onClick={penalizado ? quitarBaneoTotal : aplicarBaneoTotal}
+              disabled={!!ocupado || penalizado === null}
+              className={`text-xs font-bold px-4 py-2 rounded-xl transition border flex items-center gap-1.5 disabled:opacity-50 ${
+                penalizado
+                  ? 'bg-[var(--bg-surface)] border-[var(--border-color)]/80 text-[var(--text-primary)] hover:bg-[var(--bg-base)]'
+                  : 'bg-rose-600 border-rose-600 text-white hover:bg-rose-700'
+              }`}
+            >
+              {trabajando('baneo') ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <ShieldOff className="w-3.5 h-3.5" />}
+              {penalizado ? 'Levantar el baneo total' : 'Aplicar baneo total'}
+            </button>
+
+            <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+              Sus pedidos y facturas anteriores no se tocan: son parte de la contabilidad y tienen que conservarse.
+            </p>
           </section>
 
           {/* ---- Ley 8968 ---- */}

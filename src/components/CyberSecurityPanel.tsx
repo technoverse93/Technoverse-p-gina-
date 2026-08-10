@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ShieldAlert, Globe, Ban, CheckCircle, XCircle, RefreshCw, Trash2,
-  MapPin, Smartphone, Monitor, Plus, Unlock, Lock, BookOpen, Activity
+  MapPin, Smartphone, Monitor, Plus, Unlock, Lock, BookOpen, Activity,
+  Users, UserX, Search, ShieldOff
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB } from '../utils/storage';
@@ -13,18 +14,35 @@ import { useToast, useConfirm } from './ui/Overlays';
 // =====================================================================
 // CENTRO DE CIBERSEGURIDAD
 // =====================================================================
-// Una sola pantalla con todo lo que tiene que ver con quién entra, quién
-// lo intenta y qué se hace dentro del sistema:
+// Una sola pantalla, dividida en las dos cosas que en realidad son
+// distintas y que antes estaban mezcladas:
 //
-//   · Resumen        — el estado de un vistazo
-//   · Accesos        — cada intento, con IP, ubicación y dispositivo
-//   · Bloqueos       — la lista negra de IPs, con desbloqueo manual
-//   · Lista blanca   — conexiones de confianza que nunca se bloquean
-//   · Bitácora       — el registro de acciones operativas
+// A) SEGURIDAD ADMINISTRATIVA — la puerta de atrás. Quién intenta entrar
+//    al panel, defensa contra fuerza bruta y bloqueo de IPs.
+//      · Resumen        — el estado de un vistazo
+//      · Accesos        — cada intento, con IP, ubicación y dispositivo
+//      · Dispositivos   — aparatos reconocidos
+//      · Bloqueos       — la lista negra de IPs, con desbloqueo manual
+//      · Lista blanca   — conexiones de confianza que nunca se bloquean
+//      · Bitácora       — el registro de acciones operativas
+//
+// B) TRÁFICO Y USUARIOS — la puerta de adelante. Quién visita la tienda
+//    y a quién se le ha retirado el derecho de usarla.
+//      · Visitantes     — un renglón por aparato: IP, sistema, navegador
+//      · Penalizados    — las cuentas con baneo total, y cómo levantarlo
+//
+// La separación no es cosmética: son dos trabajos distintos. Uno se mira
+// cuando algo huele a intrusión; el otro, cuando hay un problema con un
+// cliente concreto. Tenerlos juntos hacía que ninguno se revisara.
 //
 // La pestaña "Bitácora de Auditoría" que existía aparte quedó absorbida
-// aquí como la última sección: es exactamente la misma tabla, con el
-// mismo botón de limpiar. No se perdió nada, solo dejó de estar suelta.
+// aquí: es exactamente la misma tabla, con el mismo botón de limpiar. No
+// se perdió nada, solo dejó de estar suelta.
+//
+// SOBRE LA TELEMETRÍA DE VISITANTES: no incluye ubicación. A un cliente
+// que solo viene a comprar no se le pide permiso de GPS — la IP ya dice
+// país y provincia, que es lo que sirve para un reclamo, y pedir más
+// espanta gente sin aportar nada.
 // =====================================================================
 
 interface CyberSecurityPanelProps {
@@ -33,8 +51,51 @@ interface CyberSecurityPanelProps {
   onAuditLogChanged?: () => void;
 }
 
-type Seccion = 'resumen' | 'accesos' | 'dispositivos' | 'bloqueos' | 'blanca' | 'bitacora';
+type Vertiente = 'admin' | 'trafico';
+type Seccion =
+  | 'resumen' | 'accesos' | 'dispositivos' | 'bloqueos' | 'blanca' | 'bitacora'
+  | 'visitantes' | 'penalizados';
 type FiltroAccesos = 'todos' | 'exitosos' | 'fallidos' | 'bloqueados';
+
+/** Un aparato que entró a la tienda. Un renglón por aparato, no por visita. */
+interface Visitante {
+  huella: string;
+  primera_visita: string;
+  ultima_visita: string;
+  visitas: number;
+  ip: string | null;
+  user_agent: string | null;
+  navegador: string | null;
+  version_navegador: string | null;
+  sistema: string | null;
+  version_sistema: string | null;
+  dispositivo: string | null;
+  tipo: string | null;
+  plataforma: string | null;
+  idioma: string | null;
+  zona_horaria: string | null;
+  pantalla: string | null;
+  memoria_gb: number | null;
+  nucleos: number | null;
+  origen: string | null;
+  email: string | null;
+  ultima_ruta: string | null;
+}
+
+/** Una cuenta con baneo total vigente o ya levantado. */
+interface Penalizado {
+  email: string;
+  nombre: string | null;
+  motivo: string | null;
+  ip_al_banear: string | null;
+  user_agent_al_banear: string | null;
+  bloquear_user_agent: boolean;
+  ips_bloqueadas: string[] | null;
+  creado_en: string;
+  creado_por: string | null;
+  levantado_en: string | null;
+  levantado_por: string | null;
+}
 
 interface Acceso {
   id: number;
@@ -158,7 +219,16 @@ export default function CyberSecurityPanel({
   const toast = useToast();
   const confirm = useConfirm();
 
+  const [vertiente, setVertiente] = useState<Vertiente>('admin');
   const [seccion, setSeccion] = useState<Seccion>('resumen');
+  const [visitantes, setVisitantes] = useState<Visitante[]>([]);
+  const [penalizados, setPenalizados] = useState<Penalizado[]>([]);
+  const [buscarVisitante, setBuscarVisitante] = useState('');
+  const [visitanteDetalle, setVisitanteDetalle] = useState<Visitante | null>(null);
+  const [baneoModal, setBaneoModal] = useState<{ email: string; nombre?: string | null } | null>(null);
+  const [baneoMotivo, setBaneoMotivo] = useState('');
+  const [baneoUsarUA, setBaneoUsarUA] = useState(false);
+  const [baneando, setBaneando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [accesos, setAccesos] = useState<Acceso[]>([]);
   const [bloqueos, setBloqueos] = useState<Bloqueo[]>([]);
@@ -176,16 +246,20 @@ export default function CyberSecurityPanel({
   // -------------------------------------------------------------------
   const cargar = useCallback(async () => {
     setCargando(true);
-    const [a, b, c, d] = await Promise.all([
+    const [a, b, c, d, e, f] = await Promise.all([
       supabase.from('login_audit_logs').select('*').order('ocurrido_en', { ascending: false }).limit(300),
       supabase.from('banned_ips').select('*').order('actualizado_en', { ascending: false }),
       supabase.from('ip_whitelist').select('*').order('creado_en', { ascending: false }),
       supabase.from('known_devices').select('*').order('ultimo_visto', { ascending: false }),
+      // Tope de 500: es un panel para mirar, no un almacén. Lo viejo lo
+      // limpia `purgar_huellas()` en la base.
+      supabase.from('visitor_fingerprints').select('*').order('ultima_visita', { ascending: false }).limit(500),
+      supabase.from('blocked_users_list').select('*').order('creado_en', { ascending: false }),
     ]);
     // Se avisa del fallo en vez de mostrar una pantalla vacía que parecería
     // decir "no hay ningún intento registrado" — que es lo contrario de lo
     // que uno necesita creer en un panel de seguridad.
-    const fallo = a.error || b.error || c.error || d.error;
+    const fallo = a.error || b.error || c.error || d.error || e.error || f.error;
     if (fallo) {
       toast.error('No se pudo leer el registro de seguridad: ' + fallo.message);
     }
@@ -193,6 +267,8 @@ export default function CyberSecurityPanel({
     setBloqueos((b.data as Bloqueo[]) || []);
     setConfianza((c.data as Confianza[]) || []);
     setDispositivos((d.data as Dispositivo[]) || []);
+    setVisitantes((e.data as Visitante[]) || []);
+    setPenalizados((f.data as Penalizado[]) || []);
     setCargando(false);
   }, [toast]);
 
@@ -270,6 +346,59 @@ export default function CyberSecurityPanel({
     if (error) { toast.error('No se pudo bloquear: ' + error.message); return; }
     toast.success(`IP ${limpia} bloqueada ${permanente ? 'de forma permanente' : 'por 30 minutos'}.`);
     setNuevaIpBloqueo('');
+    cargar();
+  };
+
+  // ---- Tráfico y usuarios -------------------------------------------
+  const visitantesFiltrados = useMemo(() => {
+    const q = buscarVisitante.trim().toLowerCase();
+    if (!q) return visitantes;
+    return visitantes.filter(v =>
+      [v.ip, v.email, v.dispositivo, v.sistema, v.navegador, v.huella]
+        .some(campo => (campo || '').toLowerCase().includes(q))
+    );
+  }, [visitantes, buscarVisitante]);
+
+  const emailsPenalizados = useMemo(
+    () => new Set(penalizados.filter(x => !x.levantado_en).map(x => x.email.toLowerCase())),
+    [penalizados]
+  );
+
+  /**
+   * Baneo total. Lo hace TODO la función de base de datos
+   * `banear_cliente_total`, no este componente: si se hiciera desde aquí
+   * con varias llamadas sueltas, una que fallara a medias dejaría al
+   * cliente bloqueado por un lado y libre por el otro.
+   */
+  const aplicarBaneoTotal = async () => {
+    if (!baneoModal) return;
+    setBaneando(true);
+    const { data, error } = await supabase.rpc('banear_cliente_total', {
+      p_email: baneoModal.email,
+      p_motivo: baneoMotivo.trim() || null,
+      p_bloquear_user_agent: baneoUsarUA,
+    });
+    setBaneando(false);
+    if (error) { toast.error('No se pudo aplicar el baneo: ' + error.message); return; }
+    const total = (data as any)?.total_ips ?? 0;
+    toast.success(
+      `Cuenta ${baneoModal.email} penalizada.` +
+      (total > 0 ? ` Se bloquearon ${total} ${total === 1 ? 'dirección IP' : 'direcciones IP'}.` : '')
+    );
+    setBaneoModal(null); setBaneoMotivo(''); setBaneoUsarUA(false);
+    cargar();
+  };
+
+  const levantarBaneo = async (email: string) => {
+    const ok = await confirm({
+      title: 'Levantar la penalización',
+      message: `${email} volverá a poder entrar a la tienda y comprar. Se liberarán además las IPs que se bloquearon por este baneo — las que estén bloqueadas por otro motivo se quedan como están. ¿Continuar?`,
+      confirmText: 'Levantar',
+    });
+    if (!ok) return;
+    const { error } = await supabase.rpc('levantar_baneo_cliente', { p_email: email });
+    if (error) { toast.error('No se pudo levantar: ' + error.message); return; }
+    toast.success(`Penalización de ${email} levantada.`);
     cargar();
   };
 
@@ -398,14 +527,29 @@ export default function CyberSecurityPanel({
   };
 
   // -------------------------------------------------------------------
-  const secciones: { id: Seccion; label: string; icono: any; contador?: number }[] = [
-    { id: 'resumen',  label: 'Resumen',      icono: Activity },
-    { id: 'accesos',  label: 'Accesos',      icono: Globe,      contador: accesos.length },
-    { id: 'dispositivos', label: 'Dispositivos', icono: Smartphone, contador: dispositivos.length },
-    { id: 'bloqueos', label: 'Bloqueos',     icono: Ban,        contador: resumen.bloqueosActivos },
-    { id: 'blanca',   label: 'Lista blanca', icono: CheckCircle, contador: confianza.length },
-    { id: 'bitacora', label: 'Bitácora',     icono: BookOpen,   contador: auditLog.length },
-  ];
+  const seccionesPorVertiente: Record<Vertiente, { id: Seccion; label: string; icono: any; contador?: number }[]> = {
+    admin: [
+      { id: 'resumen',      label: 'Resumen',      icono: Activity },
+      { id: 'accesos',      label: 'Accesos',      icono: Globe,      contador: accesos.length },
+      { id: 'dispositivos', label: 'Dispositivos', icono: Smartphone, contador: dispositivos.length },
+      { id: 'bloqueos',     label: 'Bloqueos',     icono: Ban,        contador: resumen.bloqueosActivos },
+      { id: 'blanca',       label: 'Lista blanca', icono: CheckCircle, contador: confianza.length },
+      { id: 'bitacora',     label: 'Bitácora',     icono: BookOpen,   contador: auditLog.length },
+    ],
+    trafico: [
+      { id: 'visitantes',  label: 'Visitantes',  icono: Users, contador: visitantes.length },
+      { id: 'penalizados', label: 'Penalizados', icono: UserX, contador: penalizados.filter(x => !x.levantado_en).length },
+    ],
+  };
+  const secciones = seccionesPorVertiente[vertiente];
+
+  /** Cambiar de vertiente lleva siempre a su primera sección: si no, se
+   *  quedaría seleccionada una pestaña que ya no está en pantalla y el
+   *  contenido saldría en blanco. */
+  const cambiarVertiente = (v: Vertiente) => {
+    setVertiente(v);
+    setSeccion(seccionesPorVertiente[v][0].id);
+  };
 
   return (
     <div className="space-y-6" id="view-ciberseguridad">
@@ -423,6 +567,36 @@ export default function CyberSecurityPanel({
         >
           <RefreshCw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin' : ''}`} /> Actualizar
         </button>
+      </div>
+
+      {/* ---- Las dos vertientes ---- */}
+      <div className="grid grid-cols-2 gap-2">
+        {([
+          { id: 'admin'   as Vertiente, titulo: 'Seguridad administrativa', pie: 'Accesos al panel, fuerza bruta y bloqueo de IPs', icono: Lock },
+          { id: 'trafico' as Vertiente, titulo: 'Tráfico y usuarios',       pie: 'Visitantes de la tienda y cuentas penalizadas',   icono: Users },
+        ]).map(v => {
+          const Icono = v.icono;
+          const activa = vertiente === v.id;
+          return (
+            <button
+              key={v.id}
+              onClick={() => cambiarVertiente(v.id)}
+              className={`text-left p-3 rounded-2xl border transition ${
+                activa
+                  ? 'bg-[var(--bg-surface)] border-[var(--brand-gold-mid)]/50 shadow-sm'
+                  : 'bg-transparent border-[var(--border-color)]/60 hover:bg-[var(--bg-surface)]'
+              }`}
+            >
+              <div className={`flex items-center gap-2 font-bold text-sm ${
+                activa ? 'text-[var(--brand-gold-mid)]' : 'text-[var(--text-primary)]'
+              }`}>
+                <Icono className="w-4 h-4 flex-shrink-0" />
+                <span className="truncate">{v.titulo}</span>
+              </div>
+              <p className="text-[10px] text-[var(--text-secondary)] mt-1 leading-snug">{v.pie}</p>
+            </button>
+          );
+        })}
       </div>
 
       {/* ---- Navegación interna ---- */}
@@ -988,6 +1162,342 @@ export default function CyberSecurityPanel({
                   )}
                 />
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* =============== VISITANTES DE LA TIENDA =============== */}
+      {seccion === 'visitantes' && (
+        <div className="space-y-4">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <p className="text-xs text-[var(--text-secondary)] max-w-xl leading-relaxed">
+              Un renglón por <strong className="text-[var(--text-primary)]">aparato</strong>, no por visita. Se guarda
+              la IP, el sistema operativo, el navegador y —cuando el navegador lo permite— el modelo.{' '}
+              <strong className="text-[var(--text-primary)]">No se pide ubicación a los clientes</strong>: la IP ya da
+              país y provincia, que es lo que sirve para un reclamo.
+            </p>
+            <div className="relative flex-shrink-0">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
+              <input
+                value={buscarVisitante}
+                onChange={e => setBuscarVisitante(e.target.value)}
+                placeholder="IP, correo, modelo…"
+                className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] w-56 focus:outline-none focus:border-[var(--brand-gold-mid)]"
+              />
+            </div>
+          </div>
+
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[820px] text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)] uppercase text-[10px] tracking-wide">
+                    <th className="p-3">Aparato</th>
+                    <th className="p-3">Sistema</th>
+                    <th className="p-3">Navegador</th>
+                    <th className="p-3">Conexión</th>
+                    <th className="p-3">Cliente</th>
+                    <th className="p-3 text-center">Visitas</th>
+                    <th className="p-3">Última vez</th>
+                    <th className="p-3 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <PaginatedTbody
+                  items={visitantesFiltrados}
+                  itemsPerPage={12}
+                  renderItem={(v: Visitante) => {
+                    const penalizado = !!v.email && emailsPenalizados.has(v.email.toLowerCase());
+                    return (
+                      <tr key={v.huella} className="border-b border-[var(--border-color)]/40 hover:bg-[var(--bg-base)]">
+                        <td className="p-3">
+                          <div className="flex items-center gap-2">
+                            {v.tipo === 'Escritorio'
+                              ? <Monitor className="w-3.5 h-3.5 text-[var(--text-secondary)] flex-shrink-0" />
+                              : <Smartphone className="w-3.5 h-3.5 text-[var(--text-secondary)] flex-shrink-0" />}
+                            <div className="min-w-0">
+                              <div className="font-bold text-[var(--text-primary)] truncate max-w-[180px]">
+                                {v.dispositivo || v.tipo || 'Aparato sin identificar'}
+                              </div>
+                              <div className="text-[10px] text-[var(--text-secondary)]">{v.tipo || '—'}</div>
+                            </div>
+                          </div>
+                        </td>
+                        <td className="p-3 text-[var(--text-primary)]">
+                          {v.sistema || '—'}
+                          {v.version_sistema && <span className="text-[var(--text-secondary)]"> {v.version_sistema}</span>}
+                        </td>
+                        <td className="p-3 text-[var(--text-primary)]">
+                          {v.navegador || '—'}
+                          {v.version_navegador && (
+                            <span className="text-[var(--text-secondary)]"> {String(v.version_navegador).split('.')[0]}</span>
+                          )}
+                        </td>
+                        <td className="p-3">
+                          <div className="font-mono text-[11px] text-[var(--text-primary)]">{v.ip || '—'}</div>
+                          <div className="text-[10px] text-[var(--text-secondary)] uppercase">{v.origen || 'web'}</div>
+                        </td>
+                        <td className="p-3">
+                          {v.email ? (
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <span className="truncate max-w-[170px] text-[var(--text-primary)]">{v.email}</span>
+                              {penalizado && (
+                                <span className="flex-shrink-0 text-[9px] uppercase font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 px-1.5 py-0.5 rounded">
+                                  Baneado
+                                </span>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-[var(--text-secondary)]">Anónimo</span>
+                          )}
+                        </td>
+                        <td className="p-3 text-center font-mono text-[var(--text-primary)]">{v.visitas}</td>
+                        <td className="p-3 text-[var(--text-secondary)] text-[11px]">{fechaCorta(v.ultima_visita)}</td>
+                        <td className="p-3">
+                          <div className="flex items-center justify-end gap-1.5">
+                            <button
+                              onClick={() => setVisitanteDetalle(v)}
+                              className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
+                            >
+                              Ver
+                            </button>
+                            {/* Solo se puede penalizar a quien tiene cuenta:
+                                un visitante anónimo no tiene nada que banear
+                                más allá de su IP, y para eso está Bloqueos. */}
+                            {v.email && !penalizado && (
+                              <button
+                                onClick={() => { setBaneoModal({ email: v.email as string }); setBaneoMotivo(''); setBaneoUsarUA(false); }}
+                                className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-rose-500/40 text-rose-400 hover:bg-rose-500/15"
+                              >
+                                Banear
+                              </button>
+                            )}
+                          </div>
+                        </td>
+                      </tr>
+                    );
+                  }}
+                />
+              </table>
+            </div>
+          </div>
+
+          {visitantesFiltrados.length === 0 && (
+            <p className="text-center text-xs text-[var(--text-secondary)] py-8">
+              {visitantes.length === 0
+                ? 'Todavía no hay visitas registradas. Los datos aparecen conforme la gente entre a la tienda.'
+                : 'Ningún visitante coincide con la búsqueda.'}
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* =============== CUENTAS PENALIZADAS =============== */}
+      {seccion === 'penalizados' && (
+        <div className="space-y-4">
+          <p className="text-xs text-[var(--text-secondary)] max-w-2xl leading-relaxed">
+            El baneo total hace tres cosas a la vez: marca la cuenta, bloquea todas las IPs desde las que se le vio y
+            desactiva su perfil de cliente. Deja de poder entrar, ver el catálogo y comprar — la aplicación le muestra
+            una pantalla de acceso denegado.{' '}
+            <strong className="text-[var(--text-primary)]">Los pedidos y facturas anteriores no se tocan</strong>,
+            porque son parte de la contabilidad.
+          </p>
+
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[760px] text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)] uppercase text-[10px] tracking-wide">
+                    <th className="p-3">Cuenta</th>
+                    <th className="p-3">Motivo</th>
+                    <th className="p-3 text-center">IPs bloqueadas</th>
+                    <th className="p-3">Aplicado</th>
+                    <th className="p-3 text-center">Estado</th>
+                    <th className="p-3 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <PaginatedTbody
+                  items={penalizados}
+                  itemsPerPage={10}
+                  renderItem={(x: Penalizado) => {
+                    const vigente = !x.levantado_en;
+                    return (
+                      <tr key={x.email} className="border-b border-[var(--border-color)]/40 hover:bg-[var(--bg-base)]">
+                        <td className="p-3">
+                          <div className="font-bold text-[var(--text-primary)] truncate max-w-[200px]">{x.email}</div>
+                          {x.nombre && <div className="text-[10px] text-[var(--text-secondary)]">{x.nombre}</div>}
+                        </td>
+                        <td className="p-3 text-[var(--text-primary)] max-w-[220px]">
+                          <div className="line-clamp-2">{x.motivo || '—'}</div>
+                          {x.bloquear_user_agent && (
+                            <div className="text-[9px] uppercase font-bold text-amber-500 mt-1">+ navegador bloqueado</div>
+                          )}
+                        </td>
+                        <td className="p-3 text-center font-mono text-[var(--text-primary)]">
+                          {x.ips_bloqueadas?.length || 0}
+                        </td>
+                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">
+                          <div>{fechaCorta(x.creado_en)}</div>
+                          {x.creado_por && <div className="text-[10px] truncate max-w-[150px]">{x.creado_por}</div>}
+                        </td>
+                        <td className="p-3 text-center">
+                          {vigente ? (
+                            <span className="text-[9px] uppercase font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded">
+                              Vigente
+                            </span>
+                          ) : (
+                            <span className="text-[9px] uppercase font-bold border border-[var(--border-color)]/70 text-[var(--text-secondary)] px-2 py-0.5 rounded">
+                              Levantado
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          {vigente ? (
+                            <button
+                              onClick={() => levantarBaneo(x.email)}
+                              className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-primary)] hover:bg-[var(--bg-surface)] inline-flex items-center gap-1"
+                            >
+                              <Unlock className="w-3 h-3" /> Levantar
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-[var(--text-secondary)]">
+                              {fechaCorta(x.levantado_en)}
+                            </span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  }}
+                />
+              </table>
+            </div>
+          </div>
+
+          {penalizados.length === 0 && (
+            <p className="text-center text-xs text-[var(--text-secondary)] py-8">
+              No hay ninguna cuenta penalizada. El baneo total se aplica desde la lista de visitantes o desde la ficha
+              del cliente.
+            </p>
+          )}
+        </div>
+      )}
+
+      {/* =============== DETALLE DE UN VISITANTE =============== */}
+      {visitanteDetalle && (
+        <div
+          className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setVisitanteDetalle(null)}
+        >
+          <div
+            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto p-5 space-y-3"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border-color)]/50 pb-3">
+              <h4 className="font-bold text-[var(--text-primary)]">Ficha del aparato</h4>
+              <button
+                onClick={() => setVisitanteDetalle(null)}
+                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xl leading-none px-2"
+              >
+                ×
+              </button>
+            </div>
+            {[
+              ['Modelo',            visitanteDetalle.dispositivo],
+              ['Tipo',              visitanteDetalle.tipo],
+              ['Sistema operativo', [visitanteDetalle.sistema, visitanteDetalle.version_sistema].filter(Boolean).join(' ')],
+              ['Navegador',         [visitanteDetalle.navegador, visitanteDetalle.version_navegador].filter(Boolean).join(' ')],
+              ['Dirección IP',      visitanteDetalle.ip],
+              ['Origen',            visitanteDetalle.origen === 'apk' ? 'Aplicación Android' : 'Navegador web'],
+              ['Cliente',           visitanteDetalle.email || 'Anónimo'],
+              ['Pantalla',          visitanteDetalle.pantalla],
+              ['Núcleos / memoria', [visitanteDetalle.nucleos ? `${visitanteDetalle.nucleos} núcleos` : '', visitanteDetalle.memoria_gb ? `${visitanteDetalle.memoria_gb} GB` : ''].filter(Boolean).join(' · ')],
+              ['Idioma',            visitanteDetalle.idioma],
+              ['Zona horaria',      visitanteDetalle.zona_horaria],
+              ['Última ruta',       visitanteDetalle.ultima_ruta],
+              ['Visitas',           String(visitanteDetalle.visitas)],
+              ['Primera visita',    fechaCorta(visitanteDetalle.primera_visita)],
+              ['Última visita',     fechaCorta(visitanteDetalle.ultima_visita)],
+            ].map(([etiqueta, valor]) => (
+              <div key={etiqueta as string} className="flex justify-between gap-4 text-xs">
+                <span className="text-[var(--text-secondary)] flex-shrink-0">{etiqueta}</span>
+                <span className="text-[var(--text-primary)] text-right break-all">{valor || '—'}</span>
+              </div>
+            ))}
+            <div className="text-[10px] text-[var(--text-secondary)] break-all pt-2 border-t border-[var(--border-color)]/30">
+              <span className="uppercase font-bold">User-Agent completo:</span> {visitanteDetalle.user_agent || '—'}
+            </div>
+            <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+              Este aparato no tiene ubicación registrada, y es a propósito: a los clientes de la tienda no se les pide
+              permiso de GPS. Lo que sí se puede saber es el país y la provincia a partir de la IP.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* =============== APLICAR BANEO TOTAL =============== */}
+      {baneoModal && (
+        <div
+          className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => !baneando && setBaneoModal(null)}
+        >
+          <div
+            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-md p-5 space-y-4"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center gap-2 border-b border-[var(--border-color)]/50 pb-3">
+              <ShieldOff className="w-5 h-5 text-rose-500 flex-shrink-0" />
+              <h4 className="font-bold text-[var(--text-primary)]">Baneo total</h4>
+            </div>
+
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              Se le retirará el acceso a <strong className="text-[var(--text-primary)]">{baneoModal.email}</strong>: la
+              cuenta queda suspendida y se bloquean todas las direcciones IP desde las que se le ha visto entrar. Sus
+              pedidos y facturas anteriores no se tocan.
+            </p>
+
+            <div>
+              <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1.5">
+                Motivo (queda registrado)
+              </label>
+              <textarea
+                value={baneoMotivo}
+                onChange={e => setBaneoMotivo(e.target.value)}
+                rows={3}
+                placeholder="Ej.: intento de fraude en el pedido #1042"
+                className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--brand-gold-mid)] resize-none"
+              />
+            </div>
+
+            <label className="flex gap-2.5 items-start cursor-pointer">
+              <input
+                type="checkbox"
+                checked={baneoUsarUA}
+                onChange={e => setBaneoUsarUA(e.target.checked)}
+                className="mt-0.5 flex-shrink-0"
+              />
+              <span className="text-[11px] text-[var(--text-secondary)] leading-snug">
+                Bloquear también su navegador exacto.{' '}
+                <strong className="text-amber-500">Úselo con cuidado</strong>: esa firma la comparten miles de personas
+                con el mismo modelo de teléfono y la misma versión del navegador, así que puede dejar fuera a clientes
+                que no tienen nada que ver. Sirve cuando la persona cambia de red pero sigue con el mismo aparato.
+              </span>
+            </label>
+
+            <div className="flex gap-2 pt-1">
+              <button
+                onClick={() => setBaneoModal(null)}
+                disabled={baneando}
+                className="flex-1 border border-[var(--border-color)]/80 text-[var(--text-primary)] text-xs font-bold py-2.5 rounded-xl hover:bg-[var(--bg-base)] disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                onClick={aplicarBaneoTotal}
+                disabled={baneando}
+                className="flex-1 bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold py-2.5 rounded-xl disabled:opacity-50"
+              >
+                {baneando ? 'Aplicando…' : 'Aplicar baneo total'}
+              </button>
             </div>
           </div>
         </div>
