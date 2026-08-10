@@ -155,11 +155,37 @@ async function accesoDirecto(correo: string, password: string): Promise<Resultad
   return { ok: true, userId: data.user.id, porteroCaido: true };
 }
 
+// ---------------------------------------------------------------------
+// FRENO CONTRA EL DOBLE TOQUE
+// ---------------------------------------------------------------------
+// Desde que el acceso pasa por el portero, iniciar sesión tarda de uno a
+// cuatro segundos (Edge Function + geolocalización + Supabase Auth). En un
+// celular ese silencio invita a volver a tocar el botón, y cada toque es
+// un intento MÁS que cuenta para el bloqueo de 3 fallos. Con la contraseña
+// mal escrita, dos toques impacientes bastaban para quedar bloqueado.
+//
+// El freno vive aquí, en el único camino de acceso, y no en cada
+// formulario: así protege por igual al panel y a las dos pantallas de
+// ingreso de la tienda, sin depender de que cada una se acuerde.
+let accesoEnCurso = false;
+
 /**
  * Inicia sesión pasando por el portero. Devuelve siempre un resultado
  * con un mensaje listo para mostrar; nunca lanza excepciones.
  */
 export async function iniciarSesionVigilada(email: string, password: string): Promise<ResultadoAcceso> {
+  if (accesoEnCurso) {
+    return { ok: false, mensaje: 'Ya se está verificando el acceso. Espere un momento…' };
+  }
+  accesoEnCurso = true;
+  try {
+    return await intentarAcceso(email, password);
+  } finally {
+    accesoEnCurso = false;
+  }
+}
+
+async function intentarAcceso(email: string, password: string): Promise<ResultadoAcceso> {
   const correo = (email || '').trim().toLowerCase();
 
   let respuesta: any = null;
@@ -237,6 +263,38 @@ export async function iniciarSesionVigilada(email: string, password: string): Pr
   void capturarUbicacionPrecisa(respuesta.log_id ?? null);
 
   return { ok: true, userId: respuesta.user?.id };
+}
+
+/**
+ * ¿Esta conexión tiene prohibido usar la aplicación?
+ *
+ * Existe por la APK. La página web ya la corta el Worker de Cloudflare
+ * antes de entregar el HTML, pero los archivos de la APK viven dentro del
+ * teléfono y nunca pasan por Cloudflare: si el APK se filtrara, serviría
+ * para rodear ese bloqueo. Esta comprobación sale a internet desde el
+ * propio aparato, así que también lo alcanza a él.
+ *
+ * ALCANCE REAL, dicho sin adornos: esto corre del lado del cliente. Quien
+ * tenga el APK y sepa modificarlo puede quitarlo. Sirve para que una copia
+ * filtrada no funcione sin más; no es una cerradura contra alguien
+ * decidido. Lo que ese alguien no puede saltarse es el portero del inicio
+ * de sesión, que vive en el servidor: sin poder entrar a una cuenta, la
+ * aplicación no le sirve de nada.
+ *
+ * Devuelve false ante cualquier fallo: nunca dejar a nadie fuera por un
+ * problema de red.
+ */
+export async function conexionBloqueada(): Promise<boolean> {
+  try {
+    const { data, error } = await conTope(
+      supabase.functions.invoke('admin-login', { body: { accion: 'estado' } }),
+      TIEMPO_LIMITE_MS
+    );
+    if (error || !data) return false;
+    return data.bloqueada === true;
+  } catch {
+    return false;
+  }
 }
 
 /**
