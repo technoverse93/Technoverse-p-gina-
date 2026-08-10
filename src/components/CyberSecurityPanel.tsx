@@ -33,7 +33,7 @@ interface CyberSecurityPanelProps {
   onAuditLogChanged?: () => void;
 }
 
-type Seccion = 'resumen' | 'accesos' | 'bloqueos' | 'blanca' | 'bitacora';
+type Seccion = 'resumen' | 'accesos' | 'dispositivos' | 'bloqueos' | 'blanca' | 'bitacora';
 type FiltroAccesos = 'todos' | 'exitosos' | 'fallidos' | 'bloqueados';
 
 interface Acceso {
@@ -54,6 +54,27 @@ interface Acceso {
   longitud: number | null;
   zona_horaria: string | null;
   proveedor: string | null;
+  device_id: string | null;
+  dispositivo_conocido: boolean | null;
+  // Ubicación real del GPS. Solo existe cuando quien entró es una cuenta
+  // administrativa Y autorizó el permiso. Cuando está, manda sobre la de
+  // la IP, que apenas alcanza para la ciudad.
+  gps_latitud: number | null;
+  gps_longitud: number | null;
+  gps_precision_m: number | null;
+  gps_capturado_en: string | null;
+}
+
+interface Dispositivo {
+  device_id: string;
+  primer_visto: string;
+  ultimo_visto: string;
+  ultimo_email: string | null;
+  etiqueta: string | null;
+  user_agent: string | null;
+  origen: string | null;
+  ingresos: number;
+  confiable: boolean;
 }
 
 interface Bloqueo {
@@ -138,6 +159,7 @@ export default function CyberSecurityPanel({
   const [accesos, setAccesos] = useState<Acceso[]>([]);
   const [bloqueos, setBloqueos] = useState<Bloqueo[]>([]);
   const [confianza, setConfianza] = useState<Confianza[]>([]);
+  const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [filtro, setFiltro] = useState<FiltroAccesos>('todos');
   const [detalle, setDetalle] = useState<Acceso | null>(null);
 
@@ -150,20 +172,23 @@ export default function CyberSecurityPanel({
   // -------------------------------------------------------------------
   const cargar = useCallback(async () => {
     setCargando(true);
-    const [a, b, c] = await Promise.all([
+    const [a, b, c, d] = await Promise.all([
       supabase.from('login_audit_logs').select('*').order('ocurrido_en', { ascending: false }).limit(300),
       supabase.from('banned_ips').select('*').order('actualizado_en', { ascending: false }),
       supabase.from('ip_whitelist').select('*').order('creado_en', { ascending: false }),
+      supabase.from('known_devices').select('*').order('ultimo_visto', { ascending: false }),
     ]);
     // Se avisa del fallo en vez de mostrar una pantalla vacía que parecería
     // decir "no hay ningún intento registrado" — que es lo contrario de lo
     // que uno necesita creer en un panel de seguridad.
-    if (a.error || b.error || c.error) {
-      toast.error('No se pudo leer el registro de seguridad: ' + (a.error?.message || b.error?.message || c.error?.message));
+    const fallo = a.error || b.error || c.error || d.error;
+    if (fallo) {
+      toast.error('No se pudo leer el registro de seguridad: ' + fallo.message);
     }
     setAccesos((a.data as Acceso[]) || []);
     setBloqueos((b.data as Bloqueo[]) || []);
     setConfianza((c.data as Confianza[]) || []);
+    setDispositivos((d.data as Dispositivo[]) || []);
     setCargando(false);
   }, [toast]);
 
@@ -269,6 +294,49 @@ export default function CyberSecurityPanel({
     cargar();
   };
 
+  const renombrarDispositivo = async (d: Dispositivo) => {
+    const nombre = window.prompt(
+      'Póngale un nombre a este aparato para reconocerlo después (ej. "Mi celular", "Compu del local"):',
+      d.etiqueta || ''
+    );
+    if (nombre === null) return;
+    const { error } = await supabase
+      .from('known_devices')
+      .update({ etiqueta: nombre.trim() || null })
+      .eq('device_id', d.device_id);
+    if (error) { toast.error('No se pudo guardar el nombre: ' + error.message); return; }
+    cargar();
+  };
+
+  const cambiarConfianzaDispositivo = async (d: Dispositivo) => {
+    // Marcar como NO reconocido no borra el aparato: lo deja en la lista
+    // pero hace que vuelva a salir en rojo si alguien lo usa otra vez. Eso
+    // es justo lo que uno quiere si sospecha de un aparato en concreto.
+    const { error } = await supabase
+      .from('known_devices')
+      .update({ confiable: !d.confiable })
+      .eq('device_id', d.device_id);
+    if (error) { toast.error('No se pudo cambiar: ' + error.message); return; }
+    toast.success(d.confiable
+      ? 'Aparato marcado como NO reconocido. Volverá a salir en rojo la próxima vez.'
+      : 'Aparato marcado como de confianza.');
+    cargar();
+  };
+
+  const olvidarDispositivo = async (d: Dispositivo) => {
+    const ok = await confirm({
+      title: 'Olvidar este aparato',
+      message: `Se borrará "${d.etiqueta || d.device_id.slice(0, 12)}" de la lista de conocidos. Si se vuelve a usar, aparecerá como aparato nuevo. El historial de accesos NO se toca.`,
+      confirmText: 'Olvidar',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    const { error } = await supabase.from('known_devices').delete().eq('device_id', d.device_id);
+    if (error) { toast.error('No se pudo olvidar: ' + error.message); return; }
+    toast.success('Aparato olvidado.');
+    cargar();
+  };
+
   const purgarHistorial = async () => {
     const ok = await confirm({
       title: 'Depurar historial de accesos',
@@ -309,6 +377,7 @@ export default function CyberSecurityPanel({
   const secciones: { id: Seccion; label: string; icono: any; contador?: number }[] = [
     { id: 'resumen',  label: 'Resumen',      icono: Activity },
     { id: 'accesos',  label: 'Accesos',      icono: Globe,      contador: accesos.length },
+    { id: 'dispositivos', label: 'Dispositivos', icono: Smartphone, contador: dispositivos.length },
     { id: 'bloqueos', label: 'Bloqueos',     icono: Ban,        contador: resumen.bloqueosActivos },
     { id: 'blanca',   label: 'Lista blanca', icono: CheckCircle, contador: confianza.length },
     { id: 'bitacora', label: 'Bitácora',     icono: BookOpen,   contador: auditLog.length },
@@ -400,6 +469,28 @@ export default function CyberSecurityPanel({
                   {resumirDispositivo(resumen.ultimoExito.user_agent)}
                   {resumen.ultimoExito.origen ? ` · ${resumen.ultimoExito.origen}` : ''}
                 </div>
+                <div className="flex flex-wrap gap-1.5 pt-1">
+                  {resumen.ultimoExito.dispositivo_conocido === false && (
+                    <span className="text-[9px] uppercase font-bold bg-amber-500/10 border border-amber-500/40 text-amber-500 px-2 py-0.5 rounded">
+                      Aparato nuevo
+                    </span>
+                  )}
+                  {resumen.ultimoExito.dispositivo_conocido === true && (
+                    <span className="text-[9px] uppercase font-bold bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] px-2 py-0.5 rounded">
+                      Aparato conocido
+                    </span>
+                  )}
+                  {resumen.ultimoExito.gps_latitud != null && (
+                    <a
+                      href={`https://www.google.com/maps?q=${resumen.ultimoExito.gps_latitud},${resumen.ultimoExito.gps_longitud}`}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="text-[9px] uppercase font-bold bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] px-2 py-0.5 rounded hover:brightness-110"
+                    >
+                      Lugar exacto (GPS)
+                    </a>
+                  )}
+                </div>
               </div>
             ) : (
               <p className="text-xs text-[var(--text-secondary)] italic">
@@ -458,6 +549,9 @@ export default function CyberSecurityPanel({
               <li>· Un ingreso correcto reinicia el contador.</li>
               <li>· Los errores de contraseña de <strong className="text-[var(--text-primary)]">clientes de la tienda</strong> se registran pero no bloquean, para no dejar sin comprar a quienes comparten IP con ellos.</li>
               <li>· Si el sistema de vigilancia se cae, el acceso sigue funcionando: nunca lo deja fuera de su propio panel.</li>
+              <li>· Se reconoce el <strong className="text-[var(--text-primary)]">aparato</strong>: si entran desde uno nunca visto, sale marcado como aparato nuevo.</li>
+              <li>· Al entrar una cuenta administrativa se pide permiso de ubicación, y si se acepta se guarda el <strong className="text-[var(--text-primary)]">lugar exacto por GPS</strong>. A los clientes de la tienda nunca se les pide.</li>
+              <li>· La ubicación por IP <strong className="text-[var(--text-primary)]">solo dice la ciudad</strong>, no el lugar. Eso no se puede mejorar: una IP no contiene la dirección de nadie.</li>
             </ul>
           </div>
         </div>
@@ -547,12 +641,111 @@ export default function CyberSecurityPanel({
                           <div className="text-[var(--text-primary)]">{a.ip || '—'}</div>
                           {a.proveedor && <div className="truncate max-w-[150px]">{a.proveedor}</div>}
                         </td>
-                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">{resumirDispositivo(a.user_agent)}</td>
+                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">
+                          <div>{resumirDispositivo(a.user_agent)}</div>
+                          {/* Esta es la señal que de verdad delata a un extraño:
+                              la ubicación por IP solo llega a la ciudad, pero un
+                              aparato que nunca se había usado sí es noticia. */}
+                          {a.dispositivo_conocido === false && (
+                            <span className="inline-block mt-1 text-[9px] font-bold uppercase bg-amber-500/10 border border-amber-500/40 text-amber-500 px-1.5 py-0.5 rounded">
+                              Aparato nuevo
+                            </span>
+                          )}
+                          {a.gps_latitud != null && (
+                            <span className="inline-block mt-1 ml-1 text-[9px] font-bold uppercase bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] px-1.5 py-0.5 rounded">
+                              GPS
+                            </span>
+                          )}
+                        </td>
                       </tr>
                     )}
                   />
                 </table>
               </div>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* =============== DISPOSITIVOS =============== */}
+      {seccion === 'dispositivos' && (
+        <div className="space-y-4">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5">
+            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+              Cada celular o computadora desde el que se entró correctamente queda marcado aquí. Si un día aparece un{' '}
+              <strong className="text-amber-500">aparato nuevo</strong> que usted no reconoce, esa es la señal de
+              alarma de verdad — mucho más confiable que la ubicación, porque la IP solo llega a decir la ciudad.
+            </p>
+            <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed mt-3 pt-3 border-t border-[var(--border-color)]/40">
+              Dos advertencias honestas: si usted borra los datos del navegador o entra en modo incógnito, su propio
+              aparato va a salir como nuevo. Y la marca la manda el navegador, así que en teoría se puede falsear:
+              tómelo como una alerta que vale la pena revisar, no como una cerradura.
+            </p>
+          </div>
+
+          {dispositivos.length === 0 ? (
+            <div className="bg-[var(--bg-surface)] border border-dashed border-[var(--border-color)]/60 rounded-2xl py-12 text-center text-xs text-[var(--text-secondary)] italic">
+              {cargando ? 'Cargando…' : 'Todavía no hay aparatos registrados. El suyo aparecerá la próxima vez que inicie sesión.'}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {dispositivos.map(d => (
+                <div
+                  key={d.device_id}
+                  className={`bg-[var(--bg-surface)] border rounded-2xl p-4 space-y-2 ${
+                    d.confiable ? 'border-[var(--border-color)]/60' : 'border-amber-500/50'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="font-bold text-sm text-[var(--text-primary)] truncate">
+                        {d.etiqueta || resumirDispositivo(d.user_agent)}
+                      </div>
+                      <div className="text-[11px] text-[var(--text-secondary)]">
+                        {resumirDispositivo(d.user_agent)}
+                        {d.origen ? ` · ${d.origen}` : ''} · {d.ingresos} ingreso(s)
+                      </div>
+                      <div className="text-[10px] text-[var(--text-secondary)]">
+                        Primera vez: {fechaCorta(d.primer_visto)}
+                      </div>
+                      <div className="text-[10px] text-[var(--text-secondary)]">
+                        Última vez: {fechaCorta(d.ultimo_visto)}
+                        {d.ultimo_email ? ` · ${d.ultimo_email}` : ''}
+                      </div>
+                      <div className="text-[9px] text-[var(--text-muted)] font-mono truncate mt-1">{d.device_id}</div>
+                    </div>
+                    {!d.confiable && (
+                      <span className="flex-shrink-0 text-[9px] uppercase font-bold bg-amber-500/10 border border-amber-500/40 text-amber-500 px-2 py-0.5 rounded">
+                        No reconocido
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--border-color)]/40">
+                    <button
+                      onClick={() => renombrarDispositivo(d)}
+                      className="bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--text-primary)] text-[11px] font-bold px-3 py-1.5 rounded-lg transition hover:bg-[var(--bg-surface)]"
+                    >
+                      Ponerle nombre
+                    </button>
+                    <button
+                      onClick={() => cambiarConfianzaDispositivo(d)}
+                      className={`text-[11px] font-bold px-3 py-1.5 rounded-lg transition border ${
+                        d.confiable
+                          ? 'bg-amber-500/10 border-amber-500/40 text-amber-500 hover:bg-amber-500/20'
+                          : 'bg-[var(--ok-soft)] border-[var(--ok)] text-[var(--ok)] hover:brightness-110'
+                      }`}
+                    >
+                      {d.confiable ? 'No lo reconozco' : 'Sí es mío'}
+                    </button>
+                    <button
+                      onClick={() => olvidarDispositivo(d)}
+                      className="bg-rose-500/10 border border-rose-500/40 text-rose-400 text-[11px] font-bold px-3 py-1.5 rounded-lg transition hover:bg-rose-500/20"
+                    >
+                      Olvidar
+                    </button>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
         </div>
@@ -782,31 +975,62 @@ export default function CyberSecurityPanel({
               ['País',        `${bandera(detalle.codigo_pais)} ${detalle.pais || '—'}`],
               ['Región',      detalle.region || '—'],
               ['Ciudad',      detalle.ciudad || '—'],
-              ['Coordenadas', detalle.latitud != null && detalle.longitud != null ? `${detalle.latitud}, ${detalle.longitud}` : '—'],
               ['Zona horaria', detalle.zona_horaria || '—'],
               ['Operador',    detalle.proveedor || '—'],
               ['Origen',      detalle.origen || '—'],
               ['Dispositivo', resumirDispositivo(detalle.user_agent)],
+              ['¿Aparato conocido?', detalle.dispositivo_conocido === null
+                ? 'sin dato'
+                : detalle.dispositivo_conocido ? 'Sí, ya se había usado antes' : 'NO — primera vez que se usa'],
+              ['Ubicación GPS', detalle.gps_latitud != null && detalle.gps_longitud != null
+                ? `${detalle.gps_latitud.toFixed(6)}, ${detalle.gps_longitud.toFixed(6)}` +
+                  (detalle.gps_precision_m != null ? ` (±${Math.round(detalle.gps_precision_m)} m)` : '')
+                : 'no autorizada'],
             ].map(([k, v]) => (
               <div key={k as string} className="flex justify-between gap-4 text-xs border-b border-[var(--border-color)]/30 pb-1.5">
                 <span className="text-[var(--text-secondary)] uppercase font-bold text-[10px] flex-shrink-0">{k}</span>
                 <span className="text-[var(--text-primary)] text-right break-all">{v}</span>
               </div>
             ))}
-            {detalle.latitud != null && detalle.longitud != null && (
+            {/* Dos mapas bien distintos, y se dice cuál es cuál.
+                Antes había un solo botón que decía "ubicación aproximada" y
+                siempre caía en el mismo punto: eran las coordenadas del
+                centro de la ciudad que devuelve el proveedor de IP, no un
+                lugar. Mezclar eso con el GPS real sería engañoso. */}
+            {detalle.gps_latitud != null && detalle.gps_longitud != null ? (
+              <a
+                href={`https://www.google.com/maps?q=${detalle.gps_latitud},${detalle.gps_longitud}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="block text-center bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] text-xs font-bold px-4 py-2.5 rounded-xl transition hover:brightness-110"
+              >
+                Ver el lugar EXACTO en el mapa (GPS)
+              </a>
+            ) : detalle.latitud != null && detalle.longitud != null ? (
               <a
                 href={`https://www.google.com/maps?q=${detalle.latitud},${detalle.longitud}`}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="block text-center bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--brand-gold-mid)] text-xs font-bold px-4 py-2.5 rounded-xl transition hover:bg-[var(--bg-surface)]"
+                className="block text-center bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--text-secondary)] text-xs font-bold px-4 py-2.5 rounded-xl transition hover:bg-[var(--bg-surface)]"
               >
-                Ver la ubicación aproximada en el mapa
+                Ver solo la ciudad en el mapa (no es el lugar)
               </a>
+            ) : null}
+
+            {detalle.gps_latitud != null ? (
+              <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed pt-1">
+                Esta ubicación viene del GPS del aparato y la autorizó la persona que entró, así que sí es el lugar
+                real, con un margen de pocos metros.
+              </p>
+            ) : (
+              <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed pt-1">
+                Este ingreso no tiene ubicación real: solo se sabe la ciudad, deducida de la dirección IP. Ese dato
+                marca <strong className="text-[var(--text-primary)]">el centro del cantón</strong>, no dónde estaba la
+                persona — de hecho dos operadores distintos devuelven exactamente el mismo punto. Puede fallar por
+                decenas de kilómetros, y más todavía con VPN o datos móviles. La ubicación exacta solo aparece cuando
+                una cuenta administrativa autoriza el permiso de ubicación al entrar.
+              </p>
             )}
-            <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed pt-1">
-              La ubicación se deduce de la dirección IP: es aproximada (suele acertar la ciudad, no la dirección exacta)
-              y puede estar equivocada si la persona usa VPN o datos móviles.
-            </p>
             <div className="text-[10px] text-[var(--text-secondary)] break-all pt-2 border-t border-[var(--border-color)]/30">
               <span className="uppercase font-bold">User-Agent completo:</span> {detalle.user_agent || '—'}
             </div>
