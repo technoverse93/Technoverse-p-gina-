@@ -1,5 +1,12 @@
 # Cabeceras servidas por Cloudflare para todo el sitio.
 # ---------------------------------------------------------------------------
+# ATENCIÓN: desde que existe el Worker de src/worker/index.ts (declarado en
+# wrangler.jsonc con run_worker_first), Cloudflare YA NO APLICA este archivo.
+# Las reglas de abajo están replicadas dentro del Worker, que es quien las
+# pone de verdad hoy. Este archivo se conserva por dos razones: documenta la
+# intención en un solo lugar legible, y vuelve a tomar el mando si algún día
+# se quita el Worker. Si cambia algo aquí, cámbielo también allá.
+# ---------------------------------------------------------------------------
 # Los assets de /assets/* llevan hash en el nombre (index-a1b2c3.js), así que
 # nunca cambian de contenido bajo el mismo nombre: se pueden cachear para
 # siempre. index.html en cambio NO debe cachearse — es el que apunta a los
@@ -17,8 +24,17 @@
   # Al salir hacia otro sitio solo se envía el dominio, nunca la ruta completa
   # (evita filtrar URLs internas del panel en la cabecera Referer).
   Referrer-Policy: strict-origin-when-cross-origin
-  # La app no usa cámara, micrófono ni geolocalización: se apagan de raíz.
-  Permissions-Policy: camera=(), microphone=(), geolocation=()
+  # La app no usa cámara ni micrófono: se apagan de raíz.
+  #
+  # FALLO CORREGIDO: aquí decía `geolocation=()`. Los paréntesis vacíos no
+  # significan "pedir permiso": significan PROHIBIDO PARA TODOS, incluido
+  # el propio sitio. El navegador rechazaba navigator.geolocation en
+  # silencio, sin mostrar nunca el aviso de permiso y sin ningún error
+  # visible. Por eso el GPS del Centro de Ciberseguridad no se activaba.
+  # Era correcto cuando se escribió —la app entonces no usaba ubicación—
+  # y quedó desactualizado al agregarla. `(self)` permite la ubicación
+  # únicamente a este dominio, que es exactamente lo que hace falta.
+  Permissions-Policy: camera=(), microphone=(), geolocation=(self)
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable
