@@ -11,6 +11,7 @@ import {
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
 import { iniciarSesionVigilada } from '../utils/adminLogin';
+import { CATEGORIAS_TIENDA, normalizarCategoria, esRepuesto } from '../utils/categorias';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
 import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog } from '../types';
@@ -914,10 +915,15 @@ export default function AdminPanel({
   }, [orders]);
 
   const inventoryDistData = React.useMemo(() => {
-    const categories = ['Pantallas', 'Baterías', 'Cámaras', 'Tarjetas Lógicas', 'Fundas'];
-    const data = categories.map(cat => cat && ({
+    // Este gráfico contaba productos en categorías que no existen en el sistema
+    // —Pantallas, Cámaras, Tarjetas Lógicas—, así que el conteo siempre daba
+    // cero y la tarjeta mostraba "Sin stock" aunque hubiera inventario.
+    // Ahora usa las categorías reales de la tienda y la misma traducción que
+    // el catálogo, para que los productos guardados con nombres viejos
+    // ("Otros", "Mouse") también se cuenten.
+    const data = CATEGORIAS_TIENDA.map(cat => ({
       name: cat,
-      stock: products.filter(p => p && p.category === cat).length
+      stock: products.filter(p => p && !esRepuesto(p.category) && normalizarCategoria(p.category) === cat).length
     }));
     return data.some(d => d && d.stock > 0) ? data : [];
   }, [products]);
