@@ -2,8 +2,25 @@
   "$schema": "./node_modules/wrangler/config-schema.json",
   "name": "technoverse-cr",
   "compatibility_date": "2026-07-14",
+
+  // Worker que corre en el borde ANTES de entregar el HTML. Su trabajo es
+  // rechazar con 403 a las IP con bloqueo total, y aplicar las cabeceras
+  // de seguridad y de caché.
+  //
+  // OJO: al existir `run_worker_first`, Cloudflare deja de aplicar el
+  // archivo public/_headers. Por eso esas cabeceras están replicadas
+  // dentro del Worker; si algún día se quita el Worker de aquí, hay que
+  // comprobar que public/_headers vuelva a hacer su trabajo.
+  "main": "src/worker/index.ts",
+
   "assets": {
     "directory": "./dist",
-    "not_found_handling": "single-page-application"
+    "not_found_handling": "single-page-application",
+    // Nombre con el que el Worker le pide los archivos a Cloudflare.
+    "binding": "ASSETS",
+    // Todo pasa por el Worker MENOS /assets/*, que son los archivos con
+    // hash en el nombre: son cientos de peticiones por visita y no sirven
+    // de nada sin el HTML, que sí queda protegido.
+    "run_worker_first": ["/*", "!/assets/*"]
   }
 }
