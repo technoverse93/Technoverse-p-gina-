@@ -410,4 +410,49 @@ export default function ClienteFicha({ cliente, pedidos, adminEmail, onCerrar, o
               </p>
             </div>
             <button
-              onClick={alternarActiv
+              onClick={alternarActivo}
+              disabled={!!ocupado || activo === null}
+              className={`text-xs font-bold px-4 py-2 rounded-xl transition border flex items-center gap-1.5 disabled:opacity-50 ${
+                activo === false
+                  ? 'bg-[var(--ok-soft)] border-[var(--ok)] text-[var(--ok)] hover:brightness-110'
+                  : 'bg-rose-500/10 border-rose-500/40 text-rose-500 hover:bg-rose-500/20'
+              }`}
+            >
+              {trabajando('activo') ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Power className="w-3.5 h-3.5" />}
+              {activo === false ? 'Reactivar cuenta' : 'Desactivar cuenta'}
+            </button>
+          </section>
+
+          {/* ---- Ley 8968 ---- */}
+          <section className="bg-[var(--bg-base)] border border-[var(--border-color)]/60 rounded-2xl p-4 space-y-3">
+            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
+              <AlertTriangle className="w-4 h-4" /> Derechos del cliente (Ley 8968)
+            </h4>
+            <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+              Estas dos no son opcionales: son derechos que el cliente puede exigirle ante la PRODHAB, y usted está
+              obligado a atenderlos.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              <button
+                onClick={exportarDatos}
+                disabled={!!ocupado}
+                className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-[var(--text-primary)] text-xs font-bold px-4 py-2 rounded-xl transition hover:bg-[var(--bg-base)] disabled:opacity-50 flex items-center gap-1.5"
+              >
+                <Download className="w-3.5 h-3.5" /> Exportar sus datos
+              </button>
+              <button
+                onClick={derechoAlOlvido}
+                disabled={!!ocupado}
+                className="bg-rose-500/10 border border-rose-500/40 text-rose-500 text-xs font-bold px-4 py-2 rounded-xl transition hover:bg-rose-500/20 disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {trabajando('olvido') ? <RefreshCw className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                Derecho al Olvido
+              </button>
+            </div>
+          </section>
+
+        </div>
+      </div>
+    </div>
+  );
+}
