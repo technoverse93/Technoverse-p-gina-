@@ -1,4 +1,5 @@
 import { supabase } from '../supabaseClient';
+import { obtenerDeviceId } from './huella';
 
 // =====================================================================
 // ACCESO VIGILADO (telemetría de intentos + baneo de IP)
@@ -55,22 +56,12 @@ const MENSAJE_CREDENCIALES = 'Credenciales inválidas. Por favor verifique el co
 //     suyo. Es molesto, no es un fallo.
 //   · La marca la manda el navegador, así que en teoría se puede falsear.
 //     Sirve como señal de alerta, no como cerradura.
-const LLAVE_DISPOSITIVO = 'technoverse_device_id';
-
-function obtenerDeviceId(): string | null {
-  try {
-    let id = localStorage.getItem(LLAVE_DISPOSITIVO);
-    if (!id) {
-      id = (crypto?.randomUUID?.() ||
-        `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
-      localStorage.setItem(LLAVE_DISPOSITIVO, id);
-    }
-    return id;
-  } catch {
-    // Modo incógnito o almacenamiento bloqueado: se sigue sin marca.
-    return null;
-  }
-}
+//
+// `obtenerDeviceId()` vive en `src/utils/huella.ts` y se importa arriba.
+// Estaba duplicada aquí, y tenía que dejar de estarlo: la telemetría de
+// la tienda y el reconocimiento de dispositivo del panel deben usar
+// EXACTAMENTE la misma marca, o el mismo aparato aparecería como dos
+// distintos según la pantalla que se mire.
 
 // ---------------------------------------------------------------------
 // UBICACIÓN REAL (GPS) — SOLO PARA CUENTAS ADMINISTRATIVAS
@@ -286,14 +277,48 @@ async function intentarAcceso(email: string, password: string): Promise<Resultad
  */
 export async function conexionBloqueada(): Promise<boolean> {
   try {
+    // `mi_estado_de_acceso` responde por las DOS vías de castigo a la vez:
+    // la IP con bloqueo total y la cuenta penalizada. Antes esto llamaba a
+    // la Edge Function `admin-login`, que solo miraba la IP; se cambió a
+    // la función de base de datos porque es una consulta directa —más
+    // rápida y sin arranque en frío— y porque cubre el baneo de cuenta,
+    // que la Edge Function no conoce.
     const { data, error } = await conTope(
-      supabase.functions.invoke('admin-login', { body: { accion: 'estado' } }),
+      Promise.resolve(supabase.rpc('mi_estado_de_acceso')),
       TIEMPO_LIMITE_MS
     );
     if (error || !data) return false;
-    return data.bloqueada === true;
+    return (data as any).bloqueado === true;
   } catch {
     return false;
+  }
+}
+
+/**
+ * Detalle de por qué está bloqueada esta conexión. Lo usa la pantalla de
+ * bloqueo para decir si el castigo es a la conexión o a la cuenta: no es
+ * lo mismo "su internet está bloqueado" que "su cuenta fue suspendida", y
+ * el mensaje equivocado genera un reclamo que no se puede resolver.
+ *
+ * Devuelve null si no se pudo averiguar. Nunca lanza.
+ */
+export async function detalleDeBloqueo(): Promise<
+  { ip: string | null; ipBloqueada: boolean; cuentaPenalizada: boolean } | null
+> {
+  try {
+    const { data, error } = await conTope(
+      Promise.resolve(supabase.rpc('mi_estado_de_acceso')),
+      TIEMPO_LIMITE_MS
+    );
+    if (error || !data) return null;
+    const d = data as any;
+    return {
+      ip: d.ip ?? null,
+      ipBloqueada: d.ip_bloqueada === true,
+      cuentaPenalizada: d.cuenta_penalizada === true,
+    };
+  } catch {
+    return null;
   }
 }
 
