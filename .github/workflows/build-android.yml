@@ -37,6 +37,44 @@ jobs:
       - name: Sync Capacitor
         run: npx cap sync android
 
+      # La carpeta android/ no vive en el repositorio: la genera `cap add`
+      # en cada compilación, así que su AndroidManifest.xml nace de cero y
+      # cualquier permiso que se le agregue a mano se pierde. Por eso el
+      # permiso de ubicación se inyecta aquí, después de generarlo.
+      #
+      # Para qué: el Centro de Ciberseguridad guarda la ubicación real del
+      # GPS cuando entra una cuenta administrativa y la persona autoriza el
+      # permiso. Sin esta línea en el manifiesto, el navegador interno de la
+      # APK ni siquiera puede preguntar, y en el celular solo quedaría la
+      # ubicación por IP (que apenas acierta la ciudad).
+      #
+      # Se comprueba que no esté ya puesto, para que el paso sea repetible.
+      - name: Declarar permiso de ubicación en el manifiesto
+        run: |
+          MANIFEST=android/app/src/main/AndroidManifest.xml
+          if grep -q "ACCESS_FINE_LOCATION" "$MANIFEST"; then
+            echo "El permiso ya estaba declarado; no se toca nada."
+          else
+            python3 - "$MANIFEST" <<'PY'
+          import sys
+          ruta = sys.argv[1]
+          texto = open(ruta, encoding='utf-8').read()
+          permisos = (
+              '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n'
+              '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n'
+              '    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n'
+              '</manifest>'
+          )
+          if '</manifest>' not in texto:
+              raise SystemExit('No se encontró el cierre </manifest>: el manifiesto no tiene el formato esperado.')
+          texto = texto.replace('</manifest>', permisos, 1)
+          open(ruta, 'w', encoding='utf-8').write(texto)
+          print('Permiso de ubicación agregado al manifiesto.')
+          PY
+          fi
+          echo "--- permisos declarados ---"
+          grep "uses-permission" "$MANIFEST"
+
       - name: Build debug APK
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
