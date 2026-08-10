@@ -40,6 +40,87 @@ const TIEMPO_LIMITE_MS = 12000;
 
 const MENSAJE_CREDENCIALES = 'Credenciales inválidas. Por favor verifique el correo y contraseña.';
 
+// ---------------------------------------------------------------------
+// MARCA DEL DISPOSITIVO
+// ---------------------------------------------------------------------
+// La ubicación por IP solo da la ciudad: dos operadores distintos
+// devuelven la misma coordenada porque es el centro del cantón, no un
+// lugar. La pregunta que sí se puede responder bien es otra: "¿es el
+// mismo aparato de siempre?". Para eso se guarda una marca al azar en
+// este navegador y viaja con cada intento de ingreso.
+//
+// Dos límites que conviene tener claros:
+//   · Si se borran los datos del navegador o se entra en modo incógnito,
+//     la marca se pierde y el aparato aparecerá como NUEVO aunque sea
+//     suyo. Es molesto, no es un fallo.
+//   · La marca la manda el navegador, así que en teoría se puede falsear.
+//     Sirve como señal de alerta, no como cerradura.
+const LLAVE_DISPOSITIVO = 'technoverse_device_id';
+
+function obtenerDeviceId(): string | null {
+  try {
+    let id = localStorage.getItem(LLAVE_DISPOSITIVO);
+    if (!id) {
+      id = (crypto?.randomUUID?.() ||
+        `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`);
+      localStorage.setItem(LLAVE_DISPOSITIVO, id);
+    }
+    return id;
+  } catch {
+    // Modo incógnito o almacenamiento bloqueado: se sigue sin marca.
+    return null;
+  }
+}
+
+// ---------------------------------------------------------------------
+// UBICACIÓN REAL (GPS) — SOLO PARA CUENTAS ADMINISTRATIVAS
+// ---------------------------------------------------------------------
+// Se ejecuta DESPUÉS de que la sesión ya quedó iniciada, y nunca la
+// demora: si la persona tarda en responder el permiso, o lo niega, o el
+// aparato no tiene GPS, no pasa absolutamente nada.
+//
+// A un cliente de la tienda jamás se le pide: se comprueba el rol antes
+// de siquiera llamar al navegador, para que el aviso de ubicación no le
+// aparezca a alguien que solo vino a comprar.
+//
+// Y hay que decirlo claro: un intruso nunca va a autorizar el GPS. Esto
+// sirve para confirmar los ingresos propios ("sí, ese fui yo, desde mi
+// casa"), no para ubicar a quien intenta entrar.
+async function capturarUbicacionPrecisa(logId: number | null): Promise<void> {
+  try {
+    if (!logId || typeof navigator === 'undefined' || !navigator.geolocation) return;
+
+    const { data: sesion } = await supabase.auth.getUser();
+    const uid = sesion?.user?.id;
+    if (!uid) return;
+
+    const { data: perfil } = await supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', uid)
+      .maybeSingle();
+    if (!perfil || perfil.role === 'Cliente') return;
+
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        supabase.rpc('registrar_ubicacion_precisa', {
+          p_log_id: logId,
+          p_lat: pos.coords.latitude,
+          p_lon: pos.coords.longitude,
+          p_precision_m: Number.isFinite(pos.coords.accuracy) ? pos.coords.accuracy : null,
+        }).then(
+          () => { /* listo */ },
+          () => { /* si no se pudo guardar, el ingreso ya quedó registrado igual */ }
+        );
+      },
+      () => { /* permiso negado o GPS sin señal: se queda la ciudad por IP */ },
+      { enableHighAccuracy: true, timeout: 15000, maximumAge: 0 }
+    );
+  } catch {
+    /* la ubicación jamás puede afectar al inicio de sesión */
+  }
+}
+
 /** Distingue la APK de la web, para saberlo al revisar la bitácora. */
 function detectarOrigen(): 'apk' | 'web' {
   try {
@@ -88,7 +169,12 @@ export async function iniciarSesionVigilada(email: string, password: string): Pr
   try {
     const { data, error } = await conTope(
       supabase.functions.invoke('admin-login', {
-        body: { email: correo, password, origen: detectarOrigen() },
+        body: {
+          email: correo,
+          password,
+          origen: detectarOrigen(),
+          device_id: obtenerDeviceId(),
+        },
       }),
       TIEMPO_LIMITE_MS
     );
@@ -144,6 +230,11 @@ export async function iniciarSesionVigilada(email: string, password: string): Pr
     // Antes que dejar a la persona afuera, se reintenta por el camino directo.
     return await accesoDirecto(correo, password);
   }
+
+  // Ya adentro. Se intenta guardar la ubicación real, sin esperar por ella:
+  // el `void` es a propósito, para que la pantalla no se quede congelada
+  // mientras la persona decide si acepta el permiso de ubicación.
+  void capturarUbicacionPrecisa(respuesta.log_id ?? null);
 
   return { ok: true, userId: respuesta.user?.id };
 }
