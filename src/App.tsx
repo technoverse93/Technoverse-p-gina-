@@ -3,6 +3,7 @@ import PublicStore from './components/PublicStore';
 import { User } from './types';
 import { initKeyboard } from './mobile/keyboard';
 import { OverlayProvider, useToast } from './components/ui/Overlays';
+import { conexionBloqueada } from './utils/adminLogin';
 
 // AdminPanel carga recharts, motion y toda la lógica de taller/inventario/CRM:
 // era el bloque más pesado del bundle principal (>300 KB gzip) y se estaba
@@ -34,6 +35,30 @@ export default function App() {
   );
 }
 
+/**
+ * Pantalla que sustituye a TODA la aplicación cuando la conexión está
+ * bloqueada. Sin tienda, sin catálogo, sin carrito y sin panel.
+ */
+function PantallaBloqueada() {
+  return (
+    <div className="min-h-screen flex items-center justify-center p-6 bg-[#0F1217] text-[#E9ECF1]">
+      <div className="max-w-lg w-full bg-[#171B22] border border-white/10 rounded-2xl p-8">
+        <div className="text-[11px] uppercase tracking-[0.12em] font-bold text-[#FB923C] mb-3">
+          Technoverse Costa Rica
+        </div>
+        <h1 className="text-xl font-bold mb-2">Acceso bloqueado</h1>
+        <p className="text-sm leading-relaxed text-[#A7AFBD] mb-3">
+          Esta conexión fue bloqueada por el sistema de seguridad y por ahora no puede usar la aplicación.
+        </p>
+        <p className="text-sm leading-relaxed text-[#A7AFBD]">
+          Si es un bloqueo temporal por intentos de ingreso fallidos, se levanta solo al cabo de un rato.
+          Si cree que se trata de un error, comuníquese con nosotros.
+        </p>
+      </div>
+    </div>
+  );
+}
+
 function AppInner() {
   const toast = useToast();
 
@@ -44,6 +69,28 @@ function AppInner() {
 
   useEffect(() => {
     initKeyboard();
+  }, []);
+
+  // ---- Bloqueo de acceso a nivel de aplicación ----------------------------
+  //
+  // La página web ya la corta el Worker de Cloudflare antes de entregar el
+  // HTML (src/worker/index.ts). Esto de acá existe por la APK: sus archivos
+  // viven dentro del teléfono y nunca pasan por Cloudflare, así que una copia
+  // filtrada del APK serviría para rodear aquel bloqueo. La comprobación sale
+  // a internet desde el propio aparato, y ahí sí se ve su IP real.
+  //
+  // NO se espera a la respuesta para pintar la aplicación: hacerlo dejaría a
+  // TODO el mundo mirando una pantalla en blanco durante un segundo por culpa
+  // de un control que al 99,9 % de la gente no le aplica. Quien esté bloqueado
+  // ve la tienda un instante y luego se le sustituye por el aviso; quien no,
+  // no nota absolutamente nada.
+  const [accesoBloqueado, setAccesoBloqueado] = useState(false);
+  useEffect(() => {
+    let vigente = true;
+    conexionBloqueada().then(bloqueada => {
+      if (vigente && bloqueada) setAccesoBloqueado(true);
+    });
+    return () => { vigente = false; };
   }, []);
 
   // Theme Management
@@ -156,6 +203,10 @@ function AppInner() {
     window.addEventListener('technoverse_sync_error', alFallarGuardado);
     return () => window.removeEventListener('technoverse_sync_error', alFallarGuardado);
   }, [toast]);
+
+  if (accesoBloqueado) {
+    return <PantallaBloqueada />;
+  }
 
   return (
     <div className="min-h-screen bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700 dark:selection:bg-[var(--brand-gold-mid)]/20 dark:selection:text-[var(--brand-gold-light)]" id="technoverse-application-container">
