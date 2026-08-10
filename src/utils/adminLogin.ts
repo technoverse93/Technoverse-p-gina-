@@ -164,4 +164,4 @@ export async function obtenerMiConexion(): Promise<{ ip: string | null; geo: any
   } catch {
     return null;
   }
-  }
+}
