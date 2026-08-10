@@ -14,6 +14,7 @@ import { FeaturedCategoriesCarousel } from './FeaturedCategoriesCarousel';
 import { Product, Order, OrderItem, RepairOrder } from '../types';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
+import { iniciarSesionVigilada } from '../utils/adminLogin';
 import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
 import { useToast } from './ui/Overlays';
@@ -257,20 +258,36 @@ export default function PublicStore({
 
     // Autenticación real y segura vía Supabase Auth (contraseñas nunca viajan
     // en texto plano ni se comparan en el navegador).
-    const { data: authData, error: authError } = await supabase.auth.signInWithPassword({
-      email: cleanEmail,
-      password: loginPassword,
-    });
+    //
+    // Este formulario es el que usa TODO el mundo: los clientes de la tienda
+    // y también el administrador. Por eso pasa por el portero de
+    // ciberseguridad, que deja registrado el intento con IP, ubicación,
+    // fecha y dispositivo. El bloqueo por intentos fallidos solo aplica a
+    // cuentas administrativas o a correos inexistentes: un cliente que se
+    // equivoque de contraseña queda anotado pero nunca bloquea la IP (en
+    // datos móviles esa IP la comparten cientos de personas). Y si el
+    // portero no responde, se entra por el camino directo de siempre.
+    const acceso = await iniciarSesionVigilada(cleanEmail, loginPassword);
 
-    if (authError || !authData.user) {
-      toast.error('Credenciales inválidas. Por favor verifique el correo y contraseña.');
+    if (!acceso.ok) {
+      toast.error(acceso.mensaje || 'Credenciales inválidas. Por favor verifique el correo y contraseña.');
+      return;
+    }
+
+    let userId = acceso.userId;
+    if (!userId) {
+      const { data: sesion } = await supabase.auth.getUser();
+      userId = sesion?.user?.id;
+    }
+    if (!userId) {
+      toast.error('No se pudo confirmar la sesión. Intente de nuevo.');
       return;
     }
 
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
-      .eq('id', authData.user.id)
+      .eq('id', userId)
       .single();
 
     if (profileError || !profile) {

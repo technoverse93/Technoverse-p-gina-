@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
+import { iniciarSesionVigilada } from '../utils/adminLogin';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
 import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog, Banner } from '../types';
@@ -21,6 +22,7 @@ const TallerKanban = lazy(() => import('./TallerKanban'));
 const InventarioControl = lazy(() => import('./InventarioControl'));
 const ComplianceModule = lazy(() => import('./ComplianceModule'));
 const ChatCRM = lazy(() => import('./chat/ChatCRM'));
+const CyberSecurityPanel = lazy(() => import('./CyberSecurityPanel'));
 
 const TabLoadingFallback = () => (
   <div className="flex items-center justify-center py-24 text-[var(--text-muted)] text-sm gap-2">
@@ -78,6 +80,10 @@ export default function AdminPanel({
     const path = window.location.pathname;
     if (path.startsWith('/admin/')) {
       const tab = path.replace('/admin/', '');
+      // La pestaña 'bitacora' ya no existe por separado: se fusionó dentro
+      // del Centro de Ciberseguridad. Sin esta traducción, un enlace o un
+      // marcador viejo a /admin/bitacora abriría el panel en blanco.
+      if (tab === 'bitacora') return 'ciberseguridad';
       return tab || 'dashboard';
     }
     return 'dashboard';
@@ -416,13 +422,31 @@ export default function AdminPanel({
     // Autenticación real contra Supabase Auth (ya no comparación de texto
     // plano local ni Firebase). El rol se determina desde la tabla profiles,
     // que es la fuente de verdad, no un email hardcodeado.
-    const { data: signInData, error: signInError } = await supabase.auth.signInWithPassword({
-      email: cleanEmail, password: loginPassword
-    });
+    //
+    // El acceso pasa ahora por el portero de ciberseguridad, que anota el
+    // intento (IP, ubicación, fecha, dispositivo) y rechaza las conexiones
+    // bloqueadas. Si el portero no está disponible, iniciarSesionVigilada
+    // entra por el camino directo de siempre: nunca deja al dueño afuera.
+    const acceso = await iniciarSesionVigilada(cleanEmail, loginPassword);
 
-    if (signInError || !signInData?.user) {
-      toast.error('Credenciales inválidas. Por favor verifique el correo y contraseña.');
-      addAuditLog(cleanEmail || 'anonimo', 'Seguridad', 'Intento Fallido', 'Intento de login con credenciales incorrectas.');
+    if (!acceso.ok) {
+      toast.error(acceso.mensaje || 'Credenciales inválidas. Por favor verifique el correo y contraseña.');
+      if (!acceso.bloqueado) {
+        addAuditLog(cleanEmail || 'anonimo', 'Seguridad', 'Intento Fallido', 'Intento de login con credenciales incorrectas.');
+      }
+      return;
+    }
+
+    // El id lo devuelve el portero; si se entró por el camino de respaldo
+    // viene igual. Como último recurso se relee de la sesión ya montada.
+    let userId = acceso.userId;
+    if (!userId) {
+      const { data: sesion } = await supabase.auth.getUser();
+      userId = sesion?.user?.id;
+    }
+    if (!userId) {
+      await supabase.auth.signOut();
+      toast.error('No se pudo confirmar la sesión. Intente de nuevo.');
       return;
     }
 
@@ -438,7 +462,7 @@ export default function AdminPanel({
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('role, name')
-      .eq('id', signInData.user.id)
+      .eq('id', userId)
       .maybeSingle();
 
     if (profileError || !profile || profile.role === 'Cliente') {
@@ -924,7 +948,11 @@ export default function AdminPanel({
         { id: 'cumplimiento', label: 'Cumplimiento Legal', icon: ShieldCheck },
         { id: 'marketing', label: 'Marketing y Banners', icon: Megaphone },
         { id: 'logistica', label: 'Logística Entregas', icon: Truck },
-        { id: 'bitacora', label: 'Bitácora de Auditoría', icon: BookOpen },
+        // La antigua pestaña "Bitácora de Auditoría" quedó absorbida dentro
+        // del Centro de Ciberseguridad, como una de sus secciones. Es la
+        // misma tabla con el mismo botón de limpiar: no se perdió nada, solo
+        // dejó de estar suelta al lado de un panel que hace lo mismo.
+        { id: 'ciberseguridad', label: 'Ciberseguridad', icon: ShieldAlert },
         { id: 'configuracion', label: 'Configuración General', icon: Settings },
       ];
       return items.filter(it => it && isOwner || hasPermission(it.id));
@@ -962,7 +990,11 @@ export default function AdminPanel({
         { id: 'cumplimiento', label: 'Cumplimiento Legal', icon: ShieldCheck },
         { id: 'marketing', label: 'Marketing y Banners', icon: Megaphone },
         { id: 'logistica', label: 'Logística Entregas', icon: Truck },
-        { id: 'bitacora', label: 'Bitácora de Auditoría', icon: BookOpen },
+        // La antigua pestaña "Bitácora de Auditoría" quedó absorbida dentro
+        // del Centro de Ciberseguridad, como una de sus secciones. Es la
+        // misma tabla con el mismo botón de limpiar: no se perdió nada, solo
+        // dejó de estar suelta al lado de un panel que hace lo mismo.
+        { id: 'ciberseguridad', label: 'Ciberseguridad', icon: ShieldAlert },
         { id: 'configuracion', label: 'Configuración General', icon: Settings },
       ]
     }
@@ -1929,67 +1961,18 @@ if (!del) return null;
           </div>
 
         )}
-        {activeTab === 'bitacora' && (
-          /* MODULE J: BITÁCORA (AUDITORÍA - DUEÑO SOLO) */
-          <div className="space-y-6" id="view-bitacora">
-            <div className="flex justify-between items-center border-b border-[var(--border-color)]/50 pb-3">
-              <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <BookOpen className="w-5 h-5 text-sky-500 dark:text-[var(--brand-gold-light)]" /> Bitácora Inmutable de Auditoría Operativa
-              </h3>
-              <button
-                onClick={() => {
-                  const db = getDB();
-                  db.audit_log = [
-                    {
-                      id: `LOG-RESET`,
-                      userEmail: currentUser?.email || 'admin',
-                      module: 'Seguridad',
-                      action: 'Reset Bitácora',
-                      detail: 'Bitácora depurada por Dueño. Se conservó el registro inicial fiscal.',
-                      timestamp: new Date().toISOString()
-                    }
-                  ];
-                  saveDB(db);
-                  loadAllAdminData();
-                }}
-                className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-rose-400 hover:text-rose-300 hover:bg-rose-500/15 text-sm font-bold px-3 py-1.5 rounded-xl transition"
-              >
-                Limpiar Bitácora
-              </button>
-            </div>
-
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
-              <div className="overflow-x-auto overflow-y-auto max-h-[500px]">
-                <table className="w-full min-w-[600px] text-left text-sm border-collapse font-mono leading-relaxed">
-                  <thead>
-                    <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-surface)] text-[var(--text-secondary)]">
-                      <th className="p-3">ID / Fecha</th>
-                      <th className="p-3">Usuario</th>
-                      <th className="p-3 text-center">Módulo</th>
-                      <th className="p-3 text-center">Acción</th>
-                      <th className="p-3">Detalle Técnico</th>
-                    </tr>
-                  </thead>
-                  <PaginatedTbody items={auditLog} itemsPerPage={10} renderItem={(log) => ( 
-                      <tr key={log.id} className="hover:bg-[var(--bg-surface)] ">
-                        <td className="p-3">
-                          <div className="text-[10px] text-[var(--text-secondary)]">{log.id}</div>
-                          <div className="text-[9px] text-[var(--text-secondary)]">{new Date(log.timestamp).toLocaleString()}</div>
-                        </td>
-                        <td className="p-3 font-medium text-[var(--text-primary)]">{log.userEmail}</td>
-                        <td className="p-3 text-center">
-                          <span className="bg-blue-50 text-blue-600 dark:text-[var(--brand-gold-light)] border border-blue-100 px-2 py-0.5 rounded text-[10px] uppercase font-bold dark:bg-[var(--brand-gold-mid)] dark:border-[var(--brand-gold-dark)]">
-                            {log.module}
-                          </span>
-                        </td>
-                        <td className="p-3 text-center text-[var(--text-primary)] font-bold text-[10px] uppercase">{log.action}</td>
-                        <td className="p-3 text-[var(--text-primary)] max-w-sm whitespace-pre-wrap">{log.detail}</td>
-                       </tr> )} />
-                </table>
-              </div>
-            </div>
-          </div>
-
+        {activeTab === 'ciberseguridad' && (
+          /* MODULE J: CENTRO DE CIBERSEGURIDAD
+             Absorbe la antigua pestaña "Bitácora de Auditoría": esa tabla
+             vive ahora como la sección "Bitácora" de este panel, con el
+             mismo botón de limpiar y exactamente los mismos datos. */
+          <Suspense fallback={<TabLoadingFallback />}>
+            <CyberSecurityPanel
+              auditLog={auditLog}
+              currentUserEmail={currentUser?.email}
+              onAuditLogChanged={loadAllAdminData}
+            />
+          </Suspense>
         )}
         {activeTab === 'configuracion' && (
           /* MODULE K: CONFIGURACIÓN GENERAL */
