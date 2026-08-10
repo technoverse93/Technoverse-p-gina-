@@ -15,6 +15,7 @@ import { Product, Order, OrderItem, RepairOrder } from '../types';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { iniciarSesionVigilada } from '../utils/adminLogin';
+import { CATEGORIAS_CON_TODOS, coincideCategoria, esRepuesto } from '../utils/categorias';
 import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
 import { useToast } from './ui/Overlays';
@@ -920,27 +921,14 @@ export default function PublicStore({
 
   // Categories list
   const SPARE_PART_CATEGORIES = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
-  const CATEGORIES = ['Todos', 'Dispositivos', 'Estuches', 'Cargadores', 'Audio'];
+  const CATEGORIES = CATEGORIAS_CON_TODOS;
 
-  const checkCategoryMatch = (prodCat: string, storeCat: string) => {
-    if (!prodCat || !storeCat) return false;
-    const pc = prodCat.toLowerCase();
-    const sc = storeCat.toLowerCase();
-    if (sc === 'todos') return true;
-    if (sc === 'estuches') {
-      return pc.includes('estuches') || pc.includes('fundas') || pc.includes('protectores');
-    }
-    if (sc === 'dispositivos') {
-      return pc.includes('dispositivos') || pc.includes('teclados') || pc.includes('mouse');
-    }
-    if (sc === 'audio') {
-      return pc.includes('audio') || pc.includes('audífonos') || pc.includes('audifonos');
-    }
-    if (sc === 'cargadores') {
-      return pc.includes('cargadores') || pc.includes('cables') || pc.includes('cargador');
-    }
-    return pc.includes(sc) || sc.includes(pc);
-  };
+  // La traducción de categorías vive ahora en src/utils/categorias.ts, que
+  // es la MISMA lista que usa el formulario de inventario. Antes había dos
+  // listas distintas y una tabla de equivalencias a mano: los productos
+  // guardados como "Otros" no correspondían a ninguna categoría de la
+  // tienda y desaparecían en cuanto el cliente tocaba un filtro.
+  const checkCategoryMatch = (prodCat: string, storeCat: string) => coincideCategoria(prodCat, storeCat);
 
   // useMemo: este filtro recorría TODA la lista de productos en CADA render
   // (cada tecla del buscador, abrir el carrito, cualquier cambio de estado no
@@ -951,7 +939,7 @@ export default function PublicStore({
   const filteredProducts = useMemo(() => products.filter(p => { if (!p) return false;
     // 0. Hidden/Inactive filter
     if (p.active === false) return false;
-    if (SPARE_PART_CATEGORIES.includes(p.category)) return false;
+    if (esRepuesto(p.category)) return false;
 
     // 1. Category filter
     if (selectedCategory && selectedCategory !== 'Todos') {

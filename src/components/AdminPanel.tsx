@@ -13,7 +13,7 @@ import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/s
 import { iniciarSesionVigilada } from '../utils/adminLogin';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
-import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog, Banner } from '../types';
+import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog } from '../types';
 import { useToast, useConfirm } from './ui/Overlays';
 
 // Cargados solo cuando se visita su pestaña: reduce el JS que el A12 tiene
@@ -144,7 +144,6 @@ export default function AdminPanel({
   const [clients, setClients] = useState<ClientProfile[]>([]);
   const [deliveries, setDeliveries] = useState<LogisticsDelivery[]>([]);
   const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
-  const [banners, setBanners] = useState<Banner[]>([]);
   const [auditLog, setAuditLog] = useState<AuditLog[]>([]);
 
   // Product CRUD state
@@ -204,10 +203,6 @@ export default function AdminPanel({
   const [couponForm, setCouponForm] = useState<Partial<MarketingCampaign>>({
     code: '', type: 'Porcentaje', value: 10, limit: 1, active: true
   });
-  const [isBannerModalOpen, setIsBannerModalOpen] = useState(false);
-  const [bannerForm, setBannerForm] = useState<Partial<Banner>>({
-    title: '', description: '', type: 'General', active: true
-  });
 
   const handleSaveCoupon = (e: React.FormEvent) => {
     e.preventDefault();
@@ -226,26 +221,6 @@ export default function AdminPanel({
     addAuditLog(currentUser?.email || 'admin', 'Mercadeo', 'Crear Cupón', `Cupón ${newCoupon.code} creado`);
   };
 
-  const handleSaveBanner = (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!bannerForm.title) return;
-    const db = getDB();
-    if (bannerForm.id) {
-      const idx = db.banners.findIndex(b => b && b.id === bannerForm.id);
-      if (idx !== -1) {
-        db.banners[idx] = bannerForm as Banner;
-      }
-    } else {
-      const newBanner = {
-        ...bannerForm,
-        id: `BAN-${Date.now()}`
-      } as Banner;
-      db.banners.push(newBanner);
-    }
-    saveDB(db);
-    loadAllAdminData();
-    setIsBannerModalOpen(false);
-  };
 
   const openClientModal = (client?: ClientProfile) => {
     if (client) {
@@ -395,7 +370,6 @@ export default function AdminPanel({
     setClients(db.clients || []);
     setDeliveries(db.deliveries || []);
     setCampaigns(db.marketing_campaigns || []);
-    setBanners(db.banners || []);
     setAuditLog(db.audit_log || []);
     
     if (onRefreshTrigger) {
@@ -489,6 +463,50 @@ export default function AdminPanel({
   };
 
   
+  // ---- "Eliminar" un cliente = ANONIMIZARLO, nunca borrarlo -----------
+  //
+  // Borrar la fila de verdad rompería la integridad de todo lo que ya pasó:
+  // los pedidos, los comprobantes fiscales y los movimientos de inventario
+  // apuntan a este cliente. Hacienda además obliga a conservar los
+  // comprobantes emitidos, así que la fila TIENE que seguir existiendo.
+  //
+  // Lo que se hace es lo que manda la Ley 8968: se limpian los datos que
+  // identifican a la persona (nombre, correo, teléfono, dirección,
+  // tarjetas) y se dejan valores genéricos. El historial de compras y los
+  // montos quedan intactos, porque son de la empresa, no del cliente.
+  //
+  // Es exactamente la misma operación que el botón "Derecho al Olvido" de
+  // la ficha: una sola lógica, dos puertas de entrada.
+  const handleAnonimizarCliente = async (cliente: ClientProfile) => {
+    const ok = await confirm({
+      title: 'Eliminar cliente',
+      message: `Se van a borrar de forma irreversible el nombre, correo, teléfono, dirección y tarjetas de ${cliente.name}. Sus compras y comprobantes SE CONSERVAN —Hacienda obliga a guardarlos— pero quedarán a nombre de "Cliente anónimo". Esto no se puede deshacer. ¿Continuar?`,
+      confirmText: 'Eliminar y anonimizar',
+      variant: 'danger'
+    });
+    if (!ok) return;
+
+    const db = getDB();
+    const i = db.clients.findIndex(c => c.id === cliente.id);
+    if (i === -1) { toast.error('No se encontró el cliente.'); return; }
+
+    const nombreOriginal = db.clients[i].name;
+    db.clients[i].name = 'CLIENTE ANÓNIMO (DERECHO AL OLVIDO)';
+    db.clients[i].email = `anonimo-${cliente.id.toLowerCase()}@technoverse.com`;
+    db.clients[i].phone = '+506 0000 0000';
+    db.clients[i].addressDetail = 'ELIMINADO BAJO SOLICITUD DE LEY 8968';
+    db.clients[i].cardsTokenized = [];
+    db.clients[i].balance = 0;
+    db.clients[i].notes = `Información personal purgada el ${new Date().toLocaleDateString('es-CR')} conforme a la Ley 8968.`;
+
+    addAuditLog(currentUser?.email || 'admin', 'Protección Datos', 'Derecho Olvido',
+      `Purga de datos personales completada para ${nombreOriginal} (${cliente.id}) conforme a la Ley 8968.`, db);
+
+    await saveDB(db);
+    loadAllAdminData();
+    toast.success('Cliente anonimizado. Su historial de compras se conservó intacto.');
+  };
+
   const handleSaveConfig = async () => {
     // Evita que un doble clic/doble toque en el celular dispare el mismo
     // guardado varias veces en paralelo (eso causaba conflictos 409 en
@@ -952,7 +970,7 @@ export default function AdminPanel({
     } else {
       const items = [
         { id: 'facturacion', label: 'Contabilidad y FAC', icon: FileSpreadsheet },
-        { id: 'marketing', label: 'Marketing y Banners', icon: Megaphone },
+        { id: 'marketing', label: 'Marketing', icon: Megaphone },
         // La antigua pestaña "Bitácora de Auditoría" quedó absorbida dentro
         // del Centro de Ciberseguridad, como una de sus secciones. Es la
         // misma tabla con el mismo botón de limpiar: no se perdió nada, solo
@@ -992,7 +1010,7 @@ export default function AdminPanel({
       title: "Servicios & Finanzas",
       items: [
         { id: 'facturacion', label: 'Contabilidad y FAC', icon: FileSpreadsheet },
-        { id: 'marketing', label: 'Marketing y Banners', icon: Megaphone },
+        { id: 'marketing', label: 'Marketing', icon: Megaphone },
         // La antigua pestaña "Bitácora de Auditoría" quedó absorbida dentro
         // del Centro de Ciberseguridad, como una de sus secciones. Es la
         // misma tabla con el mismo botón de limpiar: no se perdió nada, solo
@@ -1573,6 +1591,13 @@ export default function AdminPanel({
                                 <Edit className="w-4 h-4" />
                               </button>
                               <button
+                                onClick={() => handleAnonimizarCliente(c)}
+                                className="p-1.5 hover:bg-rose-500/10 rounded-lg text-rose-400 transition"
+                                title="Eliminar cliente (anonimiza sus datos y conserva el historial)"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                              <button
                                 onClick={() => handleForcePasswordReset(c.email, c.name)}
                                 disabled={resettingClientEmail === c.email}
                                 className="p-1.5 hover:bg-[var(--bg-surface)] rounded-lg text-amber-500 transition disabled:opacity-40 disabled:cursor-wait"
@@ -1773,90 +1798,6 @@ export default function AdminPanel({
               </div>
             </div>
 
-            {/* BANNERS SECTION */}
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 space-y-4">
-              <div className="flex justify-between items-center border-b border-[var(--border-color)]/50 pb-2">
-                <div>
-                  <span className="text-sm font-bold uppercase tracking-wider text-sky-400 dark:text-[var(--brand-gold-light)] block">Banners Promocionales</span>
-                  <p className="text-[10px] text-[var(--text-secondary)]">Banners que se muestran en la tienda pública.</p>
-                </div>
-                <button
-                  onClick={() => setIsBannerModalOpen(true)}
-                  className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-[var(--text-primary)] font-bold text-sm px-4 py-2 rounded-xl transition flex items-center gap-2"
-                >
-                  <Plus className="w-3 h-3" /> Nuevo Banner
-                </button>
-              </div>
-
-              {isBannerModalOpen && (
-                <form onSubmit={handleSaveBanner} className="bg-[var(--bg-surface)] p-4 rounded-xl border border-[var(--border-color)]/80 space-y-3">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Título</label>
-                      <input required type="text" value={bannerForm.title} onChange={e => setBannerForm({...bannerForm, title: e.target.value})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)]" />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Tipo de Banner</label>
-                      <CustomSelect
-                        value={bannerForm.type || ''}
-                        onChange={(val) => setBannerForm({...bannerForm, type: val as any})}
-                        className="py-1.5"
-                        options={[
-                          { value: 'Lanzamiento', label: 'Lanzamiento' },
-                          { value: 'Oferta', label: 'Oferta Especial' },
-                          { value: 'General', label: 'General' },
-                        ]}
-                      />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Descripción</label>
-                      <textarea required value={bannerForm.description} onChange={e => setBannerForm({...bannerForm, description: e.target.value})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)]" rows={2} />
-                    </div>
-                  </div>
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button type="button" onClick={() => setIsBannerModalOpen(false)} className="text-[10px] text-[var(--text-secondary)] hover:text-rose-500 px-3 py-1">Cancelar</button>
-                    <button type="submit" className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-[var(--text-primary)] px-4 py-1.5 rounded-lg text-[10px] font-bold transition">Guardar Banner</button>
-                  </div>
-                </form>
-              )}
-
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {banners.map(b => b && (
-                  <div key={b.id} className={`p-4 rounded-xl border flex flex-col justify-between space-y-3 ${b.active ? 'bg-[var(--bg-surface)]  border-[var(--border-color)]/80' : 'bg-[var(--bg-surface)]   border-[var(--border-color)]/50 opacity-50'}`}>
-                    <div className="space-y-2">
-                      <span className="bg-[var(--brand-gold-mid)]/10 text-sky-400 dark:text-[var(--brand-gold-light)] border border-sky-500 dark:border-[var(--brand-gold-mid)]/20 px-1.5 py-0.5 rounded text-[8px] font-bold uppercase tracking-wider">
-                        {b.type}
-                      </span>
-                      <h5 className="font-bold text-sm text-[var(--text-primary)]">{b.title}</h5>
-                      <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
-                        {b.description}
-                      </p>
-                    </div>
-                    <div className="flex justify-between items-center pt-2 border-t border-[var(--border-color)]/50">
-                      <span className={`text-[9px] font-bold ${b.active ? 'text-emerald-400 dark:text-[var(--brand-gold-light)]' : 'text-[var(--text-secondary)]'}`}>
-                        {b.active ? '● Activo en Tienda' : '○ Oculto'}
-                      </span>
-                      <button onClick={() => {
-                        const db = getDB();
-                        const idx = db.banners.findIndex(ban => ban && ban.id === b.id);
-                        if (idx !== -1) {
-                          db.banners[idx].active = !b.active;
-                          saveDB(db);
-                          loadAllAdminData();
-                        }
-                      }} className="text-[10px] text-sky-400 hover:text-sky-300 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] underline">
-                        {b.active ? 'Ocultar' : 'Mostrar'}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-                {banners.length === 0 && (
-                  <div className="col-span-full text-center py-6 text-[11px] text-[var(--text-secondary)] italic border border-[var(--border-color)]/50 border-dashed rounded-xl">
-                    No hay banners configurados en el sistema.
-                  </div>
-                )}
-              </div>
-            </div>
           </div>
         )}
         {activeTab === 'ciberseguridad' && (
