@@ -90,6 +90,10 @@ interface Bloqueo {
   pais: string | null;
   ciudad: string | null;
   desbloqueado_en: string | null;
+  // true = la IP no puede ni abrir el sitio (lo corta el Worker de
+  // Cloudflare antes de entregar el HTML). false = solo se le cierra el
+  // inicio de sesión, pero puede seguir viendo la tienda y comprando.
+  bloqueo_total: boolean;
 }
 
 interface Confianza {
@@ -257,6 +261,9 @@ export default function CyberSecurityPanel({
       nivel: permanente ? 3 : 1,
       bloqueado_hasta: permanente ? null : new Date(Date.now() + 30 * 60000).toISOString(),
       motivo: `Bloqueo manual del administrador (${currentUserEmail || 'admin'})`,
+      // Un bloqueo puesto a mano es una decisión deliberada: cierra el
+      // sitio entero. Después se puede bajar a "solo login" desde la ficha.
+      bloqueo_total: true,
       desbloqueado_en: null,
       actualizado_en: new Date().toISOString(),
     });
@@ -291,6 +298,23 @@ export default function CyberSecurityPanel({
     const { error } = await supabase.from('ip_whitelist').delete().eq('ip', ip);
     if (error) { toast.error('No se pudo quitar: ' + error.message); return; }
     toast.success(`IP ${ip} retirada de la lista blanca.`);
+    cargar();
+  };
+
+  const cambiarAlcanceBloqueo = async (b: Bloqueo) => {
+    // Este interruptor existe por una razón concreta: en Costa Rica los
+    // operadores móviles reparten una misma IP pública entre cientos de
+    // personas. Un bloqueo total sobre una IP así deja sin poder comprar
+    // a gente que no hizo nada. Poder bajarlo a "solo login" caso por caso
+    // evita tener que elegir entre seguridad y ventas.
+    const { error } = await supabase
+      .from('banned_ips')
+      .update({ bloqueo_total: !b.bloqueo_total, actualizado_en: new Date().toISOString() })
+      .eq('ip', b.ip);
+    if (error) { toast.error('No se pudo cambiar el alcance: ' + error.message); return; }
+    toast.success(b.bloqueo_total
+      ? `${b.ip}: ahora solo se le bloquea el inicio de sesión. Puede seguir viendo la tienda.`
+      : `${b.ip}: ahora se le bloquea el sitio web completo.`);
     cargar();
   };
 
@@ -552,6 +576,8 @@ export default function CyberSecurityPanel({
               <li>· Se reconoce el <strong className="text-[var(--text-primary)]">aparato</strong>: si entran desde uno nunca visto, sale marcado como aparato nuevo.</li>
               <li>· Al entrar una cuenta administrativa se pide permiso de ubicación, y si se acepta se guarda el <strong className="text-[var(--text-primary)]">lugar exacto por GPS</strong>. A los clientes de la tienda nunca se les pide.</li>
               <li>· La ubicación por IP <strong className="text-[var(--text-primary)]">solo dice la ciudad</strong>, no el lugar. Eso no se puede mejorar: una IP no contiene la dirección de nadie.</li>
+              <li>· Una IP bloqueada no puede ni <strong className="text-[var(--text-primary)]">abrir el sitio web</strong>: se le corta en Cloudflare antes de entregarle la página. Cada bloqueo se puede bajar a "solo login" desde su ficha.</li>
+              <li>· El bloqueo del sitio <strong className="text-[var(--text-primary)]">no aplica a la APK</strong>, que es de uso interno.</li>
             </ul>
           </div>
         </div>
@@ -812,6 +838,13 @@ export default function CyberSecurityPanel({
                         {b.nivel > 0 && !b.permanente && (
                           <span className="text-[9px] uppercase font-bold text-[var(--text-secondary)]">Nivel {b.nivel}</span>
                         )}
+                        <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded border ${
+                          b.bloqueo_total
+                            ? 'bg-rose-500/10 border-rose-500/40 text-rose-500'
+                            : 'bg-amber-500/10 border-amber-500/40 text-amber-500'
+                        }`}>
+                          {b.bloqueo_total ? 'Sitio completo' : 'Solo login'}
+                        </span>
                       </div>
                       <div className="text-[11px] text-[var(--text-secondary)]">
                         {ubicacionTexto(b)} · {b.intentos_fallidos} intento(s)
@@ -824,12 +857,20 @@ export default function CyberSecurityPanel({
                       <div className="text-[10px] text-[var(--text-secondary)]">{b.motivo} · {fechaCorta(b.actualizado_en)}</div>
                     </div>
                     {activo && (
-                      <button
-                        onClick={() => desbloquear(b.ip)}
-                        className="bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--ok)] hover:bg-[var(--ok-soft)] text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5 flex-shrink-0"
-                      >
-                        <Unlock className="w-3.5 h-3.5" /> Desbloquear
-                      </button>
+                      <div className="flex flex-wrap gap-2 flex-shrink-0">
+                        <button
+                          onClick={() => cambiarAlcanceBloqueo(b)}
+                          className="bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--text-primary)] text-[11px] font-bold px-3 py-2 rounded-xl transition hover:bg-[var(--bg-surface)]"
+                        >
+                          {b.bloqueo_total ? 'Dejar solo el login' : 'Bloquear el sitio entero'}
+                        </button>
+                        <button
+                          onClick={() => desbloquear(b.ip)}
+                          className="bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--ok)] hover:bg-[var(--ok-soft)] text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5"
+                        >
+                          <Unlock className="w-3.5 h-3.5" /> Desbloquear
+                        </button>
+                      </div>
                     )}
                   </div>
                 );

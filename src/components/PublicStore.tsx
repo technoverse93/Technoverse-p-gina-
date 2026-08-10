@@ -119,6 +119,11 @@ export default function PublicStore({
   const [isRegisterMode, setIsRegisterMode] = useState(false);
   const [loginEmail, setLoginEmail] = useState('');
   const [loginPassword, setLoginPassword] = useState('');
+  // Desde que el acceso pasa por el portero de seguridad tarda uno o dos
+  // segundos más. Sin este estado el botón se queda mudo, la persona vuelve
+  // a tocarlo, y cada toque cuenta como un intento fallido más para el
+  // bloqueo por 3 fallos.
+  const [entrandoSesion, setEntrandoSesion] = useState(false);
   
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -254,6 +259,16 @@ export default function PublicStore({
 
   const handleClientLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (entrandoSesion) return;
+    setEntrandoSesion(true);
+    try {
+      await procesarInicioSesion();
+    } finally {
+      setEntrandoSesion(false);
+    }
+  };
+
+  const procesarInicioSesion = async () => {
     const cleanEmail = loginEmail.trim().toLowerCase();
 
     // Autenticación real y segura vía Supabase Auth (contraseñas nunca viajan
@@ -1196,9 +1211,10 @@ export default function PublicStore({
 
                       <button
                         type="submit"
-                        className="w-full btn-glass-primary font-bold text-sm py-3.5 rounded-xl active:scale-[0.98]"
+                        disabled={entrandoSesion}
+                        className="w-full btn-glass-primary font-bold text-sm py-3.5 rounded-xl active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait"
                       >
-                        Iniciar Sesión
+                        {entrandoSesion ? 'Verificando acceso…' : 'Iniciar Sesión'}
                       </button>
 
                       <div className="pt-4 flex flex-col items-center gap-3 border-t border-slate-50">
@@ -2295,9 +2311,10 @@ export default function PublicStore({
 
                 <button
                   type="submit"
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] dark:text-[#14100a] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer"
+                  disabled={entrandoSesion}
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] dark:text-[#14100a] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
                 >
-                  Iniciar Sesión
+                  {entrandoSesion ? 'Verificando acceso…' : 'Iniciar Sesión'}
                 </button>
               </form>
             )}
