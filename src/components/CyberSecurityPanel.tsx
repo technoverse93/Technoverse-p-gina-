@@ -7,7 +7,10 @@ import {
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB } from '../utils/storage';
 import { obtenerMiConexion } from '../utils/adminLogin';
-import { soportaBiometria, registrarBiometria, misLlaves, borrarLlave, LlaveBiometrica } from '../utils/biometria';
+import {
+  soportaBiometria, registrarBiometria, misLlaves, borrarLlave, LlaveBiometrica,
+  tipoDeBiometria, biometriaYaActivada, desactivarBiometriaNativa,
+} from '../utils/biometria';
 import { AuditLog } from '../types';
 import { PaginatedTbody } from './PaginationHelper';
 import { useToast, useConfirm } from './ui/Overlays';
@@ -249,6 +252,10 @@ export default function CyberSecurityPanel({
   const [llaves, setLlaves] = useState<LlaveBiometrica[]>([]);
   const [hayBiometria, setHayBiometria] = useState(false);
   const [registrandoLlave, setRegistrandoLlave] = useState(false);
+  // Dentro de la APK la biometría funciona distinto (plugin nativo), así
+  // que la pantalla tiene que explicar lo que corresponde a cada caso.
+  const [esApk] = useState(() => tipoDeBiometria() === 'nativa');
+  const [huellaActivada, setHuellaActivada] = useState(false);
   const [conteos, setConteos] = useState<any>(null);
   const [limpiando, setLimpiando] = useState(false);
   const [cargando, setCargando] = useState(true);
@@ -312,7 +319,12 @@ export default function CyberSecurityPanel({
   useEffect(() => {
     let vigente = true;
     soportaBiometria().then(puede => { if (vigente) setHayBiometria(puede); });
-    misLlaves().then(l => { if (vigente) setLlaves(l); });
+    biometriaYaActivada().then(x => { if (vigente) setHuellaActivada(x); });
+    // Las llaves WebAuthn solo existen en la web; en la APK la lista sale
+    // vacía y no se muestra.
+    if (tipoDeBiometria() === 'webauthn') {
+      misLlaves().then(l => { if (vigente) setLlaves(l); });
+    }
     return () => { vigente = false; };
   }, []);
 
@@ -588,7 +600,8 @@ export default function CyberSecurityPanel({
         return;
       }
       toast.success(r.mensaje || 'Acceso biométrico activado.');
-      setLlaves(await misLlaves());
+      setHuellaActivada(await biometriaYaActivada());
+      if (!esApk) setLlaves(await misLlaves());
     } finally {
       setRegistrandoLlave(false);
     }
@@ -1840,14 +1853,30 @@ export default function CyberSecurityPanel({
 
           <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-4 space-y-3">
             {hayBiometria ? (
-              <button
-                onClick={activarBiometria}
-                disabled={registrandoLlave}
-                className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white dark:text-slate-950 text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 disabled:opacity-60"
-              >
-                <Fingerprint className="w-4 h-4" />
-                {registrandoLlave ? 'Esperando al aparato…' : 'Activar en este aparato'}
-              </button>
+              <div className="flex flex-wrap gap-2">
+                <button
+                  onClick={activarBiometria}
+                  disabled={registrandoLlave}
+                  className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white dark:text-slate-950 text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 disabled:opacity-60"
+                >
+                  <Fingerprint className="w-4 h-4" />
+                  {registrandoLlave
+                    ? 'Esperando al aparato…'
+                    : huellaActivada ? 'Volver a activar' : 'Activar en este aparato'}
+                </button>
+                {esApk && huellaActivada && (
+                  <button
+                    onClick={async () => {
+                      await desactivarBiometriaNativa();
+                      setHuellaActivada(false);
+                      toast.success('Acceso con huella retirado de este teléfono.');
+                    }}
+                    className="border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-bold px-4 py-2.5 rounded-xl"
+                  >
+                    Quitar de este teléfono
+                  </button>
+                )}
+              </div>
             ) : (
               <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
                 Este aparato no ofrece acceso biométrico. Ocurre cuando el equipo no tiene lector, cuando el sitio no
@@ -1891,6 +1920,24 @@ export default function CyberSecurityPanel({
                   </tbody>
                 </table>
               </div>
+            </div>
+          )}
+
+          {esApk && (
+            <div className="bg-[var(--bg-base)] border border-[var(--border-color)]/60 rounded-2xl p-4">
+              <h5 className="text-[11px] uppercase font-bold text-[var(--text-secondary)] mb-2">
+                En la aplicación funciona distinto
+              </h5>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                El navegador interno de Android no soporta el sistema de llaves que usa la web, así que aquí se usa el
+                lector del propio teléfono: la huella libera una sesión guardada en el almacén cifrado del sistema.
+              </p>
+              <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed mt-2">
+                Es lo que hacen las aplicaciones de banco, y es seguro, pero conviene saber la diferencia: en la web se
+                guarda una llave que <strong className="text-[var(--text-primary)]">solo sirve para firmar</strong> y no
+                funcionaría en otro aparato; aquí se guarda un pase. Sacarlo del almacén cifrado exige un teléfono
+                alterado, pero no es imposible.
+              </p>
             </div>
           )}
 
