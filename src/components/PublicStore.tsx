@@ -15,7 +15,7 @@ import { Product, Order, OrderItem, RepairOrder } from '../types';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { iniciarSesionVigilada } from '../utils/adminLogin';
-import { soportaBiometria, entrarConBiometria } from '../utils/biometria';
+import { soportaBiometria, entrarConBiometria, biometriaYaActivada } from '../utils/biometria';
 import { CATEGORIAS_CON_TODOS, coincideCategoria, esRepuesto } from '../utils/categorias';
 import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
@@ -130,6 +130,13 @@ export default function PublicStore({
   // tiene arreglo.
   const [hayBiometria, setHayBiometria] = useState(false);
   const [entrandoBiometria, setEntrandoBiometria] = useState(false);
+  // ¿Este teléfono ya tiene la huella activada? Si la tiene, el aviso se
+  // lanza solo al abrir el acceso, que es lo que se espera de una app.
+  const [biometriaLista, setBiometriaLista] = useState(false);
+  // Se ofrece automáticamente UNA sola vez por apertura de la aplicación.
+  // Si la persona cancela, no se le vuelve a insistir: quedaría atrapada
+  // en un aviso que reaparece sin poder llegar al formulario.
+  const yaSeOfrecio = useRef(false);
   
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -266,8 +273,35 @@ export default function PublicStore({
   useEffect(() => {
     let vigente = true;
     soportaBiometria().then(puede => { if (vigente) setHayBiometria(puede); });
+    biometriaYaActivada().then(lista => { if (vigente) setBiometriaLista(lista); });
     return () => { vigente = false; };
   }, []);
+
+  /**
+   * Lanza el aviso de huella solo, al abrir el acceso.
+   *
+   * Solo si este teléfono ya la tenía activada: a quien nunca la configuró
+   * no se le muestra nada. Y una sola vez por apertura, para que cancelar
+   * no deje a la persona dando vueltas en el mismo aviso.
+   */
+  useEffect(() => {
+    if (currentUser) return;                       // ya está dentro
+    if (!hayBiometria || !biometriaLista) return;  // no configurada en este aparato
+    if (yaSeOfrecio.current) return;
+
+    // El acceso se abre por DOS caminos: el modal y el desplegable de
+    // "Cuenta". Gatear solo por el modal dejaba fuera el camino que la
+    // gente usa de verdad, y el aviso nunca aparecía.
+    const accesoALaVista = (isLoginModalOpen && !isRegisterMode) || isAccountDropdownOpen;
+    if (!accesoALaVista) return;
+
+    yaSeOfrecio.current = true;
+    // Pequeña espera para que la pantalla termine de pintarse: si el aviso
+    // del sistema se superpone a medio render, en algunos Android se cierra
+    // solo.
+    const t = setTimeout(() => { void accederConBiometria(); }, 350);
+    return () => clearTimeout(t);
+  }, [isLoginModalOpen, isRegisterMode, isAccountDropdownOpen, hayBiometria, biometriaLista, currentUser]);
 
   /**
    * Entrada con Face ID / huella.
@@ -285,12 +319,15 @@ export default function PublicStore({
         // Cancelar no es un error: no tiene sentido regañar a quien
         // simplemente cerró el aviso de Face ID.
         if (!r.cancelado) toast.error(r.mensaje || 'No se pudo entrar con biometría.');
+        // El botón se queda visible aunque haya fallado: si el pase caducó,
+        // basta con entrar una vez con la contraseña y se rearma solo.
         return;
       }
       const { data: sesion } = await supabase.auth.getUser();
       const userId = sesion?.user?.id;
       if (!userId) { toast.error('No se pudo confirmar la sesión.'); return; }
       await completarInicioSesion(userId);
+      setBiometriaLista(await biometriaYaActivada());
     } finally {
       setEntrandoBiometria(false);
     }

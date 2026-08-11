@@ -11,6 +11,7 @@ import {
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
 import { iniciarSesionVigilada } from '../utils/adminLogin';
+import { cerrarSesionConservandoBiometria } from '../utils/biometria';
 import { CATEGORIAS_TIENDA, normalizarCategoria, esRepuesto } from '../utils/categorias';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
@@ -559,7 +560,10 @@ export default function AdminPanel({
     if (currentUser) {
       addAuditLog(currentUser.email, 'Seguridad', 'Logout', 'Sesión cerrada por el usuario.');
     }
-    await supabase.auth.signOut();
+    // En la APK se cierra con alcance local: `signOut()` a secas revoca en
+    // el servidor TODOS los pases de la cuenta, incluido el que guarda la
+    // huella, y por eso cerrar sesión mataba la biometría.
+    await cerrarSesionConservandoBiometria();
     onLogout();
     setLoginPassword('');
   };
