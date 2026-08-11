@@ -5,6 +5,7 @@ import { initKeyboard } from './mobile/keyboard';
 import { OverlayProvider, useToast } from './components/ui/Overlays';
 import { conexionBloqueada, detalleDeBloqueo } from './utils/adminLogin';
 import { registrarVisita } from './utils/huella';
+import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria } from './utils/biometria';
 
 // AdminPanel carga recharts, motion y toda la lógica de taller/inventario/CRM:
 // era el bloque más pesado del bundle principal (>300 KB gzip) y se estaba
@@ -133,6 +134,13 @@ function AppInner() {
     void registrarVisita();
   }, []);
 
+  // Mantiene al día el pase guardado detrás de la huella. Sin esto la
+  // biometría de la APK funcionaba una sola vez: el pase es de un solo uso
+  // y se consumía en el primer ingreso.
+  useEffect(() => {
+    iniciarSincronizacionBiometrica();
+  }, []);
+
   // Theme Management
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('technoverse_theme');
@@ -180,6 +188,11 @@ function AppInner() {
   };
 
   const handleLogout = () => {
+    // FALLO CORREGIDO: esto vaciaba el estado de la pantalla pero NO cerraba
+    // la sesión de Supabase, así que el aparato seguía autenticado aunque la
+    // aplicación dijera lo contrario. Ahora se cierra de verdad — y en la
+    // APK con alcance local, para no invalidar el pase que guarda la huella.
+    void cerrarSesionConservandoBiometria();
     setCurrentUser(null);
     window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: null } }));
     window.history.pushState(null, "", "/");
