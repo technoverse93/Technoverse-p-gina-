@@ -289,4 +289,4 @@ export async function registrarVisita(): Promise<void> {
   } catch {
     // Que la telemetría nunca sea el motivo de que alguien no pueda comprar.
   }
-                                                 }
+}
