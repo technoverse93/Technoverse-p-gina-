@@ -50,6 +50,29 @@ import { supabase } from '../supabaseClient';
 /** Identificador del "servidor" bajo el que se guarda el pase. */
 const LLAVERO = 'technoverse.cr';
 
+/**
+ * Marca de "este teléfono tiene la huella activada".
+ *
+ * Está SEPARADA del pase guardado, y esa separación es justo lo que
+ * arregla el fallo: el pase caduca y se renueva constantemente, pero la
+ * decisión de haber activado la huella no debería perderse por eso. Antes
+ * las dos cosas eran la misma, así que en cuanto el pase dejaba de servir
+ * el teléfono "olvidaba" que la huella estaba activada y el botón
+ * desaparecía.
+ */
+const LLAVE_ACTIVA = 'technoverse_biometria_activa';
+
+function marcarActiva(valor: boolean): void {
+  try {
+    if (valor) localStorage.setItem(LLAVE_ACTIVA, '1');
+    else localStorage.removeItem(LLAVE_ACTIVA);
+  } catch { /* sin almacenamiento se pierde la marca, no es grave */ }
+}
+
+function estaMarcadaActiva(): boolean {
+  try { return localStorage.getItem(LLAVE_ACTIVA) === '1'; } catch { return false; }
+}
+
 interface PluginBiometrico {
   isAvailable(opciones?: any): Promise<{ isAvailable: boolean; biometryType?: number }>;
   verifyIdentity(opciones?: any): Promise<void>;
@@ -96,17 +119,28 @@ export async function soportaBiometriaNativa(): Promise<boolean> {
   }
 }
 
-/** ¿Ya hay una sesión guardada tras la huella en este teléfono? */
+/**
+ * ¿Este teléfono tiene la huella activada?
+ *
+ * Responde por la MARCA, no por el pase. Es deliberado: el pase se
+ * renueva y puede quedar inservible, pero mientras la persona no la
+ * desactive a mano, la huella sigue activada y el botón tiene que
+ * seguir apareciendo. Si el pase resultó viejo, se le pedirá la
+ * contraseña una vez y se rearma solo.
+ */
 export async function hayAccesoGuardado(): Promise<boolean> {
-  try {
-    const p = plugin();
-    if (!p) return false;
-    const c = await p.getCredentials({ server: LLAVERO });
-    return !!c?.password;
-  } catch {
-    // El plugin lanza cuando no hay nada guardado: eso no es un error.
-    return false;
-  }
+  if (!plugin()) return false;
+  return estaMarcadaActiva();
+}
+
+/** Corta una espera que se alarga demasiado. */
+async function conTope<T>(promesa: PromiseLike<T>, ms: number): Promise<T> {
+  return await Promise.race([
+    Promise.resolve(promesa),
+    new Promise<T>((_, rechazar) =>
+      setTimeout(() => rechazar(new Error('tiempo agotado')), ms)
+    ),
+  ]);
 }
 
 export interface ResultadoNativo {
@@ -144,6 +178,7 @@ export async function activarBiometriaNativa(): Promise<ResultadoNativo> {
     });
 
     await p.setCredentials({ username: correo, password: token, server: LLAVERO });
+    marcarActiva(true);
     return { ok: true, mensaje: 'Acceso con huella activado en este teléfono.' };
   } catch (e: any) {
     return interpretar(e);
@@ -176,17 +211,35 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
       description: '',
     });
 
-    const { error } = await supabase.auth.refreshSession({ refresh_token: guardado.password });
+    // Tope de espera. Sin él, con la red caída o muy lenta la promesa no
+    // vuelve nunca y el botón se queda en "Verificando…" para siempre, sin
+    // forma de reintentar ni de escribir la contraseña. Quince segundos son
+    // de sobra en 4G y cortos como para no desesperar a nadie.
+    const { data, error } = await conTope(
+      supabase.auth.refreshSession({ refresh_token: guardado.password }),
+      15000
+    );
     if (error) {
-      // El pase dejó de servir: contraseña cambiada, sesión cerrada desde
-      // otro lado, o cuenta suspendida. Se borra para no dejar al usuario
-      // atrapado en un botón que nunca va a funcionar.
-      await borrarBiometriaNativa();
+      // El pase dejó de servir: contraseña cambiada o sesión revocada.
+      //
+      // OJO CON LO QUE **NO** SE HACE AQUÍ: antes esto borraba también la
+      // marca de "huella activada", y era el fallo. La persona entraba una
+      // vez, el pase se consumía, el siguiente intento fallaba, y el
+      // teléfono se olvidaba de la huella para siempre. Ahora solo se tira
+      // el pase inservible: la marca se queda, así que el botón sigue ahí
+      // y en cuanto entre con su contraseña se rearma solo.
+      await tirarPaseInservible();
       return {
         ok: false,
-        mensaje: 'El acceso guardado ya no es válido. Entre con su contraseña y vuelva a activar la huella.',
+        mensaje: 'La sesión guardada caducó. Entre con su contraseña una vez y la huella vuelve a quedar lista.',
       };
     }
+
+    // EL PASE ES DE UN SOLO USO. Supabase entrega uno nuevo en cada
+    // renovación e invalida el anterior; si no se guardara el nuevo, la
+    // huella funcionaría UNA vez y nunca más. Esta línea es la corrección
+    // central del fallo.
+    await guardarPaseActual(data?.session?.refresh_token, data?.session?.user?.email);
 
     return { ok: true, mensaje: 'Bienvenido.' };
   } catch (e: any) {
@@ -194,8 +247,14 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
   }
 }
 
-/** Quita el acceso por huella de este teléfono. */
+/** Quita el acceso por huella de este teléfono, a petición de la persona. */
 export async function borrarBiometriaNativa(): Promise<void> {
+  marcarActiva(false);
+  await tirarPaseInservible();
+}
+
+/** Tira solo el pase, conservando la marca de "huella activada". */
+async function tirarPaseInservible(): Promise<void> {
   try {
     await plugin()?.deleteCredentials({ server: LLAVERO });
   } catch {
@@ -203,9 +262,89 @@ export async function borrarBiometriaNativa(): Promise<void> {
   }
 }
 
+/**
+ * Guarda el pase vigente, sin pedir la huella.
+ *
+ * No hace falta pedirla: quien llega hasta aquí YA está autenticado. Y
+ * pedirla en cada renovación de sesión —que ocurre sola cada hora— sería
+ * insoportable.
+ */
+async function guardarPaseActual(token?: string | null, correo?: string | null): Promise<void> {
+  try {
+    const p = plugin();
+    if (!p || !token || !estaMarcadaActiva()) return;
+    await p.setCredentials({
+      username: correo || '',
+      password: token,
+      server: LLAVERO,
+    });
+  } catch {
+    /* si no se pudo guardar, se reintenta en la próxima renovación */
+  }
+}
+
+/**
+ * Mantiene el pase al día y cierra sesión sin romper la huella.
+ *
+ * ---------------------------------------------------------------------
+ * EL FALLO QUE ESTO CORRIGE, EXPLICADO
+ * ---------------------------------------------------------------------
+ * Supabase ROTA el pase: cada vez que la sesión se renueva entrega uno
+ * nuevo e invalida el anterior. La versión anterior guardaba el pase una
+ * sola vez, al activar la huella, y no lo volvía a tocar. En cuanto la
+ * sesión se renovaba —sola, cada hora— ese pase quedaba muerto.
+ *
+ * Peor todavía: entrar con la huella ES una renovación, así que el propio
+ * ingreso consumía el pase guardado. Por eso funcionaba perfecto la
+ * primera vez y nunca más.
+ *
+ * Con esto, cada vez que la sesión se renueva o se inicia, el pase
+ * guardado se actualiza al vigente.
+ */
+export function iniciarSincronizacionBiometrica(): void {
+  if (!esAplicacionNativa()) return;
+  try {
+    supabase.auth.onAuthStateChange((evento, sesion) => {
+      if (evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED' || evento === 'INITIAL_SESSION') {
+        void guardarPaseActual(sesion?.refresh_token, sesion?.user?.email);
+      }
+    });
+  } catch {
+    /* sin sincronización la huella seguirá fallando, pero nada se rompe */
+  }
+}
+
+/**
+ * Cierra la sesión SIN invalidar el pase guardado.
+ *
+ * `signOut()` sin argumentos usa alcance global: le dice al servidor que
+ * revoque TODOS los pases de esa cuenta, incluido el que está guardado
+ * detrás de la huella. Con eso, cerrar sesión mataba la biometría aunque
+ * el pase estuviera al día.
+ *
+ * `scope: 'local'` borra la sesión de este aparato y deja el pase válido,
+ * que es exactamente lo que se necesita para volver a entrar con la
+ * huella. En la web se mantiene el cierre global de siempre.
+ */
+export async function cerrarSesionConservandoBiometria(): Promise<void> {
+  try {
+    if (esAplicacionNativa() && estaMarcadaActiva()) {
+      await supabase.auth.signOut({ scope: 'local' });
+      return;
+    }
+    await supabase.auth.signOut();
+  } catch {
+    /* si falla, se intenta el cierre normal para no dejar la sesión viva */
+    try { await supabase.auth.signOut(); } catch { /* nada más que hacer */ }
+  }
+}
+
 /** Traduce los errores del plugin a algo que se pueda leer. */
 function interpretar(e: any): ResultadoNativo {
   const codigo = String(e?.code ?? e?.message ?? '');
+  if (/tiempo agotado/i.test(codigo)) {
+    return { ok: false, mensaje: 'No hubo respuesta del servidor. Revise su conexión e inténtelo otra vez.' };
+  }
   // 10 = cancelado por la persona, 14 = no hay huellas registradas,
   // 15 = no hay bloqueo de pantalla configurado.
   if (/10|cancel/i.test(codigo)) {

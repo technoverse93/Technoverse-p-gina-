@@ -42,7 +42,12 @@ import { obtenerDeviceId } from './huella';
 import {
   esAplicacionNativa, soportaBiometriaNativa, activarBiometriaNativa,
   entrarConBiometriaNativa, hayAccesoGuardado, borrarBiometriaNativa,
+  iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria,
 } from './biometriaNativa';
+
+// Se reexportan para que las pantallas no tengan que saber si están en la
+// web o en la APK: llaman a lo mismo y cada camino hace lo suyo.
+export { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria };
 
 // ---------------------------------------------------------------------
 // base64url ↔ binario
