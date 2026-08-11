@@ -1,10 +1,15 @@
 import React, { useState, useEffect } from 'react';
-import { Kanban, Search, Plus, Save, Clock, HelpCircle, FileText, CheckCircle2, ChevronRight, RefreshCw, Key, MessageCircle } from 'lucide-react';
+import { Kanban, Search, Plus, Save, Clock, HelpCircle, FileText, CheckCircle2, ChevronRight, RefreshCw, Key, MessageCircle, BookMarked, EyeOff, X } from 'lucide-react';
 import { RepairOrder, Product, ClientProfile } from '../types';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { processRepairAtomic } from '../utils/transactions';
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
+import { CATEGORIAS_REPUESTO } from '../utils/categorias';
+import {
+  Catalogo, catalogoBase, cargarCatalogo, categoriasDe, marcasDe, modelosDe,
+  agregarModelo, ocultarModelo, contarModelos, OPCION_OTRO,
+} from '../utils/catalogoDispositivos';
 
 interface TallerKanbanProps {
   activeUserEmail?: string;
@@ -15,64 +20,22 @@ const KANBAN_COLUMNS: RepairOrder['status'][] = [
   'Pendiente', 'Diagnosticada', 'Cotizada', 'Aprobada', 'Esperando repuestos', 'En Reparación', 'Lista', 'Entregada', 'Cancelada'
 ];
 
-const sparePartCategories = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
+// Misma lista que usa el inventario. Estaba copiada a mano aquí y en
+// InventarioControl.tsx; si alguien agregaba una categoría de repuesto en
+// un lado y no en el otro, el taller dejaba de ver piezas que sí existían
+// en bodega.
+const sparePartCategories = CATEGORIAS_REPUESTO;
 
 // Filtros en cascada de recepción: Categoría -> Marca -> Modelo -> Categoría de Falla.
-const DEVICE_CATEGORIES = ['Celular', 'Laptop', 'PC', 'Consola'];
-
-const BRANDS_BY_CATEGORY: Record<string, string[]> = {
-  'Celular': ['Apple', 'Samsung', 'Xiaomi', 'Motorola', 'Huawei', 'Otra'],
-  'Laptop': ['Apple', 'Dell', 'HP', 'Lenovo', 'Asus', 'Acer', 'Otra'],
-  'PC': ['Ensamblado', 'HP', 'Dell', 'Lenovo', 'Otra'],
-  'Consola': ['Sony (PlayStation)', 'Microsoft (Xbox)', 'Nintendo', 'Otra'],
-};
-
-// Modelos indexados por CATEGORÍA + MARCA (no solo por marca). Antes 'Apple'
-// compartía UNA sola lista, así que en Celular -> Apple aparecían MacBooks/iMac
-// mezclados con los iPhone (y viceversa en Laptop). Ahora cada categoría tiene
-// su propio conjunto de modelos por marca, eliminando la contaminación. Listas
-// enfocadas al mercado de Costa Rica (equipos de venta/importación común).
-// Toda lista termina en 'Otro' para habilitar ingreso manual sin bloquear.
-const MODELS_BY_CATEGORY_BRAND: Record<string, Record<string, string[]>> = {
-  'Celular': {
-    'Apple': ['iPhone 7', 'iPhone 7 Plus', 'iPhone 8', 'iPhone 8 Plus', 'iPhone X', 'iPhone XR', 'iPhone XS', 'iPhone XS Max', 'iPhone 11', 'iPhone 11 Pro', 'iPhone 11 Pro Max', 'iPhone 12', 'iPhone 12 Mini', 'iPhone 12 Pro', 'iPhone 12 Pro Max', 'iPhone 13', 'iPhone 13 Mini', 'iPhone 13 Pro', 'iPhone 13 Pro Max', 'iPhone 14', 'iPhone 14 Plus', 'iPhone 14 Pro', 'iPhone 14 Pro Max', 'iPhone 15', 'iPhone 15 Plus', 'iPhone 15 Pro', 'iPhone 15 Pro Max', 'iPhone 16', 'iPhone 16 Plus', 'iPhone 16 Pro', 'iPhone 16 Pro Max', 'Otro'],
-    'Samsung': ['Galaxy A03', 'Galaxy A04', 'Galaxy A05', 'Galaxy A14', 'Galaxy A15', 'Galaxy A24', 'Galaxy A34', 'Galaxy A54', 'Galaxy S20', 'Galaxy S21', 'Galaxy S22', 'Galaxy S23', 'Galaxy S23 Ultra', 'Galaxy S24', 'Galaxy S24 Ultra', 'Galaxy Z Flip', 'Galaxy Z Fold', 'Galaxy Note 20', 'Otro'],
-    'Xiaomi': ['Redmi A2', 'Redmi 12', 'Redmi 13C', 'Redmi Note 11', 'Redmi Note 12', 'Redmi Note 13', 'Redmi Note 13 Pro', 'Poco X5', 'Poco X6', 'Mi 11', 'Otro'],
-    'Motorola': ['Moto E13', 'Moto G13', 'Moto G23', 'Moto G54', 'Moto G84', 'Moto Edge 40', 'Otro'],
-    'Huawei': ['Y9', 'P30', 'P40', 'Mate 20', 'Mate 30', 'Nova 11', 'Otro'],
-    'Otra': ['Otro'],
-  },
-  'Laptop': {
-    'Apple': ['MacBook Air M1', 'MacBook Air M2', 'MacBook Air M3', 'MacBook Pro 13"', 'MacBook Pro 14"', 'MacBook Pro 16"', 'Otro'],
-    'Dell': ['Inspiron', 'XPS', 'Latitude', 'Vostro', 'Otro'],
-    'HP': ['Pavilion', 'Envy', 'ProBook', 'EliteBook', 'Victus', 'Otro'],
-    'Lenovo': ['ThinkPad', 'IdeaPad', 'Legion', 'Yoga', 'Otro'],
-    'Asus': ['VivoBook', 'ZenBook', 'ROG', 'TUF Gaming', 'Otro'],
-    'Acer': ['Aspire', 'Nitro', 'Predator', 'Swift', 'Otro'],
-    'Otra': ['Otro'],
-  },
-  'PC': {
-    'Ensamblado': ['Torre Gamer', 'Torre Oficina', 'Torre Diseño', 'Otro'],
-    'HP': ['Pavilion Desktop', 'All-in-One', 'Elite Tower', 'Otro'],
-    'Dell': ['OptiPlex', 'Inspiron Desktop', 'Vostro Desktop', 'Otro'],
-    'Lenovo': ['IdeaCentre', 'ThinkCentre', 'Otro'],
-    'Otra': ['Otro'],
-  },
-  'Consola': {
-    'Sony (PlayStation)': ['PS4', 'PS4 Slim', 'PS4 Pro', 'PS5', 'PS5 Slim', 'Otro'],
-    'Microsoft (Xbox)': ['Xbox One', 'Xbox One S', 'Xbox Series S', 'Xbox Series X', 'Otro'],
-    'Nintendo': ['Switch', 'Switch Lite', 'Switch OLED', 'Otro'],
-    'Otra': ['Otro'],
-  },
-};
-const DEFAULT_MODELS = ['Otro'];
-
-/** Modelos válidos para la combinación categoría+marca; siempre incluye 'Otro'. */
-function getModelsFor(category: string, brand: string): string[] {
-  const byBrand = MODELS_BY_CATEGORY_BRAND[category];
-  if (!byBrand) return DEFAULT_MODELS;
-  return byBrand[brand] || DEFAULT_MODELS;
-}
+//
+// Las tres listas ya NO viven aquí. Estaban escritas a mano en este
+// archivo —4 categorías, 19 marcas y unos 120 modelos— y ampliarlas
+// obligaba a tocar el código y volver a desplegar. Ahora salen de
+// `src/utils/catalogoDispositivos.ts`, que trae 513 modelos de base y se
+// puede ampliar desde el propio taller sin programar nada.
+//
+// El catálogo base vive en el código a propósito: si Supabase no
+// responde, la recepción de equipos tiene que seguir funcionando.
 
 const DAMAGE_CATEGORIES = [
   'Pantalla / LCD', 'Batería', 'Puerto de Carga', 'Cámara', 'Placa Lógica', 'Software / Sistema',
@@ -107,6 +70,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
   const [products, setProducts] = useState<Product[]>([]);
   const [clients, setClients] = useState<ClientProfile[]>([]);
   const [selectedRepair, setSelectedRepair] = useState<RepairOrder | null>(null);
+
   useEffect(() => {
     if (selectedRepair) {
       document.body.style.overflow = "hidden";
@@ -126,6 +90,16 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
   const [newDeviceBrand, setNewDeviceBrand] = useState('');
   const [newDeviceModel, setNewDeviceModel] = useState('');
   const [newDeviceModelOther, setNewDeviceModelOther] = useState('');
+  // Arranca con el catálogo base para que el formulario esté usable en el
+  // primer render, sin esperar a la red; en cuanto llega lo de Supabase se
+  // sustituye por el catálogo completo.
+  const [catalogo, setCatalogo] = useState<Catalogo>(() => catalogoBase());
+  const [guardarEnCatalogo, setGuardarEnCatalogo] = useState(false);
+  const [verCatalogo, setVerCatalogo] = useState(false);
+  const [buscarModelo, setBuscarModelo] = useState('');
+  const [nuevoModeloCat, setNuevoModeloCat] = useState('');
+  const [nuevoModeloMarca, setNuevoModeloMarca] = useState('');
+  const [nuevoModeloNombre, setNuevoModeloNombre] = useState('');
   const [newDamageCategory, setNewDamageCategory] = useState('');
   const [newDamageReported, setNewDamageReported] = useState('');
   const [newWarrantyMonths, setNewWarrantyMonths] = useState<number | ''>(''); // Minimum is 3 by Costa Rican law
@@ -174,6 +148,15 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     return () => window.removeEventListener('technoverse_db_updated', handleUpdate);
   }, []);
 
+  // El catálogo se lee una sola vez al abrir el taller. Si falla, queda el
+  // base y no se avisa nada: el técnico puede trabajar igual, solo que sin
+  // los modelos que se hayan agregado a mano.
+  useEffect(() => {
+    let vigente = true;
+    cargarCatalogo().then(c => { if (vigente) setCatalogo(c); });
+    return () => { vigente = false; };
+  }, []);
+
   const loadTallerData = () => {
     const db = getDB();
     setRepairs(db.repair_orders || []);
@@ -183,7 +166,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
   const handleCreateRepair = (e: React.FormEvent) => {
     e.preventDefault();
-    const finalModel = newDeviceModel === 'Otro' ? newDeviceModelOther.trim() : newDeviceModel;
+    const finalModel = newDeviceModel === OPCION_OTRO ? newDeviceModelOther.trim() : newDeviceModel;
     if (!newCustomerName.trim() || !newCustomerEmail.trim() || !newCustomerPhone.trim()
       || !newDeviceCategory || !newDeviceBrand || !finalModel || !newDamageCategory || !newDamageReported.trim()) {
       toast.warning('Por favor complete todos los datos requeridos, incluyendo categoría, marca, modelo y categoría de falla del equipo.');
@@ -201,6 +184,18 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     const number = Math.floor(100 + Math.random() * 900);
     const repairId = `GT-${number}`;
     const ticketId = `TKT-${number}`;
+    // Si se pidió guardar el modelo escrito a mano, se manda al catálogo.
+    // Es aparte de la orden y sin esperar respuesta: que el catálogo no se
+    // pueda ampliar jamás puede impedir recibir un equipo.
+    if (guardarEnCatalogo && newDeviceModel === OPCION_OTRO && finalModel) {
+      void agregarModelo(newDeviceCategory, newDeviceBrand, finalModel, activeUserEmail)
+        .then(error => {
+          if (error) { toast.warning('La orden se creó, pero el modelo no se pudo guardar en el catálogo: ' + error); return; }
+          cargarCatalogo().then(setCatalogo);
+          toast.success(`"${finalModel}" quedó guardado en el catálogo.`);
+        });
+    }
+
     const deviceLabel = `${newDeviceBrand} ${finalModel} (${newDeviceCategory})`;
 
     const newRepair: RepairOrder = {
@@ -264,6 +259,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     setNewDeviceBrand('');
     setNewDeviceModel('');
     setNewDeviceModelOther('');
+    setGuardarEnCatalogo(false);
     setNewDamageCategory('');
     setNewDamageReported('');
     setNewWarrantyMonths(3);
@@ -674,7 +670,14 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
             <h3 className="font-bold text-sm mb-1 flex items-center gap-1.5">
               <Kanban className="w-5 h-5 text-sky-400 dark:text-[var(--brand-gold-light)]" /> Servicio Técnico Interno
             </h3>
-            <p className="text-[10px] text-[var(--text-secondary)] mb-4">Ingresa un nuevo dispositivo para diagnóstico e inicio del flujo de soporte legal.</p>
+            <p className="text-[10px] text-[var(--text-secondary)] mb-3">Ingresa un nuevo dispositivo para diagnóstico e inicio del flujo de soporte legal.</p>
+            <button
+              onClick={() => setVerCatalogo(true)}
+              className="mb-4 text-[10px] font-bold uppercase tracking-wide px-3 py-1.5 rounded-xl border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)] inline-flex items-center gap-1.5"
+            >
+              <BookMarked className="w-3.5 h-3.5" />
+              Catálogo de equipos · {contarModelos(catalogo)} modelos
+            </button>
           </div>
 
           {!showAddForm ? (
@@ -769,7 +772,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 onChange={(val) => { setNewDeviceCategory(val); setNewDeviceBrand(''); setNewDeviceModel(''); setNewDeviceModelOther(''); }}
                 placeholder="-- Categoría --"
                 className="text-xs py-2"
-                options={DEVICE_CATEGORIES.map(c => ({ value: c, label: c }))}
+                options={categoriasDe(catalogo).map(c => ({ value: c, label: c }))}
               />
             </div>
             <div>
@@ -779,7 +782,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 onChange={(val) => { setNewDeviceBrand(val); setNewDeviceModel(''); setNewDeviceModelOther(''); }}
                 placeholder={newDeviceCategory ? '-- Marca --' : 'Elija categoría primero'}
                 className="text-xs py-2"
-                options={(BRANDS_BY_CATEGORY[newDeviceCategory] || []).map(b => ({ value: b, label: b }))}
+                options={(newDeviceCategory ? marcasDe(catalogo, newDeviceCategory) : []).map(b => ({ value: b, label: b }))}
               />
             </div>
             <div>
@@ -789,17 +792,33 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 onChange={setNewDeviceModel}
                 placeholder={newDeviceBrand ? '-- Modelo --' : 'Elija marca primero'}
                 className="text-xs py-2"
-                options={getModelsFor(newDeviceCategory, newDeviceBrand).map(m => ({ value: m, label: m }))}
+                options={(newDeviceBrand ? modelosDe(catalogo, newDeviceCategory, newDeviceBrand) : []).map(m => ({ value: m, label: m }))}
               />
-              {newDeviceModel === 'Otro' && (
-                <input
-                  type="text"
-                  required
-                  value={newDeviceModelOther}
-                  onChange={(e) => setNewDeviceModelOther(e.target.value)}
-                  placeholder="Especifique el modelo"
-                  className="w-full mt-2 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
-                />
+              {newDeviceModel === OPCION_OTRO && (
+                <>
+                  <input
+                    type="text"
+                    required
+                    value={newDeviceModelOther}
+                    onChange={(e) => setNewDeviceModelOther(e.target.value)}
+                    placeholder="Especifique el modelo"
+                    className="w-full mt-2 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                  />
+                  {/* Así crece el catálogo: con los equipos que de verdad
+                      entran al taller, en el momento en que entran. No hay
+                      que sentarse a llenar listas por adelantado. */}
+                  <label className="flex items-start gap-2 mt-2 cursor-pointer">
+                    <input
+                      type="checkbox"
+                      checked={guardarEnCatalogo}
+                      onChange={(e) => setGuardarEnCatalogo(e.target.checked)}
+                      className="mt-0.5 flex-shrink-0"
+                    />
+                    <span className="text-[10px] text-[var(--text-secondary)] leading-snug">
+                      Guardar este modelo en el catálogo para no volver a escribirlo
+                    </span>
+                  </label>
+                </>
               )}
             </div>
             <div>
@@ -1140,6 +1159,165 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
               </button>
             </form>
 
+          </div>
+        </div>
+      )}
+
+
+      {/* =============== CATÁLOGO DE EQUIPOS =============== */}
+      {verCatalogo && (
+        <div
+          className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setVerCatalogo(false)}
+        >
+          <div
+            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[88vh] flex flex-col"
+            onClick={e => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between border-b border-[var(--border-color)]/50 p-4 flex-shrink-0">
+              <h4 className="font-bold text-[var(--text-primary)] flex items-center gap-2 text-sm">
+                <BookMarked className="w-4 h-4" /> Catálogo de equipos
+              </h4>
+              <button
+                onClick={() => setVerCatalogo(false)}
+                className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] p-1"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="p-4 space-y-4 overflow-y-auto">
+              <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+                {contarModelos(catalogo)} modelos en {categoriasDe(catalogo).length} categorías. Los que agregue acá
+                aparecen de una vez en el formulario de recepción.{' '}
+                <strong className="text-[var(--text-primary)]">Nunca hace falta que un equipo esté en la lista</strong>{' '}
+                para poder recibirlo: siempre se puede escoger "Otro" y escribir el modelo a mano.
+              </p>
+
+              {/* ---- Agregar ---- */}
+              <div className="bg-[var(--bg-base)] border border-[var(--border-color)]/60 rounded-2xl p-3 space-y-2">
+                <h5 className="text-[10px] uppercase font-bold text-[var(--text-secondary)]">Agregar un modelo</h5>
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                  <input
+                    value={nuevoModeloCat}
+                    onChange={e => setNuevoModeloCat(e.target.value)}
+                    list="taller-categorias"
+                    placeholder="Categoría"
+                    className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                  />
+                  <input
+                    value={nuevoModeloMarca}
+                    onChange={e => setNuevoModeloMarca(e.target.value)}
+                    list="taller-marcas"
+                    placeholder="Marca"
+                    className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                  />
+                  <input
+                    value={nuevoModeloNombre}
+                    onChange={e => setNuevoModeloNombre(e.target.value)}
+                    placeholder="Modelo"
+                    className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                  />
+                </div>
+                {/* Las sugerencias salen del catálogo que ya existe, para que
+                    no se creen "Samsung" y "samsung" como marcas distintas. */}
+                <datalist id="taller-categorias">
+                  {categoriasDe(catalogo).map(c => <option key={c} value={c} />)}
+                </datalist>
+                <datalist id="taller-marcas">
+                  {Array.from(new Set(
+                    Object.values(catalogo).flatMap(marcas => Object.keys(marcas))
+                  )).sort((a, b) => a.localeCompare(b, 'es')).map(m => <option key={m} value={m} />)}
+                </datalist>
+                <button
+                  onClick={async () => {
+                    const error = await agregarModelo(nuevoModeloCat, nuevoModeloMarca, nuevoModeloNombre, activeUserEmail);
+                    if (error) { toast.warning(error); return; }
+                    setCatalogo(await cargarCatalogo());
+                    toast.success(`"${nuevoModeloNombre.trim()}" agregado al catálogo.`);
+                    setNuevoModeloNombre('');
+                  }}
+                  className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white dark:text-slate-950 text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5"
+                >
+                  <Plus className="w-3.5 h-3.5" /> Agregar al catálogo
+                </button>
+              </div>
+
+              {/* ---- Buscar y esconder ---- */}
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
+                <input
+                  value={buscarModelo}
+                  onChange={e => setBuscarModelo(e.target.value)}
+                  placeholder="Buscar un modelo en el catálogo…"
+                  className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                />
+              </div>
+
+              {buscarModelo.trim().length >= 2 ? (
+                <div className="space-y-1">
+                  {(() => {
+                    const q = buscarModelo.trim().toLowerCase();
+                    const hallazgos: { categoria: string; marca: string; modelo: string }[] = [];
+                    for (const [categoria, marcas] of Object.entries(catalogo)) {
+                      for (const [marca, modelos] of Object.entries(marcas)) {
+                        for (const modelo of modelos) {
+                          if (`${marca} ${modelo}`.toLowerCase().includes(q)) {
+                            hallazgos.push({ categoria, marca, modelo });
+                          }
+                        }
+                      }
+                    }
+                    if (hallazgos.length === 0) {
+                      return (
+                        <p className="text-center text-[11px] text-[var(--text-secondary)] py-6">
+                          Ningún modelo coincide. Agréguelo arriba, o recíbalo con "Otro" sin agregarlo.
+                        </p>
+                      );
+                    }
+                    return hallazgos.slice(0, 60).map(h => (
+                      <div
+                        key={`${h.categoria}|${h.marca}|${h.modelo}`}
+                        className="flex items-center justify-between gap-2 bg-[var(--bg-base)] border border-[var(--border-color)]/50 rounded-xl px-3 py-2"
+                      >
+                        <div className="min-w-0">
+                          <div className="text-xs text-[var(--text-primary)] truncate">{h.marca} {h.modelo}</div>
+                          <div className="text-[9px] uppercase text-[var(--text-secondary)]">{h.categoria}</div>
+                        </div>
+                        <button
+                          onClick={async () => {
+                            const error = await ocultarModelo(h.categoria, h.marca, h.modelo, activeUserEmail);
+                            if (error) { toast.error('No se pudo esconder: ' + error); return; }
+                            setCatalogo(await cargarCatalogo());
+                            toast.success(`"${h.modelo}" ya no aparece en las listas.`);
+                          }}
+                          className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-rose-400 hover:border-rose-500/40 flex-shrink-0 inline-flex items-center gap-1"
+                        >
+                          <EyeOff className="w-3 h-3" /> Esconder
+                        </button>
+                      </div>
+                    ));
+                  })()}
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                  {categoriasDe(catalogo).map(c => (
+                    <div key={c} className="bg-[var(--bg-base)] border border-[var(--border-color)]/50 rounded-xl px-3 py-2">
+                      <div className="text-xs font-bold text-[var(--text-primary)] truncate">{c}</div>
+                      <div className="text-[10px] text-[var(--text-secondary)]">
+                        {Object.values(catalogo[c] || {}).reduce((n: number, m: string[]) => n + m.length, 0)} modelos ·{' '}
+                        {Object.keys(catalogo[c]).length} marcas
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+                Esconder un modelo no borra nada: las órdenes que ya lo usan lo conservan tal cual, porque el modelo se
+                guarda como texto dentro de la orden.
+              </p>
+            </div>
           </div>
         </div>
       )}
