@@ -39,6 +39,10 @@
 
 import { supabase } from '../supabaseClient';
 import { obtenerDeviceId } from './huella';
+import {
+  esAplicacionNativa, soportaBiometriaNativa, activarBiometriaNativa,
+  entrarConBiometriaNativa, hayAccesoGuardado, borrarBiometriaNativa,
+} from './biometriaNativa';
 
 // ---------------------------------------------------------------------
 // base64url ↔ binario
@@ -79,6 +83,11 @@ function aTexto(buffer: ArrayBuffer | null): string {
  */
 export async function soportaBiometria(): Promise<boolean> {
   try {
+    // Dentro de la APK manda el plugin nativo: el WebView de Android no
+    // implementa WebAuthn, así que preguntarle por él siempre daría que
+    // no. Ese era el motivo de que el botón no apareciera en la APK.
+    if (esAplicacionNativa()) return await soportaBiometriaNativa();
+
     if (typeof window === 'undefined' || !window.PublicKeyCredential) return false;
     const fn = (window.PublicKeyCredential as any)
       .isUserVerifyingPlatformAuthenticatorAvailable;
@@ -87,6 +96,25 @@ export async function soportaBiometria(): Promise<boolean> {
   } catch {
     return false;
   }
+}
+
+/**
+ * ¿Qué sistema se está usando aquí? Sirve para que la pantalla explique
+ * bien lo que hace el botón, que no es lo mismo en los dos casos.
+ */
+export function tipoDeBiometria(): 'nativa' | 'webauthn' {
+  return esAplicacionNativa() ? 'nativa' : 'webauthn';
+}
+
+/** ¿Ya está activada en este aparato? Solo aplica al camino nativo. */
+export async function biometriaYaActivada(): Promise<boolean> {
+  if (!esAplicacionNativa()) return false;
+  return await hayAccesoGuardado();
+}
+
+/** Quita la biometría de este aparato (camino nativo). */
+export async function desactivarBiometriaNativa(): Promise<void> {
+  await borrarBiometriaNativa();
 }
 
 // ---------------------------------------------------------------------
@@ -148,6 +176,12 @@ function mensajeDeError(e: any): ResultadoBiometria {
  * contra un correo ajeno.
  */
 export async function registrarBiometria(etiqueta?: string): Promise<ResultadoBiometria> {
+  // En la APK se guarda la sesión detrás de la huella del sistema; en la
+  // web se registra una llave WebAuthn. Son mecanismos distintos con
+  // garantías distintas —está explicado en `biometriaNativa.ts`— pero
+  // para quien usa la aplicación el gesto es el mismo.
+  if (esAplicacionNativa()) return await activarBiometriaNativa();
+
   try {
     const { data: sesion } = await supabase.auth.getSession();
     if (!sesion?.session) {
@@ -207,6 +241,8 @@ export async function registrarBiometria(etiqueta?: string): Promise<ResultadoBi
  * perfil de otra, aunque escriba el correo ajeno.
  */
 export async function entrarConBiometria(email?: string): Promise<ResultadoBiometria> {
+  if (esAplicacionNativa()) return await entrarConBiometriaNativa();
+
   try {
     const correo = (email || '').trim().toLowerCase();
     const { opciones } = await llamar({ accion: 'acceso-opciones', email: correo || undefined });
