@@ -708,9 +708,27 @@ export default function PublicStore({
     // Stock deduction is handled atomically by processSaleAtomic in Firestore.
     // Do NOT deduct stock locally here — that would conflict with the transaction.
 
-    // Create Order FAC-XXX
-    const orderNum = db.orders.length + 1;
-    const invoiceId = `FAC-00${orderNum}`;
+    // =================================================================
+    // FALLO QUE ESTO CORRIGE: LAS VENTAS SE PERDÍAN
+    // =================================================================
+    // Antes el número salía de `db.orders.length + 1`, contando la copia
+    // LOCAL de los pedidos. Y un cliente solo ve los suyos: las políticas
+    // de la base le muestran únicamente los pedidos con su correo. Así
+    // que en el teléfono de un cliente `db.orders.length` era 0 y la
+    // compra se llamaba SIEMPRE "FAC-001" — un número que ya existía.
+    //
+    // La base rechazaba la fila con "duplicate key value violates unique
+    // constraint orders_pkey" (está en los registros del servidor), pero
+    // el pedido ya se había guardado en la copia local, así que el
+    // cliente veía su compra confirmada y al panel no llegaba nada.
+    //
+    // Ahora el número se arma con la fecha y un tramo al azar: es único
+    // sin tener que consultar nada, que es lo que hace falta cuando la
+    // compra puede salir de dos aparatos a la vez.
+    const ahora = new Date();
+    const sello = ahora.toISOString().slice(2, 10).replace(/-/g, '');
+    const azar = Math.random().toString(36).slice(2, 7).toUpperCase();
+    const invoiceId = `FAC-${sello}-${azar}`;
 
     const newOrder: Order = {
       id: invoiceId,

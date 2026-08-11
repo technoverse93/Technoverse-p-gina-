@@ -839,7 +839,10 @@ export default function AdminPanel({
     // Generate refund order
     db.orders.push({
       ...ord,
-      id: `NC-00${db.orders.length + 1}`,
+      // Mismo motivo que en la tienda: contar la copia local daba números
+      // repetidos y la base rechazaba la fila. Fecha + tramo al azar es
+      // único sin consultar nada.
+      id: `NC-${new Date().toISOString().slice(2, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`,
       status: 'Cancelado',
       subtotal: -ord.subtotal,
       membershipDiscount: -ord.membershipDiscount,
