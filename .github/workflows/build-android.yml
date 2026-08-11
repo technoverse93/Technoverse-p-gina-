@@ -49,10 +49,10 @@ jobs:
       # ubicación por IP (que apenas acierta la ciudad).
       #
       # Se comprueba que no esté ya puesto, para que el paso sea repetible.
-      - name: Declarar permiso de ubicación en el manifiesto
+      - name: Declarar permisos de ubicación y biometría en el manifiesto
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          if grep -q "ACCESS_FINE_LOCATION" "$MANIFEST"; then
+          if grep -q "ACCESS_FINE_LOCATION" "$MANIFEST" && grep -q "USE_BIOMETRIC" "$MANIFEST"; then
             echo "El permiso ya estaba declarado; no se toca nada."
           else
             python3 - "$MANIFEST" <<'PY'
@@ -63,13 +63,21 @@ jobs:
               '    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />\n'
               '    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />\n'
               '    <uses-feature android:name="android.hardware.location.gps" android:required="false" />\n'
+              # Huella / rostro. USE_BIOMETRIC es el permiso moderno;
+              # USE_FINGERPRINT lo necesitan los Android anteriores al 9,
+              # que todavía circulan bastante en Costa Rica.
+              '    <uses-permission android:name="android.permission.USE_BIOMETRIC" />\n'
+              '    <uses-permission android:name="android.permission.USE_FINGERPRINT" />\n'
+              # `required=false` a propósito: un teléfono sin lector debe
+              # poder instalar la aplicación igual y entrar con contraseña.
+              '    <uses-feature android:name="android.hardware.fingerprint" android:required="false" />\n'
               '</manifest>'
           )
           if '</manifest>' not in texto:
               raise SystemExit('No se encontró el cierre </manifest>: el manifiesto no tiene el formato esperado.')
           texto = texto.replace('</manifest>', permisos, 1)
           open(ruta, 'w', encoding='utf-8').write(texto)
-          print('Permiso de ubicación agregado al manifiesto.')
+          print('Permisos de ubicación y biometría agregados al manifiesto.')
           PY
           fi
           echo "--- permisos declarados ---"
