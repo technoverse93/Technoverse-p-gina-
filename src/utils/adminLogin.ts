@@ -278,13 +278,14 @@ async function intentarAcceso(email: string, password: string): Promise<Resultad
 export async function conexionBloqueada(): Promise<boolean> {
   try {
     // `mi_estado_de_acceso` responde por las DOS vías de castigo a la vez:
-    // la IP con bloqueo total y la cuenta penalizada. Antes esto llamaba a
-    // la Edge Function `admin-login`, que solo miraba la IP; se cambió a
-    // la función de base de datos porque es una consulta directa —más
-    // rápida y sin arranque en frío— y porque cubre el baneo de cuenta,
-    // que la Edge Function no conoce.
+    // la cuenta penalizada y el aparato baneado. Ya NO mira la IP: una IP
+    // la comparte un edificio entero y bloquearla castigaba a inocentes
+    // sin detener a nadie que supiera cambiar de red.
+    //
+    // El aparato se manda como parámetro porque la base de datos no puede
+    // leer el almacenamiento del navegador.
     const { data, error } = await conTope(
-      Promise.resolve(supabase.rpc('mi_estado_de_acceso')),
+      Promise.resolve(supabase.rpc('mi_estado_de_acceso', { p_device: obtenerDeviceId() })),
       TIEMPO_LIMITE_MS
     );
     if (error || !data) return false;
@@ -295,26 +296,26 @@ export async function conexionBloqueada(): Promise<boolean> {
 }
 
 /**
- * Detalle de por qué está bloqueada esta conexión. Lo usa la pantalla de
- * bloqueo para decir si el castigo es a la conexión o a la cuenta: no es
- * lo mismo "su internet está bloqueado" que "su cuenta fue suspendida", y
+ * Detalle de por qué está bloqueado el acceso. Lo usa la pantalla de
+ * bloqueo para decir si el castigo es al aparato o a la cuenta: no es lo
+ * mismo "este aparato está bloqueado" que "su cuenta fue suspendida", y
  * el mensaje equivocado genera un reclamo que no se puede resolver.
  *
  * Devuelve null si no se pudo averiguar. Nunca lanza.
  */
 export async function detalleDeBloqueo(): Promise<
-  { ip: string | null; ipBloqueada: boolean; cuentaPenalizada: boolean } | null
+  { ip: string | null; dispositivoBloqueado: boolean; cuentaPenalizada: boolean } | null
 > {
   try {
     const { data, error } = await conTope(
-      Promise.resolve(supabase.rpc('mi_estado_de_acceso')),
+      Promise.resolve(supabase.rpc('mi_estado_de_acceso', { p_device: obtenerDeviceId() })),
       TIEMPO_LIMITE_MS
     );
     if (error || !data) return null;
     const d = data as any;
     return {
       ip: d.ip ?? null,
-      ipBloqueada: d.ip_bloqueada === true,
+      dispositivoBloqueado: d.dispositivo_bloqueado === true,
       cuentaPenalizada: d.cuenta_penalizada === true,
     };
   } catch {
