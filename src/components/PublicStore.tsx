@@ -5,7 +5,7 @@ import {
   ShoppingBag, Search, ChevronDown, Trash2, ArrowRight,
   MapPin, CreditCard, CheckCircle, Smartphone, Wrench, Settings,
   MessageSquare, Sparkles, AlertCircle, FileDown, Heart, ShieldAlert,
-  User as UserIcon, X, LogOut, Sun, Moon, Home, LayoutGrid
+  User as UserIcon, X, LogOut, Sun, Moon, Home, LayoutGrid, Fingerprint
 } from 'lucide-react';
 import { ProductCard } from './ProductCard';
 import { CustomSelect } from './CustomSelect';
@@ -15,6 +15,7 @@ import { Product, Order, OrderItem, RepairOrder } from '../types';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { iniciarSesionVigilada } from '../utils/adminLogin';
+import { soportaBiometria, entrarConBiometria } from '../utils/biometria';
 import { CATEGORIAS_CON_TODOS, coincideCategoria, esRepuesto } from '../utils/categorias';
 import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
@@ -124,6 +125,11 @@ export default function PublicStore({
   // a tocarlo, y cada toque cuenta como un intento fallido más para el
   // bloqueo por 3 fallos.
   const [entrandoSesion, setEntrandoSesion] = useState(false);
+  // El botón de biometría solo se muestra si el aparato de verdad la tiene.
+  // Enseñárselo a quien no puede usarlo genera un "no me funciona" que no
+  // tiene arreglo.
+  const [hayBiometria, setHayBiometria] = useState(false);
+  const [entrandoBiometria, setEntrandoBiometria] = useState(false);
   
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -257,6 +263,39 @@ export default function PublicStore({
     }
   }, [autoOpenLogin]);
 
+  useEffect(() => {
+    let vigente = true;
+    soportaBiometria().then(puede => { if (vigente) setHayBiometria(puede); });
+    return () => { vigente = false; };
+  }, []);
+
+  /**
+   * Entrada con Face ID / huella.
+   *
+   * El correo se manda solo para acotar qué llaves ofrecer; la cuenta a la
+   * que se entra la decide la llave que firma, no lo que se escriba aquí.
+   * Por eso la biometría de una persona nunca abre el perfil de otra.
+   */
+  const accederConBiometria = async () => {
+    if (entrandoBiometria || entrandoSesion) return;
+    setEntrandoBiometria(true);
+    try {
+      const r = await entrarConBiometria(loginEmail.trim().toLowerCase() || undefined);
+      if (!r.ok) {
+        // Cancelar no es un error: no tiene sentido regañar a quien
+        // simplemente cerró el aviso de Face ID.
+        if (!r.cancelado) toast.error(r.mensaje || 'No se pudo entrar con biometría.');
+        return;
+      }
+      const { data: sesion } = await supabase.auth.getUser();
+      const userId = sesion?.user?.id;
+      if (!userId) { toast.error('No se pudo confirmar la sesión.'); return; }
+      await completarInicioSesion(userId);
+    } finally {
+      setEntrandoBiometria(false);
+    }
+  };
+
   const handleClientLoginSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (entrandoSesion) return;
@@ -299,6 +338,18 @@ export default function PublicStore({
       return;
     }
 
+    await completarInicioSesion(userId);
+  };
+
+  /**
+   * Lo que pasa DESPUÉS de que la sesión ya está abierta: leer el perfil,
+   * avisarle a la aplicación y cerrar el formulario.
+   *
+   * Está aparte porque ahora hay dos maneras de llegar hasta acá —con
+   * contraseña y con biometría— y las dos tienen que terminar exactamente
+   * igual. Duplicarlo garantizaba que un día se arreglara solo una.
+   */
+  const completarInicioSesion = async (userId: string) => {
     const { data: profile, error: profileError } = await supabase
       .from('profiles')
       .select('*')
@@ -1202,6 +1253,18 @@ export default function PublicStore({
                       >
                         {entrandoSesion ? 'Verificando acceso…' : 'Iniciar Sesión'}
                       </button>
+
+                      {hayBiometria && (
+                        <button
+                          type="button"
+                          onClick={accederConBiometria}
+                          disabled={entrandoBiometria || entrandoSesion}
+                          className="w-full mt-2 border border-[var(--border-color)] text-[var(--text-primary)] font-bold text-sm py-3 rounded-xl active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2 hover:bg-[var(--bg-surface)] transition"
+                        >
+                          <Fingerprint className="w-4 h-4" />
+                          {entrandoBiometria ? 'Verificando…' : 'Entrar con Face ID o huella'}
+                        </button>
+                      )}
 
                       <div className="pt-4 flex flex-col items-center gap-3 border-t border-slate-50">
                         <button
@@ -2283,6 +2346,18 @@ export default function PublicStore({
                 >
                   {entrandoSesion ? 'Verificando acceso…' : 'Iniciar Sesión'}
                 </button>
+
+                {hayBiometria && (
+                  <button
+                    type="button"
+                    onClick={accederConBiometria}
+                    disabled={entrandoBiometria || entrandoSesion}
+                    className="w-full border border-[var(--border-color)] text-[var(--text-primary)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition hover:bg-[var(--bg-surface)] disabled:opacity-60 flex items-center justify-center gap-2"
+                  >
+                    <Fingerprint className="w-4 h-4" />
+                    {entrandoBiometria ? 'Verificando…' : 'Face ID o huella'}
+                  </button>
+                )}
               </form>
             )}
 

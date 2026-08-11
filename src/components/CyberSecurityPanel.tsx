@@ -2,11 +2,12 @@ import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ShieldAlert, Globe, Ban, CheckCircle, XCircle, RefreshCw, Trash2,
   MapPin, Smartphone, Monitor, Plus, Unlock, Lock, BookOpen, Activity,
-  Users, UserX, Search, ShieldOff
+  Users, UserX, Search, ShieldOff, Fingerprint, Smartphone as Movil
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB } from '../utils/storage';
 import { obtenerMiConexion } from '../utils/adminLogin';
+import { soportaBiometria, registrarBiometria, misLlaves, borrarLlave, LlaveBiometrica } from '../utils/biometria';
 import { AuditLog } from '../types';
 import { PaginatedTbody } from './PaginationHelper';
 import { useToast, useConfirm } from './ui/Overlays';
@@ -54,7 +55,7 @@ interface CyberSecurityPanelProps {
 type Vertiente = 'admin' | 'trafico';
 type Seccion =
   | 'resumen' | 'accesos' | 'dispositivos' | 'bloqueos' | 'blanca' | 'bitacora'
-  | 'visitantes' | 'penalizados';
+  | 'visitantes' | 'penalizados' | 'aparatos' | 'biometria';
 type FiltroAccesos = 'todos' | 'exitosos' | 'fallidos' | 'bloqueados';
 
 /** Un aparato que entró a la tienda. Un renglón por aparato, no por visita. */
@@ -95,6 +96,17 @@ interface Penalizado {
   creado_por: string | null;
   levantado_en: string | null;
   levantado_por: string | null;
+}
+
+/** Un aparato con el acceso cortado. Sustituye al viejo baneo por IP. */
+interface AparatoBaneado {
+  device_uuid: string;
+  motivo: string | null;
+  email: string | null;
+  user_agent: string | null;
+  creado_en: string;
+  creado_por: string | null;
+  levantado_en: string | null;
 }
 
 interface Acceso {
@@ -229,6 +241,11 @@ export default function CyberSecurityPanel({
   const [baneoMotivo, setBaneoMotivo] = useState('');
   const [baneoUsarUA, setBaneoUsarUA] = useState(false);
   const [baneando, setBaneando] = useState(false);
+  const [aparatos, setAparatos] = useState<AparatoBaneado[]>([]);
+  const [nuevoAparato, setNuevoAparato] = useState('');
+  const [llaves, setLlaves] = useState<LlaveBiometrica[]>([]);
+  const [hayBiometria, setHayBiometria] = useState(false);
+  const [registrandoLlave, setRegistrandoLlave] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [accesos, setAccesos] = useState<Acceso[]>([]);
   const [bloqueos, setBloqueos] = useState<Bloqueo[]>([]);
@@ -246,7 +263,7 @@ export default function CyberSecurityPanel({
   // -------------------------------------------------------------------
   const cargar = useCallback(async () => {
     setCargando(true);
-    const [a, b, c, d, e, f] = await Promise.all([
+    const [a, b, c, d, e, f, g] = await Promise.all([
       supabase.from('login_audit_logs').select('*').order('ocurrido_en', { ascending: false }).limit(300),
       supabase.from('banned_ips').select('*').order('actualizado_en', { ascending: false }),
       supabase.from('ip_whitelist').select('*').order('creado_en', { ascending: false }),
@@ -255,11 +272,12 @@ export default function CyberSecurityPanel({
       // limpia `purgar_huellas()` en la base.
       supabase.from('visitor_fingerprints').select('*').order('ultima_visita', { ascending: false }).limit(500),
       supabase.from('blocked_users_list').select('*').order('creado_en', { ascending: false }),
+      supabase.from('banned_devices').select('*').order('creado_en', { ascending: false }),
     ]);
     // Se avisa del fallo en vez de mostrar una pantalla vacía que parecería
     // decir "no hay ningún intento registrado" — que es lo contrario de lo
     // que uno necesita creer en un panel de seguridad.
-    const fallo = a.error || b.error || c.error || d.error || e.error || f.error;
+    const fallo = a.error || b.error || c.error || d.error || e.error || f.error || g.error;
     if (fallo) {
       toast.error('No se pudo leer el registro de seguridad: ' + fallo.message);
     }
@@ -269,6 +287,7 @@ export default function CyberSecurityPanel({
     setDispositivos((d.data as Dispositivo[]) || []);
     setVisitantes((e.data as Visitante[]) || []);
     setPenalizados((f.data as Penalizado[]) || []);
+    setAparatos((g.data as AparatoBaneado[]) || []);
     setCargando(false);
   }, [toast]);
 
@@ -278,6 +297,13 @@ export default function CyberSecurityPanel({
     obtenerMiConexion().then(r => {
       if (r) { setMiIp(r.ip); setMiGeo(r.geo); }
     });
+  }, []);
+
+  useEffect(() => {
+    let vigente = true;
+    soportaBiometria().then(puede => { if (vigente) setHayBiometria(puede); });
+    misLlaves().then(l => { if (vigente) setLlaves(l); });
+    return () => { vigente = false; };
   }, []);
 
   // -------------------------------------------------------------------
@@ -400,6 +426,61 @@ export default function CyberSecurityPanel({
     if (error) { toast.error('No se pudo levantar: ' + error.message); return; }
     toast.success(`Penalización de ${email} levantada.`);
     cargar();
+  };
+
+  const banearAparato = async (device: string, motivo?: string) => {
+    const limpio = device.trim();
+    if (!limpio) { toast.warning('Escriba el identificador del aparato.'); return; }
+    const { error } = await supabase.rpc('banear_dispositivo', {
+      p_device: limpio,
+      p_motivo: motivo || `Bloqueo manual (${currentUserEmail || 'admin'})`,
+    });
+    if (error) { toast.error('No se pudo bloquear: ' + error.message); return; }
+    toast.success('Aparato bloqueado. No podrá abrir el sitio desde ninguna red.');
+    setNuevoAparato('');
+    cargar();
+  };
+
+  const liberarAparato = async (device: string) => {
+    const ok = await confirm({
+      title: 'Liberar el aparato',
+      message: 'Este equipo volverá a poder abrir el sitio y comprar. ¿Continuar?',
+      confirmText: 'Liberar',
+    });
+    if (!ok) return;
+    const { error } = await supabase.rpc('levantar_dispositivo', { p_device: device });
+    if (error) { toast.error('No se pudo liberar: ' + error.message); return; }
+    toast.success('Aparato liberado.');
+    cargar();
+  };
+
+  const activarBiometria = async () => {
+    setRegistrandoLlave(true);
+    try {
+      const r = await registrarBiometria(navigator.userAgent.slice(0, 60));
+      if (!r.ok) {
+        if (!r.cancelado) toast.error(r.mensaje || 'No se pudo activar.');
+        return;
+      }
+      toast.success(r.mensaje || 'Acceso biométrico activado.');
+      setLlaves(await misLlaves());
+    } finally {
+      setRegistrandoLlave(false);
+    }
+  };
+
+  const quitarLlave = async (id: number) => {
+    const ok = await confirm({
+      title: 'Quitar el acceso biométrico',
+      message: 'Este aparato dejará de poder entrar con Face ID o huella. Podrá seguir entrando con su contraseña. ¿Continuar?',
+      confirmText: 'Quitar',
+      variant: 'danger',
+    });
+    if (!ok) return;
+    const r = await borrarLlave(id);
+    if (!r.ok) { toast.error(r.mensaje || 'No se pudo quitar.'); return; }
+    toast.success('Acceso biométrico retirado de ese aparato.');
+    setLlaves(await misLlaves());
   };
 
   const agregarConfianza = async (ip: string, descripcion: string) => {
@@ -534,11 +615,13 @@ export default function CyberSecurityPanel({
       { id: 'dispositivos', label: 'Dispositivos', icono: Smartphone, contador: dispositivos.length },
       { id: 'bloqueos',     label: 'Bloqueos',     icono: Ban,        contador: resumen.bloqueosActivos },
       { id: 'blanca',       label: 'Lista blanca', icono: CheckCircle, contador: confianza.length },
+      { id: 'biometria',    label: 'Biometría',    icono: Fingerprint, contador: llaves.length },
       { id: 'bitacora',     label: 'Bitácora',     icono: BookOpen,   contador: auditLog.length },
     ],
     trafico: [
       { id: 'visitantes',  label: 'Visitantes',  icono: Users, contador: visitantes.length },
       { id: 'penalizados', label: 'Penalizados', icono: UserX, contador: penalizados.filter(x => !x.levantado_en).length },
+      { id: 'aparatos',    label: 'Aparatos bloqueados', icono: Movil, contador: aparatos.filter(x => !x.levantado_en).length },
     ],
   };
   const secciones = seccionesPorVertiente[vertiente];
@@ -1379,6 +1462,202 @@ export default function CyberSecurityPanel({
               del cliente.
             </p>
           )}
+        </div>
+      )}
+
+      {/* =============== APARATOS BLOQUEADOS =============== */}
+      {seccion === 'aparatos' && (
+        <div className="space-y-4">
+          <p className="text-xs text-[var(--text-secondary)] max-w-2xl leading-relaxed">
+            Esto <strong className="text-[var(--text-primary)]">sustituye al viejo bloqueo por dirección IP</strong>.
+            Una IP la comparte un edificio entero, un café o toda una red móvil: bloquearla castigaba a gente que no
+            tenía nada que ver, y a quien se quería bloquear le bastaba apagar el WiFi para volver a entrar. El
+            identificador de aparato no cambia al cambiar de red, así que el bloqueo sigue a la persona del WiFi a los
+            datos móviles.
+          </p>
+
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-4 space-y-2">
+            <h5 className="text-[10px] uppercase font-bold text-[var(--text-secondary)]">Bloquear un aparato a mano</h5>
+            <div className="flex flex-wrap gap-2">
+              <input
+                value={nuevoAparato}
+                onChange={e => setNuevoAparato(e.target.value)}
+                placeholder="Identificador del aparato (columna Aparato en Visitantes)"
+                className="flex-1 min-w-[240px] bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[var(--brand-gold-mid)]"
+              />
+              <button
+                onClick={() => banearAparato(nuevoAparato)}
+                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5"
+              >
+                <Ban className="w-3.5 h-3.5" /> Bloquear
+              </button>
+            </div>
+          </div>
+
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
+            <div className="overflow-x-auto">
+              <table className="w-full min-w-[700px] text-left text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)] uppercase text-[10px] tracking-wide">
+                    <th className="p-3">Aparato</th>
+                    <th className="p-3">Motivo</th>
+                    <th className="p-3">Cuenta</th>
+                    <th className="p-3">Bloqueado</th>
+                    <th className="p-3 text-center">Estado</th>
+                    <th className="p-3 text-right">Acciones</th>
+                  </tr>
+                </thead>
+                <PaginatedTbody
+                  items={aparatos}
+                  itemsPerPage={10}
+                  renderItem={(a: AparatoBaneado) => {
+                    const vigente = !a.levantado_en;
+                    return (
+                      <tr key={a.device_uuid} className="border-b border-[var(--border-color)]/40 hover:bg-[var(--bg-base)]">
+                        <td className="p-3 font-mono text-[10px] text-[var(--text-primary)] break-all max-w-[200px]">
+                          {a.device_uuid}
+                        </td>
+                        <td className="p-3 text-[var(--text-primary)] max-w-[200px]">
+                          <div className="line-clamp-2">{a.motivo || '—'}</div>
+                        </td>
+                        <td className="p-3 text-[var(--text-secondary)] truncate max-w-[160px]">{a.email || 'Sin cuenta'}</td>
+                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">
+                          <div>{fechaCorta(a.creado_en)}</div>
+                          {a.creado_por && <div className="text-[10px] truncate max-w-[140px]">{a.creado_por}</div>}
+                        </td>
+                        <td className="p-3 text-center">
+                          {vigente ? (
+                            <span className="text-[9px] uppercase font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded">
+                              Bloqueado
+                            </span>
+                          ) : (
+                            <span className="text-[9px] uppercase font-bold border border-[var(--border-color)]/70 text-[var(--text-secondary)] px-2 py-0.5 rounded">
+                              Liberado
+                            </span>
+                          )}
+                        </td>
+                        <td className="p-3 text-right">
+                          {vigente ? (
+                            <button
+                              onClick={() => liberarAparato(a.device_uuid)}
+                              className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-primary)] hover:bg-[var(--bg-surface)] inline-flex items-center gap-1"
+                            >
+                              <Unlock className="w-3 h-3" /> Liberar
+                            </button>
+                          ) : (
+                            <span className="text-[10px] text-[var(--text-secondary)]">{fechaCorta(a.levantado_en)}</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  }}
+                />
+              </table>
+            </div>
+          </div>
+
+          {aparatos.length === 0 && (
+            <p className="text-center text-xs text-[var(--text-secondary)] py-8">
+              No hay ningún aparato bloqueado.
+            </p>
+          )}
+
+          <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+            Hay que ser honesto con el alcance: la marca del aparato vive en el navegador, y quien borre los datos del
+            navegador aparecerá como equipo nuevo. Por eso esta capa evita que el bloqueado pueda siquiera{' '}
+            <strong className="text-[var(--text-primary)]">ver</strong> la página, mientras la cerradura de verdad —la
+            que impide entrar a la cuenta y leer datos— es el baneo de cuenta, que no tiene nada que borrar.
+          </p>
+        </div>
+      )}
+
+      {/* =============== MI ACCESO BIOMÉTRICO =============== */}
+      {seccion === 'biometria' && (
+        <div className="space-y-4">
+          <p className="text-xs text-[var(--text-secondary)] max-w-2xl leading-relaxed">
+            Face ID, Touch ID o huella para entrar sin escribir la contraseña.{' '}
+            <strong className="text-[var(--text-primary)]">Aquí no se guarda ninguna cara ni ninguna huella</strong>: el
+            teléfono no se las entrega al navegador. Lo que se guarda es una llave pública que solo sirve para
+            comprobar firmas, y la llave privada nunca sale del chip seguro del aparato.
+          </p>
+
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-4 space-y-3">
+            {hayBiometria ? (
+              <button
+                onClick={activarBiometria}
+                disabled={registrandoLlave}
+                className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white dark:text-slate-950 text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 disabled:opacity-60"
+              >
+                <Fingerprint className="w-4 h-4" />
+                {registrandoLlave ? 'Esperando al aparato…' : 'Activar en este aparato'}
+              </button>
+            ) : (
+              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+                Este aparato no ofrece acceso biométrico. Ocurre cuando el equipo no tiene lector, cuando el sitio no
+                se abrió por HTTPS, o dentro de la APK si el contenido no se sirve desde el dominio real.
+              </p>
+            )}
+          </div>
+
+          {llaves.length > 0 && (
+            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
+              <div className="overflow-x-auto">
+                <table className="w-full min-w-[560px] text-left text-xs border-collapse">
+                  <thead>
+                    <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)] uppercase text-[10px] tracking-wide">
+                      <th className="p-3">Aparato</th>
+                      <th className="p-3">Activado</th>
+                      <th className="p-3">Último uso</th>
+                      <th className="p-3 text-right">Acciones</th>
+                    </tr>
+                  </thead>
+                  <tbody>
+                    {llaves.map(l => (
+                      <tr key={l.id} className="border-b border-[var(--border-color)]/40 hover:bg-[var(--bg-base)]">
+                        <td className="p-3 text-[var(--text-primary)] max-w-[240px]">
+                          <div className="truncate">{l.etiqueta || 'Aparato sin nombre'}</div>
+                        </td>
+                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">{fechaCorta(l.creado_en)}</td>
+                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">
+                          {l.ultimo_uso ? fechaCorta(l.ultimo_uso) : 'Nunca'}
+                        </td>
+                        <td className="p-3 text-right">
+                          <button
+                            onClick={() => quitarLlave(l.id)}
+                            className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-rose-400 hover:border-rose-500/40 inline-flex items-center gap-1"
+                          >
+                            <Trash2 className="w-3 h-3" /> Quitar
+                          </button>
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          )}
+
+          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
+            <h5 className="text-[11px] uppercase font-bold text-amber-500 mb-2">Un límite que conviene tener claro</h5>
+            <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
+              Si en un mismo teléfono hay <strong className="text-[var(--text-primary)]">dos caras registradas en Face
+              ID</strong> (o dos huellas), las dos desbloquean ese teléfono, y por lo tanto las dos pueden usar las
+              llaves que guarda. Eso lo decide iOS o Android, no esta aplicación, y no hay forma de impedirlo desde
+              acá.
+            </p>
+            <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed mt-2">
+              O sea: el aislamiento entre cuentas es total{' '}
+              <strong className="text-[var(--text-primary)]">entre aparatos distintos</strong>. Si dos personas van a
+              tener cuentas separadas de verdad, cada una debe activar su biometría en su propio teléfono y no enrolar
+              su cara en el del otro.
+            </p>
+          </div>
+
+          <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+            Las llaves de esta lista son solo suyas. Ni siquiera el dueño puede ver ni usar las de otra cuenta: la
+            llave privada vive en el aparato de esa persona y aquí únicamente queda la parte pública, que no sirve para
+            entrar.
+          </p>
         </div>
       )}
 
