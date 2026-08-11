@@ -47,9 +47,9 @@ function PantallaBloqueada({ porCuenta }: { porCuenta: boolean }) {
         <div className="text-[11px] uppercase tracking-[0.12em] font-bold text-[#FB923C] mb-3">
           Technoverse Costa Rica
         </div>
-        {/* El motivo cambia el mensaje a propósito. Decirle "su conexión está
-            bloqueada" a alguien cuya CUENTA fue suspendida provoca un reclamo
-            que nadie puede resolver: cambia de red, sigue bloqueado y no
+        {/* El motivo cambia el mensaje a propósito. Decirle "este aparato está
+            bloqueado" a alguien cuya CUENTA fue suspendida provoca un reclamo
+            que nadie puede resolver: cambia de teléfono, sigue bloqueado y no
             entiende por qué. */}
         <h1 className="text-xl font-bold mb-2">
           {porCuenta ? 'Cuenta suspendida' : 'Acceso bloqueado'}
@@ -68,10 +68,10 @@ function PantallaBloqueada({ porCuenta }: { porCuenta: boolean }) {
         ) : (
           <>
             <p className="text-sm leading-relaxed text-[#A7AFBD] mb-3">
-              Esta conexión fue bloqueada por el sistema de seguridad y por ahora no puede usar la aplicación.
+              Este aparato fue bloqueado por el sistema de seguridad y por ahora no puede usar la aplicación.
             </p>
             <p className="text-sm leading-relaxed text-[#A7AFBD]">
-              Si es un bloqueo temporal por intentos de ingreso fallidos, se levanta solo al cabo de un rato.
+              El bloqueo es a este equipo, no a su conexión: cambiar de red no lo levanta.
               Si cree que se trata de un error, comuníquese con nosotros.
             </p>
           </>
