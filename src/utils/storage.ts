@@ -1214,8 +1214,11 @@ function coalesce(key: string, fn: () => void, delay = 200) {
 // productos -al ser el más probado- parecía funcionar siempre. Ahora se usa
 // UN SOLO canal multiplexado con todas las tablas, tal como recomienda
 // Supabase, eliminando esa fuente de fallos intermitentes.
-function initRealtimeChannel() {
-  const channel = supabase.channel('technoverse-realtime-sync');
+// El canal abierto ahora mismo, para poder cerrarlo y volver a abrirlo.
+let canalActual: ReturnType<typeof supabase.channel> | null = null;
+
+function montarCanal() {
+  const channel = supabase.channel(`technoverse-realtime-sync-${Date.now()}`);
 
   TABLE_CONFIGS.forEach((cfg) => {
     channel.on('postgres_changes', { event: '*', schema: 'public', table: cfg.table }, () => {
@@ -1228,6 +1231,50 @@ function initRealtimeChannel() {
     .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => coalesce('chat', () => refreshChatFromSupabase()))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => coalesce('settings', () => refreshSettingsFromSupabase()))
     .subscribe();
+
+  canalActual = channel;
+}
+
+/**
+ * FALLO QUE ESTO CORRIGE: el panel no se enteraba de las ventas nuevas.
+ *
+ * El canal se abría UNA vez al arrancar la aplicación, cuando todavía no
+ * había nadie con sesión. Del lado del servidor, Realtime decide qué
+ * filas puede ver cada suscriptor aplicando las políticas RLS con el
+ * token que tenía EN EL MOMENTO DE SUSCRIBIRSE. Como en ese momento era
+ * un visitante anónimo, y un anónimo no puede leer pedidos, los eventos
+ * de `orders` nunca llegaban aunque el canal estuviera conectado.
+ *
+ * Iniciar sesión después no arregla el canal ya suscrito: hay que
+ * volverlo a montar con el token nuevo. Eso es exactamente lo que hace
+ * esto — y también al cerrar sesión, para dejar de recibir lo que ya no
+ * corresponde.
+ *
+ * Efecto práctico: las ventas, el tráfico y los cambios de inventario
+ * aparecen solos, sin recargar.
+ */
+function initRealtimeChannel() {
+  montarCanal();
+
+  supabase.auth.onAuthStateChange((evento) => {
+    // TOKEN_REFRESHED no cambia quién es la persona: volver a montar el
+    // canal en cada refresco sería reconectar cada hora sin motivo.
+    if (evento !== 'SIGNED_IN' && evento !== 'SIGNED_OUT' && evento !== 'INITIAL_SESSION') return;
+    try {
+      if (canalActual) supabase.removeChannel(canalActual);
+    } catch {
+      /* si no se pudo cerrar, el canal viejo caduca solo */
+    }
+    canalActual = null;
+    montarCanal();
+
+    // Al entrar, la sesión ve filas que antes estaban ocultas (sus
+    // pedidos, o TODOS si es el dueño). Sin esta recarga habría que
+    // esperar al primer cambio para verlas.
+    if (evento === 'SIGNED_IN') {
+      TABLE_CONFIGS.forEach(cfg => coalesce(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg), 400));
+    }
+  });
 }
 
 async function syncSettingsToSupabase(newSettings: AppSettings) {

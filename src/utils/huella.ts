@@ -38,13 +38,7 @@
 // =====================================================================
 
 import { supabase } from '../supabaseClient';
-
-/** La misma llave que usa el reconocimiento de dispositivo del panel:
- *  un solo aparato, una sola identidad en todo el sistema. */
-const LLAVE_DISPOSITIVO = 'technoverse_device_id';
-
-/** La misma marca, copiada a una cookie para que Cloudflare la vea. */
-export const COOKIE_DISPOSITIVO = 'tv_device';
+import { obtenerDeviceId as leerDeviceId } from './dispositivo';
 
 /** Cuándo se envió la última huella, para no llamar a la base en cada
  *  clic. Media hora es de sobra: esto no es analítica de tráfico. */
@@ -54,50 +48,11 @@ const CADA_MS = 30 * 60 * 1000;
 // ---------------------------------------------------------------------
 // IDENTIDAD DEL APARATO
 // ---------------------------------------------------------------------
-
-export function obtenerDeviceId(): string | null {
-  try {
-    let id = localStorage.getItem(LLAVE_DISPOSITIVO);
-    if (!id) {
-      id =
-        crypto?.randomUUID?.() ||
-        `dev-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 12)}`;
-      localStorage.setItem(LLAVE_DISPOSITIVO, id);
-    }
-    sembrarCookie(id);
-    return id;
-  } catch {
-    // Modo incógnito o almacenamiento bloqueado: se sigue sin marca.
-    return null;
-  }
-}
-
-/**
- * Copia la marca del aparato a una cookie.
- *
- * POR QUÉ HACE FALTA, si ya está en localStorage: el localStorage NO se
- * manda con las peticiones. Cloudflare, que es quien puede cortar el
- * acceso ANTES de entregar el HTML, nunca lo ve. Las cookies sí viajan
- * en cada petición del documento, y son la única forma de que el portero
- * del borde sepa qué aparato está llamando.
- *
- * Es la misma marca, no una segunda: si se borra la cookie, se vuelve a
- * escribir desde el localStorage en la siguiente visita.
- *
- * `SameSite=Lax` evita que la cookie viaje en peticiones que dispare otro
- * sitio; no lleva ningún dato personal, solo un número al azar.
- */
-function sembrarCookie(id: string): void {
-  try {
-    if (typeof document === 'undefined') return;
-    if (document.cookie.includes(`${COOKIE_DISPOSITIVO}=${id}`)) return;
-    const seguro = location.protocol === 'https:' ? '; Secure' : '';
-    document.cookie =
-      `${COOKIE_DISPOSITIVO}=${encodeURIComponent(id)}; path=/; max-age=${60 * 60 * 24 * 365}; SameSite=Lax${seguro}`;
-  } catch {
-    /* sin cookies el bloqueo del borde no aplica, pero el de la aplicación sí */
-  }
-}
+// Vive en `src/utils/dispositivo.ts`, que no importa nada y por eso puede
+// usarse también desde `supabaseClient.ts` sin crear una importación
+// circular. Se reexporta desde aquí para no tener que tocar los archivos
+// que ya la importaban de este módulo.
+export { obtenerDeviceId, COOKIE_DISPOSITIVO } from './dispositivo';
 
 // ---------------------------------------------------------------------
 // LECTURA DEL NAVEGADOR
@@ -295,7 +250,7 @@ export async function leerDatosDelAparato(): Promise<DatosDelAparato> {
  */
 export async function registrarVisita(): Promise<void> {
   try {
-    const huella = obtenerDeviceId();
+    const huella = leerDeviceId();
     if (!huella) return;   // sin almacenamiento no hay a quién atribuir la visita
 
     // No repetir el envío en cada navegación dentro de la misma media hora.
