@@ -3,10 +3,32 @@
  * PORTERO DEL SITIO WEB (Cloudflare Worker)
  * =====================================================================
  * Se ejecuta en el borde de Cloudflare ANTES de entregar una sola línea
- * de HTML. Su único trabajo es mirar la IP de quien llega y, si está en
- * la lista negra con bloqueo total, devolver una pantalla de bloqueo con
- * código 403 sin cargar absolutamente nada de la aplicación: ni tienda,
- * ni catálogo, ni carrito, ni panel de administración.
+ * de HTML. Su único trabajo es mirar QUÉ APARATO llega y, si está
+ * baneado, devolver una pantalla de bloqueo con código 403 sin cargar
+ * absolutamente nada de la aplicación: ni tienda, ni catálogo, ni
+ * carrito, ni panel de administración.
+ *
+ * ---------------------------------------------------------------------
+ * SE ABANDONÓ EL BLOQUEO POR IP
+ * ---------------------------------------------------------------------
+ * Antes esto miraba la dirección IP. Se quitó porque no servía para lo
+ * que se quería:
+ *
+ *   · Una IP la comparte un edificio entero, un café, una oficina o toda
+ *     una red móvil. Bloquear una IP castigaba a gente que no tenía nada
+ *     que ver — y eso pasó de verdad.
+ *   · A quien se quería bloquear le bastaba con apagar el WiFi y seguir
+ *     con datos móviles para volver a entrar.
+ *
+ * Ahora se mira el identificador del aparato, que viaja en la cookie
+ * `tv_device`. Ese identificador no cambia al cambiar de red, así que el
+ * bloqueo sigue a la persona del WiFi a los datos móviles.
+ *
+ * LO QUE ESTO NO ES: la cookie se puede borrar, y borrándola el aparato
+ * aparece como nuevo. Por eso esta capa es la que evita que el bloqueado
+ * pueda siquiera VER la página, mientras la cerradura de verdad —la que
+ * impide entrar a la cuenta y leer datos— vive en la base de datos y en
+ * la función de acceso, donde no hay nada que borrar.
  *
  * Esto es distinto —y mucho más fuerte— que el bloqueo del inicio de
  * sesión que ya existía. Aquel vive dentro de la aplicación y solo cierra
@@ -72,18 +94,29 @@ const CACHE_PERMITIDO_S = 120;
 
 // ---------------------------------------------------------------------
 
+/** La cookie donde el navegador guarda la marca del aparato. */
+const COOKIE_APARATO = 'tv_device';
+
 /**
- * Resume el User-Agent a algo corto y estable para usarlo como parte de
- * la llave de caché. La cadena completa puede pasar de 200 caracteres y
- * no hace falta guardarla: solo se necesita que dos navegadores
- * distintos den llaves distintas.
+ * Lee una cookie de la petición.
+ *
+ * Se acota a 128 caracteres y a un alfabeto seguro: el valor va dentro de
+ * una consulta a Supabase y de una llave de caché, y no hay razón para
+ * aceptar algo que no parezca un identificador.
  */
-function huellaCorta(texto: string): string {
-  let h = 5381;
-  for (let i = 0; i < texto.length; i++) {
-    h = ((h * 33) ^ texto.charCodeAt(i)) >>> 0;
+function leerCookie(request: Request, nombre: string): string | null {
+  const crudo = request.headers.get('Cookie');
+  if (!crudo) return null;
+  for (const parte of crudo.split(';')) {
+    const igual = parte.indexOf('=');
+    if (igual < 0) continue;
+    if (parte.slice(0, igual).trim() !== nombre) continue;
+    let valor = parte.slice(igual + 1).trim();
+    try { valor = decodeURIComponent(valor); } catch { /* se usa tal cual */ }
+    if (!valor || valor.length > 128) return null;
+    return /^[A-Za-z0-9._-]+$/.test(valor) ? valor : null;
   }
-  return h.toString(36);
+  return null;
 }
 
 /** Los archivos con hash en el nombre: /assets/index-a1b2c3.js */
@@ -190,26 +223,17 @@ function pantallaDeBloqueo(ip: string | null): Response {
 }
 
 /**
- * ¿Esta conexión tiene prohibido abrir el sitio? Pregunta por la IP y,
- * de paso, por el User-Agent: el panel permite marcar un navegador
- * concreto al aplicar un baneo total, para el caso de que la persona
- * cambie de red pero siga usando el mismo aparato.
+ * ¿Este aparato tiene prohibido abrir el sitio?
  *
  * Se apoya en la caché del borde para no consultar la base en cada
  * visita. Devuelve false ante cualquier duda.
  */
 async function tieneBloqueoTotal(
-  ip: string,
-  userAgent: string,
+  aparato: string,
   ctx: ExecutionContext
 ): Promise<boolean> {
-  // El User-Agent entra en la llave de caché porque ahora forma parte de
-  // la decisión: si no estuviera, dos visitantes con la misma IP y
-  // distinto navegador compartirían una respuesta que no les corresponde.
   const llave = new Request(
-    `https://control-de-acceso.interno/ip/${encodeURIComponent(ip)}/${encodeURIComponent(
-      huellaCorta(userAgent)
-    )}`
+    `https://control-de-acceso.interno/aparato/${encodeURIComponent(aparato)}`
   );
   const cache = (caches as any).default as Cache;
 
@@ -223,14 +247,14 @@ async function tieneBloqueoTotal(
   const abortar = new AbortController();
   const reloj = setTimeout(() => abortar.abort(), TOPE_CONSULTA_MS);
   try {
-    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/acceso_bloqueado`, {
+    const r = await fetch(`${SUPABASE_URL}/rest/v1/rpc/acceso_bloqueado_v2`, {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         apikey: SUPABASE_KEY,
         Authorization: `Bearer ${SUPABASE_KEY}`,
       },
-      body: JSON.stringify({ p_ip: ip, p_user_agent: userAgent || null }),
+      body: JSON.stringify({ p_device: aparato }),
       signal: abortar.signal,
     });
     if (!r.ok) return false;
@@ -268,10 +292,9 @@ export default {
       // Los archivos con hash no se revisan: son cientos de peticiones por
       // visita y no sirven de nada sin el HTML, que sí está protegido.
       if (!esAsset(ruta) && esDocumento(ruta)) {
-        const ip = request.headers.get('CF-Connecting-IP');
-        const userAgent = request.headers.get('User-Agent') || '';
-        if (ip && (await tieneBloqueoTotal(ip, userAgent, ctx))) {
-          return pantallaDeBloqueo(ip);
+        const aparato = leerCookie(request, COOKIE_APARATO);
+        if (aparato && (await tieneBloqueoTotal(aparato, ctx))) {
+          return pantallaDeBloqueo(request.headers.get('CF-Connecting-IP'));
         }
       }
 
