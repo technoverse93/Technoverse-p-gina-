@@ -19,12 +19,21 @@ jobs:
           # descargar todas las dependencias desde cero.
           cache: npm
 
-      # `npm ci` en vez de `npm install`: instala EXACTAMENTE las versiones
-      # fijadas en package-lock.json. `npm install` puede resolver versiones
-      # nuevas por su cuenta, así que dos deploys del mismo commit podían
-      # producir bundles distintos — justo lo que no se quiere en producción.
+      # `npm ci` instala EXACTAMENTE las versiones fijadas en
+      # package-lock.json, así que dos deploys del mismo commit producen el
+      # mismo bundle. Es lo que se quiere en producción y por eso va primero.
+      #
+      # PERO `npm ci` se niega a instalar si package.json y el lock no
+      # coinciden, y este proyecto se mantiene subiendo archivos a mano
+      # desde un teléfono: al agregar una dependencia no hay forma de
+      # regenerar el lock, y el deploy se caía entero con
+      # "package.json and package-lock.json are not in sync".
+      #
+      # El respaldo `npm install` resuelve esa situación y de paso deja el
+      # lock actualizado dentro del runner. Se pierde la reproducibilidad
+      # exacta SOLO en ese caso; mientras el lock esté al día, manda `npm ci`.
       - name: Install dependencies
-        run: npm ci
+        run: npm ci || npm install
 
       - name: Build web app
         run: npm run build
