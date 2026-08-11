@@ -246,6 +246,8 @@ export default function CyberSecurityPanel({
   const [llaves, setLlaves] = useState<LlaveBiometrica[]>([]);
   const [hayBiometria, setHayBiometria] = useState(false);
   const [registrandoLlave, setRegistrandoLlave] = useState(false);
+  const [conteos, setConteos] = useState<any>(null);
+  const [limpiando, setLimpiando] = useState(false);
   const [cargando, setCargando] = useState(true);
   const [accesos, setAccesos] = useState<Acceso[]>([]);
   const [bloqueos, setBloqueos] = useState<Bloqueo[]>([]);
@@ -288,6 +290,11 @@ export default function CyberSecurityPanel({
     setVisitantes((e.data as Visitante[]) || []);
     setPenalizados((f.data as Penalizado[]) || []);
     setAparatos((g.data as AparatoBaneado[]) || []);
+    // Cuántos registros hay y cuántos son viejos. Sin esto, "0 eliminados"
+    // se lee como un fallo cuando en realidad significa que no había nada
+    // tan antiguo — que es exactamente lo que estaba pasando.
+    const { data: resumenHistorial } = await supabase.rpc('conteo_historial');
+    setConteos(resumenHistorial || null);
     setCargando(false);
   }, [toast]);
 
@@ -384,6 +391,121 @@ export default function CyberSecurityPanel({
         .some(campo => (campo || '').toLowerCase().includes(q))
     );
   }, [visitantes, buscarVisitante]);
+
+  /**
+   * Un renglón por APARATO FÍSICO, no por identidad guardada.
+   *
+   * POR QUÉ HACE FALTA AGRUPAR, si la tabla ya guarda una fila por marca:
+   * la marca vive en el navegador, y Safari en iPhone borra el
+   * almacenamiento de los sitios que no se visitan en siete días. El
+   * mismo teléfono vuelve entonces con una marca nueva y aparece como un
+   * visitante distinto. En unas semanas la lista se llena de renglones
+   * que en realidad son la misma persona.
+   *
+   * Se agrupa por el correo cuando lo hay —es la señal más fuerte— y por
+   * modelo + sistema + navegador + pantalla cuando es anónimo. Dos
+   * teléfonos idénticos y sin sesión pueden caer en el mismo renglón; se
+   * asume a propósito, porque es preferible a una lista ilegible, y el
+   * renglón dice cuántas identidades agrupa para que no haya sorpresas.
+   *
+   * Al bloquear un renglón se bloquean TODAS sus marcas de una vez.
+   */
+  interface GrupoVisitante {
+    clave: string;
+    huellas: string[];
+    visitas: number;
+    ip: string | null;
+    email: string | null;
+    dispositivo: string | null;
+    tipo: string | null;
+    sistema: string | null;
+    version_sistema: string | null;
+    navegador: string | null;
+    version_navegador: string | null;
+    origen: string | null;
+    primera: string;
+    ultima: string;
+    reciente: Visitante;
+  }
+
+  const visitantesAgrupados = useMemo<GrupoVisitante[]>(() => {
+    const mapa = new Map<string, GrupoVisitante>();
+
+    for (const v of visitantes) {
+      const clave = v.email
+        ? `c:${v.email.toLowerCase()}`
+        : `a:${[v.dispositivo, v.sistema, v.version_sistema, v.navegador, v.pantalla]
+            .map(x => (x || '').toLowerCase()).join('|')}`;
+
+      const existente = mapa.get(clave);
+      if (!existente) {
+        mapa.set(clave, {
+          clave,
+          huellas: [v.huella],
+          visitas: v.visitas || 1,
+          ip: v.ip, email: v.email,
+          dispositivo: v.dispositivo, tipo: v.tipo,
+          sistema: v.sistema, version_sistema: v.version_sistema,
+          navegador: v.navegador, version_navegador: v.version_navegador,
+          origen: v.origen,
+          primera: v.primera_visita,
+          ultima: v.ultima_visita,
+          reciente: v,
+        });
+        continue;
+      }
+
+      existente.huellas.push(v.huella);
+      existente.visitas += v.visitas || 1;
+      if (v.primera_visita < existente.primera) existente.primera = v.primera_visita;
+      // Los datos que se muestran son los de la visita más reciente: si el
+      // aparato cambió de red o de versión, interesa lo último, no lo viejo.
+      if (v.ultima_visita > existente.ultima) {
+        existente.ultima = v.ultima_visita;
+        existente.ip = v.ip;
+        existente.reciente = v;
+        existente.version_sistema = v.version_sistema;
+        existente.version_navegador = v.version_navegador;
+      }
+      if (!existente.email && v.email) existente.email = v.email;
+    }
+
+    return [...mapa.values()].sort((a, b) => b.ultima.localeCompare(a.ultima));
+  }, [visitantes]);
+
+  const gruposFiltrados = useMemo(() => {
+    const q = buscarVisitante.trim().toLowerCase();
+    if (!q) return visitantesAgrupados;
+    return visitantesAgrupados.filter(g =>
+      [g.ip, g.email, g.dispositivo, g.sistema, g.navegador, ...g.huellas]
+        .some(campo => (campo || '').toLowerCase().includes(q))
+    );
+  }, [visitantesAgrupados, buscarVisitante]);
+
+  /** Bloquea de una vez todas las marcas que agrupa el renglón. */
+  const banearGrupo = async (g: GrupoVisitante) => {
+    const ok = await confirm({
+      title: 'Bloquear este aparato',
+      message: g.huellas.length > 1
+        ? `Se bloquearán las ${g.huellas.length} identidades de este equipo. No podrá abrir el sitio desde ninguna red. ¿Continuar?`
+        : 'Este equipo no podrá abrir el sitio desde ninguna red, ni WiFi ni datos móviles. ¿Continuar?',
+      confirmText: 'Bloquear',
+      variant: 'danger',
+    });
+    if (!ok) return;
+
+    const motivo = g.email
+      ? `Bloqueo desde visitantes (${g.email})`
+      : 'Bloqueo desde visitantes';
+    for (const huella of g.huellas) {
+      const { error } = await supabase.rpc('banear_dispositivo', { p_device: huella, p_motivo: motivo });
+      if (error) { toast.error('No se pudo bloquear: ' + error.message); return; }
+    }
+    toast.success(g.huellas.length > 1
+      ? `${g.huellas.length} identidades bloqueadas.`
+      : 'Aparato bloqueado.');
+    cargar();
+  };
 
   const emailsPenalizados = useMemo(
     () => new Set(penalizados.filter(x => !x.levantado_en).map(x => x.email.toLowerCase())),
@@ -571,40 +693,92 @@ export default function CyberSecurityPanel({
     cargar();
   };
 
-  const purgarHistorial = async () => {
+  /**
+   * Depura el historial de ACCESOS (login_audit_logs).
+   *
+   * ACLARACIÓN IMPORTANTE, porque parecía un fallo y no lo era: la purga
+   * de 90 días "no borraba nada" sencillamente porque no había nada de
+   * más de 90 días — el registro más viejo del sistema tiene semanas. La
+   * función siempre funcionó. Lo que faltaba era decir cuántos registros
+   * se iban a borrar ANTES de confirmar, para que "0 eliminados" no se
+   * leyera como una avería.
+   *
+   * Con `dias = 0` se borra todo.
+   */
+  const purgarHistorial = async (dias: number) => {
+    const cuantos = dias === 0
+      ? (conteos?.accesos_total ?? 0)
+      : dias === 30 ? (conteos?.accesos_30 ?? 0) : (conteos?.accesos_90 ?? 0);
+
     const ok = await confirm({
-      title: 'Depurar historial de accesos',
-      message: 'Se borrarán los registros de acceso con más de 90 días. Los recientes se conservan. ¿Continuar?',
-      confirmText: 'Depurar',
+      title: dias === 0 ? 'Borrar TODO el historial de accesos' : `Depurar accesos de más de ${dias} días`,
+      message: cuantos === 0
+        ? `No hay ningún registro que cumpla ese criterio, así que no se borrará nada. El registro más antiguo es del ${conteos?.accesos_mas_viejo ? new Date(conteos.accesos_mas_viejo).toLocaleDateString() : '—'}. ¿Continuar de todas formas?`
+        : `Se borrarán ${cuantos} registro(s) de acceso. Esto no se puede deshacer. ¿Continuar?`,
+      confirmText: dias === 0 ? 'Borrar todo' : 'Depurar',
       variant: 'danger',
     });
     if (!ok) return;
-    const { data, error } = await supabase.rpc('purgar_login_audit_logs', { p_dias: 90 });
-    if (error) { toast.error('No se pudo depurar: ' + error.message); return; }
-    toast.success(`${data ?? 0} registro(s) antiguo(s) eliminado(s).`);
-    cargar();
+
+    setLimpiando(true);
+    try {
+      const { data, error } = await supabase.rpc('purgar_login_audit_logs', { p_dias: dias });
+      if (error) { toast.error('No se pudo depurar: ' + error.message); return; }
+      toast.success(`${data ?? 0} registro(s) de acceso eliminado(s).`);
+      cargar();
+    } finally {
+      setLimpiando(false);
+    }
   };
 
+  /**
+   * Limpia la bitácora operativa (audit_logs).
+   *
+   * FALLO QUE ESTO CORRIGE: antes esto solo vaciaba la COPIA LOCAL y
+   * dejaba que la sincronización se encargara de borrar en la base. Pero
+   * `audit_logs` tenía políticas de lectura, alta y modificación y
+   * NINGUNA de borrado: con RLS activa, lo que no está permitido está
+   * prohibido, así que el borrado se rechazaba en silencio devolviendo
+   * "0 filas". La bitácora se veía vacía en pantalla y volvía completa en
+   * cuanto la aplicación se resincronizaba.
+   *
+   * Se arregló por los dos lados: se agregó la política de borrado, y
+   * ahora el borrado lo hace una función del servidor en una sola
+   * operación, sin depender de que el navegador tenga cargada la lista.
+   */
   const limpiarBitacora = async () => {
     const ok = await confirm({
       title: 'Limpiar bitácora operativa',
-      message: 'Se depurará el registro de acciones del sistema y quedará únicamente el asiento de la limpieza. Los accesos e intentos de ingreso NO se tocan. ¿Continuar?',
+      message: `Se borrarán ${conteos?.bitacora_total ?? 0} registro(s) de acciones del sistema y quedará únicamente el asiento de la limpieza. Los accesos e intentos de ingreso NO se tocan. ¿Continuar?`,
       confirmText: 'Limpiar',
       variant: 'danger',
     });
     if (!ok) return;
-    const db = getDB();
-    db.audit_log = [{
-      id: 'LOG-RESET',
-      userEmail: currentUserEmail || 'admin',
-      module: 'Seguridad',
-      action: 'Reset Bitácora',
-      detail: 'Bitácora depurada por Dueño. Se conservó el registro inicial fiscal.',
-      timestamp: new Date().toISOString(),
-    }];
-    await saveDB(db);
-    if (onAuditLogChanged) onAuditLogChanged();
-    toast.success('Bitácora operativa depurada.');
+
+    setLimpiando(true);
+    try {
+      const { data, error } = await supabase.rpc('purgar_bitacora', { p_dias: 0 });
+      if (error) { toast.error('No se pudo limpiar: ' + error.message); return; }
+
+      // La copia local se vacía DESPUÉS de que el servidor confirmó. Al
+      // revés, un fallo del servidor dejaría la pantalla en blanco con los
+      // datos todavía en la base.
+      const db = getDB();
+      db.audit_log = [{
+        id: 'LOG-RESET',
+        userEmail: currentUserEmail || 'admin',
+        module: 'Seguridad',
+        action: 'Reset Bitácora',
+        detail: `Bitácora depurada por el Dueño. ${data ?? 0} registro(s) eliminado(s).`,
+        timestamp: new Date().toISOString(),
+      }];
+      await saveDB(db);
+      if (onAuditLogChanged) onAuditLogChanged();
+      toast.success(`Bitácora depurada. ${data ?? 0} registro(s) eliminado(s).`);
+      cargar();
+    } finally {
+      setLimpiando(false);
+    }
   };
 
   // -------------------------------------------------------------------
@@ -865,8 +1039,9 @@ export default function CyberSecurityPanel({
               ))}
             </div>
             <button
-              onClick={purgarHistorial}
-              className="text-[11px] text-rose-400 hover:text-rose-300 font-bold px-3 py-1.5 rounded-lg border border-[var(--border-color)]/60 hover:bg-rose-500/10 transition flex items-center gap-1.5"
+              onClick={() => purgarHistorial(90)}
+              disabled={limpiando}
+              className="text-[11px] text-rose-400 hover:text-rose-300 font-bold px-3 py-1.5 rounded-lg border border-[var(--border-color)]/60 hover:bg-rose-500/10 transition flex items-center gap-1.5 disabled:opacity-50"
             >
               <Trash2 className="w-3.5 h-3.5" /> Depurar +90 días
             </button>
@@ -1198,18 +1373,64 @@ export default function CyberSecurityPanel({
       {/* =============== BITÁCORA OPERATIVA (absorbida) =============== */}
       {seccion === 'bitacora' && (
         <div className="space-y-4">
-          <div className="flex flex-wrap justify-between items-center gap-2">
-            <p className="text-xs text-[var(--text-secondary)] max-w-lg leading-relaxed">
-              Registro de las acciones hechas dentro del sistema (ventas, ajustes, inventario). Es distinto del registro
-              de accesos: aquí queda lo que se <strong className="text-[var(--text-primary)]">hizo</strong>, allá quién{' '}
-              <strong className="text-[var(--text-primary)]">entró</strong>.
-            </p>
-            <button
-              onClick={limpiarBitacora}
-              className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-rose-400 hover:text-rose-300 hover:bg-rose-500/15 text-sm font-bold px-3 py-1.5 rounded-xl transition flex-shrink-0"
-            >
-              Limpiar Bitácora
-            </button>
+          <p className="text-[11px] text-[var(--text-secondary)] leading-snug">
+            Aquí queda lo que se <strong className="text-[var(--text-primary)]">hizo</strong> (ventas, ajustes,
+            inventario). En "Accesos" queda quién <strong className="text-[var(--text-primary)]">entró</strong>.
+          </p>
+
+          {/* ---- Estado y limpieza del historial ---- */}
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/70 rounded-xl p-3 space-y-3">
+            <div className="grid grid-cols-3 gap-2 text-center">
+              {[
+                { etiqueta: 'Bitácora', valor: conteos?.bitacora_total ?? 0 },
+                { etiqueta: 'Accesos',  valor: conteos?.accesos_total ?? 0 },
+                { etiqueta: '+90 días', valor: conteos?.accesos_90 ?? 0 },
+              ].map(x => (
+                <div key={x.etiqueta} className="bg-[var(--bg-base)] border border-[var(--border-color)]/50 rounded-lg py-2">
+                  <div className="text-base font-bold text-[var(--text-primary)] font-mono">{x.valor}</div>
+                  <div className="text-[9px] uppercase tracking-wider text-[var(--text-secondary)]">{x.etiqueta}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="flex flex-wrap gap-1.5">
+              <button
+                onClick={limpiarBitacora}
+                disabled={limpiando}
+                className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-lg border border-[var(--border-color)]/70 text-rose-400 hover:bg-rose-500/10 disabled:opacity-50"
+              >
+                Limpiar bitácora
+              </button>
+              <button
+                onClick={() => purgarHistorial(90)}
+                disabled={limpiando}
+                className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"
+              >
+                Accesos +90 días
+              </button>
+              <button
+                onClick={() => purgarHistorial(30)}
+                disabled={limpiando}
+                className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"
+              >
+                Accesos +30 días
+              </button>
+              <button
+                onClick={() => purgarHistorial(0)}
+                disabled={limpiando}
+                className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-lg border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 disabled:opacity-50"
+              >
+                Borrar todos los accesos
+              </button>
+            </div>
+
+            {conteos?.accesos_90 === 0 && conteos?.accesos_total > 0 && (
+              <p className="text-[10px] text-[var(--text-secondary)] leading-snug">
+                Ningún acceso supera los 90 días — el más antiguo es del{' '}
+                {conteos?.accesos_mas_viejo ? new Date(conteos.accesos_mas_viejo).toLocaleDateString() : '—'}. Por eso
+                "Depurar +90 días" no borra nada todavía: no hay nada tan viejo, no es una avería.
+              </p>
+            )}
           </div>
 
           <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
@@ -1252,105 +1473,113 @@ export default function CyberSecurityPanel({
 
       {/* =============== VISITANTES DE LA TIENDA =============== */}
       {seccion === 'visitantes' && (
-        <div className="space-y-4">
+        <div className="space-y-3">
           <div className="flex flex-wrap items-center justify-between gap-2">
-            <p className="text-xs text-[var(--text-secondary)] max-w-xl leading-relaxed">
-              Un renglón por <strong className="text-[var(--text-primary)]">aparato</strong>, no por visita. Se guarda
-              la IP, el sistema operativo, el navegador y —cuando el navegador lo permite— el modelo.{' '}
-              <strong className="text-[var(--text-primary)]">No se pide ubicación a los clientes</strong>: la IP ya da
-              país y provincia, que es lo que sirve para un reclamo.
+            <p className="text-[11px] text-[var(--text-secondary)] leading-snug">
+              Un renglón por aparato. Sin ubicación: a los clientes no se les pide GPS.
             </p>
             <div className="relative flex-shrink-0">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
               <input
                 value={buscarVisitante}
                 onChange={e => setBuscarVisitante(e.target.value)}
                 placeholder="IP, correo, modelo…"
-                className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] w-56 focus:outline-none focus:border-[var(--brand-gold-mid)]"
+                className="bg-[var(--bg-surface)] border border-[var(--border-color)]/70 rounded-lg pl-8 pr-2.5 py-1.5 text-[11px] text-[var(--text-primary)] w-48 focus:outline-none focus:border-[var(--brand-gold-mid)]"
               />
             </div>
           </div>
 
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
+          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/70 rounded-xl overflow-hidden">
             <div className="overflow-x-auto">
-              <table className="w-full min-w-[820px] text-left text-xs border-collapse">
+              <table className="w-full min-w-[680px] text-left text-[11px] border-collapse">
                 <thead>
-                  <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)] uppercase text-[10px] tracking-wide">
-                    <th className="p-3">Aparato</th>
-                    <th className="p-3">Sistema</th>
-                    <th className="p-3">Navegador</th>
-                    <th className="p-3">Conexión</th>
-                    <th className="p-3">Cliente</th>
-                    <th className="p-3 text-center">Visitas</th>
-                    <th className="p-3">Última vez</th>
-                    <th className="p-3 text-right">Acciones</th>
+                  <tr className="border-b border-[var(--border-color)]/70 bg-[var(--bg-base)] text-[var(--text-secondary)] uppercase text-[9px] tracking-wider">
+                    <th className="px-2.5 py-2">Aparato</th>
+                    <th className="px-2.5 py-2">Software</th>
+                    <th className="px-2.5 py-2">Conexión</th>
+                    <th className="px-2.5 py-2">Cliente</th>
+                    <th className="px-2.5 py-2 text-center">Visitas</th>
+                    <th className="px-2.5 py-2">Última vez</th>
+                    <th className="px-2.5 py-2 text-right">Acciones</th>
                   </tr>
                 </thead>
                 <PaginatedTbody
-                  items={visitantesFiltrados}
+                  items={gruposFiltrados}
                   itemsPerPage={12}
-                  renderItem={(v: Visitante) => {
-                    const penalizado = !!v.email && emailsPenalizados.has(v.email.toLowerCase());
+                  renderItem={(g: GrupoVisitante) => {
+                    const penalizado = !!g.email && emailsPenalizados.has(g.email.toLowerCase());
+                    // Un renglón puede agrupar varias marcas; basta con que
+                    // una esté bloqueada para considerarlo bloqueado.
+                    const bloqueado = g.huellas.some(h =>
+                      aparatos.some(a => a.device_uuid === h && !a.levantado_en));
                     return (
-                      <tr key={v.huella} className="border-b border-[var(--border-color)]/40 hover:bg-[var(--bg-base)]">
-                        <td className="p-3">
-                          <div className="flex items-center gap-2">
-                            {v.tipo === 'Escritorio'
-                              ? <Monitor className="w-3.5 h-3.5 text-[var(--text-secondary)] flex-shrink-0" />
-                              : <Smartphone className="w-3.5 h-3.5 text-[var(--text-secondary)] flex-shrink-0" />}
-                            <div className="min-w-0">
-                              <div className="font-bold text-[var(--text-primary)] truncate max-w-[180px]">
-                                {v.dispositivo || v.tipo || 'Aparato sin identificar'}
-                              </div>
-                              <div className="text-[10px] text-[var(--text-secondary)]">{v.tipo || '—'}</div>
-                            </div>
+                      <tr key={g.clave} className="border-b border-[var(--border-color)]/30 hover:bg-[var(--bg-base)]">
+                        <td className="px-2.5 py-2">
+                          <div className="flex items-center gap-1.5 min-w-0">
+                            {g.tipo === 'Escritorio'
+                              ? <Monitor className="w-3 h-3 text-[var(--text-secondary)] flex-shrink-0" />
+                              : <Smartphone className="w-3 h-3 text-[var(--text-secondary)] flex-shrink-0" />}
+                            <span className="font-semibold text-[var(--text-primary)] truncate max-w-[150px]">
+                              {g.dispositivo || g.tipo || 'Sin identificar'}
+                            </span>
+                            {g.huellas.length > 1 && (
+                              <span
+                                title={`${g.huellas.length} identidades del mismo equipo`}
+                                className="flex-shrink-0 text-[9px] text-[var(--text-secondary)] border border-[var(--border-color)]/60 px-1 rounded"
+                              >
+                                ×{g.huellas.length}
+                              </span>
+                            )}
                           </div>
                         </td>
-                        <td className="p-3 text-[var(--text-primary)]">
-                          {v.sistema || '—'}
-                          {v.version_sistema && <span className="text-[var(--text-secondary)]"> {v.version_sistema}</span>}
+                        <td className="px-2.5 py-2 text-[var(--text-secondary)]">
+                          <div className="text-[var(--text-primary)] truncate max-w-[130px]">
+                            {[g.sistema, g.version_sistema].filter(Boolean).join(' ') || '—'}
+                          </div>
+                          <div className="text-[10px] truncate max-w-[130px]">
+                            {[g.navegador, (g.version_navegador || '').split('.')[0]].filter(Boolean).join(' ') || '—'}
+                          </div>
                         </td>
-                        <td className="p-3 text-[var(--text-primary)]">
-                          {v.navegador || '—'}
-                          {v.version_navegador && (
-                            <span className="text-[var(--text-secondary)]"> {String(v.version_navegador).split('.')[0]}</span>
-                          )}
+                        <td className="px-2.5 py-2">
+                          <div className="font-mono text-[10px] text-[var(--text-primary)]">{g.ip || '—'}</div>
+                          <div className="text-[9px] text-[var(--text-secondary)] uppercase">{g.origen || 'web'}</div>
                         </td>
-                        <td className="p-3">
-                          <div className="font-mono text-[11px] text-[var(--text-primary)]">{v.ip || '—'}</div>
-                          <div className="text-[10px] text-[var(--text-secondary)] uppercase">{v.origen || 'web'}</div>
-                        </td>
-                        <td className="p-3">
-                          {v.email ? (
-                            <div className="flex items-center gap-1.5 min-w-0">
-                              <span className="truncate max-w-[170px] text-[var(--text-primary)]">{v.email}</span>
+                        <td className="px-2.5 py-2">
+                          {g.email ? (
+                            <div className="flex items-center gap-1 min-w-0">
+                              <span className="truncate max-w-[140px] text-[var(--text-primary)]">{g.email}</span>
                               {penalizado && (
-                                <span className="flex-shrink-0 text-[9px] uppercase font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 px-1.5 py-0.5 rounded">
-                                  Baneado
-                                </span>
+                                <span className="flex-shrink-0 text-[9px] uppercase font-bold text-rose-400">baneado</span>
                               )}
                             </div>
                           ) : (
                             <span className="text-[var(--text-secondary)]">Anónimo</span>
                           )}
                         </td>
-                        <td className="p-3 text-center font-mono text-[var(--text-primary)]">{v.visitas}</td>
-                        <td className="p-3 text-[var(--text-secondary)] text-[11px]">{fechaCorta(v.ultima_visita)}</td>
-                        <td className="p-3">
-                          <div className="flex items-center justify-end gap-1.5">
+                        <td className="px-2.5 py-2 text-center font-mono text-[var(--text-primary)]">{g.visitas}</td>
+                        <td className="px-2.5 py-2 text-[10px] text-[var(--text-secondary)] whitespace-nowrap">
+                          {fechaCorta(g.ultima)}
+                        </td>
+                        <td className="px-2.5 py-2">
+                          <div className="flex items-center justify-end gap-1">
                             <button
-                              onClick={() => setVisitanteDetalle(v)}
-                              className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]"
+                              onClick={() => setVisitanteDetalle(g.reciente)}
+                              className="text-[10px] px-1.5 py-1 rounded border border-[var(--border-color)]/60 text-[var(--text-secondary)] hover:text-[var(--text-primary)]"
                             >
                               Ver
                             </button>
-                            {/* Solo se puede penalizar a quien tiene cuenta:
-                                un visitante anónimo no tiene nada que banear
-                                más allá de su IP, y para eso está Bloqueos. */}
-                            {v.email && !penalizado && (
+                            {/* El bloqueo está disponible para TODOS los
+                                aparatos, tengan cuenta o no: se bloquea el
+                                equipo, y para eso no hace falta saber quién
+                                lo usa. */}
+                            {bloqueado ? (
+                              <span className="text-[10px] px-1.5 py-1 rounded border border-rose-500/30 text-rose-400">
+                                Bloqueado
+                              </span>
+                            ) : (
                               <button
-                                onClick={() => { setBaneoModal({ email: v.email as string }); setBaneoMotivo(''); setBaneoUsarUA(false); }}
-                                className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-rose-500/40 text-rose-400 hover:bg-rose-500/15"
+                                onClick={() => banearGrupo(g)}
+                                className="text-[10px] px-1.5 py-1 rounded border border-rose-500/40 text-rose-400 hover:bg-rose-500/10"
                               >
                                 Banear
                               </button>
@@ -1365,17 +1594,24 @@ export default function CyberSecurityPanel({
             </div>
           </div>
 
-          {visitantesFiltrados.length === 0 && (
-            <p className="text-center text-xs text-[var(--text-secondary)] py-8">
+          {gruposFiltrados.length === 0 && (
+            <p className="text-center text-[11px] text-[var(--text-secondary)] py-6">
               {visitantes.length === 0
-                ? 'Todavía no hay visitas registradas. Los datos aparecen conforme la gente entre a la tienda.'
+                ? 'Todavía no hay visitas registradas.'
                 : 'Ningún visitante coincide con la búsqueda.'}
+            </p>
+          )}
+
+          {visitantesAgrupados.length < visitantes.length && (
+            <p className="text-[10px] text-[var(--text-secondary)] leading-snug">
+              {visitantes.length} identidades agrupadas en {visitantesAgrupados.length} aparatos. Un mismo teléfono
+              genera identidades nuevas cuando el navegador borra sus datos — Safari lo hace a los siete días sin
+              visitas. Al bloquear un renglón se bloquean todas las suyas.
             </p>
           )}
         </div>
       )}
 
-      {/* =============== CUENTAS PENALIZADAS =============== */}
       {seccion === 'penalizados' && (
         <div className="space-y-4">
           <p className="text-xs text-[var(--text-secondary)] max-w-2xl leading-relaxed">
