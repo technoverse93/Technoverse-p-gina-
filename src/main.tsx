@@ -2,6 +2,11 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
+// Sistema visual del panel de administración. Va DESPUÉS de index.css
+// para que sus reglas puedan afinar las de la marca, y todo lo que
+// contiene está limitado a `#admin-panel-root` o a clases `tv-`: la
+// tienda pública no puede verse afectada por este archivo.
+import './styles/admin.css';
 
 // Auto-recuperación de "chunk viejo": cada deploy a Cloudflare genera assets
 // con hash nuevo (ej. jspdf.es.min-XXXXX.js) y solo sirve los del último

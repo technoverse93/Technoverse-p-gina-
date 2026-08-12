@@ -6,6 +6,7 @@ import { OverlayProvider, useToast } from './components/ui/Overlays';
 import { conexionBloqueada, detalleDeBloqueo } from './utils/adminLogin';
 import { registrarVisita } from './utils/huella';
 import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria } from './utils/biometria';
+import { supabase } from './supabaseClient';
 
 // AdminPanel carga recharts, motion y toda la lógica de taller/inventario/CRM:
 // era el bloque más pesado del bundle principal (>300 KB gzip) y se estaba
@@ -174,6 +175,64 @@ function AppInner() {
        window.addEventListener('technoverse_auth_sync', handleSession);
        return () => window.removeEventListener('technoverse_auth_sync', handleSession);
     }
+  }, []);
+
+  // ---- Recuperación de la sesión al abrir la aplicación --------------------
+  //
+  // FALLO CORREGIDO: `currentUser` arrancaba SIEMPRE en null y solo se
+  // llenaba al pasar por el formulario de acceso. La sesión de Supabase, en
+  // cambio, sobrevive en el teléfono. Resultado: se entraba con la huella,
+  // se cerraba la aplicación, se volvía a abrir… y la aplicación mostraba
+  // "sin sesión" aunque el aparato siguiera perfectamente autenticado. Al
+  // intentar entrar al panel, rebotaba a la tienda pidiendo la contraseña.
+  // Ese es literalmente el "no completa el inicio de sesión" reportado, y
+  // ninguna corrección dentro del código biométrico lo habría arreglado:
+  // el fallo estaba en que nadie leía la sesión existente.
+  //
+  // Solo se da por buena una sesión con perfil legible. Si el perfil no se
+  // puede leer, se deja la aplicación como estaba: es preferible pedir la
+  // contraseña una vez a dejar entrar con datos incompletos.
+  useEffect(() => {
+    let vigente = true;
+
+    const recuperar = async () => {
+      try {
+        const { data } = await supabase.auth.getSession();
+        const usuario = data?.session?.user;
+        if (!vigente || !usuario?.id) return;
+
+        const { data: perfil } = await supabase
+          .from('profiles')
+          .select('*')
+          .eq('id', usuario.id)
+          .maybeSingle();
+
+        if (!vigente || !perfil) return;
+
+        setCurrentUser({
+          id: perfil.id,
+          email: perfil.email,
+          role: perfil.role,
+          name: perfil.name || perfil.email,
+        });
+      } catch {
+        /* sin sesión recuperable se sigue como visitante: nada se rompe */
+      }
+    };
+
+    void recuperar();
+
+    // Si la sesión se cierra desde otra pestaña, o el servidor la revoca,
+    // la pantalla tiene que enterarse. Sin esto la aplicación seguiría
+    // mostrando el panel de alguien cuya sesión ya no existe.
+    const { data: escucha } = supabase.auth.onAuthStateChange((evento) => {
+      if (evento === 'SIGNED_OUT' && vigente) setCurrentUser(null);
+    });
+
+    return () => {
+      vigente = false;
+      escucha?.subscription?.unsubscribe();
+    };
   }, []);
 
   const [autoOpenLogin, setAutoOpenLogin] = useState(false);
