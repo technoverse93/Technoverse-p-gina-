@@ -146,6 +146,15 @@ export interface ResultadoBiometria {
   mensaje?: string;
   /** true cuando la persona canceló el aviso: no es un error que reportar. */
   cancelado?: boolean;
+  /**
+   * Identidad de la sesión recién abierta, en los dos caminos (APK y
+   * web). Va aquí para que la pantalla NO tenga que volver a salir a la
+   * red con `getUser()` justo después de entrar: esa segunda petición,
+   * sin límite de espera, es lo que dejaba el ingreso a medias con la
+   * huella ya aceptada.
+   */
+  userId?: string;
+  email?: string;
 }
 
 /** Traduce los errores del navegador a algo que se pueda leer. */
@@ -285,13 +294,20 @@ export async function entrarConBiometria(email?: string): Promise<ResultadoBiome
 
     // El token es de un solo uso y dura segundos. Canjearlo es lo que
     // abre la sesión de verdad.
-    const { error } = await supabase.auth.verifyOtp({
+    const { data: canje, error } = await supabase.auth.verifyOtp({
       token_hash: datos.token_hash,
       type: 'email',
     });
     if (error) return { ok: false, mensaje: 'No se pudo abrir la sesión: ' + error.message };
 
-    return { ok: true, mensaje: 'Bienvenido.' };
+    // El canje ya devuelve la sesión con su usuario. Se propaga para que
+    // la pantalla termine de entrar sin una consulta más a la red.
+    const usuario = canje?.session?.user ?? canje?.user ?? null;
+    if (!usuario?.id) {
+      return { ok: false, mensaje: 'La sesión se abrió pero no se pudo identificar la cuenta. Intente de nuevo.' };
+    }
+
+    return { ok: true, mensaje: 'Bienvenido.', userId: usuario.id, email: usuario.email || undefined };
   } catch (e) {
     return mensajeDeError(e);
   }

@@ -148,6 +148,39 @@ export interface ResultadoNativo {
   mensaje?: string;
   /** true si la persona canceló: no hay que regañarla por eso. */
   cancelado?: boolean;
+  /**
+   * Identidad de la sesión que se acaba de abrir.
+   *
+   * ---------------------------------------------------------------------
+   * POR QUÉ SE DEVUELVE Y NO SE CONSULTA DESPUÉS
+   * ---------------------------------------------------------------------
+   * La pantalla necesita el id para leer el perfil y terminar de entrar.
+   * Antes lo pedía con `supabase.auth.getUser()` JUSTO DESPUÉS de esta
+   * llamada, y ahí estaba una de las causas del fallo reportado: ese
+   * método sale a internet otra vez, sin límite de espera. Con la red
+   * lenta —o con el teléfono cambiando de wifi a datos, que es lo normal
+   * al sacarlo del bolsillo— la promesa no volvía nunca: la huella se
+   * aceptaba, la sesión quedaba abierta de verdad, y aun así la pantalla
+   * se quedaba clavada en "Verificando…".
+   *
+   * La renovación ya trae el usuario dentro. Devolverlo aquí elimina esa
+   * segunda salida a la red por completo.
+   */
+  userId?: string;
+  email?: string;
+}
+
+/**
+ * ¿Esta sesión sigue siendo utilizable dentro de un minuto?
+ *
+ * El margen de 60 segundos evita el caso tonto de dar por buena una
+ * sesión que caduca mientras se lee el perfil.
+ */
+function sesionVigente(sesion: any): boolean {
+  if (!sesion?.access_token || !sesion?.user?.id) return false;
+  const caduca = Number(sesion.expires_at || 0);
+  if (!caduca) return true;
+  return caduca * 1000 - Date.now() > 60_000;
 }
 
 /**
@@ -211,23 +244,67 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
       description: '',
     });
 
-    // Tope de espera. Sin él, con la red caída o muy lenta la promesa no
-    // vuelve nunca y el botón se queda en "Verificando…" para siempre, sin
-    // forma de reintentar ni de escribir la contraseña. Quince segundos son
-    // de sobra en 4G y cortos como para no desesperar a nadie.
-    const { data, error } = await conTope(
-      supabase.auth.refreshSession({ refresh_token: guardado.password }),
-      15000
-    );
-    if (error) {
-      // El pase dejó de servir: contraseña cambiada o sesión revocada.
+    // -----------------------------------------------------------------
+    // ATAJO: si la sesión de este aparato TODAVÍA sirve, no se renueva.
+    // -----------------------------------------------------------------
+    // Es el caso más frecuente con diferencia —se cierra la aplicación y
+    // se vuelve a abrir al rato— y es el que peor se comportaba: se
+    // gastaba una renovación de red para llegar exactamente a la sesión
+    // que ya estaba en el teléfono. Con la red mala eso se traducía en
+    // una espera larga, o en el mensaje de "entre con su contraseña"
+    // teniendo la sesión viva delante.
+    //
+    // Con el atajo, la huella entra SIN salir a internet: se aprueba el
+    // dedo y se está dentro. Es además lo que hace que funcione sin
+    // cobertura.
+    const { data: yaHabia } = await supabase.auth.getSession();
+    if (sesionVigente(yaHabia?.session)) {
+      const s = yaHabia!.session!;
+      await guardarPaseActual(s.refresh_token, s.user?.email);
+      return { ok: true, mensaje: 'Bienvenido.', userId: s.user?.id, email: s.user?.email || undefined };
+    }
+
+    // -----------------------------------------------------------------
+    // Camino normal: canjear el pase guardado por una sesión nueva.
+    // -----------------------------------------------------------------
+    // El tope de espera evita que la pantalla se quede colgada, pero por
+    // sí solo NO basta, y aquí estaba la segunda causa del fallo: si el
+    // temporizador vence, la petición ya salió y el servidor puede
+    // haberla atendido igual. El pase queda consumido en el servidor
+    // aunque aquí se haya dado por perdido, y el siguiente intento
+    // fracasa con "la sesión guardada caducó" — el síntoma exacto que se
+    // reportó, apareciendo justo después de una huella aceptada.
+    //
+    // Por eso, ante CUALQUIER final malo, se comprueba primero si la
+    // sesión llegó de todas formas antes de declarar el fallo.
+    let sesion: any = null;
+    try {
+      const { data, error } = await conTope(
+        supabase.auth.refreshSession({ refresh_token: guardado.password }),
+        20000
+      );
+      if (!error) sesion = data?.session ?? null;
+    } catch {
+      /* se resuelve abajo mirando la sesión real */
+    }
+
+    if (!sesionVigente(sesion)) {
+      // Segunda oportunidad: supabase-js guarda la sesión en cuanto la
+      // recibe, así que si la renovación llegó al servidor, está aquí
+      // aunque la promesa se haya caído.
+      const { data: rescate } = await supabase.auth.getSession();
+      if (sesionVigente(rescate?.session)) sesion = rescate!.session;
+    }
+
+    if (!sesionVigente(sesion)) {
+      // Ahora sí: el pase no sirve. Contraseña cambiada, sesión revocada
+      // desde otro aparato o cuenta suspendida.
       //
-      // OJO CON LO QUE **NO** SE HACE AQUÍ: antes esto borraba también la
-      // marca de "huella activada", y era el fallo. La persona entraba una
-      // vez, el pase se consumía, el siguiente intento fallaba, y el
-      // teléfono se olvidaba de la huella para siempre. Ahora solo se tira
-      // el pase inservible: la marca se queda, así que el botón sigue ahí
-      // y en cuanto entre con su contraseña se rearma solo.
+      // OJO CON LO QUE **NO** SE HACE AQUÍ: no se borra la marca de
+      // "huella activada". Si se borrara, un fallo puntual dejaría al
+      // teléfono sin biometría para siempre. Se tira solo el pase
+      // inservible; la marca se queda, el botón sigue ahí, y en cuanto
+      // se entre una vez con la contraseña se rearma solo.
       await tirarPaseInservible();
       return {
         ok: false,
@@ -237,11 +314,15 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
 
     // EL PASE ES DE UN SOLO USO. Supabase entrega uno nuevo en cada
     // renovación e invalida el anterior; si no se guardara el nuevo, la
-    // huella funcionaría UNA vez y nunca más. Esta línea es la corrección
-    // central del fallo.
-    await guardarPaseActual(data?.session?.refresh_token, data?.session?.user?.email);
+    // huella funcionaría UNA vez y nunca más.
+    await guardarPaseActual(sesion.refresh_token, sesion.user?.email);
 
-    return { ok: true, mensaje: 'Bienvenido.' };
+    return {
+      ok: true,
+      mensaje: 'Bienvenido.',
+      userId: sesion.user?.id,
+      email: sesion.user?.email || undefined,
+    };
   } catch (e: any) {
     return interpretar(e);
   }
