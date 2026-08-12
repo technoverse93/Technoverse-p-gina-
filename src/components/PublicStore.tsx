@@ -965,7 +965,10 @@ export default function PublicStore({
         consecutivo: issued.consecutivo,
         tipoDoc: fiscalTipoDoc,
         fechaISO: new Date().toISOString(),
-        emisorCedula: issued.emisorCedula,
+        // Se prefiere la versión sin relleno: `emisorCedula` viene con
+        // ceros a la izquierda hasta 12 dígitos para la clave de Hacienda,
+        // y así es como salía impresa en el comprobante.
+        emisorCedula: issued.emisorCedulaMostrar || issued.emisorCedula,
         emisorNombre: 'Technoverse Costa Rica S.A.',
         emisorTelefono: settingsActuales?.companyPhone || undefined,
         emisorDireccion: settingsActuales?.companyAddress || undefined,

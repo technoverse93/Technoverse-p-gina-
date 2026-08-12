@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, InventoryMovement, MarketingRequest } from '../types';
 import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
+import VinculacionComponentes from './admin/VinculacionComponentes';
 import { CATEGORIAS_INSUMO, esInsumo, CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria } from '../utils/categorias';
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
@@ -2084,6 +2085,18 @@ if (!m) return null;
                   <div className="bg-rose-500/10 border border-rose-500/20 text-rose-400 p-3 rounded-xl text-xs flex items-center gap-2 animate-in fade-in duration-200">
                     <AlertTriangle className="w-4 h-4 flex-shrink-0" />
                     <span>{formError}</span>
+                  </div>
+                )}
+
+                {/* VINCULACIÓN N-a-N — solo al EDITAR.
+                    Al crear todavía no existe el id del producto, y sin id no
+                    hay a qué colgar los componentes. Se guarda primero y se
+                    compone después, que además es el orden natural: nadie
+                    sabe de qué se compone un servicio antes de haberlo
+                    creado. */}
+                {editingProductId && (
+                  <div className="pt-4 border-t border-[var(--border-color)]/50">
+                    <VinculacionComponentes productId={editingProductId} productos={products} />
                   </div>
                 )}
 
