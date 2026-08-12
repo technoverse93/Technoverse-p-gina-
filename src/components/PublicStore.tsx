@@ -295,11 +295,22 @@ export default function PublicStore({
     const accesoALaVista = (isLoginModalOpen && !isRegisterMode) || isAccountDropdownOpen;
     if (!accesoALaVista) return;
 
-    yaSeOfrecio.current = true;
     // Pequeña espera para que la pantalla termine de pintarse: si el aviso
     // del sistema se superpone a medio render, en algunos Android se cierra
     // solo.
-    const t = setTimeout(() => { void accederConBiometria(); }, 350);
+    //
+    // FALLO CORREGIDO: la marca `yaSeOfrecio` se ponía AQUÍ, antes de que
+    // el temporizador llegara a disparar. Cualquier cambio en las
+    // dependencias dentro de esos 350 ms —cerrar el desplegable de
+    // "Cuenta" al tocar el formulario, por ejemplo— ejecutaba la limpieza
+    // y cancelaba el temporizador, pero la marca ya estaba puesta: el
+    // aviso de huella no salía nunca, y tampoco volvía a intentarse.
+    // Ahora se marca DENTRO del temporizador, es decir, solo cuando el
+    // aviso se lanza de verdad.
+    const t = setTimeout(() => {
+      yaSeOfrecio.current = true;
+      void accederConBiometria();
+    }, 350);
     return () => clearTimeout(t);
   }, [isLoginModalOpen, isRegisterMode, isAccountDropdownOpen, hayBiometria, biometriaLista, currentUser]);
 
@@ -323,9 +334,26 @@ export default function PublicStore({
         // basta con entrar una vez con la contraseña y se rearma solo.
         return;
       }
-      const { data: sesion } = await supabase.auth.getUser();
-      const userId = sesion?.user?.id;
-      if (!userId) { toast.error('No se pudo confirmar la sesión.'); return; }
+
+      // FALLO CORREGIDO: aquí se llamaba a `supabase.auth.getUser()`, una
+      // SEGUNDA salida a la red sin límite de espera, justo después de
+      // que el teléfono ya hubiera aceptado la huella. Con la red lenta
+      // esa promesa no volvía y el ingreso se quedaba a medias: huella
+      // aprobada, sesión abierta, y la pantalla pidiendo la contraseña.
+      //
+      // La identidad ya viene dentro del resultado. El `getSession()` de
+      // respaldo es solo por si se entrara por un camino que no la
+      // trajera, y lee de memoria: no sale a internet.
+      let userId = r.userId;
+      if (!userId) {
+        const { data: sesion } = await supabase.auth.getSession();
+        userId = sesion?.session?.user?.id;
+      }
+      if (!userId) {
+        toast.error('La huella se verificó, pero no se pudo confirmar la sesión. Intente de nuevo.');
+        return;
+      }
+
       await completarInicioSesion(userId);
       setBiometriaLista(await biometriaYaActivada());
     } finally {
@@ -387,13 +415,28 @@ export default function PublicStore({
    * igual. Duplicarlo garantizaba que un día se arreglara solo una.
    */
   const completarInicioSesion = async (userId: string) => {
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('*')
-      .eq('id', userId)
-      .single();
+    // Se reintenta UNA vez antes de rendirse.
+    //
+    // Justo después de abrir sesión con la huella, la primera lectura
+    // puede salir con el token todavía propagándose y devolver un error
+    // que no significa nada: un instante después funciona. Sin el
+    // reintento, ese tropiezo momentáneo devolvía a la persona al
+    // formulario de contraseña con la sesión ya abierta — uno de los
+    // síntomas reportados. Con una segunda oportunidad, ese caso
+    // desaparece; si fallan las dos, el problema es real y sí hay que
+    // avisar.
+    let profile: any = null;
+    for (let intento = 0; intento < 2 && !profile; intento++) {
+      if (intento > 0) await new Promise(r => setTimeout(r, 400));
+      const { data } = await supabase
+        .from('profiles')
+        .select('*')
+        .eq('id', userId)
+        .maybeSingle();
+      profile = data;
+    }
 
-    if (profileError || !profile) {
+    if (!profile) {
       toast.error('No se pudo cargar el perfil de la cuenta. Contacte al administrador.');
       return;
     }

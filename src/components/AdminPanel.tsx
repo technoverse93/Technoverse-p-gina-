@@ -2,21 +2,30 @@ import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect, useLayoutEffect, useRef, Suspense, lazy } from 'react';
 import { PaginatedTbody } from './PaginationHelper';
 import { CustomSelect } from './CustomSelect';
-import { 
-  LayoutDashboard, Package, Wrench, Users, CreditCard, FileSpreadsheet,
-  Settings, ShieldCheck, Megaphone, Truck, ShieldAlert, LogOut, Sun, Moon,
-  X, Plus, Trash2, Edit, Save, RefreshCw, Key, ArrowRightLeft, Eye, EyeOff, Download, DollarSign, BookOpen, ChevronDown, ChevronRight, ShoppingBag, CheckCircle,
-  Home, Sparkles, UserPlus, TrendingUp, BarChart3, Activity, MoreHorizontal, MessageSquare
+import {
+  CheckCircle, ChevronDown, Download, Edit, Eye, EyeOff, FileSpreadsheet, Key, Megaphone, Plus, RefreshCw, Save, Trash2, UserPlus, Users,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
-import { iniciarSesionVigilada } from '../utils/adminLogin';
 import { cerrarSesionConservandoBiometria } from '../utils/biometria';
 import { CATEGORIAS_TIENDA, normalizarCategoria, esRepuesto } from '../utils/categorias';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
 import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog } from '../types';
 import { useToast, useConfirm } from './ui/Overlays';
+
+// ---------------------------------------------------------------------
+// TECHNOVERSE CONSOLE
+// ---------------------------------------------------------------------
+// El armazón (riel, barra superior, dock móvil, buscador de módulos) y
+// las piezas de interfaz viven fuera de este archivo. Este componente
+// se queda con lo que le corresponde: los datos y las operaciones del
+// negocio. Antes mezclaba las dos cosas en 2.200 líneas, y por eso
+// tocar el menú obligaba a navegar por medio módulo de facturación.
+import AdminShell from './admin/AdminShell';
+import AdminDashboard from './admin/AdminDashboard';
+import { PageHead, Card, Btn, Field, Chip, TableShell, Empty } from './admin/AdminKit';
+import { resolverModulo } from './admin/adminNav';
 
 // Cargados solo cuando se visita su pestaña: reduce el JS que el A12 tiene
 // que parsear/ejecutar en el arranque del panel.
@@ -68,8 +77,6 @@ export default function AdminPanel({
   const isSavingConfigRef = useRef(false);
   const isSavingProductRef = useRef(false);
   const [isMounted, setIsMounted] = useState(false);
-  const [loginEmail, setLoginEmail] = useState('');
-  const [loginPassword, setLoginPassword] = useState('');
   
   // Floating top bar dropdown states
   const [isModulesDropdownOpen, setIsModulesDropdownOpen] = useState(false);
@@ -398,87 +405,24 @@ export default function AdminPanel({
     }
   };
 
-  const handleLogin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanEmail = loginEmail.trim().toLowerCase();
-
-    // Autenticación real contra Supabase Auth (ya no comparación de texto
-    // plano local ni Firebase). El rol se determina desde la tabla profiles,
-    // que es la fuente de verdad, no un email hardcodeado.
-    //
-    // El acceso pasa ahora por el portero de ciberseguridad, que anota el
-    // intento (IP, ubicación, fecha, dispositivo) y rechaza las conexiones
-    // bloqueadas. Si el portero no está disponible, iniciarSesionVigilada
-    // entra por el camino directo de siempre: nunca deja al dueño afuera.
-    const acceso = await iniciarSesionVigilada(cleanEmail, loginPassword);
-
-    if (!acceso.ok) {
-      toast.error(acceso.mensaje || 'Credenciales inválidas. Por favor verifique el correo y contraseña.');
-      if (!acceso.bloqueado) {
-        addAuditLog(cleanEmail || 'anonimo', 'Seguridad', 'Intento Fallido', 'Intento de login con credenciales incorrectas.');
-      }
-      return;
-    }
-
-    // El id lo devuelve el portero; si se entró por el camino de respaldo
-    // viene igual. Como último recurso se relee de la sesión ya montada.
-    let userId = acceso.userId;
-    if (!userId) {
-      const { data: sesion } = await supabase.auth.getUser();
-      userId = sesion?.user?.id;
-    }
-    if (!userId) {
-      await supabase.auth.signOut();
-      toast.error('No se pudo confirmar la sesión. Intente de nuevo.');
-      return;
-    }
-
-    // FALLO CORREGIDO: acá se pedía la columna `employee_role`, que ya no
-    // existe en `profiles` desde que se eliminó el sistema de empleados.
-    // PostgREST no ignora una columna desconocida: devuelve error. Y como el
-    // bloque de abajo trata cualquier `profileError` como "no tiene permiso",
-    // el panel cerraba la sesión y respondía "Esta cuenta no tiene acceso al
-    // panel de administración" — incluso al administrador legítimo. En la
-    // práctica el formulario de acceso del panel estaba inutilizado, y solo se
-    // podía entrar iniciando sesión desde la tienda (que pide `select('*')` y
-    // por eso nunca falló). Se piden únicamente las columnas que existen.
-    const { data: profile, error: profileError } = await supabase
-      .from('profiles')
-      .select('role, name')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (profileError || !profile || profile.role === 'Cliente') {
-      await supabase.auth.signOut();
-      toast.error('Esta cuenta no tiene acceso al panel de administración.');
-      return;
-    }
-
-    // Cualquier cuenta autenticada que no sea Cliente es Administrador con
-    // acceso total: ya no existe el rol intermedio de Empleado.
-    const adminUser: User = { id: 'admin-id', email: cleanEmail, role: 'Dueño', name: profile.name || 'Administrador Technoverse' };
-    onLogin(adminUser);
-    setLoginEmail(''); setLoginPassword('');
-    setLoginToastMessage('Sesión iniciada con éxito como Administrador.');
-    setShowLoginToast(true);
-    setTimeout(() => setShowLoginToast(false), 3000);
-  };
-
-  
-  // ---- "Eliminar" un cliente = ANONIMIZARLO, nunca borrarlo -----------
+  // ---------------------------------------------------------------------
+  // NOTA: el panel NO tiene formulario de acceso propio.
+  // ---------------------------------------------------------------------
+  // Se entra SIEMPRE por el formulario de la tienda, que es el que pasa
+  // por el portero de ciberseguridad y el que ofrece la huella. Si aquí
+  // no hay una sesión válida, el componente devuelve la pantalla de
+  // redirección de más abajo y App vuelve a la tienda con el acceso
+  // abierto.
   //
-  // Borrar la fila de verdad rompería la integridad de todo lo que ya pasó:
-  // los pedidos, los comprobantes fiscales y los movimientos de inventario
-  // apuntan a este cliente. Hacienda además obliga a conservar los
-  // comprobantes emitidos, así que la fila TIENE que seguir existiendo.
-  //
-  // Lo que se hace es lo que manda la Ley 8968: se limpian los datos que
-  // identifican a la persona (nombre, correo, teléfono, dirección,
-  // tarjetas) y se dejan valores genéricos. El historial de compras y los
-  // montos quedan intactos, porque son de la empresa, no del cliente.
-  //
-  // Es exactamente la misma operación que el botón "Derecho al Olvido" de
-  // la ficha: una sola lógica, dos puertas de entrada.
+  // Antes vivía aquí un `handleLogin` completo —con su propio
+  // `iniciarSesionVigilada` y su lectura de perfil— que NINGÚN elemento
+  // de la interfaz podía invocar: no existía el formulario que lo
+  // llamara. Se eliminó porque además arrastraba dos
+  // `supabase.auth.signOut()` de alcance global que, de haberse llegado
+  // a ejecutar dentro de la APK, habrían revocado el pase guardado
+  // detrás de la huella y roto la biometría en un intento de acceso
+  // fallido.
+
   const handleAnonimizarCliente = async (cliente: ClientProfile) => {
     const ok = await confirm({
       title: 'Eliminar cliente',
@@ -565,7 +509,6 @@ export default function AdminPanel({
     // huella, y por eso cerrar sesión mataba la biometría.
     await cerrarSesionConservandoBiometria();
     onLogout();
-    setLoginPassword('');
   };
 
   // Check RBAC permission for modules
@@ -969,661 +912,201 @@ export default function AdminPanel({
 
   const isOwner = currentUser?.role === 'Dueño';
 
-  // Helper to check if a category has any permitted sub-items
-  const getPermittedSubItems = (category: 'inventario' | 'administracion') => {
-    if (category === 'inventario') {
-      const items = [
-        { id: 'inventario_productos', label: 'Productos', icon: Package },
-        { id: 'inventario_repuestos', label: 'Repuestos', icon: Wrench },
-        { id: 'inventario_movimientos', label: 'Movimientos', icon: ArrowRightLeft },
-        { id: 'inventario_reportes', label: 'Reportes de Stock', icon: FileSpreadsheet },
-      ];
-      // Dueño sees everything, as requested to restore visibility in both panels.
-      return items.filter(it => it && isOwner || hasPermission(it.id));
-    } else {
-      const items = [
-        { id: 'facturacion', label: 'Contabilidad y FAC', icon: FileSpreadsheet },
-        { id: 'marketing', label: 'Marketing', icon: Megaphone },
-        // La antigua pestaña "Bitácora de Auditoría" quedó absorbida dentro
-        // del Centro de Ciberseguridad, como una de sus secciones. Es la
-        // misma tabla con el mismo botón de limpiar: no se perdió nada, solo
-        // dejó de estar suelta al lado de un panel que hace lo mismo.
-        { id: 'ciberseguridad', label: 'Ciberseguridad', icon: ShieldAlert },
-        { id: 'configuracion', label: 'Configuración General', icon: Settings },
-      ];
-      return items.filter(it => it && isOwner || hasPermission(it.id));
-    }
+  /**
+   * Cambia de módulo y deja la URL apuntando a él.
+   *
+   * Lo segundo importa: `activeTab` se inicializa leyendo /admin/<tab>,
+   * así que sin actualizar la dirección, recargar la página siempre
+   * devolvía al panel general y un enlace compartido no abría nunca el
+   * módulo que se quería enseñar. Se usa `replaceState` y no `pushState`
+   * para no llenar el historial: quien pulsa "atrás" espera salir del
+   * panel, no recorrer los doce módulos que visitó.
+   */
+  const irAModulo = (tab: string) => {
+    const destino = resolverModulo(tab).id;
+    setActiveTab(destino);
+    setActiveDropdown(null);
+    try { window.history.replaceState(null, '', `/admin/${destino}`); } catch { /* la navegación funciona igual */ }
   };
 
-  const sidebarSections = [
-    {
-      title: "General",
-      items: [
-        { id: 'dashboard', label: 'Dashboard', icon: LayoutDashboard }
-      ]
-    },
-    {
-      title: "Control de Inventario",
-      items: [
-        { id: 'inventario_productos', label: 'Productos', icon: Package },
-        { id: 'inventario_repuestos', label: 'Repuestos', icon: Wrench },
-        { id: 'inventario_movimientos', label: 'Movimientos', icon: ArrowRightLeft },
-        { id: 'inventario_reportes', label: 'Reportes de Stock', icon: FileSpreadsheet },
-      ]
-    },
-    {
-      title: "Operaciones",
-      items: [
-        { id: 'chat', label: 'Chat CRM', icon: MessageSquare },
-        { id: 'taller', label: 'Taller Kanban', icon: Wrench },
-        { id: 'clientes', label: 'Clientes CRM', icon: CreditCard }
-      ]
-    },
-    {
-      title: "Servicios & Finanzas",
-      items: [
-        { id: 'facturacion', label: 'Contabilidad y FAC', icon: FileSpreadsheet },
-        { id: 'marketing', label: 'Marketing', icon: Megaphone },
-        // La antigua pestaña "Bitácora de Auditoría" quedó absorbida dentro
-        // del Centro de Ciberseguridad, como una de sus secciones. Es la
-        // misma tabla con el mismo botón de limpiar: no se perdió nada, solo
-        // dejó de estar suelta al lado de un panel que hace lo mismo.
-        { id: 'ciberseguridad', label: 'Ciberseguridad', icon: ShieldAlert },
-        { id: 'configuracion', label: 'Configuración General', icon: Settings },
-      ]
-    }
-  ];
 
   return (
-    <div className="h-dvh bg-[var(--bg-base)] text-[var(--text-primary)] flex flex-col overflow-hidden w-full" id="admin-panel-root">
+    <AdminShell
+      activeTab={activeTab}
+      onNavigate={irAModulo}
+      currentUser={currentUser}
+      onLogout={handleLogout}
+      onNavigateToStore={onNavigateToStore}
+      theme={theme}
+      toggleTheme={toggleTheme}
+      logoUrl={storeLogoPreview || storeLogo || undefined}
+    >
       {showLoginToast && (
-        <div className="fixed bottom-6 right-6 z-[998] bg-[#1E293B]/95 border border-[var(--brand-gold-mid)]/50 text-white px-5 py-3 rounded-2xl shadow-lg flex items-center gap-3 animate-in fade-in slide-in-from-bottom-5 duration-300">
-          <div className="p-1 bg-[var(--brand-gold-mid)] rounded-lg">
-            <CheckCircle className="w-4 h-4 text-[#1a1408] dark:text-[#14100a]" />
-          </div>
-          <div>
-            <div className="text-[10px] text-[var(--brand-gold-mid)] font-bold uppercase tracking-wider">¡Éxito!</div>
-            <div className="text-sm font-sans text-slate-100">{loginToastMessage}</div>
-          </div>
+        <div className="fixed bottom-6 right-6 z-[998] tv-card px-4 py-3 flex items-center gap-3 shadow-lg">
+          <CheckCircle className="w-4 h-4 text-[var(--accent)] flex-shrink-0" />
+          <span className="text-sm text-[var(--text-primary)]">{loginToastMessage}</span>
         </div>
       )}
-      {/* UNIFIED NAVIGATION HEADER WITH BREADCRUMB GLASS DROP-DOWNS */}
-      <header className="glass-nav h-12 sm:h-14 sticky top-0 z-50 flex items-center justify-between px-3 md:px-4">
-        <div className="flex items-center gap-3 sm:gap-4 overflow-hidden flex-1 min-w-0">
-          <button onClick={() => onNavigateToStore? onNavigateToStore() : window.location.reload()} className="hidden lg:flex flex-shrink-0 items-center gap-1.5 px-2 py-1 rounded-lg bg-[var(--brand-gold-mid)]/10 text-sky-600 dark:text-[var(--brand-gold-light)] font-bold text-[10px] hover:bg-[var(--brand-gold-mid)]/20 transition"><svg xmlns="http://www.w3.org/2000/svg" className="h-3.5 w-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}><path strokeLinecap="round" strokeLinejoin="round" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" /><path strokeLinecap="round" strokeLinejoin="round" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" /></svg> Ver tienda</button>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            <img src={storeLogoPreview || storeLogo || "/logo.png"} alt="Technoverse Logo" className="h-8 w-8 rounded-lg border border-[var(--border-color)] object-contain bg-[var(--bg-surface)] p-0.5" />
-            <span className="font-display font-bold text-lg tracking-tight text-[var(--brand-gold-mid)] hidden sm:block">
-              Technoverse
-            </span>
-          </div>
 
-          {/* Navigation Items (Center-Left) — SOLO escritorio (lg+). En móvil y
-              tablet la navegación vive únicamente en la bottom nav, para que
-              nunca se vean los mismos enlaces arriba y abajo a la vez. */}
-          <nav className="hidden lg:flex items-center gap-1 sm:gap-1.5 flex-1 min-w-0">
-            {/* Dashboard */}
-            {(isOwner || hasPermission('dashboard')) && (
-              <button
-                onClick={() => {
-                  setActiveTab('dashboard');
-                  setActiveDropdown(null);
-                }}
-                className={`px-4 py-3 text-sm font-bold uppercase tracking-wider rounded-xl transition cursor-pointer flex items-center gap-1 flex-shrink-0 ${
-                  activeTab === 'dashboard' 
-                    ? 'text-[var(--brand-gold-mid)] bg-[var(--bg-surface)] border border-[var(--brand-gold-mid)]/20' 
-                    : 'text-[var(--text-primary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]'
-                }`}
-              >
-                <LayoutDashboard className="w-4 h-4 flex-shrink-0" />
-                <span className="hidden md:inline whitespace-nowrap">Dashboard</span>
-              </button>
-            )}
-          </nav>
-        </div>
-
-        {/* Right side Profile Dropdown */}
-        <div className="flex items-center gap-4">
-          <button
-            onClick={toggleTheme}
-            className="p-3 md:p-2.5 rounded-xl border bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--brand-gold-mid)] hover:text-[var(--brand-gold-mid)] transition-all duration-200 flex items-center justify-center cursor-pointer dark:border-[#8f7a5a] dark:text-[#c9b57e]"
-            title="Cambiar Tema"
-          >
-            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-          </button>
-          
-          <button
-            onClick={onNavigateToStore}
-            className="flex lg:hidden items-center gap-1.5 px-3 py-1.5 rounded-full bg-[var(--brand-gold-mid)]/10 text-sky-400 dark:text-[var(--brand-gold-light)] hover:bg-[var(--brand-gold-mid)]/20 transition text-[10px] font-bold uppercase tracking-wider border border-sky-500 dark:border-[var(--brand-gold-mid)]/20"
-            title="Volver a la tienda"
-          >
-            <Home className="w-3 h-3" />
-            Ver tienda
-          </button>
-          <button
-            onClick={handleLogout}
-            className="hidden lg:flex items-center gap-2 px-4 py-2 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-500 hover:bg-rose-500/20 hover:text-rose-400 transition cursor-pointer font-bold text-sm"
-          >
-            <LogOut className="w-4 h-4" />
-            <span>Cerrar sesión</span>
-          </button>
-        </div>
-      </header>
-
-      {/* WORKSPACE CONTENT AREA */}
-      <div className="flex-1 flex flex-row overflow-hidden w-full relative">
-        {/* Sidebar on Desktop / Drawer on Mobile */}
-        <aside className={`hidden lg:flex flex-col glass-panel !rounded-none !border-y-0 !border-l-0 transition-all duration-300 overflow-hidden flex-shrink-0 ${isSidebarCollapsed ? 'w-16' : 'w-64'}`}>
-          <div className="flex-1 overflow-y-auto py-4 space-y-4 px-3 select-none">
-            {/* Sidebar toggle button inside the sidebar top */}
-            <div className={`flex items-center ${isSidebarCollapsed ? 'justify-center' : 'justify-between px-2'} mb-2`}>
-              {!isSidebarCollapsed && <span className="text-[10px] font-black tracking-wider text-[var(--text-muted)] uppercase">Navegación</span>}
-              <button 
-                onClick={() => setIsSidebarCollapsed(!isSidebarCollapsed)}
-                className="p-1.5 rounded-lg text-[var(--text-muted)] hover:text-white hover:bg-slate-800 transition"
-                title={isSidebarCollapsed ? "Expandir" : "Contraer"}
-              >
-                {isSidebarCollapsed ? <ChevronRight className="w-4 h-4" /> : <ChevronDown className="w-4 h-4 rotate-90" />}
-              </button>
-            </div>
-
-            {/* Sidebar Sections */}
-            {sidebarSections.map((sec, secIdx) => {
-              // Filter permitted items
-              const permittedItems = sec.items.filter(item => isOwner || hasPermission(item.id));
-              if (permittedItems.length === 0) return null;
-
-              return (
-                <div key={secIdx} className="space-y-1">
-                  {!isSidebarCollapsed && (
-                    <div className="text-[9px] uppercase font-bold text-[var(--text-muted)] px-3 py-1.5 tracking-widest border-b border-[var(--border-color)]/30 mb-1">
-                      {sec.title}
-                    </div>
-                  )}
-                  {permittedItems.map(item => {
-                    const Icon = item.icon;
-                    const isActive = activeTab === item.id;
-                    return (
-                      <button
-                        key={item.id}
-                        onClick={() => {
-                          setActiveTab(item.id);
-                          setActiveDropdown(null);
-                        }}
-                        className={`w-full flex items-center gap-3.5 px-3 py-2 rounded-xl text-left transition cursor-pointer ${
-                          isActive 
-                            ? 'text-[var(--brand-gold-mid)] bg-[var(--bg-surface)] border border-[var(--brand-gold-mid)]/20 font-bold' 
-                            : 'text-[var(--text-primary)] hover:bg-[var(--bg-surface)] hover:bg-slate-800'
-                        }`}
-                        title={isSidebarCollapsed ? item.label : undefined}
-                      >
-                        <Icon className={`w-4 h-4 flex-shrink-0 ${isActive ? 'text-[var(--brand-gold-mid)]' : 'text-[var(--text-muted)]'}`} />
-                        {!isSidebarCollapsed && <span className="text-xs font-semibold whitespace-nowrap overflow-hidden text-ellipsis">{item.label}</span>}
-                      </button>
-                    );
-                  })}
-                </div>
-              );
-            })}
-          </div>
-        </aside>
-
-
-        {/* WORKSPACE CONTENT AREA */}
-        <main className="flex-1 overflow-y-auto p-4 md:p-8 pb-24 lg:pb-8 space-y-6 w-full bg-[var(--bg-base)]" style={{ willChange: 'scroll-position' }}>
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={activeTab}
-              initial={{ opacity: 0, y: 5 }}
-              animate={{ opacity: 1, y: 0 }}
-              exit={{ opacity: 0, y: -5 }}
-              transition={{ duration: 0.15, ease: "easeOut" }}
-            >
-              {activeTab === 'dashboard' && (
-          /* MODULE A: DASHBOARD PRINCIPAL */
-          <div className="space-y-8" id="view-dashboard">
-            <AnimatePresence mode="wait">
-              {!isMounted ? (
-                <motion.div 
-                  key="skeleton"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  exit={{ opacity: 0 }}
-                  transition={{ duration: 0.2 }}
-                  className="space-y-8"
-                >
-                  <div className="flex items-center gap-3 mb-2">
-                    <div className="w-8 h-8 bg-slate-200 rounded-lg animate-pulse" />
-                    <div className="h-7 bg-slate-200 rounded-lg w-64 animate-pulse" />
-                  </div>
-                  
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                    {[...Array(6)].map((_, i) => (
-                      <div key={i} className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-5 h-[104px] space-y-3">
-                        <div className="h-3 bg-[var(--border-color)] rounded w-16 animate-pulse" />
-                        <div className="h-6 bg-[var(--border-color)] rounded w-24 animate-pulse" />
-                        <div className="h-3 bg-[var(--border-color)] rounded w-20 animate-pulse" />
-                      </div>
-                    ))}
-                  </div>
-
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 h-[380px] space-y-4">
-                      <div className="h-4 bg-[var(--border-color)] rounded w-48 animate-pulse" />
-                      <div className="flex-1 w-full bg-[var(--border-color)] rounded-xl animate-pulse" style={{ height: '280px' }} />
-                    </div>
-                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 h-[380px] space-y-4">
-                      <div className="h-4 bg-[var(--border-color)] rounded w-48 animate-pulse" />
-                      <div className="flex-1 w-full bg-[var(--border-color)] rounded-xl animate-pulse" style={{ height: '280px' }} />
-                    </div>
-                  </div>
-
-                  <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 h-[260px] space-y-4">
-                    <div className="h-4 bg-[var(--border-color)] rounded w-64 animate-pulse" />
-                    <div className="flex-1 w-full bg-[var(--border-color)] rounded-xl animate-pulse" style={{ height: '180px' }} />
-                  </div>
-                </motion.div>
-              ) : (
-                <motion.div 
-                  key="content"
-                  initial={{ opacity: 0 }}
-                  animate={{ opacity: 1 }}
-                  transition={{ duration: 0.4, delay: 0.1 }}
-                  className="space-y-8"
-                >
-                  <div className="flex items-center justify-between">
-                    <h3 className="text-xl font-black text-[var(--text-secondary)] flex items-center gap-3 tracking-tight">
-                      <div className="p-2 bg-blue-600 dark:bg-[var(--brand-gold-mid)] rounded-xl shadow-sm">
-                        <LayoutDashboard className="w-5 h-5 text-white dark:text-slate-950" />
-                      </div>
-                      Centro de Operaciones Technoverse
-                    </h3>
-                    <div className="hidden sm:flex items-center gap-2 text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest bg-[var(--bg-surface)] px-3 py-1.5 rounded-full border border-[var(--border-color)]">
-                      <Activity className="w-3 h-3 text-emerald-500 animate-pulse dark:text-[var(--brand-gold-light)]" /> Sistema en Línea • San José, CR
-                    </div>
-                  </div>
-
-                  {/* KPI Cards */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-6 gap-4">
-                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-5 space-y-3 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-wider">Ingresos Brutos</span>
-                        <TrendingUp className="w-3.5 h-3.5 text-emerald-500 dark:text-[var(--brand-gold-light)]" />
-                      </div>
-                      <div className="text-xl font-black text-[var(--text-secondary)] font-mono">₡{totalSalesRevenue.toLocaleString()}</div>
-                      <div className="text-[9px] font-bold text-emerald-600 bg-emerald-50 px-2 py-0.5 rounded-full inline-block dark:text-[var(--brand-gold-light)] dark:bg-[var(--brand-gold-mid)]">Cierre de Caja OK</div>
-                    </div>
-
-                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-5 space-y-3 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-wider">Clientes Activos</span>
-                        <Users className="w-3.5 h-3.5 text-blue-500 dark:text-[var(--brand-gold-light)]" />
-                      </div>
-                      <div className="text-xl font-black text-[var(--text-secondary)] font-mono">{clientsCount}</div>
-                      <div className="text-[10px] font-bold text-[var(--text-muted)] italic">Base de Datos CRM</div>
-                    </div>
-
-                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-5 space-y-3 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-wider">En Taller</span>
-                        <Wrench className="w-3.5 h-3.5 text-sky-500 dark:text-[var(--brand-gold-light)]" />
-                      </div>
-                      <div className="text-xl font-black text-sky-600 dark:text-[var(--brand-gold-light)] font-mono">{activeRepairsCount}</div>
-                      <div className="text-[10px] font-bold text-[var(--text-muted)]">Reparaciones en Curso</div>
-                    </div>
-
-                    <div className={`bg-[var(--bg-surface)] border rounded-2xl p-5 space-y-3 shadow-sm transition-all duration-300 ${
-                      repairsAwaitingParts > 0 ? 'border-rose-500' : 'border-[var(--border-color)] hover:shadow-md'
-                    }`}>
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] font-black uppercase tracking-wider text-[var(--text-muted)]">Backlog Repuestos</span>
-                        <ShieldAlert className={`w-3.5 h-3.5 ${repairsAwaitingParts > 0 ? 'text-rose-500' : 'text-[var(--text-muted)]'}`} />
-                      </div>
-                      <div className={`text-xl font-black font-mono ${repairsAwaitingParts > 0 ? 'text-rose-600' : 'text-[var(--text-secondary)]'}`}>
-                        {repairsAwaitingParts}
-                      </div>
-                      <div className={`text-[10px] font-black uppercase ${repairsAwaitingParts > 0 ? 'text-rose-500 animate-pulse' : 'text-[var(--text-muted)]'}`}>
-                        {repairsAwaitingParts > 0 ? '⚠️ Acción Requerida' : 'Flujo Optimizado'}
-                      </div>
-                    </div>
-
-                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-5 space-y-3 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-wider">Capacidad Bodega</span>
-                        <Package className="w-3.5 h-3.5 text-amber-500" />
-                      </div>
-                      <div className="text-xl font-black text-emerald-600 font-mono dark:text-[var(--brand-gold-light)]">{estimatedFreeSpace}%</div>
-                      <div className="text-[10px] font-bold text-[var(--text-muted)] uppercase tracking-tighter">Espacio Disponible</div>
-                    </div>
-
-                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-5 space-y-3 shadow-sm hover:shadow-md transition-shadow">
-                      <div className="flex items-center justify-between">
-                        <span className="text-[10px] text-[var(--text-muted)] font-black uppercase tracking-wider">Stock Crítico</span>
-                        <ShieldAlert className="w-3.5 h-3.5 text-amber-500" />
-                      </div>
-                      <div className="text-xl font-black text-amber-600 font-mono">{lowStockProductsCount}</div>
-                      <div className="text-[10px] font-bold text-[var(--text-muted)] italic">Items por reponer</div>
-                    </div>
-                  </div>
-
-                  {/* CHARTS */}
-                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 shadow-sm flex flex-col h-[380px]">
-                      <div className="flex items-center justify-between mb-6">
-                        <span className="text-xs font-black text-[var(--text-muted)] uppercase tracking-widest">Rendimiento de Ventas Diarias</span>
-                        <BarChart3 className="w-4 h-4 text-blue-500 dark:text-[var(--brand-gold-light)]" />
-                      </div>
-                      <div className="flex-1 w-full min-h-[260px]">
-                        {orders.filter(o => o && o.status === 'Completado').length === 0 ? (
-                          <div className="flex flex-col items-center justify-center h-full text-[var(--text-muted)]">
-                            <TrendingUp className="w-12 h-12 mb-2 opacity-10" />
-                            <p className="text-xs font-bold uppercase tracking-widest">Aún no hay ventas registradas</p>
-                          </div>
-                        ) : (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <AreaChart data={dailySalesData}>
-                              <defs>
-                                <linearGradient id="colorVentas" x1="0" y1="0" x2="0" y2="1">
-                                  <stop offset="5%" stopColor="#3b82f6" stopOpacity={0.15}/>
-                                  <stop offset="95%" stopColor="#3b82f6" stopOpacity={0}/>
-                                </linearGradient>
-                              </defs>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                              <XAxis 
-                                dataKey="name" 
-                                stroke="#94a3b8" 
-                                fontSize={11} 
-                                fontWeight={600}
-                                tickLine={false} 
-                                axisLine={false}
-                                dy={10}
-                              />
-                              <YAxis 
-                                stroke="#94a3b8" 
-                                fontSize={11} 
-                                fontWeight={600}
-                                tickLine={false} 
-                                axisLine={false}
-                                tickFormatter={(val) => `₡${val/1000}k`}
-                              />
-                              <Tooltip 
-                                contentStyle={{ 
-                                  backgroundColor: '#fff', 
-                                  border: '1px solid #e2e8f0', 
-                                  borderRadius: '12px',
-                                  boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                                  color: '#1e293b', 
-                                  fontSize: '12px',
-                                  fontWeight: 'bold'
-                                }} 
-                              />
-                              <Area 
-                                type="monotone" 
-                                dataKey="ventas" 
-                                stroke="#3b82f6" 
-                                strokeWidth={3}
-                                fillOpacity={1} 
-                                fill="url(#colorVentas)" 
-                                animationDuration={1500}
-                              />
-                            </AreaChart>
-                          </ResponsiveContainer>
-                        )}
-                      </div>
-                    </div>
-
-                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 shadow-sm flex flex-col h-[380px]">
-                      <div className="flex items-center justify-between mb-6">
-                        <span className="text-xs font-black text-[var(--text-muted)] uppercase tracking-widest">Distribución de Inventario</span>
-                        <Package className="w-4 h-4 text-emerald-500 dark:text-[var(--brand-gold-light)]" />
-                      </div>
-                      <div className="flex-1 w-full min-h-[260px]">
-                        {inventoryDistData.length === 0 ? (
-                          <div className="flex flex-col items-center justify-center h-full text-[var(--text-muted)]">
-                            <Package className="w-12 h-12 mb-2 opacity-10" />
-                            <p className="text-xs font-bold uppercase tracking-widest">Sin stock en categorías principales</p>
-                          </div>
-                        ) : (
-                          <ResponsiveContainer width="100%" height="100%">
-                            <BarChart data={inventoryDistData}>
-                              <CartesianGrid strokeDasharray="3 3" stroke="#f1f5f9" vertical={false} />
-                              <XAxis 
-                                dataKey="name" 
-                                stroke="#94a3b8" 
-                                fontSize={11} 
-                                fontWeight={600}
-                                tickLine={false} 
-                                axisLine={false}
-                                dy={10}
-                              />
-                              <YAxis 
-                                stroke="#94a3b8" 
-                                fontSize={11} 
-                                fontWeight={600}
-                                tickLine={false} 
-                                axisLine={false}
-                              />
-                              <Tooltip 
-                                cursor={{fill: '#f8fafc'}} 
-                                contentStyle={{ 
-                                  backgroundColor: '#fff', 
-                                  border: '1px solid #e2e8f0', 
-                                  borderRadius: '12px',
-                                  boxShadow: '0 10px 15px -3px rgb(0 0 0 / 0.1)',
-                                  fontSize: '12px',
-                                  fontWeight: 'bold'
-                                }} 
-                              />
-                              <Bar 
-                                dataKey="stock" 
-                                fill="#10b981" 
-                                radius={[6, 6, 0, 0]} 
-                                animationDuration={1500}
-                              />
-                            </BarChart>
-                          </ResponsiveContainer>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-
-                  {/* SVG Visual Sales Graphic */}
-                  <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-2xl p-6 shadow-sm flex flex-col h-[260px]">
-                    <div className="flex items-center justify-between mb-6">
-                      <span className="text-xs font-black text-[var(--text-muted)] uppercase tracking-widest">Actividad Reciente de Transacciones</span>
-                      <CreditCard className="w-4 h-4 text-amber-500" />
-                    </div>
-                    <div className="flex-1 h-full bg-[var(--bg-base)] rounded-2xl border border-[var(--border-color)] p-6 flex items-end justify-between gap-3 relative" style={{ contain: 'layout style' }}>
-                      <div className="absolute top-0 left-0 w-full h-1 bg-blue-500 dark:bg-[var(--brand-gold-mid)] opacity-20" />
-                      {orders.length === 0 ? (
-                        <div className="absolute inset-0 flex flex-col items-center justify-center text-xs text-[var(--text-muted)] font-bold uppercase tracking-widest gap-2">
-                          <ShoppingBag className="w-8 h-8 opacity-20" />
-                          Esperando Primera Venta
-                        </div>
-                      ) : (
-                        orders.slice(-15).map((ord, idx) => (
-                          <div
-                            key={ord.id}
-                            className="flex-1 flex flex-col items-center gap-2 h-full justify-end group cursor-pointer"
-                          >
-                            <div className="relative w-full h-full flex flex-col justify-end">
-                              <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 opacity-0 group-hover:opacity-100 transition-all pointer-events-none z-10">
-                                <div className="bg-slate-800 text-white text-[10px] font-bold px-2 py-1 rounded whitespace-nowrap">
-                                  ₡{ord.total.toLocaleString()}
-                                </div>
-                                <div className="w-2 h-2 bg-slate-800 rotate-45 mx-auto -mt-1" />
-                              </div>
-                              <motion.div
-                                initial={{ scaleY: 0 }}
-                                animate={{ scaleY: Math.min(1, Math.max(0.15, ord.total / (totalSalesRevenue || 500000))) }}
-                                transition={{ type: 'tween', duration: 0.3 }}
-                                style={{ transformOrigin: 'bottom' }}
-                                className="w-full h-full bg-blue-600 rounded-t-lg group-hover:bg-blue-700 dark:bg-[var(--brand-gold-mid)] dark:group-hover:bg-[var(--brand-gold-dark)] transition-colors"
-                              />
-                            </div>
-                            <span className="text-[9px] font-black text-[var(--text-muted)] font-mono hidden sm:block">#{ord.id.split('-').pop()}</span>
-                          </div>
-                        ))
-                      )}
-                    </div>
-                  </div>
-                </motion.div>
-              )}
-            </AnimatePresence>
-          </div>
-        )}
+      <AnimatePresence mode="wait">
+        <motion.div
+          key={activeTab}
+          initial={{ opacity: 0, y: 4 }}
+          animate={{ opacity: 1, y: 0 }}
+          exit={{ opacity: 0, y: -4 }}
+          transition={{ duration: 0.14, ease: 'easeOut' }}
+        >
+          {activeTab === 'dashboard' && (
+            <AdminDashboard
+              products={products}
+              orders={orders}
+              repairs={repairs}
+              clients={clients}
+              isMounted={isMounted}
+              theme={theme}
+              onNavigate={irAModulo}
+            />
+          )}
         {(activeTab === 'productos' || activeTab.startsWith('inventario_')) && (
-          /* MODULE B: PRODUCTOS (INVENTARIO CRUD) */
-          <div className="space-y-6" id="view-productos">
-            <Suspense fallback={<TabLoadingFallback />}>
-              <InventarioControl
-                currentUser={currentUser}
-                onDataChanged={loadAllAdminData}
-                defaultSubTab={activeTab.startsWith('inventario_') ? (activeTab.replace('inventario_', '') as any) : 'productos'}
-                onTabChange={(tab) => setActiveTab(`inventario_${tab}`)}
-              />
-            </Suspense>
-          </div>
+          <Suspense fallback={<TabLoadingFallback />}>
+            <InventarioControl
+              currentUser={currentUser}
+              onDataChanged={loadAllAdminData}
+              defaultSubTab={activeTab.startsWith('inventario_') ? (activeTab.replace('inventario_', '') as any) : 'productos'}
+              onTabChange={(tab) => irAModulo(`inventario_${tab}`)}
+            />
+          </Suspense>
         )}
+
         {activeTab === 'taller' && (
-          (isOwner || hasPermission('taller')) ? (
-            /* MODULE C: TALLER (KANBAN COMPONENT EMBEDDED) */
-            <div className="space-y-4" id="view-taller">
-              <Suspense fallback={<TabLoadingFallback />}>
-                <TallerKanban activeUserEmail={currentUser?.email} onRepairUpdated={loadAllAdminData} />
-              </Suspense>
-            </div>
-          ) : (
-             <div className="p-8 text-center text-rose-500 font-bold">Acceso denegado. Permisos insuficientes.</div>
-          )
+          <Suspense fallback={<TabLoadingFallback />}>
+            <TallerKanban activeUserEmail={currentUser?.email} onRepairUpdated={loadAllAdminData} />
+          </Suspense>
         )}
+
         {activeTab === 'chat' && (
-          (isOwner || hasPermission('chat')) ? (
-            /* MODULE: CHAT CRM (SOPORTE EN TIEMPO REAL) */
-            <div className="space-y-4" id="view-chat">
-              <Suspense fallback={<TabLoadingFallback />}>
-                <ChatCRM currentUser={currentUser} onDataChanged={loadAllAdminData} />
-              </Suspense>
-            </div>
-          ) : (
-             <div className="p-8 text-center text-rose-500 font-bold">Acceso denegado. Permisos insuficientes.</div>
-          )
+          <Suspense fallback={<TabLoadingFallback />}>
+            <ChatCRM currentUser={currentUser} onDataChanged={loadAllAdminData} />
+          </Suspense>
         )}
+
+        {/* ------------------------------------------------------------------
+            CLIENTES
+            ------------------------------------------------------------------ */}
         {activeTab === 'clientes' && (
-          /* MODULE E: CLIENTES (CRM) */
-          <div className="space-y-6" id="view-clientes">
-            <div className="flex justify-between items-center border-b border-[var(--border-color)]/50 pb-3">
-              <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                <CreditCard className="w-5 h-5 text-sky-500 dark:text-[var(--brand-gold-light)]" /> Clientes CRM Technoverse
-              </h3>
-              <button 
-                onClick={() => openClientModal()}
-                className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-[var(--text-primary)] px-4 py-2 rounded-xl text-sm font-bold transition flex items-center gap-2"
-              >
-                <Plus className="w-4 h-4" /> Registrar Cliente
-              </button>
-            </div>
+          <div className="tv-stack" id="view-clientes">
+            <PageHead
+              title="Clientes"
+              subtitle={resolverModulo('clientes').descripcion}
+              actions={
+                <Btn variant="primary" icon={Plus} onClick={() => openClientModal()}>
+                  Registrar cliente
+                </Btn>
+              }
+            />
 
             {isClientModalOpen && (
-              <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-6 mb-6">
-                <h4 className="text-sm font-bold text-[var(--text-primary)] mb-4 uppercase tracking-wider">{editingClient ? 'Editar Cliente' : 'Nuevo Cliente'}</h4>
-                <form onSubmit={handleSaveClient} className="space-y-4">
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Nombre Completo</label>
-                      <input required type="text" value={clientForm.name} onChange={e => setClientForm({...clientForm, name: e.target.value})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)]" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Correo Electrónico</label>
-                      <input required type="email" value={clientForm.email} onChange={e => setClientForm({...clientForm, email: e.target.value})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)]" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Teléfono</label>
-                      <input required type="tel" value={clientForm.phone} onChange={e => setClientForm({...clientForm, phone: e.target.value})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)]" />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Provincia</label>
+              <Card title={editingClient ? 'Editar cliente' : 'Nuevo cliente'}>
+                <form onSubmit={handleSaveClient} className="tv-stack">
+                  <div className="tv-grid tv-grid-2">
+                    <Field label="Nombre completo">
+                      <input required type="text" className="tv-input" value={clientForm.name}
+                        onChange={e => setClientForm({ ...clientForm, name: e.target.value })} />
+                    </Field>
+                    <Field label="Correo electrónico">
+                      <input required type="email" className="tv-input" value={clientForm.email}
+                        onChange={e => setClientForm({ ...clientForm, email: e.target.value })} />
+                    </Field>
+                    <Field label="Teléfono">
+                      <input required type="tel" className="tv-input" value={clientForm.phone}
+                        onChange={e => setClientForm({ ...clientForm, phone: e.target.value })} />
+                    </Field>
+                    <Field label="Provincia">
                       <CustomSelect
                         value={clientForm.province || ''}
-                        onChange={(val) => setClientForm({...clientForm, province: val as any})}
+                        onChange={(val) => setClientForm({ ...clientForm, province: val as any })}
                         options={['San José', 'Alajuela', 'Cartago', 'Heredia', 'Guanacaste', 'Puntarenas', 'Limón'].map(p => ({ value: p, label: p }))}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Dirección Exacta</label>
-                      <input required type="text" value={clientForm.addressDetail} onChange={e => setClientForm({...clientForm, addressDetail: e.target.value})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)]" />
-                    </div>
-                    <div className="md:col-span-2">
-                      <label className="block text-[10px] text-[var(--text-secondary)] uppercase font-mono mb-1">Notas Internas</label>
-                      <textarea value={clientForm.notes} onChange={e => setClientForm({...clientForm, notes: e.target.value})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-4 py-3 text-sm text-[var(--text-primary)]" rows={2} />
-                    </div>
+                    </Field>
+                    <Field label="Dirección exacta">
+                      <input required type="text" className="tv-input" value={clientForm.addressDetail}
+                        onChange={e => setClientForm({ ...clientForm, addressDetail: e.target.value })} />
+                    </Field>
+                    <Field label="Notas internas">
+                      <textarea rows={2} className="tv-input" value={clientForm.notes}
+                        onChange={e => setClientForm({ ...clientForm, notes: e.target.value })} />
+                    </Field>
                   </div>
-                  <div className="flex justify-end gap-3 pt-4">
-                    <button type="button" onClick={() => setIsClientModalOpen(false)} className="px-4 py-2 text-sm font-bold text-[var(--text-secondary)] hover:text-rose-500">Cancelar</button>
-                    <button type="submit" className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-[var(--text-primary)] px-4 py-2 rounded-xl text-sm font-bold transition">Guardar Cliente</button>
+                  <div className="flex justify-end gap-2">
+                    <Btn type="button" variant="ghost" onClick={() => setIsClientModalOpen(false)}>Cancelar</Btn>
+                    <Btn type="submit" variant="primary" icon={Save}>Guardar cliente</Btn>
                   </div>
                 </form>
-              </div>
+              </Card>
             )}
 
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-surface)] text-[var(--text-secondary)]">
-                      <th className="p-4">Cliente</th>
-                      <th className="p-4">Correo / Teléfono</th>
-                      <th className="p-4">Provincia</th>
-                      <th className="p-4 text-center">Tarjetas Tokenizadas</th>
-                      <th className="p-4 text-center">Acciones</th>
+            <Card title={`${clients.length} ${clients.length === 1 ? 'cliente' : 'clientes'}`} padded={false}>
+              {clients.length === 0 ? (
+                <Empty
+                  icon={Users}
+                  title="Todavía no hay clientes"
+                  text="Se registran solos cuando alguien crea su cuenta en la tienda, o se pueden agregar a mano desde el botón de arriba."
+                />
+              ) : (
+                <TableShell
+                  head={<>
+                    <th>Cliente</th>
+                    <th>Contacto</th>
+                    <th>Provincia</th>
+                    <th style={{ textAlign: 'center' }}>Tarjetas</th>
+                    <th style={{ textAlign: 'right' }}>Acciones</th>
+                  </>}
+                >
+                  <PaginatedTbody items={clients} itemsPerPage={10} renderItem={(c) => (
+                    <tr key={c.id}>
+                      <td className="font-semibold">{c.name}</td>
+                      <td className="text-[12px] text-[var(--text-secondary)]">
+                        <div className="font-mono">{c.email}</div>
+                        <div className="font-mono">{c.phone}</div>
+                      </td>
+                      <td>{c.province}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        {c.cardsTokenized.length > 0
+                          ? <Chip tone="ok">•••• {c.cardsTokenized[0].last4}</Chip>
+                          : <span className="text-[12px] text-[var(--text-muted)]">Ninguna</span>}
+                      </td>
+                      <td>
+                        <div className="flex items-center justify-end gap-1.5">
+                          <Btn variant="ghost" onClick={() => setClienteFicha(c)}>Ver ficha</Btn>
+                          <button type="button" className="tv-icon-btn" onClick={() => openClientModal(c)} title="Editar cliente" aria-label="Editar cliente">
+                            <Edit className="w-4 h-4" />
+                          </button>
+                          <button
+                            type="button"
+                            className="tv-icon-btn"
+                            onClick={() => handleForcePasswordReset(c.email, c.name)}
+                            disabled={resettingClientEmail === c.email}
+                            title="Forzar cambio de contraseña"
+                            aria-label="Forzar cambio de contraseña"
+                          >
+                            {resettingClientEmail === c.email ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
+                          </button>
+                          <button
+                            type="button"
+                            className="tv-icon-btn hover:!text-[#E5484D]"
+                            onClick={() => handleAnonimizarCliente(c)}
+                            title="Eliminar cliente (anonimiza sus datos y conserva el historial)"
+                            aria-label="Eliminar cliente"
+                          >
+                            <Trash2 className="w-4 h-4" />
+                          </button>
+                        </div>
+                      </td>
                     </tr>
-                  </thead>
-                  <PaginatedTbody items={clients} itemsPerPage={10} renderItem={(c) => ( 
-                        <tr key={c.id} className="hover:bg-[var(--bg-surface)] ">
-                          <td className="p-4 font-bold text-[var(--text-primary)]">{c.name}</td>
-                          <td className="p-4 font-mono text-[11px] text-[var(--text-secondary)]">
-                            <div>{c.email}</div>
-                            <div>{c.phone}</div>
-                          </td>
-                          <td className="p-4 font-sans text-[var(--text-primary)]">{c.province}</td>
-                          <td className="p-4 text-center">
-                            {c.cardsTokenized.length > 0 ? (
-                              <span className="font-mono text-[10px] text-emerald-400 dark:text-[var(--brand-gold-light)]">
-                                Token: Visa (•••• {c.cardsTokenized[0].last4})
-                              </span>
-                            ) : (
-                              <span className="text-[10px] text-[var(--text-secondary)] italic">Ninguna</span>
-                            )}
-                          </td>
-                          <td className="p-4 text-center">
-                            <div className="flex items-center justify-center gap-1">
-                              <button onClick={() => setClienteFicha(c)} className="px-2 py-1 hover:bg-[var(--bg-base)] rounded-lg text-[var(--brand-gold-mid)] border border-[var(--brand-gold-mid)]/40 text-[10px] font-bold uppercase transition" title="Ficha completa del cliente">
-                                Ver ficha
-                              </button>
-                              <button onClick={() => openClientModal(c)} className="p-1.5 hover:bg-[var(--bg-surface)] rounded-lg text-sky-400 dark:text-[var(--brand-gold-light)] transition" title="Editar Cliente">
-                                <Edit className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleAnonimizarCliente(c)}
-                                className="p-1.5 hover:bg-rose-500/10 rounded-lg text-rose-400 transition"
-                                title="Eliminar cliente (anonimiza sus datos y conserva el historial)"
-                              >
-                                <Trash2 className="w-4 h-4" />
-                              </button>
-                              <button
-                                onClick={() => handleForcePasswordReset(c.email, c.name)}
-                                disabled={resettingClientEmail === c.email}
-                                className="p-1.5 hover:bg-[var(--bg-surface)] rounded-lg text-amber-500 transition disabled:opacity-40 disabled:cursor-wait"
-                                title="Forzar reseteo de contraseña"
-                              >
-                                {resettingClientEmail === c.email ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Key className="w-4 h-4" />}
-                              </button>
-                            </div>
-                          </td>
-                         </tr> )} />
-                </table>
-              </div>
-            </div>
+                  )} />
+                </TableShell>
+              )}
+            </Card>
 
             {clienteFicha && (
               <Suspense fallback={null}>
@@ -1637,187 +1120,189 @@ export default function AdminPanel({
               </Suspense>
             )}
           </div>
-
         )}
+
+        {/* ------------------------------------------------------------------
+            CONTABILIDAD
+            ------------------------------------------------------------------ */}
         {activeTab === 'facturacion' && (
-          /* MODULE F: FACTURACIÓN Y CONTABILIDAD */
-          <div className="space-y-6" id="view-facturacion">
-            <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <FileSpreadsheet className="w-5 h-5 text-sky-500 dark:text-[var(--brand-gold-light)]" /> Historial de Facturación Electrónica (FAC-001)
-            </h3>
+          <div className="tv-stack" id="view-facturacion">
+            <PageHead
+              title="Contabilidad"
+              subtitle={resolverModulo('facturacion').descripcion}
+              actions={
+                <Btn icon={Download} onClick={() => handleExportCSV(orders.map(o => o && ({
+                  Consecutivo: o.id,
+                  Fecha: o.timestamp,
+                  Cliente: o.customerName,
+                  Subtotal: o.subtotal,
+                  IVA: o.taxAmount,
+                  Total: o.total,
+                  Estado: o.status,
+                })), 'Reporte_IVA_D104')}>
+                  Reporte IVA (D-104)
+                </Btn>
+              }
+            />
 
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden p-5 space-y-4">
-              <div className="flex justify-between items-center border-b border-[var(--border-color)]/50 pb-2.5">
-                <span className="text-sm font-bold uppercase tracking-wider text-[var(--text-secondary)] block">Comprobantes de Ingresos</span>
-                <button
-                  onClick={() => handleExportCSV(orders.map(o => o && ({ 
-                    Consecutivo: o.id, 
-                    Fecha: o.timestamp, 
-                    Cliente: o.customerName, 
-                    Subtotal: o.subtotal, 
-                    IVA: o.taxAmount, 
-                    Total: o.total, 
-                    Estado: o.status 
-                  })), 'Reporte_IVA_D104')}
-                  className="text-[10px] bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 flex items-center gap-1 text-blue-600 dark:text-[var(--brand-gold-light)] hover:bg-[var(--bg-surface)] font-bold transition"
+            <Card title="Comprobantes electrónicos" padded={false}>
+              {orders.length === 0 ? (
+                <Empty
+                  icon={FileSpreadsheet}
+                  title="Sin comprobantes emitidos"
+                  text="Cada venta completada genera aquí su comprobante, con el IVA desglosado y su estado ante Hacienda."
+                />
+              ) : (
+                <TableShell
+                  head={<>
+                    <th>Consecutivo</th>
+                    <th>Cliente</th>
+                    <th style={{ textAlign: 'right' }}>Subtotal</th>
+                    <th style={{ textAlign: 'right' }}>IVA (13%)</th>
+                    <th style={{ textAlign: 'right' }}>Total</th>
+                    <th style={{ textAlign: 'center' }}>Hacienda</th>
+                    <th style={{ textAlign: 'right' }}>Acciones</th>
+                  </>}
                 >
-                  <Download className="w-3.5 h-3.5" /> Generar Reporte IVA (D-104)
-                </button>
-              </div>
-
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse font-mono">
-                  <thead>
-                    <tr className="border-b border-[var(--border-color)]/80 text-[var(--text-secondary)]">
-                      <th className="py-2.5">Consecutivo</th>
-                      <th className="py-2.5">Cliente</th>
-                      <th className="py-2.5 text-right">Subtotal</th>
-                      <th className="py-2.5 text-right">IVA (13%)</th>
-                      <th className="py-2.5 text-right">Total Neto</th>
-                      <th className="py-2.5 text-center">Estado Hacienda</th>
-                      <th className="py-2.5 text-center">Acciones</th>
+                  <PaginatedTbody items={orders} itemsPerPage={10} renderItem={(o) => (
+                    <tr key={o.id}>
+                      <td className="font-mono text-[12px] text-[var(--text-secondary)]">{o.id}</td>
+                      <td className="font-semibold">{o.customerName}</td>
+                      <td style={{ textAlign: 'right' }} className="tabular-nums">₡{o.subtotal.toLocaleString('es-CR')}</td>
+                      <td style={{ textAlign: 'right' }} className="tabular-nums text-[var(--text-secondary)]">₡{o.taxAmount.toLocaleString('es-CR')}</td>
+                      <td style={{ textAlign: 'right' }} className="tabular-nums font-semibold">₡{o.total.toLocaleString('es-CR')}</td>
+                      <td style={{ textAlign: 'center' }}>
+                        <Chip tone={o.hdaStatus === 'Aceptado' ? 'ok' : 'accent'}>{o.hdaStatus}</Chip>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        {o.status !== 'Devuelto' && o.status !== 'Cancelado' ? (
+                          <Btn variant="danger" onClick={() => handleIssueCreditNote(o.id)}>Nota de crédito</Btn>
+                        ) : (
+                          <Chip tone="alert">Devuelto</Chip>
+                        )}
+                      </td>
                     </tr>
-                  </thead>
-                  <PaginatedTbody items={orders} itemsPerPage={10} renderItem={(o) => ( 
-                        <tr key={o.id} className="hover:bg-[var(--bg-surface)] ">
-                          <td className="py-2.5 text-sky-400 dark:text-[var(--brand-gold-light)] font-bold">{o.id}</td>
-                          <td className="py-2.5 font-sans font-medium text-[var(--text-primary)]">{o.customerName}</td>
-                          <td className="py-2.5 text-right">₡{o.subtotal.toLocaleString()}</td>
-                          <td className="py-2.5 text-right text-[var(--text-secondary)]">₡{o.taxAmount.toLocaleString()}</td>
-                          <td className="py-2.5 text-right font-bold text-emerald-400 dark:text-[var(--brand-gold-light)]">₡{o.total.toLocaleString()}</td>
-                          <td className="py-2.5 text-center font-sans">
-                            <span className={`px-2 py-0.5 rounded text-[10px] font-bold uppercase tracking-wider ${
-                              o.hdaStatus === 'Aceptado' 
-                                ? 'bg-emerald-500 dark:bg-[var(--brand-gold-mid)]/15 border border-emerald-500 dark:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)] text-emerald-600 dark:text-[var(--brand-gold-light)]' 
-                                : 'bg-amber-500/15 border border-amber-500 text-amber-600 animate-pulse'
-                            }`}>
-                              {o.hdaStatus}
-                            </span>
-                          </td>
-                          <td className="py-2.5 text-center font-sans">
-                            {o.status !== 'Devuelto' && o.status !== 'Cancelado' ? (
-                              <button
-                                onClick={() => handleIssueCreditNote(o.id)}
-                                className="bg-rose-500/10 hover:bg-rose-500/30 text-rose-400 text-[10px] font-bold px-2.5 py-1 rounded-lg transition"
-                              >
-                                Emitir Nota Crédito (NC)
-                              </button>
-                            ) : (
-                              <span className="text-rose-400 text-[10px] font-bold italic">DEVUELTO</span>
-                            )}
-                          </td>
-                         </tr> )} />
-                </table>
-              </div>
-            </div>
+                  )} />
+                </TableShell>
+              )}
+            </Card>
           </div>
-
         )}
+
+        {/* ------------------------------------------------------------------
+            MARKETING
+            ------------------------------------------------------------------ */}
         {activeTab === 'marketing' && (
-          /* MODULE H: MARKETING AND CAMPAIGNS */
-          <div className="space-y-6" id="view-marketing">
-            <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <Megaphone className="w-5 h-5 text-sky-500 dark:text-[var(--brand-gold-light)]" /> Campañas de Mercadeo y Cupones
-            </h3>
+          <div className="tv-stack" id="view-marketing">
+            <PageHead
+              title="Marketing"
+              subtitle={resolverModulo('marketing').descripcion}
+              actions={
+                <Btn variant="primary" icon={Plus} onClick={() => setIsCouponModalOpen(true)}>
+                  Nuevo cupón
+                </Btn>
+              }
+            />
 
-            {/* Coupons Section */}
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 space-y-4">
-              <div className="flex justify-between items-center border-b border-[var(--border-color)]/50 pb-2">
-                <span className="text-sm font-bold uppercase tracking-wider text-sky-400 dark:text-[var(--brand-gold-light)]">Cupones de Descuento</span>
-                <button
-                  onClick={() => setIsCouponModalOpen(true)}
-                  className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-[var(--text-primary)] font-bold text-sm px-4 py-2 rounded-xl transition flex items-center gap-2"
-                >
-                  <Plus className="w-3 h-3" /> Nuevo Cupón
-                </button>
-              </div>
-
-              {isCouponModalOpen && (
-                <form onSubmit={handleSaveCoupon} className="bg-[var(--bg-surface)] p-4 rounded-xl border border-[var(--border-color)]/80 space-y-3">
-                  <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                    <div>
-                      <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Código Promocional</label>
-                      <input required type="text" value={couponForm.code} onChange={e => setCouponForm({...couponForm, code: e.target.value.toUpperCase()})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] uppercase font-mono" placeholder="TECHNO2026" />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Tipo Descuento</label>
+            {isCouponModalOpen && (
+              <Card title="Nuevo cupón">
+                <form onSubmit={handleSaveCoupon} className="tv-stack">
+                  <div className="tv-grid tv-grid-2">
+                    <Field label="Código promocional">
+                      <input required type="text" className="tv-input font-mono uppercase" placeholder="TECHNO2026"
+                        value={couponForm.code}
+                        onChange={e => setCouponForm({ ...couponForm, code: e.target.value.toUpperCase() })} />
+                    </Field>
+                    <Field label="Tipo de descuento">
                       <CustomSelect
                         value={couponForm.type || ''}
-                        onChange={(val) => setCouponForm({...couponForm, type: val as any})}
-                        className="py-1.5"
+                        onChange={(val) => setCouponForm({ ...couponForm, type: val as any })}
                         options={[
                           { value: 'Porcentaje', label: '% Porcentaje' },
-                          { value: 'Fijo', label: '₡ Monto Fijo' },
+                          { value: 'Fijo', label: '₡ Monto fijo' },
                         ]}
                       />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Valor</label>
-                      <input required type="number" value={couponForm.value} onChange={e => setCouponForm({...couponForm, value: parseFloat(e.target.value)})} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)]" />
-                    </div>
-                    <div>
-                      <label className="block text-[9px] text-[var(--text-secondary)] uppercase font-bold mb-1">Límite de Usos</label>
-                      <input disabled type="number" value={1} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-sm text-[var(--text-secondary)] opacity-70 cursor-not-allowed" />
-                    </div>
+                    </Field>
+                    <Field label="Valor">
+                      <input required type="number" className="tv-input" value={couponForm.value}
+                        onChange={e => setCouponForm({ ...couponForm, value: parseFloat(e.target.value) })} />
+                    </Field>
+                    <Field
+                      label="Límite de usos"
+                      hint="Regla fija del sistema: un solo uso por cupón, y vence a los 60 días de creado."
+                    >
+                      <input disabled type="number" className="tv-input" value={1} />
+                    </Field>
                   </div>
-                  <p className="text-[9px] text-[var(--text-secondary)]">Regla fija: 1 solo uso por cupón, y vence automáticamente a los 60 días de creado.</p>
-                  <div className="flex justify-end gap-2 pt-2">
-                    <button type="button" onClick={() => setIsCouponModalOpen(false)} className="text-[10px] text-[var(--text-secondary)] hover:text-rose-500 px-3 py-1">Cancelar</button>
-                    <button type="submit" className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-[var(--text-primary)] px-4 py-1.5 rounded-lg text-[10px] font-bold transition">Guardar Cupón</button>
+                  <div className="flex justify-end gap-2">
+                    <Btn type="button" variant="ghost" onClick={() => setIsCouponModalOpen(false)}>Cancelar</Btn>
+                    <Btn type="submit" variant="primary" icon={Save}>Guardar cupón</Btn>
                   </div>
                 </form>
-              )}
+              </Card>
+            )}
 
-              <div className="overflow-x-auto">
-                <table className="w-full text-left text-sm border-collapse">
-                  <thead>
-                    <tr className="border-b border-[var(--border-color)]/80 text-[var(--text-secondary)]">
-                      <th className="py-2">Código</th>
-                      <th className="py-2">Tipo</th>
-                      <th className="py-2 text-right">Valor</th>
-                      <th className="py-2 text-center">Usos</th>
-                      <th className="py-2 text-center">Vence</th>
-                      <th className="py-2 text-center">Estado</th>
-                      <th className="py-2 text-center">Acciones</th>
-                    </tr>
-                  </thead>
+            <Card title="Cupones de descuento" padded={false}>
+              {campaigns.length === 0 ? (
+                <Empty
+                  icon={Megaphone}
+                  title="Sin cupones creados"
+                  text="Un cupón permite aplicar un descuento en la tienda con un código. Cada uno sirve para una sola compra."
+                />
+              ) : (
+                <TableShell
+                  head={<>
+                    <th>Código</th>
+                    <th>Tipo</th>
+                    <th style={{ textAlign: 'right' }}>Valor</th>
+                    <th style={{ textAlign: 'center' }}>Usos</th>
+                    <th style={{ textAlign: 'center' }}>Vence</th>
+                    <th style={{ textAlign: 'center' }}>Estado</th>
+                    <th style={{ textAlign: 'right' }}>Acciones</th>
+                  </>}
+                >
                   <PaginatedTbody items={campaigns} itemsPerPage={10} renderItem={(c) => (
-                        <tr key={c.id}>
-                          <td className="py-2 font-mono font-bold text-sky-400 dark:text-[var(--brand-gold-light)]">{c.code}</td>
-                          <td className="py-2 text-[var(--text-primary)]">{c.type}</td>
-                          <td className="py-2 text-right font-mono text-[var(--text-primary)]">{c.type === 'Porcentaje' ? `${c.value}%` : `₡${c.value.toLocaleString()}`}</td>
-                          <td className="py-2 text-center text-[var(--text-secondary)]">{c.used} / {c.limit}</td>
-                          <td className="py-2 text-center text-[var(--text-secondary)]">{c.expiresAt ? new Date(c.expiresAt).toLocaleDateString() : '—'}</td>
-                          <td className="py-2 text-center">
-                            <span className={`px-2 py-0.5 rounded text-[9px] font-bold uppercase ${c.active ? 'bg-emerald-500 dark:bg-[var(--brand-gold-mid)]/20 text-emerald-400 dark:text-[var(--brand-gold-light)]' : 'bg-rose-500/20 text-rose-400'}`}>
-                              {c.active ? 'Activo' : 'Inactivo'}
-                            </span>
-                          </td>
-                          <td className="py-2 text-center">
-                            <button onClick={() => {
-                              const db = getDB();
-                              const idx = db.marketing_campaigns.findIndex(mc => mc && mc.id === c.id);
-                              if (idx !== -1) {
-                                db.marketing_campaigns[idx].active = !c.active;
-                                saveDB(db);
-                                loadAllAdminData();
-                              }
-                            }} className="text-[10px] text-[var(--text-secondary)] hover:text-rose-500 underline">
-                              {c.active ? 'Desactivar' : 'Activar'}
-                            </button>
-                          </td>
-                         </tr> )} />
-                </table>
-              </div>
-            </div>
-
+                    <tr key={c.id}>
+                      <td className="font-mono font-bold">{c.code}</td>
+                      <td>{c.type}</td>
+                      <td style={{ textAlign: 'right' }} className="tabular-nums">
+                        {c.type === 'Porcentaje' ? `${c.value}%` : `₡${c.value.toLocaleString('es-CR')}`}
+                      </td>
+                      <td style={{ textAlign: 'center' }} className="text-[var(--text-secondary)]">{c.used} / {c.limit}</td>
+                      <td style={{ textAlign: 'center' }} className="text-[var(--text-secondary)]">
+                        {c.expiresAt ? new Date(c.expiresAt).toLocaleDateString('es-CR') : '—'}
+                      </td>
+                      <td style={{ textAlign: 'center' }}>
+                        <Chip tone={c.active ? 'ok' : undefined}>{c.active ? 'Activo' : 'Inactivo'}</Chip>
+                      </td>
+                      <td style={{ textAlign: 'right' }}>
+                        <Btn variant="ghost" onClick={() => {
+                          const db = getDB();
+                          const idx = db.marketing_campaigns.findIndex(mc => mc && mc.id === c.id);
+                          if (idx !== -1) {
+                            db.marketing_campaigns[idx].active = !c.active;
+                            saveDB(db);
+                            loadAllAdminData();
+                          }
+                        }}>
+                          {c.active ? 'Desactivar' : 'Activar'}
+                        </Btn>
+                      </td>
+                    </tr>
+                  )} />
+                </TableShell>
+              )}
+            </Card>
           </div>
         )}
+
+        {/* ------------------------------------------------------------------
+            CIBERSEGURIDAD
+            Absorbe la antigua pestaña "Bitácora de Auditoría": esa tabla
+            vive ahora como una sección de este panel, con los mismos
+            datos y el mismo botón de limpiar.
+            ------------------------------------------------------------------ */}
         {activeTab === 'ciberseguridad' && (
-          /* MODULE J: CENTRO DE CIBERSEGURIDAD
-             Absorbe la antigua pestaña "Bitácora de Auditoría": esa tabla
-             vive ahora como la sección "Bitácora" de este panel, con el
-             mismo botón de limpiar y exactamente los mismos datos. */
           <Suspense fallback={<TabLoadingFallback />}>
             <CyberSecurityPanel
               auditLog={auditLog}
@@ -1826,385 +1311,169 @@ export default function AdminPanel({
             />
           </Suspense>
         )}
+
+        {/* ------------------------------------------------------------------
+            CONFIGURACIÓN
+            ------------------------------------------------------------------ */}
         {activeTab === 'configuracion' && (
-          /* MODULE K: CONFIGURACIÓN GENERAL */
-          <div className="space-y-6" id="view-configuracion">
-            <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <Settings className="w-5 h-5 text-sky-500 dark:text-[var(--brand-gold-light)]" /> Configuración General de Technoverse
-            </h3>
+          <div className="tv-stack" id="view-configuracion">
+            <PageHead
+              title="Configuración"
+              subtitle={resolverModulo('configuracion').descripcion}
+              actions={<Btn variant="primary" icon={Save} onClick={handleSaveConfig}>Guardar cambios</Btn>}
+            />
 
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-6 space-y-4">
-              <h4 className="text-sm font-bold uppercase text-sky-400 dark:text-[var(--brand-gold-light)] pb-2 border-b border-[var(--border-color)]/50">Datos Fiscales de Facturación de Hacienda</h4>
-              
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Cédula Jurídica / Física</label>
-                  <input
-                    type="text"
-                    value={cedulaJuridica}
-                    onChange={(e) => setCedulaJuridica(e.target.value)}
-                    placeholder="Ej. 3-101-000000"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] dark:text-zinc-100 focus:outline-none font-mono placeholder:text-[var(--text-muted)]"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Teléfono Fiscal Oficial</label>
-                  <input
-                    type="text"
-                    value={companyPhone}
-                    onChange={(e) => setCompanyPhone(e.target.value)}
-                    placeholder="Ej. +506 0000 0000"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] dark:text-zinc-100 focus:outline-none font-mono placeholder:text-[var(--text-muted)]"
-                  />
-                </div>
+            <Card title="Datos fiscales">
+              <div className="tv-grid tv-grid-2">
+                <Field label="Cédula jurídica o física">
+                  <input type="text" className="tv-input font-mono" placeholder="3-101-000000"
+                    value={cedulaJuridica} onChange={e => setCedulaJuridica(e.target.value)} />
+                </Field>
+                <Field label="Teléfono fiscal oficial">
+                  <input type="text" className="tv-input font-mono" placeholder="+506 0000 0000"
+                    value={companyPhone} onChange={e => setCompanyPhone(e.target.value)} />
+                </Field>
+                <Field label="Domicilio fiscal y punto de retiro">
+                  <input type="text" className="tv-input" placeholder="Provincia, cantón, distrito y señas exactas"
+                    value={companyAddress} onChange={e => setCompanyAddress(e.target.value)} />
+                </Field>
+                <Field label="Horarios de retiro" hint="El retiro es estrictamente con cita previa.">
+                  <input type="text" className="tv-input" placeholder="Lunes a viernes, 1pm a 6pm"
+                    value={pickupHours} onChange={e => setPickupHours(e.target.value)} />
+                </Field>
               </div>
+            </Card>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Dirección del Domicilio del CEO (Domicilio Fiscal y Punto de Retiro)</label>
-                  <input
-                    type="text"
-                    value={companyAddress}
-                    onChange={(e) => setCompanyAddress(e.target.value)}
-                    placeholder="Provincia, cantón, distrito y señas exactas"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] dark:text-zinc-100 focus:outline-none placeholder:text-[var(--text-muted)]"
-                  />
+            <Card title="Integraciones">
+              <Field
+                label="Webhook de Instagram (Zapier)"
+                hint='URL del "Catch Hook" de un Zap (Webhook → Instagram Publish Photo). Con esto configurado, las publicaciones programadas desde Inventario salen solas en la fecha elegida, sin que nadie tenga que abrir la aplicación en ese momento.'
+              >
+                <input type="url" className="tv-input font-mono" placeholder="https://hooks.zapier.com/hooks/catch/…"
+                  value={instagramWebhookUrl} onChange={e => setInstagramWebhookUrl(e.target.value)} />
+              </Field>
+            </Card>
+
+            <Card title="Logo de la tienda">
+              <div className="flex flex-col sm:flex-row items-start gap-5">
+                <div className="w-20 h-20 rounded-[10px] border border-[var(--border-color)] bg-[var(--bg-sunken)] flex items-center justify-center overflow-hidden flex-shrink-0">
+                  <img src={storeLogoPreview || storeLogo || '/logo.png'} alt="" className="max-w-full max-h-full object-contain" />
                 </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Horarios de Retiro (Estricta Cita Previa)</label>
+                <Field
+                  label="Nueva imagen"
+                  className="flex-1 w-full"
+                  hint="Se aplica de inmediato en la tienda y en el panel. La imagen se comprime antes de guardarse."
+                >
                   <input
-                    type="text"
-                    value={pickupHours}
-                    onChange={(e) => setPickupHours(e.target.value)}
-                    placeholder="Ej. Lunes a viernes, 1pm a 6pm"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] dark:text-zinc-100 focus:outline-none placeholder:text-[var(--text-muted)]"
+                    type="file"
+                    accept="image/*"
+                    onChange={handleLogoChange}
+                    className="w-full text-[13px] text-[var(--text-secondary)] file:mr-3 file:py-2 file:px-3.5 file:rounded-[10px] file:border-0 file:text-[12.5px] file:font-bold file:bg-[var(--accent)] file:text-[var(--accent-ink)] file:cursor-pointer"
                   />
-                </div>
+                </Field>
               </div>
+            </Card>
 
-              <div className="grid grid-cols-1 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Webhook de Instagram (Zapier)</label>
-                  <input
-                    type="url"
-                    value={instagramWebhookUrl}
-                    onChange={(e) => setInstagramWebhookUrl(e.target.value)}
-                    placeholder="https://hooks.zapier.com/hooks/catch/…"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] dark:text-zinc-100 focus:outline-none font-mono placeholder:text-[var(--text-muted)]"
-                  />
-                  <p className="mt-1.5 text-[10px] text-[var(--text-secondary)] leading-relaxed">
-                    URL del "Catch Hook" de un Zap (Webhook → Instagram Publish Photo). Con esto configurado, las publicaciones que se programan desde Inventario salen solas en la fecha elegida, sin que nadie tenga que abrir la app en ese momento.
-                  </p>
-                </div>
-              </div>
-
-              {/* COSTA RICAN E-COMMERCE COMPLIANCE NOTE */}
-              <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-5 space-y-3 mt-4">
-                <span className="text-[10px] uppercase tracking-wider font-extrabold text-amber-400 flex items-center gap-1.5">
-                  ⚠️ NOTA DE CUMPLIMIENTO LEGAL (COSTA RICA)
-                </span>
-                <p className="text-[11px] text-[var(--text-primary)] leading-relaxed">
-                  <strong>Facturación electrónica (Hacienda / DGT):</strong> Toda venta debe documentarse mediante comprobante electrónico autorizado (factura, tiquete o nota de crédito electrónica) conforme al Reglamento de Comprobantes Electrónicos para Efectos Tributarios (resolución DGT-R-48-2016 y sus reformas), con el Impuesto al Valor Agregado desglosado por línea según la Ley del IVA (Ley Nº 9635) y transmitido al Ministerio de Hacienda para su validación.
+            <Card title="Accesos administrativos">
+              <div className="tv-stack">
+                <p className="tv-hint !mt-0">
+                  Toda cuenta creada aquí recibe acceso total al panel. No existen roles limitados: cualquier
+                  cuenta autenticada en el panel es Administrador.
                 </p>
-                <p className="text-[11px] text-[var(--text-primary)] leading-relaxed">
-                  <strong>Protección al consumidor (MEIC / Ley Nº 7472):</strong> Los precios publicados deben mostrarse en colones costarricenses con impuestos incluidos, sin cargos ocultos. El plazo, costo y condiciones de entrega deben informarse antes de completar la compra. El consumidor tiene derecho a la reversión del cargo y a devoluciones cuando el bien no corresponda a lo ofrecido, conforme a la Ley de Promoción de la Competencia y Defensa Efectiva del Consumidor y su reglamento.
-                </p>
-                <p className="text-[11px] text-[var(--text-primary)] leading-relaxed">
-                  <strong>Protección de datos personales (PRODHAB / Ley Nº 8968):</strong> Los datos de clientes (identificación, contacto, medios de pago) se recaban con consentimiento informado, se usan únicamente para los fines de la relación comercial y están sujetos a los derechos de acceso, rectificación, cancelación y oposición (ARCO) que otorga la Ley de Protección de la Persona frente al Tratamiento de sus Datos Personales, supervisada por la PRODHAB.
-                </p>
-              </div>
 
-              {/* SECCIÓN LOGO DE LA TIENDA */}
-              <div className="border-t border-[var(--border-color)]/50 pt-4 mt-4 space-y-4">
-                <h4 className="text-sm font-bold uppercase text-[var(--brand-gold-mid)] pb-2 border-b border-[var(--border-color)]/50">Logo de la tienda</h4>
-                <div className="flex flex-col md:flex-row items-center gap-6">
-                  {/* Preview area */}
-                  <div className="w-24 h-24 bg-[var(--bg-surface)] rounded-2xl border border-[var(--border-color)]/80 flex items-center justify-center overflow-hidden flex-shrink-0">
-                    <img
-                      src={storeLogoPreview || storeLogo || "/logo.png"}
-                      alt="Store Logo Preview"
-                      className="max-w-full max-h-full object-contain"
-                    />
-                  </div>
-                  <div className="space-y-1.5 flex-1">
-                    <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)]">Seleccionar nueva imagen del logo</label>
-                    <input
-                      type="file"
-                      accept="image/*"
-                      onChange={handleLogoChange}
-                      className="w-full text-sm text-[var(--text-secondary)] file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-sm file:font-bold file:bg-[var(--brand-gold-mid)] file:text-[var(--text-primary)] hover:file:bg-sky-600 dark:bg-[var(--brand-gold-dark)] file:cursor-pointer transition"
-                    />
-                    <p className="text-[10px] text-[var(--text-secondary)] leading-normal">
-                      Seleccione una imagen de su computadora. Se guardará localmente y se aplicará inmediatamente en todo el sitio (tienda y panel de administración).
+                <div>
+                  <Btn onClick={() => { setShowCreateUserForm(!showCreateUserForm); setGeneratedUserPass(null); }}>
+                    {showCreateUserForm ? 'Ocultar formulario' : 'Crear nuevo usuario'}
+                  </Btn>
+                </div>
+
+                {showCreateUserForm && (
+                  <form onSubmit={handleCreateUserSubmit} className="tv-stack">
+                    <div className="tv-grid tv-grid-2">
+                      <Field label="Nombre completo">
+                        <input type="text" required className="tv-input"
+                          value={newUserName} onChange={e => setNewUserName(e.target.value)} />
+                      </Field>
+                      <Field label="Correo electrónico">
+                        <input type="email" required className="tv-input font-mono"
+                          value={newUserEmail} onChange={e => setNewUserEmail(e.target.value)} />
+                      </Field>
+                    </div>
+                    <Field label="Contraseña" hint="Si se deja vacía, el sistema genera una segura y la muestra una sola vez.">
+                      <div className="relative">
+                        <input
+                          type={showPassword ? 'text' : 'password'}
+                          className="tv-input font-mono pr-10"
+                          value={newUserPassword}
+                          onChange={e => setNewUserPassword(e.target.value)}
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(!showPassword)}
+                          className="absolute right-2 top-1/2 -translate-y-1/2 tv-icon-btn !w-7 !h-7"
+                          aria-label={showPassword ? 'Ocultar la contraseña' : 'Mostrar la contraseña'}
+                        >
+                          {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
+                        </button>
+                      </div>
+                    </Field>
+                    <div>
+                      <Btn type="submit" variant="primary" disabled={isCreatingUser} icon={UserPlus}>
+                        {isCreatingUser ? 'Creando…' : 'Registrar usuario'}
+                      </Btn>
+                    </div>
+                  </form>
+                )}
+
+                {generatedUserPass && (
+                  <div className="rounded-[10px] border border-[var(--border-color)] bg-[var(--bg-sunken)] p-4">
+                    <div className="tv-label !mb-1">Contraseña del nuevo administrador</div>
+                    <div className="font-mono text-[15px] font-bold text-[var(--text-primary)] break-all">{generatedUserPass}</div>
+                    <p className="tv-hint">
+                      Anótela ahora: no se vuelve a mostrar y no queda guardada en ninguna parte del panel.
                     </p>
                   </div>
-                </div>
+                )}
               </div>
+            </Card>
 
-              <div className="pt-2">
-                <button
-                  type="button"
-                  onClick={handleSaveConfig}
-                  className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-[var(--text-primary)] font-bold text-sm px-5 py-2.5 rounded-xl transition"
-                >
-                  Guardar Cambios Operativos
-                </button>
+            {/* La nota legal va al final y contraída: es información de
+                referencia que hay que poder consultar, no algo que deba
+                competir por la atención cada vez que se abre la pantalla.
+                Antes ocupaba media pantalla en un recuadro ámbar. */}
+            <details className="tv-card">
+              <summary className="tv-card-head cursor-pointer list-none">
+                <span className="tv-card-title">Nota de cumplimiento legal (Costa Rica)</span>
+                <ChevronDown className="w-4 h-4 text-[var(--text-muted)]" />
+              </summary>
+              <div className="tv-card-body space-y-3 text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
+                <p>
+                  <strong className="text-[var(--text-primary)]">Facturación electrónica (Hacienda / DGT):</strong>{' '}
+                  toda venta debe documentarse mediante comprobante electrónico autorizado (factura, tiquete o nota
+                  de crédito electrónica) conforme al Reglamento de Comprobantes Electrónicos para Efectos
+                  Tributarios (resolución DGT-R-48-2016 y sus reformas), con el Impuesto al Valor Agregado
+                  desglosado por línea según la Ley del IVA (Ley N.º 9635) y transmitido al Ministerio de Hacienda
+                  para su validación.
+                </p>
+                <p>
+                  <strong className="text-[var(--text-primary)]">Protección al consumidor (MEIC / Ley N.º 7472):</strong>{' '}
+                  los precios publicados deben mostrarse en colones costarricenses con impuestos incluidos, sin
+                  cargos ocultos. El plazo, costo y condiciones de entrega deben informarse antes de completar la
+                  compra. La persona consumidora tiene derecho a la reversión del cargo y a devoluciones cuando el
+                  bien no corresponda a lo ofrecido.
+                </p>
+                <p>
+                  <strong className="text-[var(--text-primary)]">Protección de datos (PRODHAB / Ley N.º 8968):</strong>{' '}
+                  los datos de clientes (identificación, contacto, medios de pago) se recaban con consentimiento
+                  informado, se usan únicamente para los fines de la relación comercial y están sujetos a los
+                  derechos de acceso, rectificación, cancelación y oposición.
+                </p>
               </div>
-            </div>
-
-            {/* CREACIÓN DE USUARIOS ADMINISTRADORES */}
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-6 space-y-4" id="view-crear-usuario">
-              <div className="flex justify-between items-center pb-2 border-b border-[var(--border-color)]/50">
-                <h4 className="text-sm font-bold uppercase text-sky-400 dark:text-[var(--brand-gold-light)]">Gestión de Accesos Administrativos</h4>
-                <button
-                  type="button"
-                  onClick={() => { setShowCreateUserForm(!showCreateUserForm); setGeneratedUserPass(null); }}
-                  className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] text-[var(--text-primary)] font-bold text-xs px-4 py-2 rounded-xl transition"
-                >
-                  {showCreateUserForm ? 'Ocultar Formulario' : 'Crear Nuevo Usuario'}
-                </button>
-              </div>
-
-              {showCreateUserForm && (
-                <form onSubmit={handleCreateUserSubmit} className="space-y-4">
-                  <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
-                    El usuario creado recibirá acceso total (Administrador) al panel. No existen roles limitados: cualquier cuenta autenticada aquí es Administrador.
-                  </p>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <div>
-                      <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Nombre Completo</label>
-                      <input
-                        type="text"
-                        value={newUserName}
-                        onChange={(e) => setNewUserName(e.target.value)}
-                        required
-                        className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
-                      />
-                    </div>
-                    <div>
-                      <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Correo Electrónico</label>
-                      <input
-                        type="email"
-                        value={newUserEmail}
-                        onChange={(e) => setNewUserEmail(e.target.value)}
-                        required
-                        className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
-                      />
-                    </div>
-                  </div>
-                  <div>
-                    <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Contraseña (opcional, se genera una segura si se deja vacío)</label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? 'text' : 'password'}
-                        value={newUserPassword}
-                        onChange={(e) => setNewUserPassword(e.target.value)}
-                        className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono pr-10"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--text-muted)] hover:text-[var(--text-primary)]"
-                      >
-                        {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                  <button
-                    type="submit"
-                    disabled={isCreatingUser}
-                    className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white dark:text-slate-950 font-bold text-sm px-5 py-2.5 rounded-xl transition disabled:opacity-50"
-                  >
-                    {isCreatingUser ? 'Creando...' : 'Registrar Usuario y Emitir Credenciales'}
-                  </button>
-                </form>
-              )}
-
-              {generatedUserPass && (
-                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-4">
-                  <span className="text-[10px] text-[var(--text-secondary)] uppercase font-bold block mb-1">Contraseña del Nuevo Administrador</span>
-                  <span className="font-mono text-sm text-[var(--text-primary)] font-bold">{generatedUserPass}</span>
-                </div>
-              )}
-            </div>
+            </details>
           </div>
-
         )}
-            </motion.div>
-          </AnimatePresence>
-      </main>
-      </div>
-
-      {/* Mobile overflow sheets for the bottom navigation bar (Inventario / Más) */}
-      <AnimatePresence>
-        {isMobileInventoryMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.97 }}
-            transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
-            className="floating-sheet-mobile glass-panel rounded-2xl p-2 lg:hidden"
-          >
-            <div className="px-4 py-2 border-b border-[var(--border-color)] mb-1">
-              <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Control de Inventario</span>
-            </div>
-            <div className="p-1 space-y-1">
-              {getPermittedSubItems('inventario').map(item => item && (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActiveTab(item.id);
-                    setIsMobileInventoryMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${
-                    activeTab === item.id
-                      ? 'text-[var(--brand-gold-mid)] bg-[var(--bg-base)] font-bold'
-                      : 'text-[var(--text-primary)] hover:bg-[var(--bg-base)]'
-                  }`}
-                >
-                  <item.icon className="w-4 h-4 flex-shrink-0 text-[var(--brand-gold-mid)]" />
-                  <span className="text-sm font-semibold">{item.label}</span>
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        )}
+        </motion.div>
       </AnimatePresence>
-
-      <AnimatePresence>
-        {isMobileMoreMenuOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.97 }}
-            transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
-            className="floating-sheet-mobile glass-panel rounded-2xl p-2 lg:hidden"
-          >
-            <div className="px-4 py-2 border-b border-[var(--border-color)] mb-1">
-              <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Servicios &amp; Finanzas</span>
-            </div>
-            <div className="p-1 space-y-1">
-              {getPermittedSubItems('administracion').map(item => item && (
-                <button
-                  key={item.id}
-                  onClick={() => {
-                    setActiveTab(item.id);
-                    setIsMobileMoreMenuOpen(false);
-                  }}
-                  className={`w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left transition cursor-pointer ${
-                    activeTab === item.id
-                      ? 'text-[var(--brand-gold-mid)] bg-[var(--bg-base)] font-bold'
-                      : 'text-[var(--text-primary)] hover:bg-[var(--bg-base)]'
-                  }`}
-                >
-                  <item.icon className="w-4 h-4 flex-shrink-0 text-[var(--brand-gold-mid)]" />
-                  <span className="text-sm font-semibold">{item.label}</span>
-                </button>
-              ))}
-              <div className="border-t border-[var(--border-color)] my-1 pt-1">
-                <button
-                  onClick={() => {
-                    setIsMobileMoreMenuOpen(false);
-                    handleLogout();
-                  }}
-                  className="w-full flex items-center gap-3 px-3 py-2.5 rounded-xl text-left text-rose-500 hover:bg-rose-500/10 transition cursor-pointer font-bold"
-                >
-                  <LogOut className="w-4 h-4 flex-shrink-0" />
-                  <span className="text-sm font-semibold">Cerrar Sesión</span>
-                </button>
-              </div>
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Global bottom navigation bar (mobile only) — replaces the hamburger + drawer entirely */}
-      <nav className="bottom-nav-bar lg:hidden flex items-stretch">
-        {(isOwner || hasPermission('dashboard')) && (
-          <button
-            className={`bottom-nav-item ${activeTab === 'dashboard' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('dashboard');
-              setActiveDropdown(null);
-              setIsMobileInventoryMenuOpen(false);
-              setIsMobileMoreMenuOpen(false);
-            }}
-          >
-            <span className="bn-icon-wrap"><LayoutDashboard className="w-5 h-5" /></span>
-            Dashboard
-          </button>
-        )}
-        {getPermittedSubItems('inventario').length > 0 && (
-          <button
-            className={`bottom-nav-item ${isMobileInventoryMenuOpen || activeTab.startsWith('inventario_') ? 'active' : ''}`}
-            onClick={() => {
-              if (isMobileInventoryMenuOpen) { setIsMobileInventoryMenuOpen(false); return; }
-              setIsMobileMoreMenuOpen(false);
-              setActiveDropdown(null);
-              setIsMobileInventoryMenuOpen(true);
-            }}
-          >
-            <span className="bn-icon-wrap"><Package className="w-5 h-5" /></span>
-            Inventario
-          </button>
-        )}
-        {hasPermission('chat') && (
-          <button
-            className={`bottom-nav-item ${activeTab === 'chat' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('chat');
-              setActiveDropdown(null);
-              setIsMobileInventoryMenuOpen(false);
-              setIsMobileMoreMenuOpen(false);
-            }}
-          >
-            <span className="bn-icon-wrap"><MessageSquare className="w-5 h-5" /></span>
-            Chat
-          </button>
-        )}
-        {hasPermission('taller') && (
-          <button
-            className={`bottom-nav-item ${activeTab === 'taller' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('taller');
-              setActiveDropdown(null);
-              setIsMobileInventoryMenuOpen(false);
-              setIsMobileMoreMenuOpen(false);
-            }}
-          >
-            <span className="bn-icon-wrap"><Wrench className="w-5 h-5" /></span>
-            Taller
-          </button>
-        )}
-        {(isOwner || hasPermission('clientes')) && (
-          <button
-            className={`bottom-nav-item ${activeTab === 'clientes' ? 'active' : ''}`}
-            onClick={() => {
-              setActiveTab('clientes');
-              setActiveDropdown(null);
-              setIsMobileInventoryMenuOpen(false);
-              setIsMobileMoreMenuOpen(false);
-            }}
-          >
-            <span className="bn-icon-wrap"><CreditCard className="w-5 h-5" /></span>
-            Clientes
-          </button>
-        )}
-        {getPermittedSubItems('administracion').length > 0 && (
-          <button
-            className={`bottom-nav-item ${isMobileMoreMenuOpen ? 'active' : ''}`}
-            onClick={() => {
-              if (isMobileMoreMenuOpen) { setIsMobileMoreMenuOpen(false); return; }
-              setIsMobileInventoryMenuOpen(false);
-              setActiveDropdown(null);
-              setIsMobileMoreMenuOpen(true);
-            }}
-          >
-            <span className="bn-icon-wrap"><MoreHorizontal className="w-5 h-5" /></span>
-            Más
-          </button>
-        )}
-      </nav>
-    </div>
+    </AdminShell>
   );
 }
