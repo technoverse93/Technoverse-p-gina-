@@ -399,6 +399,7 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
       p_subtotal: subtotal,
       p_iva_total: ivaTotal,
       p_total: total,
+      p_garantia_meses: normalizarGarantia(datos.garantiaMeses),
     });
     if (errorEmision) throw errorEmision;
 
@@ -413,7 +414,11 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
       consecutivo: emitida.consecutivo,
       tipoDoc: '01',
       fechaISO: ahora.toISOString(),
-      emisorCedula: emitida.emisorCedula,
+      // `emisorCedulaMostrar` es la identificación TAL CUAL se configuró.
+      // `emisorCedula` viene rellena con ceros a 12 posiciones porque la
+      // clave de Hacienda lo exige, y era la que se imprimía: una cédula
+      // física de 9 dígitos salía en el comprobante como 000119090965.
+      emisorCedula: emitida.emisorCedulaMostrar || emitida.emisorCedula,
       emisorNombre: 'Technoverse Costa Rica',
       emisorTelefono: config?.companyPhone || undefined,
       emisorDireccion: config?.companyAddress || undefined,
