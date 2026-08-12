@@ -54,6 +54,10 @@ interface ExtractedRow {
   skuDuplicate: boolean;
   skuHistorical: boolean;
   historicalData: any;
+  /** La línea traía "agotado"/"(agotado)": el proveedor no tiene existencias.
+   *  Se detecta y se deja SIN seleccionar por defecto — no tiene sentido
+   *  registrar en el catálogo algo que no se puede comprar todavía. */
+  agotado: boolean;
 }
 
 interface InventarioControlProps {
@@ -183,10 +187,17 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     return () => { document.body.style.overflow = "auto"; };
   }, [traceProductModal, deleteProductModal, showPdfModal]);
   const [isAnalyzingPdf, setIsAnalyzingPdf] = useState(false);
-  const [analysisProgress, setAnalysisProgress] = useState(0);
-  const [analysisLogs, setAnalysisLogs] = useState<string[]>([]);
   const [extractedProducts, setExtractedProducts] = useState<ExtractedRow[]>([]);
   const [globalMargin, setGlobalMargin] = useState<number | ''>(''); // default margin 30%
+  // Categoría aplicada a TODO el lote importado. Una lista de precios de
+  // proveedor casi siempre es de una sola familia (pantallas, por ejemplo),
+  // así que adivinar la categoría línea por línea —como hacía la versión
+  // anterior con palabras clave en el nombre— fallaba justo en los casos
+  // reales: "Honor X6B Con marco ₡8 000" no tiene ninguna palabra que
+  // delate que es un repuesto. Se elige una vez para todo el lote y queda
+  // editable fila por fila igual que la categoría de un producto normal.
+  const [globalCategory, setGlobalCategory] = useState<string>('LCD');
+  const [pdfReadProgress, setPdfReadProgress] = useState<string>('');
   const [pdfRawText, setPdfRawText] = useState<string>('');
   const [activePopoverIndex, setActivePopoverIndex] = useState<number | null>(null);
 
@@ -264,211 +275,193 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     };
   }, []);
 
-  const parseTextToProducts = (text: string, productsInDb: Product[], historicalSkus: any[]): ExtractedRow[] => {
+  /**
+   * Convierte texto plano (extraído de un PDF real o pegado a mano) en
+   * filas de importación de "Nombre + Precio", que es como en realidad
+   * vienen las listas de precios de un proveedor — SIN código de SKU
+   * propio (ese lo inventa el sistema, igual que al dar de alta un
+   * producto a mano) y con el precio en cualquier formato costarricense
+   * habitual: "₡85 000" (miles con espacio), "₡8.500", "₡8,500" o "$9.00".
+   *
+   * FALLO CORREGIDO (probado con una lista real de un distribuidor): la
+   * versión anterior exigía encontrar un "código" de al menos 5 caracteres
+   * en la línea antes de intentar leer nada, y su regex de precio no
+   * reconocía los miles separados por ESPACIO. Contra una lista real
+   * —renglones como "A01 ₡8 000" o "Honor X6B Con marco ₡10 000", sin
+   * ningún código— casi todas las líneas se descartaban en silencio o el
+   * precio se leía mal ("₡85 000" se entendía como 85, no como 85000).
+   */
+  const parseTextToProducts = (
+    text: string,
+    productsInDb: Product[],
+    historicalSkus: any[],
+    defaultCategory: string
+  ): ExtractedRow[] => {
     const lines = text.split('\n');
     const results: ExtractedRow[] = [];
 
-    // Helper to clean and parse prices
+    // Limpia un monto ya aislado del símbolo de moneda. Los miles pueden
+    // venir separados por espacio, coma o punto; el decimal (si lo hay)
+    // siempre son exactamente 2 dígitos pegados al final ("9.00", "8,50").
     const parsePriceHelper = (str: string): number => {
-      let clean = str.replace(/[₡$]/g, '').replace(/USD/gi, '').replace(/CRC/gi, '').trim();
-      if (clean.includes(',') && clean.includes('.')) {
-        clean = clean.replace(/\./g, '').replace(',', '.');
-      } else if (clean.includes(',')) {
-        const parts = clean.split(',');
-        if (parts[parts.length - 1].length === 2) {
-          clean = clean.replace(/\./g, '').replace(',', '.');
-        } else {
-          clean = clean.replace(/,/g, '');
-        }
-      } else {
-        const parts = clean.split('.');
-        if (parts.length > 2) {
-          clean = clean.replace(/\./g, '');
-        } else if (parts.length === 2 && parts[1].length === 3) {
-          clean = clean.replace(/\./g, '');
-        }
+      let clean = str.trim();
+      const decimalMatch = clean.match(/[.,](\d{2})$/);
+      let decimales = '';
+      if (decimalMatch) {
+        decimales = '.' + decimalMatch[1];
+        clean = clean.slice(0, decimalMatch.index);
       }
-      return parseFloat(clean) || 0;
+      clean = clean.replace(/[.,\s]/g, '');
+      return parseFloat(clean + decimales) || 0;
     };
 
+    // Símbolo/código de moneda + monto, en cualquiera de los dos órdenes en
+    // que un proveedor suele escribirlo.
+    const priceRegex = /(?:[₡$]|CRC|USD)\s*(\d[\d.,\s]*\d|\d)|(\d[\d.,\s]*\d|\d)\s*(?:CRC|USD)\b/i;
+
+    let seed = Math.floor(1000 + Math.random() * 9000);
+
     lines.forEach((line) => {
-      const trimmed = line.trim();
+      // Varios espacios seguidos (columnas de una tabla mal copiadas) se
+      // colapsan a uno: si no, "Honor   X6B   ₡8000" deja espacios dobles
+      // sueltos en el nombre final.
+      const trimmed = line.replace(/\s+/g, ' ').trim();
       if (!trimmed) return;
-      
-      // Look for a SKU pattern (at least 5 alphanumeric/dash/underscore chars)
-      const skuMatches = trimmed.match(/\b[A-Za-z0-9_-]{5,}\b/g);
-      if (!skuMatches) return;
 
-      // Extract price pattern
-      const priceRegex = /(?:[₡$]|USD|CRC)\s*([0-9.,]+)|([0-9.,]+)\s*(?:[₡$]|USD|CRC)/gi;
-      const priceMatches = [...trimmed.matchAll(priceRegex)];
+      const match = trimmed.match(priceRegex);
+      if (!match) return; // sin precio reconocible: no es una línea de artículo (encabezado, título, etc.)
 
-      let costValue = 0;
-      let isUsd = false;
+      const valStr = match[1] || match[2];
+      const costValue = parsePriceHelper(valStr);
+      if (costValue <= 0) return;
 
-      if (priceMatches.length > 0) {
-        const match = priceMatches[0];
-        const valStr = match[1] || match[2];
-        costValue = parsePriceHelper(valStr);
-        const fullMatch = match[0].toUpperCase();
-        if (fullMatch.includes('$') || fullMatch.includes('USD')) {
-          isUsd = true;
-        }
-      } else {
-        const fallbackPriceMatch = trimmed.match(/\b\d+(?:\.\d+)?\b/);
-        if (fallbackPriceMatch) {
-          costValue = parsePriceHelper(fallbackPriceMatch[0]);
-        }
-      }
+      const esUsd = /\$|USD/i.test(match[0]);
+      const finalCost = esUsd ? Math.round(costValue * 540) : Math.round(costValue);
 
-      if (costValue === 0) return;
+      // El nombre es todo lo que queda de la línea al quitarle el precio.
+      let nameText = trimmed.replace(match[0], '');
 
-      const validSkus = skuMatches.filter(s => {
-        const upper = s.toUpperCase();
-        return upper !== 'USD' && upper !== 'CRC' && !/^\d+$/.test(s) && !s.includes('http');
-      });
-
-      if (validSkus.length === 0) return;
-      let sku = validSkus[0].toUpperCase();
-
-      let nameText = trimmed;
-      // Remove the exact SKU from the text
-      nameText = nameText.replace(new RegExp('\\b' + sku + '\\b', 'gi'), '');
-      
-      // Remove prices from the text
-      priceMatches.forEach(m => {
-        nameText = nameText.replace(m[0], '');
-      });
-
-      // Remove warranty text
-      const warrantyMatch = trimmed.match(/(\d+\s*(?:meses|años|mes|año|días|dias))/i);
-      let warranty = '3 meses'; // Default
+      // Garantía: "1 mes de garantía", "30 dias naturales de garantia", etc.
+      // Se extrae a su propio campo — dejarla dentro del nombre duplicaría
+      // la información y ensuciaría el catálogo.
+      const warrantyMatch = nameText.match(/(\d+\s*(?:meses|años|mes|año|días|dias)(?:\s+de\s+garant[ií]a)?)/i);
+      let warranty = '3 meses';
       if (warrantyMatch) {
-        warranty = warrantyMatch[1].trim();
+        warranty = warrantyMatch[1].replace(/\s+de\s+garant[ií]a/i, '').trim();
         nameText = nameText.replace(warrantyMatch[0], '');
       }
 
-      // Remove URL text (image URL)
-      const urlMatch = trimmed.match(/(https?:\/\/[^\s]+)/i);
+      // "Agotado"/"(Agotado)": el proveedor no tiene existencias de ese
+      // modelo ahora mismo. Se detecta para no importarlo seleccionado por
+      // defecto, y se limpia del nombre.
+      const agotado = /agotado/i.test(nameText);
+      nameText = nameText.replace(/[([]?\s*agotado\s*[)\]]?/gi, '');
+
+      // URL de imagen, si el proveedor la incluye en la misma línea.
+      const urlMatch = nameText.match(/(https?:\/\/[^\s]+)/i);
       let imageUrl = '';
       if (urlMatch) {
         imageUrl = urlMatch[1].trim();
         nameText = nameText.replace(urlMatch[0], '');
       }
 
-      let name = nameText
+      const name = nameText
         .replace(/[\s\t,;|-]+/g, ' ')
         .replace(/^\s*[-:|;,]\s*/, '')
         .replace(/\s*[-:|;,]\s*$/, '')
         .trim();
 
-      // Fallback name if extraction leaves it empty
-      if (!name || name.length < 3) {
-        name = `Producto ${sku}`;
-      }
+      // Sin nombre reconocible, la línea es basura (número de página,
+      // encabezado suelto, etc.) y no un artículo real: se descarta.
+      if (!name || name.length < 2) return;
 
-      // La categoría que se adivina del nombre tiene que ser una de las que
-      // la tienda sabe mostrar (src/utils/categorias.ts). Antes se asignaban
-      // aquí nombres viejos —Fundas, Cables, Otros— y el producto importado
-      // nacía con una categoría que el catálogo público no reconocía.
-      let category = 'Accesorios';
-      const lowerName = name.toLowerCase();
-      if (lowerName.includes('funda') || lowerName.includes('protector') || lowerName.includes('carcasa') || lowerName.includes('estuche')) category = 'Estuches';
-      else if (lowerName.includes('cable') || lowerName.includes('cargador')) category = 'Cargadores';
-      else if (lowerName.includes('teclado') || lowerName.includes('mouse') || lowerName.includes('laptop') || lowerName.includes('celular')) category = 'Dispositivos';
-      else if (lowerName.includes('audífono') || lowerName.includes('audifono') || lowerName.includes('parlante')) category = 'Audio';
-      else if (lowerName.includes('repuesto') || lowerName.includes('pantalla') || lowerName.includes('batería') || lowerName.includes('bateria') || lowerName.includes('flex')) category = 'Repuestos';
+      const category = defaultCategory;
 
-      if (!sku) {
-        let prefix = 'GEN';
-        if (category === 'Estuches') prefix = 'EST';
-        else if (category === 'Cargadores') prefix = 'CRG';
-        else if (category === 'Dispositivos') prefix = 'DSP';
-        else if (category === 'Audio') prefix = 'AUD';
-        else if (category === 'Repuestos' || sparePartCategories.includes(category)) prefix = 'RPT';
-        else prefix = 'ACC';
-        sku = `${prefix}-${Math.round(Math.random() * 100000)}`;
-      }
+      // El SKU del proveedor no sirve de nada aquí (no es el código interno
+      // de Technoverse), así que se genera con la misma fórmula que usa el
+      // alta manual. `seed` sube en cada fila, así que dos variantes con
+      // nombres parecidos ("A01" / "A01 con marco") nunca chocan entre sí
+      // dentro del mismo lote.
+      const sku = buildAutoSku(name, category, seed);
+      seed += 1;
 
-      const finalCost = isUsd ? Math.round(costValue * 540) : Math.round(costValue);
-      const skuDuplicate = productsInDb.some(p => p.sku && p.sku.toLowerCase() === sku.toLowerCase() && p.active !== false);
+      const skuDuplicate = productsInDb.some(p => p && p.sku && p.sku.toLowerCase() === sku.toLowerCase() && p.active !== false);
       const histData = historicalSkus.find(h => h && h.sku && h.sku.toLowerCase() === sku.toLowerCase());
-      const skuHistorical = !!histData;
 
       results.push({
         sku,
         name,
         category,
         cost: finalCost,
-        price: 0, // Initially 0, mandatory for importing!
-        stock: 0, // Initially 0, mandatory >= 0!
-        imageUrl: imageUrl || '',
-        warranty: warranty,
-        selected: true,
+        price: 0, // Precio de venta: se define aquí (o con el margen global), nunca se adivina.
+        stock: 0, // Una lista de precios no es una entrega física: el stock real se cuenta aparte.
+        imageUrl,
+        warranty,
+        selected: !agotado,
         isPriceManuallyEdited: false,
         skuDuplicate,
-        skuHistorical,
-        historicalData: histData || null
+        skuHistorical: !!histData,
+        historicalData: histData || null,
+        agotado,
       });
     });
 
     return results;
   };
 
-  const simulatePdfAnalysis = (filename: string, textToParse: string) => {
-    setIsAnalyzingPdf(true);
-    setAnalysisProgress(0);
-    setAnalysisLogs([]);
-    setExtractedProducts([]);
-    setPdfRawText(textToParse);
-
-    const steps = [
-      { p: 15, log: `🔍 Iniciando análisis de estructura de "${filename}" (Mapeo de contenedores)...` },
-      { p: 35, log: "📂 Buscando secciones tabulares de datos (Columnas: Código, Descripción, Precio)..." },
-      { p: 60, log: "✓ Encontrada tabla de productos. Extrayendo registros de costos y campos alfanuméricos..." },
-      { p: 80, log: "💲 Analizando divisas y tipos de cambio (Tasa de conversión: 1 USD = 540 CRC)..." },
-      { p: 95, log: "✓ Ejecutando heurística de categorías e identificando registros de garantías..." },
-      { p: 100, log: "🚀 ¡Análisis finalizado con éxito! Generando vista previa de productos detectados." }
-    ];
-
-    let currentStep = 0;
-    const runSimulation = () => {
-      if (currentStep < steps.length) {
-        const step = steps[currentStep];
-        setAnalysisProgress(step.p);
-        setAnalysisLogs(prev => [...prev, step.log]);
-        currentStep++;
-        setTimeout(runSimulation, 450);
-      } else {
-        setIsAnalyzingPdf(false);
-        const parsed = parseTextToProducts(textToParse, products, historicalSkus);
-        setExtractedProducts(parsed);
-        showToast(`Se han detectado ${parsed.length} productos listos para previsualización.`, 'success');
-      }
-    };
-
-    setTimeout(runSimulation, 200);
+  /**
+   * Lee el texto real del archivo (PDF o texto plano) y lo pasa por el
+   * parser. Antes esto era pura fachada: `handlePdfUpload` ignoraba el
+   * archivo subido y elegía uno de tres textos de muestra según el NOMBRE
+   * del archivo — nunca leyó un PDF de verdad. Se reemplaza por extracción
+   * real (`extractTextFromFile`, pdf.js para PDF / FileReader para .txt).
+   */
+  const analizarArchivo = async (textoExtraido: string) => {
+    setIsAnalyzingPdf(false);
+    setPdfRawText(textoExtraido);
+    if (!textoExtraido.trim()) {
+      showToast(
+        'No se pudo leer texto de ese archivo. Si es un PDF escaneado (una foto de la lista, sin texto real detrás), pruebe con la lista en formato de texto plano, o péguela a mano abajo.',
+        'error'
+      );
+      setExtractedProducts([]);
+      return;
+    }
+    const parsed = parseTextToProducts(textoExtraido, products, historicalSkus, globalCategory);
+    setExtractedProducts(parsed);
+    if (parsed.length === 0) {
+      showToast('No se detectó ningún artículo con precio en el archivo. Puede pegar o corregir el texto a mano en el editor de abajo.', 'warning');
+    } else {
+      const agotados = parsed.filter(r => r.agotado).length;
+      showToast(
+        `Se detectaron ${parsed.length} artículo(s) listos para revisar.` +
+        (agotados > 0 ? ` ${agotados} marcados "agotado" quedaron sin seleccionar.` : ''),
+        'success'
+      );
+    }
   };
 
-  const handlePdfUpload = (file: File) => {
+  const handlePdfUpload = async (file: File) => {
     if (!file) return;
     if (file.size > 10 * 1024 * 1024) {
       showToast("El archivo excede el límite de 10 MB.", "error");
       return;
     }
 
-    const lowerName = file.name.toLowerCase();
-    let selectedText = "";
-
-    if (lowerName.includes("repuesto") || lowerName.includes("taller") || lowerName.includes("pantalla")) {
-      selectedText = `PROVEEDOR CENTRAL DE REPUESTOS DE COSTA RICA\nSUCURSAL SAN JOSÉ - TEL: 2255-0000\n\nCÓDIGO          DESCRIPCIÓN                                 PRECIO      GARANTÍA     IMAGEN\nREP-SCR-IP13    Repuesto Pantalla OLED para iPhone 13       ₡32400 CRC  3 meses      https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=150\nREP-BTY-IP11    Repuesto Batería Interna Reemplazo iPhone   ₡9720 CRC   3 meses      https://images.unsplash.com/photo-1517404289873-c4d37553c6f5?w=150\nCBL-FLEX-CHG    Cable Flex Conector de Carga Samsung S21    ₡4320 CRC   3 meses      https://images.unsplash.com/photo-1563770660941-20978e870e26?w=150`;
-    } else if (lowerName.includes("gaming") || lowerName.includes("periferico") || lowerName.includes("teclado") || lowerName.includes("mouse") || lowerName.includes("audio")) {
-      selectedText = `GAMING WHOLESALE DISTRIBUTION INC.\nMIAMI, FL - INVOICE #998821\n\nSKU             ITEM DESCRIPTION                            PRICE       WARRANTY     IMAGE\nTEC-MECH-RGB    Teclado Mecánico Retroiluminado RGB Switch $30.00 USD  12 meses     https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=150\nMOU-ERG-WIRE    Mouse Óptico Ergonómico Recargable         $12.00 USD  6 meses      https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?w=150\nAUD-GAM-71      Audífono Gamer Pro 7.1 Sonido Envolvente   $25.00 USD  24 meses     https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=150`;
-    } else {
-      selectedText = `DISTRIBUIDORA GLOBAL DE ACCESORIOS S.A.\nFECHA: 2026-07-07   CÓDIGO CLIENTE: TECH-552\n\nCÓDIGO          DESCRIPCIÓN                                 PRECIO      GARANTÍA     IMAGEN\nFND-MAG-IP15    Funda Silicona Magnética iPhone 15 Pro     $9.00 USD   12 meses     https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=150\nCBL-TC-3A       Cable de Carga Rápida USB-C a USB-C 3A      $4.00 USD   6 meses      https://images.unsplash.com/photo-1541140111913-ee9602dfaf7f?w=150\nCRG-GAN-35W     Cargador Dual GaN de Pared 35W Ultra       $14.00 USD  12 meses     https://images.unsplash.com/photo-1622445262465-2481c4574875?w=150`;
+    setExtractedProducts([]);
+    setPdfRawText('');
+    setIsAnalyzingPdf(true);
+    setPdfReadProgress('Leyendo el archivo…');
+    try {
+      const { extractTextFromFile } = await import('../utils/pdfText');
+      const texto = await extractTextFromFile(file);
+      await analizarArchivo(texto);
+    } catch (e: any) {
+      setIsAnalyzingPdf(false);
+      showToast(`No se pudo leer el archivo: ${e?.message || e}`, 'error');
+    } finally {
+      setPdfReadProgress('');
     }
-
-    simulatePdfAnalysis(file.name, selectedText);
   };
 
   const handleApplyGlobalMargin = () => {
@@ -674,11 +667,17 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     showToast("Fila removida de la vista previa de importación.", "info");
   };
 
-  const isImportDisabled = extractedProducts.length === 0 || extractedProducts.some(row => 
+  // El stock NO es obligatorio: una lista de precios registra el CATÁLOGO
+  // (qué existe y a qué costo), no una entrega física. Exigir stock > 0 en
+  // cada fila obligaría a escribir una cantidad a mano en potencialmente
+  // cientos de filas antes de poder importar nada — exactamente lo que
+  // este importador existe para evitar. El stock real se cuenta y se carga
+  // aparte, cuando el pedido físico llega.
+  const isImportDisabled = extractedProducts.length === 0 || extractedProducts.some(row =>
     row.selected && (
-      !row.sku.trim() || 
-      row.price <= 0 || 
-      row.stock <= 0
+      !row.sku.trim() ||
+      row.price <= 0 ||
+      row.stock < 0
     )
   );
 
@@ -1468,15 +1467,15 @@ if (!m) return null;
                   type="button"
                   onClick={() => {
                     setExtractedProducts([]);
-                    setAnalysisLogs([]);
-                    setAnalysisProgress(0);
+                    setPdfRawText('');
                     setIsAnalyzingPdf(false);
                     setGlobalMargin(30);
+                    setGlobalCategory(activeSubTab === 'repuestos' ? 'LCD' : activeSubTab === 'insumos' ? 'Temperado' : 'Accesorios');
                     setShowPdfModal(true);
                   }}
                   className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-slate-950 font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition"
                 >
-                  <FileText className="w-4 h-4" /> Importar desde PDF
+                  <FileText className="w-4 h-4" /> Importar lista de precios
                 </button>
                 <button
                   onClick={handleStartCount}
@@ -2428,9 +2427,9 @@ if (!m) return null;
             <div className="p-6 border-b border-[var(--border-color)]/80 flex justify-between items-center bg-[var(--bg-surface)] ">
               <div className="space-y-1">
                 <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-emerald-400 dark:text-[var(--brand-gold-light)]" /> Importación Masiva de Productos por PDF
+                  <FileText className="w-5 h-5 text-emerald-400 dark:text-[var(--brand-gold-light)]" /> Importador de Listas de Precios
                 </h3>
-                <p className="text-xs text-[var(--text-secondary)]">Analice y procese listas de precios distribuidor en PDF para integrarlos a su inventario activo en segundos.</p>
+                <p className="text-xs text-[var(--text-secondary)]">Suba la lista de precios de un proveedor (PDF o texto plano) para registrar sus artículos en el inventario, sin escribirlos uno por uno.</p>
               </div>
               <button 
                 onClick={() => setShowPdfModal(false)} 
@@ -2447,13 +2446,14 @@ if (!m) return null;
               {extractedProducts.length === 0 && !isAnalyzingPdf && (
                 <div className="space-y-6 max-w-2xl mx-auto py-8">
                   <div className="border-2 border-dashed border-[var(--border-color)]/80 hover:border-emerald-500 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50 rounded-2xl p-8 text-center bg-[var(--bg-surface)] cursor-pointer transition relative group">
-                    <input 
-                      type="file" 
-                      accept=".pdf" 
+                    <input
+                      type="file"
+                      accept=".pdf,.txt"
                       onChange={(e) => {
                         if (e.target.files && e.target.files[0]) {
                           handlePdfUpload(e.target.files[0]);
                         }
+                        e.target.value = '';
                       }}
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
@@ -2462,90 +2462,31 @@ if (!m) return null;
                         <Upload className="w-6 h-6" />
                       </div>
                       <div className="space-y-1">
-                        <p className="text-sm font-bold text-[var(--text-primary)]">Seleccione o arrastre su archivo PDF</p>
-                        <p className="text-xs text-[var(--text-secondary)]">Archivos PDF de hasta 10 MB de tamaño máximo.</p>
+                        <p className="text-sm font-bold text-[var(--text-primary)]">Seleccione o arrastre la lista de precios</p>
+                        <p className="text-xs text-[var(--text-secondary)]">PDF o texto plano (.txt), hasta 10 MB.</p>
                       </div>
                     </div>
                   </div>
 
-                  {/* Test Templates Actions */}
-                  <div className="space-y-3">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] flex items-center gap-1.5">
-                      <Sparkles className="w-3.5 h-3.5 text-emerald-400 dark:text-[var(--brand-gold-light)]" /> Plantillas de Prueba Rápidas
-                    </h4>
-                    <p className="text-xs text-[var(--text-secondary)]">¿No tiene un PDF a mano? Use uno de nuestros escenarios de importación pre-diseñados para simular la extracción:</p>
-                    <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-                      <button
-                        onClick={() => {
-                          simulatePdfAnalysis("factura-accesorios-distribuidor.pdf", `DISTRIBUIDORA GLOBAL DE ACCESORIOS S.A.\nFECHA: 2026-07-07   CÓDIGO CLIENTE: TECH-552\n\nCÓDIGO          DESCRIPCIÓN                                 PRECIO      GARANTÍA     IMAGEN\nFND-MAG-IP15    Funda Silicona Magnética iPhone 15 Pro     $9.00 USD   12 meses     https://images.unsplash.com/photo-1541807084-5c52b6b3adef?w=150\nCBL-TC-3A       Cable de Carga Rápida USB-C a USB-C 3A      $4.00 USD   6 meses      https://images.unsplash.com/photo-1541140111913-ee9602dfaf7f?w=150\nCRG-GAN-35W     Cargador Dual GaN de Pared 35W Ultra       $14.00 USD  12 meses     https://images.unsplash.com/photo-1622445262465-2481c4574875?w=150`);
-                        }}
-                        className="p-3 bg-[var(--bg-surface)] border border-[var(--border-color)]/50 hover:border-emerald-500 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/30 rounded-xl text-left hover:bg-[var(--bg-surface)] transition flex flex-col justify-between"
-                      >
-                        <div>
-                          <strong className="text-xs text-[var(--text-primary)] block truncate">Accesorios General</strong>
-                          <span className="text-[10px] text-[var(--text-secondary)]">Precios en USD convertibles.</span>
-                        </div>
-                        <span className="text-[9px] font-mono text-emerald-400 dark:text-[var(--brand-gold-light)] mt-2 block">Cargar plantilla ➔</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          simulatePdfAnalysis("repuestos-taller-costarica.pdf", `PROVEEDOR CENTRAL DE REPUESTOS DE COSTA RICA\nSUCURSAL SAN JOSÉ - TEL: 2255-0000\n\nCÓDIGO          DESCRIPCIÓN                                 PRECIO      GARANTÍA     IMAGEN\nREP-SCR-IP13    Repuesto Pantalla OLED para iPhone 13       ₡32400 CRC  3 meses      https://images.unsplash.com/photo-1581091226825-a6a2a5aee158?w=150\nREP-BTY-IP11    Repuesto Batería Interna Reemplazo iPhone   ₡9720 CRC   3 meses      https://images.unsplash.com/photo-1517404289873-c4d37553c6f5?w=150\nCBL-FLEX-CHG    Cable Flex Conector de Carga Samsung S21    ₡4320 CRC   3 meses      https://images.unsplash.com/photo-1563770660941-20978e870e26?w=150`);
-                        }}
-                        className="p-3 bg-[var(--bg-surface)] border border-[var(--border-color)]/50 hover:border-emerald-500 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/30 rounded-xl text-left hover:bg-[var(--bg-surface)] transition flex flex-col justify-between"
-                      >
-                        <div>
-                          <strong className="text-xs text-[var(--text-primary)] block truncate">Taller y Repuestos</strong>
-                          <span className="text-[10px] text-[var(--text-secondary)]">Precios directos en Colones.</span>
-                        </div>
-                        <span className="text-[9px] font-mono text-emerald-400 dark:text-[var(--brand-gold-light)] mt-2 block">Cargar plantilla ➔</span>
-                      </button>
-
-                      <button
-                        onClick={() => {
-                          simulatePdfAnalysis("perifericos-gaming-importacion.pdf", `GAMING WHOLESALE DISTRIBUTION INC.\nMIAMI, FL - INVOICE #998821\n\nSKU             ITEM DESCRIPTION                            PRICE       WARRANTY     IMAGE\nTEC-MECH-RGB    Teclado Mecánico Retroiluminado RGB Switch $30.00 USD  12 meses     https://images.unsplash.com/photo-1587829741301-dc798b83add3?w=150\nMOU-ERG-WIRE    Mouse Óptico Ergonómico Recargable         $12.00 USD  6 meses      https://images.unsplash.com/photo-1615663245857-ac93bb7c39e7?w=150\nAUD-GAM-71      Audífono Gamer Pro 7.1 Sonido Envolvente   $25.00 USD  24 meses     https://images.unsplash.com/photo-1505740420928-5e560c06d30e?w=150`);
-                        }}
-                        className="p-3 bg-[var(--bg-surface)] border border-[var(--border-color)]/50 hover:border-emerald-500 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/30 rounded-xl text-left hover:bg-[var(--bg-surface)] transition flex flex-col justify-between"
-                      >
-                        <div>
-                          <strong className="text-xs text-[var(--text-primary)] block truncate">Periféricos Gaming</strong>
-                          <span className="text-[10px] text-[var(--text-secondary)]">SKUs del histórico integrados.</span>
-                        </div>
-                        <span className="text-[9px] font-mono text-emerald-400 dark:text-[var(--brand-gold-light)] mt-2 block">Cargar plantilla ➔</span>
-                      </button>
-                    </div>
+                  <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/50 rounded-xl p-3 text-[11px] text-[var(--text-secondary)] leading-relaxed">
+                    Funciona mejor cuando cada artículo va en su propia línea con el precio marcado
+                    (₡ o $), como suelen venir estas listas — por ejemplo: <br />
+                    <code className="font-mono text-[10px] text-[var(--text-primary)]">Honor X6B Con marco 1 mes de garantía ₡10 000</code>
+                    <br />
+                    Si el PDF es una foto escaneada (sin texto real detrás), no se puede leer así:
+                    copie el texto a mano en el editor de más abajo.
                   </div>
                 </div>
               )}
 
-              {/* Step 2: Processing and extraction loader */}
+              {/* Step 2: Lectura y análisis en curso */}
               {isAnalyzingPdf && (
-                <div className="space-y-6 max-w-md mx-auto py-12 text-center">
-                  <div className="space-y-3">
-                    <div className="w-16 h-16 rounded-full bg-emerald-500 dark:bg-[var(--brand-gold-mid)]/10 border border-emerald-500 dark:border-[var(--brand-gold-mid)]/30 flex items-center justify-center mx-auto text-emerald-400 dark:text-[var(--brand-gold-light)] animate-spin">
-                      <FileText className="w-8 h-8" />
-                    </div>
-                    <h4 className="text-sm font-bold text-[var(--text-primary)]">Análisis de Documento en Progreso</h4>
-                    <p className="text-xs text-[var(--text-secondary)]">Extrayendo datos de productos estructurados con heurísticas avanzadas de Technoverse...</p>
+                <div className="space-y-4 max-w-md mx-auto py-16 text-center">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500 dark:bg-[var(--brand-gold-mid)]/10 border border-emerald-500 dark:border-[var(--brand-gold-mid)]/30 flex items-center justify-center mx-auto text-emerald-400 dark:text-[var(--brand-gold-light)] animate-spin">
+                    <FileText className="w-8 h-8" />
                   </div>
-
-                  {/* Progress bar */}
-                  <div className="w-full bg-[var(--bg-surface)] rounded-full h-2.5 overflow-hidden">
-                    <div 
-                      className="bg-emerald-500 dark:bg-[var(--brand-gold-mid)] h-2.5 rounded-full transition-all duration-300"
-                      style={{ width: `${analysisProgress}%` }}
-                    />
-                  </div>
-                  <span className="text-xs font-mono font-bold text-emerald-400 dark:text-[var(--brand-gold-light)]">{analysisProgress}% Completado</span>
-
-                  {/* Analysis Logs Console */}
-                  <div className="bg-[var(--bg-surface)] rounded-xl p-3 text-left font-mono text-[10px] text-[var(--text-secondary)] border border-[var(--border-color)]/50 space-y-1 max-h-[150px] overflow-y-auto">
-                    {analysisLogs.map((log, idx) => (
-                      <p key={idx} className={idx === analysisLogs.length - 1 ? 'text-emerald-400 dark:text-[var(--brand-gold-light)] font-bold' : ''}>
-                        {log}
-                      </p>
-                    ))}
-                  </div>
+                  <h4 className="text-sm font-bold text-[var(--text-primary)]">Leyendo el archivo…</h4>
+                  <p className="text-xs text-[var(--text-secondary)]">{pdfReadProgress || 'Extrayendo el texto para analizarlo.'}</p>
                 </div>
               )}
 
@@ -2554,8 +2495,36 @@ if (!m) return null;
                 <div className="space-y-6 animate-fade-in">
                   
                   {/* Configuration & Controls */}
-                  <div className="grid grid-cols-1 md:grid-cols-4 gap-4 bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-color)]/50">
-                    
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-color)]/50">
+
+                    {/* Categoría para todo el lote */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-[var(--text-secondary)]">
+                        Categoría del lote
+                      </label>
+                      <div className="flex gap-2">
+                        <div className="flex-1 min-w-0">
+                          <CustomSelect
+                            value={globalCategory}
+                            onChange={setGlobalCategory}
+                            className="text-xs py-1.5"
+                            options={[...CATEGORIAS_REPUESTO, ...CATEGORIAS_TIENDA].map(c => ({ value: c, label: c }))}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExtractedProducts(prev => prev.map(row => ({ ...row, category: globalCategory })));
+                            showToast(`Categoría "${globalCategory}" aplicada a todas las filas.`, 'success');
+                          }}
+                          className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-slate-950 font-bold text-xs px-4 py-1.5 rounded-xl transition"
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-[var(--text-secondary)]">Una lista de proveedor casi siempre es de una sola familia; edite fila por fila si no.</p>
+                    </div>
+
                     {/* Price Margin tool */}
                     <div className="space-y-2">
                       <label className="text-xs font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
@@ -2646,9 +2615,9 @@ if (!m) return null;
                         <tbody className="divide-y divide-white/5">
                           {extractedProducts.map((row, index) => {
                             const isRowInvalid = row.selected && (
-                              !row.sku.trim() || 
-                              row.price <= 0 || 
-                              row.stock <= 0
+                              !row.sku.trim() ||
+                              row.price <= 0 ||
+                              row.stock < 0
                             );
 
                             return (
@@ -2783,12 +2752,22 @@ if (!m) return null;
                                 </td>
 
                                 <td className="p-3">
-                                  <input 
-                                    type="text" 
-                                    value={row.name} 
-                                    onChange={(e) => handleNameChange(index, e.target.value)}
-                                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-xs px-2 py-1 rounded text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
-                                  />
+                                  <div className="flex items-center gap-1.5">
+                                    <input
+                                      type="text"
+                                      value={row.name}
+                                      onChange={(e) => handleNameChange(index, e.target.value)}
+                                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-xs px-2 py-1 rounded text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
+                                    />
+                                    {row.agotado && (
+                                      <span
+                                        className="flex-shrink-0 px-1.5 py-0.5 rounded bg-rose-500/15 text-rose-500 text-[9px] font-bold uppercase tracking-wide"
+                                        title="La lista marcaba este artículo como agotado en el proveedor: se dejó sin seleccionar."
+                                      >
+                                        Agotado
+                                      </span>
+                                    )}
+                                  </div>
                                 </td>
 
                                 <td className="p-3">
@@ -2796,9 +2775,17 @@ if (!m) return null;
                                     value={row.category}
                                     onChange={(val) => handleCategoryChange(index, val)}
                                     className="text-xs py-1"
-                                    // Importación masiva: las mismas categorías de
-                                    // la tienda, más "Repuestos" para lo de taller.
-                                    options={[...CATEGORIAS_TIENDA, 'Repuestos'].map(c => ({ value: c, label: c }))}
+                                    // FALLO CORREGIDO: aquí se ofrecía el literal
+                                    // "Repuestos", que NO es ninguna de las
+                                    // categorías que `esRepuesto()` reconoce
+                                    // (categorias.ts): 'LCD', 'Batería', 'Flex', etc.
+                                    // Un producto importado con categoría
+                                    // "Repuestos" pasaba el filtro visual de esta
+                                    // pantalla, pero no aparecía en el selector de
+                                    // repuestos de Cobros ni se excluía del catálogo
+                                    // público — quedaba huérfano. Se ofrecen las
+                                    // categorías reales de taller en su lugar.
+                                    options={[...CATEGORIAS_REPUESTO, ...CATEGORIAS_TIENDA].map(c => ({ value: c, label: c }))}
                                   />
                                 </td>
 
@@ -2832,12 +2819,13 @@ if (!m) return null;
                                       value={row.stock || ''} 
                                       onChange={(e) => handleStockChange(index, e.target.value === '' ? 0 : parseInt(e.target.value, 10))}
                                       className={`w-full bg-[var(--bg-surface)]  border text-xs px-2 py-1 rounded text-right focus:outline-none font-mono ${
-                                        row.selected && row.stock <= 0 ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-[var(--border-color)]/80 text-[var(--text-primary)] focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)] dark:border-[var(--brand-gold-mid)]'
+                                        row.selected && row.stock < 0 ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-[var(--border-color)]/80 text-[var(--text-primary)] focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)] dark:border-[var(--brand-gold-mid)]'
                                       }`}
+                                      placeholder="0"
                                     />
-                                    {row.selected && row.stock <= 0 && (
+                                    {row.selected && row.stock < 0 && (
                                       <div className="absolute left-1/2 -translate-x-1/2 -top-8 bg-rose-600 text-white text-[10px] px-2 py-1 rounded shadow-sm opacity-0 group-hover:opacity-100 transition duration-150 pointer-events-none whitespace-nowrap z-50">
-                                        Debe ser mayor a 0
+                                        No puede ser negativo
                                       </div>
                                     )}
                                   </div>
@@ -2874,9 +2862,9 @@ if (!m) return null;
                   {/* Manual Text Scraper Area */}
                   <div className="space-y-2 bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-color)]/50">
                     <h4 className="text-xs font-bold text-[var(--text-secondary)] uppercase tracking-wider flex items-center gap-1.5">
-                      ⌨️ Editor del Raw Text Extraído
+                      ⌨️ Editor del texto extraído
                     </h4>
-                    <p className="text-[10px] text-[var(--text-secondary)]">¿Desea cambiar el texto plano simulado o pegar nuevos datos directamente? Edite abajo y haga clic en re-analizar para actualizar la tabla de forma interactiva.</p>
+                    <p className="text-[10px] text-[var(--text-secondary)]">Este es el texto real que se leyó del archivo. Corríjalo o pegue otro directamente y haga clic en re-analizar para actualizar la tabla.</p>
                     <textarea 
                       value={pdfRawText}
                       onChange={(e) => setPdfRawText(e.target.value)}
@@ -2887,7 +2875,7 @@ if (!m) return null;
                       <button
                         type="button"
                         onClick={() => {
-                          const parsed = parseTextToProducts(pdfRawText, products, historicalSkus);
+                          const parsed = parseTextToProducts(pdfRawText, products, historicalSkus, globalCategory);
                           setExtractedProducts(parsed);
                           showToast(`Se han detectado y actualizado ${parsed.length} productos mediante el Raw Text.`, 'success');
                         }}
