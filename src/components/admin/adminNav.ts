@@ -21,7 +21,7 @@
 
 import {
   LayoutDashboard, Package, Wrench, ArrowRightLeft, FileSpreadsheet,
-  Cpu,
+  Cpu, Boxes,
   MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
@@ -85,6 +85,14 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         icon: Cpu,
         descripcion: 'Piezas para reparación: existencias, costos y reposición.',
         buscar: ['repuestos', 'piezas', 'partes', 'pantallas', 'baterias', 'taller'],
+      },
+      {
+        id: 'inventario_insumos',
+        label: 'Insumos',
+        short: 'Insumos',
+        icon: Boxes,
+        descripcion: 'Temperados, micas, cables y demás material que se consume o se regala.',
+        buscar: ['insumos', 'temperados', 'micas', 'cables', 'estuches', 'regalia', 'consumibles'],
       },
       {
         id: 'inventario_movimientos',
