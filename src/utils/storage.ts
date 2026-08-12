@@ -933,6 +933,25 @@ function initTableRealtimeSync(cfg: TableConfig<any>) {
   });
 }
 
+/**
+ * Vuelve a leer "products" de Supabase de inmediato y deja `localCache`
+ * (y por lo tanto `getDB()`) al día.
+ *
+ * POR QUÉ EXISTE: el canal de Realtime también refresca esta tabla, pero
+ * con una ventana de "coalescing" de 200ms (ver `montarCanal`) pensada
+ * para agrupar varios cambios seguidos, no para garantizar que esté lista
+ * en el instante exacto en que alguien la necesita. Justo después de un
+ * cobro (`adjust_stock` corre del lado de Supabase, sin pasar por
+ * `saveDB()`) es exactamente ese instante: si la pantalla de Cobros lee
+ * `getDB().products` ahí mismo, puede ver todavía el stock de ANTES de
+ * descontar, y parece —a quien está probando— que el descuento no
+ * ocurrió, aunque en la base ya esté correcto.
+ */
+export async function refreshProductsFromSupabase(): Promise<void> {
+  const cfg = TABLE_CONFIGS.find(c => c.key === 'products');
+  if (cfg) await refreshTableFromSupabase(cfg);
+}
+
 async function syncTableToSupabase(cfg: TableConfig<any>, added: any[], modified: any[], deleted: any[]) {
   if (!genericReady[cfg.key as string]) {
     if (!genericPending[cfg.key as string]) genericPending[cfg.key as string] = [];

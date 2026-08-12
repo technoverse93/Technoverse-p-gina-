@@ -30,7 +30,7 @@ import {
 import { PageHead, Card, Btn, Field, Chip, Stat, Empty, colones } from './admin/AdminKit';
 import { CustomSelect } from './CustomSelect';
 import { useToast, useConfirm } from './ui/Overlays';
-import { getDB } from '../utils/storage';
+import { getDB, refreshProductsFromSupabase } from '../utils/storage';
 import { validateCedula } from '../utils/invoicePdf';
 import type { IdentificacionTipo } from '../utils/invoicePdf';
 import {
@@ -287,6 +287,12 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
         toast.error(resultado.mensaje, resultado.requiereReemision ? 14000 : 8000);
       }
       onDataChanged();
+      // `adjust_stock` ya descontó el inventario en Supabase, pero eso pasa
+      // por fuera de `saveDB()`: la copia local (`getDB()`) solo se entera
+      // cuando llega el evento de Realtime, unos cientos de ms después. Sin
+      // este refresco explícito, el stock que se ve aquí mismo tras cobrar
+      // podía parecer "sin descontar" aunque en la base ya estuviera bien.
+      await refreshProductsFromSupabase();
       setProductos((getDB().products || []).filter(Boolean));
     } finally {
       setCobrando(false);
