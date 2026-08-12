@@ -39,10 +39,21 @@ export async function processSaleAtomic(cart: any[], newOrder: any) {
       throw new Error(msg || 'No se pudo procesar la venta.');
     }
 
-    const currentDb = getDB();
-    if (!currentDb.orders) currentDb.orders = [];
-    currentDb.orders.push(newOrder);
-
+    // OJO: esta función NO guarda el pedido, y antes lo aparentaba.
+    //
+    // Aquí había un `getDB().orders.push(newOrder)`. No hacía nada: `getDB()`
+    // devuelve una COPIA PROFUNDA de la caché, así que ese push escribía en un
+    // objeto que se descartaba al salir. La tienda nunca lo notó porque hace su
+    // propio push explícito y llama a `saveDB()` después.
+    //
+    // Pero era una trampa: cualquiera que leyera este código daría por hecho
+    // que llamar a `processSaleAtomic` deja la venta registrada. El módulo de
+    // cobros se apoyó justo en eso, y sus ventas no aparecían en el panel.
+    //
+    // Se elimina el push en vez de arreglarlo para que la responsabilidad
+    // quede en un solo sitio: ESTA función ajusta el stock de forma atómica, y
+    // GUARDAR EL PEDIDO ES DE QUIEN LLAMA. Si aquí se guardara, la tienda
+    // acabaría escribiendo el mismo pedido dos veces.
     return { success: true };
   } catch (err: any) {
     return { success: false, error: err.message };

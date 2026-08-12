@@ -379,10 +379,49 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
     };
   }
 
+  // El pedido se guarda AQUÍ, explícitamente. `processSaleAtomic` solo
+  // ajusta el stock: no persiste nada (ver su comentario). Sin esto la
+  // venta se cobraba, el inventario bajaba y el comprobante salía, pero
+  // el pedido no llegaba nunca a la base — y por tanto no aparecía en el
+  // panel general, ni en Contabilidad, ni en los ingresos del día.
   try {
-    await saveDB(getDB());
-  } catch {
-    /* el pedido ya está en memoria; el guardado se reintenta solo */
+    const bd = getDB();
+    if (!bd.orders) bd.orders = [];
+    bd.orders.push(pedido);
+
+    // Movimientos de inventario, uno por artículo consumido. Es lo que
+    // hace que la salida quede trazable: sin ellos el stock baja y nadie
+    // puede reconstruir por qué.
+    if (!bd.inventory_movements) bd.inventory_movements = [];
+    for (const i of consumos) {
+      bd.inventory_movements.unshift({
+        id: `MOV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
+        productId: i.productId,
+        productName: i.productName,
+        quantityChange: -i.quantity,
+        type: 'Salida',
+        notes: i.esRegalia
+          ? `Regalía entregada con el cobro ${pedidoId}`
+          : `Consumido en el servicio cobrado ${pedidoId}`,
+        timestamp: ahora.toISOString(),
+        userEmail: datos.adminEmail || 'admin',
+      } as any);
+    }
+
+    await saveDB(bd);
+  } catch (e: any) {
+    // El dinero ya se recibió y el stock ya bajó: no se puede deshacer.
+    // Se avisa con el número de pedido para poder registrarlo a mano.
+    return {
+      ok: false,
+      requiereReemision: true,
+      pedidoId,
+      margen,
+      mensaje:
+        `Se cobró y el inventario se descontó, pero el pedido ${pedidoId} no se pudo ` +
+        `guardar: ${e?.message || e}. Anote el número: no aparecerá en los informes ` +
+        `hasta registrarlo.`,
+    };
   }
 
   // ---- 2. Comprobante ----------------------------------------------------
