@@ -6,6 +6,7 @@ import {
   CheckCircle, ChevronDown, Download, Edit, Eye, EyeOff, FileSpreadsheet, Key, Mail, Megaphone, Plus, RefreshCw, Save, Trash2, UserPlus, Users,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
 import { cerrarSesionConservandoBiometria } from '../utils/biometria';
 import { CATEGORIAS_TIENDA, normalizarCategoria, esRepuesto } from '../utils/categorias';
@@ -230,6 +231,7 @@ export default function AdminPanel({
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
+  const [promotedUserEmail, setPromotedUserEmail] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [generatedUserPass, setGeneratedUserPass] = useState<string | null>(null);
@@ -721,12 +723,38 @@ export default function AdminPanel({
       });
 
       if (fnError || !fnData?.success) {
-        toast.error('No se pudo crear el usuario. Detalle: ' + (fnData?.error || fnError?.message || 'error desconocido'));
+        // Cuando la Edge Function responde con un status distinto de 2xx,
+        // supabase-js NO pone el cuerpo de la respuesta en `fnData`: lo
+        // envuelve en un FunctionsHttpError genérico ("Edge Function
+        // returned a non-2xx status code") y dejamos escapar ese mensaje
+        // inútil en vez del motivo real ("este correo ya existe", "faltan
+        // datos", etc.) que la función sí manda en el cuerpo JSON.
+        let detalle = fnData?.error || fnError?.message || 'error desconocido';
+        if (fnError instanceof FunctionsHttpError) {
+          try {
+            const cuerpo = await fnError.context.json();
+            if (cuerpo?.error) detalle = cuerpo.error;
+          } catch {
+            // Cuerpo no era JSON; nos quedamos con el mensaje genérico.
+          }
+        }
+        toast.error('No se pudo crear el usuario. Detalle: ' + detalle);
         return;
       }
 
-      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Seguridad', 'Crear Usuario Administrador', `Usuario administrador creado: ${newUserName} (${newUserEmail})`);
-      setGeneratedUserPass(finalPass);
+      const yaExistia = !!fnData?.promoted;
+      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Seguridad', yaExistia ? 'Ascender Usuario Existente a Administrador' : 'Crear Usuario Administrador', yaExistia ? `Cuenta existente ascendida a administrador: ${newUserName} (${newUserEmail})` : `Usuario administrador creado: ${newUserName} (${newUserEmail})`);
+      if (yaExistia) {
+        // Ya tenía cuenta (por ejemplo, se había registrado como cliente):
+        // solo se le subió el rol, su contraseña NO cambió. Mostrar
+        // `finalPass` aquí sería mostrar una contraseña que no sirve.
+        setGeneratedUserPass(null);
+        setPromotedUserEmail(newUserEmail.trim().toLowerCase());
+        toast.success('El correo ya tenía una cuenta: se le dio acceso de administrador. Su contraseña actual no cambió.');
+      } else {
+        setPromotedUserEmail(null);
+        setGeneratedUserPass(finalPass);
+      }
       setNewUserName('');
       setNewUserEmail('');
       setNewUserPassword('');
@@ -1430,7 +1458,7 @@ export default function AdminPanel({
                 </p>
 
                 <div>
-                  <Btn onClick={() => { setShowCreateUserForm(!showCreateUserForm); setGeneratedUserPass(null); }}>
+                  <Btn onClick={() => { setShowCreateUserForm(!showCreateUserForm); setGeneratedUserPass(null); setPromotedUserEmail(null); }}>
                     {showCreateUserForm ? 'Ocultar formulario' : 'Crear nuevo usuario'}
                   </Btn>
                 </div>
@@ -1479,6 +1507,16 @@ export default function AdminPanel({
                     <div className="font-mono text-[15px] font-bold text-[var(--text-primary)] break-all">{generatedUserPass}</div>
                     <p className="tv-hint">
                       Anótela ahora: no se vuelve a mostrar y no queda guardada en ninguna parte del panel.
+                    </p>
+                  </div>
+                )}
+
+                {promotedUserEmail && (
+                  <div className="rounded-[10px] border border-[var(--border-color)] bg-[var(--bg-sunken)] p-4">
+                    <div className="tv-label !mb-1">Cuenta existente ascendida</div>
+                    <div className="font-mono text-[15px] font-bold text-[var(--text-primary)] break-all">{promotedUserEmail}</div>
+                    <p className="tv-hint">
+                      Este correo ya tenía cuenta (por ejemplo, como cliente); ahora tiene acceso total al panel. Su contraseña sigue siendo la que ya tenía.
                     </p>
                   </div>
                 )}
