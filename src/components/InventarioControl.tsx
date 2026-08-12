@@ -9,7 +9,7 @@ import { useToast } from './ui/Overlays';
 import { 
   Package, Plus, Edit, Trash2, Search, Filter, History, MapPin, 
   Box, FileText, AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronRight, X, Image as ImageIcon, Save, Download,
-  Upload, Check, AlertCircle, Sparkles, Send, Boxes
+  Upload, Check, AlertCircle, Send, Boxes
 } from 'lucide-react';
 
 // CAABYS genérico ("Otros servicios n.c.p."), respaldo mientras se clasifica
@@ -57,13 +57,14 @@ interface ExtractedRow {
   sku: string;
   name: string;
   category: string;
-  cost: number; // Precio distribuidor (read-only)
-  price: number; // Precio de venta (editable, required, initially 0)
-  stock: number; // Stock inicial (editable, default 0)
+  // Precio base (de costo/distribuidor) — lo único que trae una lista de
+  // precios de proveedor. El precio de VENTA se define después, en otra
+  // etapa (al cobrar); este importador no lo pide ni lo calcula.
+  cost: number;
+  stock: number; // Stock inicial (editable, arranca en STOCK_INICIAL_IMPORTACION)
   imageUrl: string;
   warranty: string; // Garantía (editable)
   selected: boolean;
-  isPriceManuallyEdited: boolean;
   skuDuplicate: boolean;
   skuHistorical: boolean;
   historicalData: any;
@@ -200,8 +201,8 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     return () => { document.body.style.overflow = "auto"; };
   }, [traceProductModal, deleteProductModal, showPdfModal]);
   const [isAnalyzingPdf, setIsAnalyzingPdf] = useState(false);
+  const [isImportingProducts, setIsImportingProducts] = useState(false);
   const [extractedProducts, setExtractedProducts] = useState<ExtractedRow[]>([]);
-  const [globalMargin, setGlobalMargin] = useState<number | ''>(''); // default margin 30%
   // Categoría aplicada a TODO el lote importado. Una lista de precios de
   // proveedor casi siempre es de una sola familia (pantallas, por ejemplo),
   // así que adivinar la categoría línea por línea —como hacía la versión
@@ -406,7 +407,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         name,
         category,
         cost: finalCost,
-        price: 0, // Precio de venta: se define aquí (o con el margen global), nunca se adivina.
         // Aproximación pedida para este importador: 10 unidades por repuesto
         // en vez de partir de 0. Sigue siendo editable fila por fila (y
         // opcional: no es obligatorio corregirlo para poder importar) — es
@@ -415,7 +415,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         imageUrl,
         warranty,
         selected: !agotado,
-        isPriceManuallyEdited: false,
         skuDuplicate,
         skuHistorical: !!histData,
         historicalData: histData || null,
@@ -481,22 +480,18 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     }
   };
 
-  const handleApplyGlobalMargin = () => {
-    setExtractedProducts(prev => 
-      prev.map(row => {
-        if (row.isPriceManuallyEdited) {
-          return row;
-        }
-        return {
-          ...row,
-          price: Math.round(row.cost * (1 + globalMargin / 100))
-        };
-      })
-    );
-    showToast(`Margen global del ${globalMargin}% aplicado correctamente.`, 'success');
-  };
-
-  const handleImportSelected = () => {
+  const handleImportSelected = async () => {
+    // FALLO CORREGIDO (reportado en producción): esta función no era
+    // `async` y llamaba a `saveDB(db)` SIN esperarla — así que mostraba
+    // "¡Éxito!" y cerraba el modal de inmediato, mientras la subida real a
+    // Supabase (que además insertaba fila por fila, ver el fallo corregido
+    // en storage.ts) seguía corriendo de fondo. Bastaba con cambiar de
+    // pantalla para cortarla a la mitad: de una importación de 632
+    // productos, solo 81 de sus movimientos de inventario llegaron a
+    // guardarse. Ahora se espera de verdad a que termine antes de avisar
+    // que terminó, y el botón queda deshabilitado con "Importando…"
+    // mientras tanto para que quede claro que sigue en curso.
+    setIsImportingProducts(true);
     try {
       const db = getDB();
       if (!db.products) db.products = [];
@@ -509,7 +504,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
 
       selectedRows.forEach(row => {
         const trimmedSku = row.sku.trim();
-        
+
         const activeDuplicate = db.products.some(p => p && p.sku && p.sku.toLowerCase() === trimmedSku.toLowerCase() && p.active !== false);
         if (activeDuplicate) {
           omittedCount++;
@@ -522,7 +517,9 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
           sku: trimmedSku.toUpperCase(),
           description: row.warranty ? `Garantía: ${row.warranty}. Importado mediante PDF.` : 'Importado mediante PDF.',
           category: row.category,
-          price: row.price,
+          // Precio de venta: NO se pide ni se calcula en este módulo — se
+          // define después, en otra etapa. Aquí solo importa el costo.
+          price: 0,
           cost: row.cost,
           stock: row.stock,
           minStock: STOCK_MINIMO_AVISO_IMPORTACION,
@@ -553,7 +550,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         if (typeof window !== 'undefined') {
           window.dispatchEvent(new CustomEvent('product:created', { detail: newProduct }));
           if (row.stock > 0) {
-            window.dispatchEvent(new CustomEvent('stock:update', { 
+            window.dispatchEvent(new CustomEvent('stock:update', {
               detail: { productId: newProduct.id, newStock: row.stock }
             }));
           }
@@ -572,7 +569,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         );
       }
 
-      saveDB(db);
+      await saveDB(db);
       loadData();
       onDataChanged();
       setShowPdfModal(false);
@@ -585,6 +582,8 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     } catch (error: any) {
       console.error(error);
       showToast(`Error de escritura: ${error.message || 'Fallo desconocido'}`, 'error');
+    } finally {
+      setIsImportingProducts(false);
     }
   };
 
@@ -647,14 +646,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     });
   };
 
-  const handlePriceChange = (index: number, val: number) => {
-    setExtractedProducts(prev => {
-      const copy = [...prev];
-      copy[index] = { ...copy[index], price: val, isPriceManuallyEdited: true };
-      return copy;
-    });
-  };
-
   const handleStockChange = (index: number, val: number) => {
     setExtractedProducts(prev => {
       const copy = [...prev];
@@ -693,7 +684,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   const isImportDisabled = extractedProducts.length === 0 || extractedProducts.some(row =>
     row.selected && (
       !row.sku.trim() ||
-      row.price <= 0 ||
       row.stock < 0
     )
   );
@@ -1492,7 +1482,6 @@ if (!m) return null;
                     setExtractedProducts([]);
                     setPdfRawText('');
                     setIsAnalyzingPdf(false);
-                    setGlobalMargin(30);
                     setGlobalCategory(activeSubTab === 'repuestos' ? 'LCD' : activeSubTab === 'insumos' ? 'Temperado' : 'Accesorios');
                     setShowPdfModal(true);
                   }}
@@ -2454,9 +2443,10 @@ if (!m) return null;
                 </h3>
                 <p className="text-xs text-[var(--text-secondary)]">Suba la lista de precios de un proveedor (PDF o texto plano) para registrar sus artículos en el inventario, sin escribirlos uno por uno.</p>
               </div>
-              <button 
-                onClick={() => setShowPdfModal(false)} 
-                className="p-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-white transition"
+              <button
+                onClick={() => setShowPdfModal(false)}
+                disabled={isImportingProducts}
+                className="p-1.5 rounded-lg bg-[var(--bg-surface)] hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-white transition disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -2518,7 +2508,7 @@ if (!m) return null;
                 <div className="space-y-6 animate-fade-in">
                   
                   {/* Configuration & Controls */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-color)]/50">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-color)]/50">
 
                     {/* Categoría para todo el lote */}
                     <div className="space-y-2">
@@ -2546,30 +2536,6 @@ if (!m) return null;
                         </button>
                       </div>
                       <p className="text-[10px] text-[var(--text-secondary)]">Una lista de proveedor casi siempre es de una sola familia; edite fila por fila si no.</p>
-                    </div>
-
-                    {/* Price Margin tool */}
-                    <div className="space-y-2">
-                      <label className="text-xs font-bold text-[var(--text-secondary)] flex items-center gap-1.5">
-                        <Sparkles className="w-3.5 h-3.5 text-emerald-400 dark:text-[var(--brand-gold-light)]" /> Margen global (%)
-                      </label>
-                      <div className="flex gap-2">
-                        <input 
-                          type="number" 
-                          value={globalMargin}
-                          onChange={(e) => setGlobalMargin(e.target.value === '' ? '' : parseFloat(e.target.value))}
-                          className="flex-1 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-xs text-[var(--text-primary)] px-3 py-1.5 rounded-xl focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
-                          placeholder="30"
-                        />
-                        <button
-                          type="button"
-                          onClick={handleApplyGlobalMargin}
-                          className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-slate-950 font-bold text-xs px-4 py-1.5 rounded-xl transition"
-                        >
-                          Aplicar
-                        </button>
-                      </div>
-                      <p className="text-[10px] text-[var(--text-secondary)]">Afecta solo precios no modificados de forma manual.</p>
                     </div>
 
                     {/* Quick Selection Actions */}
@@ -2611,7 +2577,7 @@ if (!m) return null;
                     <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/50 rounded-xl p-3 flex flex-col justify-center">
                       <strong className="text-[11px] text-[var(--text-secondary)] block font-bold">ℹ️ Reglas de Validación</strong>
                       <p className="text-[10px] text-[var(--text-secondary)] mt-1">
-                        - <strong>Fila Roja:</strong> SKU vacío, Costo/Venta menor o igual a 0, Stock menor a 0. <br />
+                        - <strong>Fila Roja:</strong> SKU vacío o Stock negativo. <br />
                         - <strong>Fila Amarilla:</strong> SKU duplicado en inventario activo (se omitirá al guardar).
                       </p>
                     </div>
@@ -2629,7 +2595,6 @@ if (!m) return null;
                             <th className="p-4">Nombre del Producto</th>
                             <th className="p-4 w-32">Categoría</th>
                             <th className="p-4 w-28 text-right">Costo (Dist.)</th>
-                            <th className="p-4 w-28 text-right">Venta (Public)</th>
                             <th className="p-4 w-24 text-right">Stock</th>
                             <th className="p-4 w-28 text-center">Garantía</th>
                             <th className="p-4 w-12 text-center">Acción</th>
@@ -2639,7 +2604,6 @@ if (!m) return null;
                           {extractedProducts.map((row, index) => {
                             const isRowInvalid = row.selected && (
                               !row.sku.trim() ||
-                              row.price <= 0 ||
                               row.stock < 0
                             );
 
@@ -2818,28 +2782,9 @@ if (!m) return null;
 
                                 <td className="p-3">
                                   <div className="relative group">
-                                    <input 
-                                      type="number" 
-                                      value={row.price || ''} 
-                                      onChange={(e) => handlePriceChange(index, e.target.value === '' ? 0 : parseFloat(e.target.value))}
-                                      className={`w-full bg-[var(--bg-surface)]  border text-xs px-2 py-1 rounded text-right focus:outline-none font-mono ${
-                                        row.selected && row.price <= 0 ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-[var(--border-color)]/80 text-[var(--text-primary)] focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)] dark:border-[var(--brand-gold-mid)]'
-                                      }`}
-                                      placeholder="Definir"
-                                    />
-                                    {row.selected && row.price <= 0 && (
-                                      <div className="absolute left-1/2 -translate-x-1/2 -top-8 bg-rose-600 text-white text-[10px] px-2 py-1 rounded shadow-sm opacity-0 group-hover:opacity-100 transition duration-150 pointer-events-none whitespace-nowrap z-50">
-                                        Debe ser mayor a 0
-                                      </div>
-                                    )}
-                                  </div>
-                                </td>
-
-                                <td className="p-3">
-                                  <div className="relative group">
-                                    <input 
-                                      type="number" 
-                                      value={row.stock || ''} 
+                                    <input
+                                      type="number"
+                                      value={row.stock || ''}
                                       onChange={(e) => handleStockChange(index, e.target.value === '' ? 0 : parseInt(e.target.value, 10))}
                                       className={`w-full bg-[var(--bg-surface)]  border text-xs px-2 py-1 rounded text-right focus:outline-none font-mono ${
                                         row.selected && row.stock < 0 ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-[var(--border-color)]/80 text-[var(--text-primary)] focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)] dark:border-[var(--brand-gold-mid)]'
@@ -2928,22 +2873,32 @@ if (!m) return null;
                 <button
                   type="button"
                   onClick={() => setShowPdfModal(false)}
-                  className="px-4 py-2 bg-[var(--border-color)] hover:bg-slate-200 text-[var(--text-secondary)] rounded-xl text-xs font-bold transition"
+                  disabled={isImportingProducts}
+                  className="px-4 py-2 bg-[var(--border-color)] hover:bg-slate-200 text-[var(--text-secondary)] rounded-xl text-xs font-bold transition disabled:opacity-50 disabled:cursor-not-allowed"
                 >
                   Cancelar
                 </button>
                 {extractedProducts.length > 0 && (
                   <button
                     type="button"
-                    disabled={isImportDisabled}
+                    disabled={isImportDisabled || isImportingProducts}
                     onClick={handleImportSelected}
                     className={`px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
-                      isImportDisabled 
-                        ? 'bg-[var(--bg-surface)] text-[var(--text-muted)] cursor-not-allowed border border-[var(--border-color)]/50' 
+                      isImportDisabled || isImportingProducts
+                        ? 'bg-[var(--bg-surface)] text-[var(--text-muted)] cursor-not-allowed border border-[var(--border-color)]/50'
                         : 'bg-emerald-500 dark:bg-[var(--brand-gold-mid)] hover:bg-emerald-600 dark:hover:bg-[var(--brand-gold-mid)] dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-[var(--text-primary)] shadow-sm shadow-emerald-500/10'
                     }`}
                   >
-                    <Check className="w-4 h-4" /> Importar seleccionados
+                    {isImportingProducts ? (
+                      <>
+                        <span className="w-3.5 h-3.5 border-2 border-current border-t-transparent rounded-full animate-spin" />
+                        Importando… no cierre esta ventana
+                      </>
+                    ) : (
+                      <>
+                        <Check className="w-4 h-4" /> Importar seleccionados
+                      </>
+                    )}
                   </button>
                 )}
               </div>
