@@ -34,10 +34,10 @@ import { getDB } from '../utils/storage';
 import { validateCedula } from '../utils/invoicePdf';
 import type { IdentificacionTipo } from '../utils/invoicePdf';
 import {
-  MEDIOS_DE_COBRO, calcularMargen, cobrarServicio,
+  MEDIOS_DE_COBRO, OPCIONES_GARANTIA, calcularMargen, cobrarServicio,
 } from '../utils/facturacion';
 import type { MedioCobro, InsumoConsumido, ResultadoCobro } from '../utils/facturacion';
-import { esRepuesto } from '../utils/categorias';
+import { esRepuesto, esInsumo } from '../utils/categorias';
 import type { Product, User } from '../types';
 
 interface Props {
@@ -51,13 +51,6 @@ const TIPOS_IDENTIFICACION = [
   { value: '03', label: 'DIMEX' },
   { value: '02', label: 'Cédula Jurídica' },
   { value: '04', label: 'NITE' },
-];
-
-const GARANTIAS = [
-  { value: '3', label: '3 meses (mínimo de ley)' },
-  { value: '6', label: '6 meses' },
-  { value: '12', label: '12 meses' },
-  { value: '0', label: 'Sin garantía' },
 ];
 
 export default function FacturacionPanel({ currentUser, onDataChanged }: Props) {
@@ -83,9 +76,9 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
 
   // ---- Insumos -----------------------------------------------------------
   const [repuestos, setRepuestos] = useState<InsumoConsumido[]>([]);
-  const [regalias, setRegalias] = useState<InsumoConsumido[]>([]);
+  const [insumos, setInsumos] = useState<InsumoConsumido[]>([]);
   const [repuestoElegido, setRepuestoElegido] = useState('');
-  const [regaliaElegida, setRegaliaElegida] = useState('');
+  const [insumoElegido, setInsumoElegido] = useState('');
 
   useEffect(() => {
     const db = getDB();
@@ -93,15 +86,15 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
   }, []);
 
   const margen = useMemo(
-    () => calcularMargen(Number(monto) || 0, repuestos, regalias),
-    [monto, repuestos, regalias]
+    () => calcularMargen(Number(monto) || 0, repuestos, insumos),
+    [monto, repuestos, insumos]
   );
 
   const conStock = productos.filter(p => (p.stock || 0) > 0);
   const opcionesRepuesto = conStock.filter(p => esRepuesto(p.category));
-  // Para la regalía sirve cualquier artículo con existencias: lo habitual es
-  // un temperado o una funda, que no son repuestos de taller.
-  const opcionesRegalia = conStock;
+  // Insumos: su propia familia del inventario (temperados, micas, cables
+  // de taller). Cualquiera de ellos puede marcarse como regalía.
+  const opcionesInsumo = conStock.filter(p => esInsumo(p.category));
 
   const agregarInsumo = (
     productId: string,
@@ -139,8 +132,8 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
   const limpiar = () => {
     setNombre(''); setIdValor(''); setCorreo(''); setTelefono('');
     setDescripcion(''); setMonto(''); setGarantia('3'); setMedio('SINPE');
-    setRepuestos([]); setRegalias([]);
-    setRepuestoElegido(''); setRegaliaElegida('');
+    setRepuestos([]); setInsumos([]);
+    setRepuestoElegido(''); setInsumoElegido('');
   };
 
   /** Comprueba TODO antes de tocar el inventario o quemar un consecutivo. */
@@ -162,7 +155,9 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     const resumen = [
       `Cliente: ${nombre.trim()}`,
       `Monto: ${colones(Number(monto))} por ${medio === 'SINPE' ? 'SINPE Móvil' : 'Efectivo'}`,
-      regalias.length > 0 ? `Incluye ${regalias.length} artículo(s) de regalía` : null,
+      insumos.some(i => i.esRegalia)
+        ? `Incluye ${insumos.filter(i => i.esRegalia).length} artículo(s) de regalía`
+        : null,
       `Se enviará el comprobante a ${correo.trim()}`,
     ].filter(Boolean).join('\n');
 
@@ -187,7 +182,7 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
         garantiaMeses: Number(garantia),
         medioCobro: medio,
         repuestos,
-        regalias,
+        insumos,
         adminEmail: currentUser?.email || 'admin',
       });
 
@@ -289,8 +284,11 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
                   inputMode="numeric"
                 />
               </Field>
-              <Field label="Garantía">
-                <CustomSelect value={garantia} onChange={setGarantia} options={GARANTIAS} />
+              <Field
+                label="Garantía"
+                hint="Solo estos cuatro plazos. Es lo que sale impreso y lo que el cliente puede reclamar."
+              >
+                <CustomSelect value={garantia} onChange={setGarantia} options={OPCIONES_GARANTIA} />
               </Field>
             </div>
             <Field label="Método de pago" hint="La tarjeta está deshabilitada: no hay procesador de pagos contratado.">
@@ -327,17 +325,19 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
       />
 
       <ListaDeInsumos
-        titulo="Regalía por primera compra"
-        descripcion="Sale del inventario y se contabiliza como gasto interno, pero en la factura aparece como Descuento 100% con costo ₡0."
+        titulo="Insumos"
+        descripcion="Temperados, micas, cables y demás material del taller. Marque la casilla para entregarlo como regalía: se descuenta igual del inventario y cuenta como gasto, pero en la factura sale a ₡0."
         icono={Gift}
-        opciones={opcionesRegalia}
-        elegido={regaliaElegida}
-        alElegir={setRegaliaElegida}
-        lista={regalias}
-        alAgregar={() => { agregarInsumo(regaliaElegida, regalias, setRegalias); setRegaliaElegida(''); }}
-        alCambiarCantidad={(id, c) => cambiarCantidad(id, c, regalias, setRegalias)}
-        alQuitar={id => setRegalias(regalias.filter(i => i.productId !== id))}
-        vacio="Sin regalía en este cobro."
+        opciones={opcionesInsumo}
+        elegido={insumoElegido}
+        alElegir={setInsumoElegido}
+        lista={insumos}
+        alAgregar={() => { agregarInsumo(insumoElegido, insumos, setInsumos); setInsumoElegido(''); }}
+        alCambiarCantidad={(id, c) => cambiarCantidad(id, c, insumos, setInsumos)}
+        alQuitar={id => setInsumos(insumos.filter(i => i.productId !== id))}
+        alMarcarRegalia={(id, valor) =>
+          setInsumos(insumos.map(i => (i.productId === id ? { ...i, esRegalia: valor } : i)))}
+        vacio="Sin insumos en este cobro."
       />
 
       <Card title="Resultado interno de la operación">
@@ -346,8 +346,16 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
         </p>
         <div className="tv-grid tv-grid-6">
           <Stat label="Se cobra" value={colones(margen.ingreso)} foot="IVA incluido" />
-          <Stat label="Costo repuestos" value={colones(margen.costoRepuestos)} foot={`${repuestos.length} artículo(s)`} />
-          <Stat label="Costo regalía" value={colones(margen.costoRegalias)} foot={`${regalias.length} artículo(s)`} />
+          <Stat
+            label="Costo del trabajo"
+            value={colones(margen.costoRepuestos)}
+            foot={`${repuestos.length} repuesto(s) + ${insumos.filter(i => !i.esRegalia).length} insumo(s)`}
+          />
+          <Stat
+            label="Costo regalía"
+            value={colones(margen.costoRegalias)}
+            foot={`${insumos.filter(i => i.esRegalia).length} artículo(s) obsequiado(s)`}
+          />
           <Stat
             label="Margen neto"
             value={colones(margen.margenNeto)}
@@ -377,7 +385,7 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
 
 function ListaDeInsumos({
   titulo, descripcion, icono: Icono, opciones, elegido, alElegir,
-  lista, alAgregar, alCambiarCantidad, alQuitar, vacio,
+  lista, alAgregar, alCambiarCantidad, alQuitar, alMarcarRegalia, vacio,
 }: {
   titulo: string;
   descripcion: string;
@@ -389,14 +397,26 @@ function ListaDeInsumos({
   alAgregar: () => void;
   alCambiarCantidad: (productId: string, cantidad: number) => void;
   alQuitar: (productId: string) => void;
+  /**
+   * Solo lo reciben los insumos. Cuando falta, la casilla de regalía no
+   * se dibuja — un repuesto no se regala: se instala dentro del trabajo
+   * y su costo ya va en el precio del servicio.
+   */
+  alMarcarRegalia?: (productId: string, valor: boolean) => void;
   vacio: string;
 }) {
   const total = lista.reduce((s, i) => s + i.costoUnitario * i.quantity, 0);
+  const regaladas = lista.filter(i => i.esRegalia).length;
 
   return (
     <Card
       title={titulo}
-      actions={lista.length > 0 ? <Chip>Costo interno {colones(total)}</Chip> : undefined}
+      actions={lista.length > 0 ? (
+        <>
+          {regaladas > 0 && <Chip tone="accent">{regaladas} de regalía</Chip>}
+          <Chip>Costo interno {colones(total)}</Chip>
+        </>
+      ) : undefined}
     >
       <p className="tv-hint !mt-0 mb-3">{descripcion}</p>
 
@@ -434,8 +454,27 @@ function ListaDeInsumos({
                 className="tv-input font-mono !w-20"
                 inputMode="numeric"
               />
-              <span className="text-[12px] text-[var(--text-muted)] font-mono tabular-nums w-24 text-right">
-                {colones(i.costoUnitario * i.quantity)}
+              {alMarcarRegalia && (
+                <label className="flex items-center gap-2 text-[12px] font-semibold cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={!!i.esRegalia}
+                    onChange={e => alMarcarRegalia(i.productId, e.target.checked)}
+                    className="w-4 h-4 accent-[var(--accent)] cursor-pointer"
+                  />
+                  <span className={i.esRegalia ? 'text-[var(--accent)]' : 'text-[var(--text-muted)]'}>
+                    Regalía
+                  </span>
+                </label>
+              )}
+              <span className="text-[12px] font-mono tabular-nums w-28 text-right">
+                {i.esRegalia ? (
+                  <span className="text-[var(--accent)]">
+                    Factura ₡0
+                  </span>
+                ) : (
+                  <span className="text-[var(--text-muted)]">{colones(i.costoUnitario * i.quantity)}</span>
+                )}
               </span>
               <button
                 type="button"

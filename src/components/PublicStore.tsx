@@ -16,7 +16,7 @@ import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { iniciarSesionVigilada } from '../utils/adminLogin';
 import { soportaBiometria, entrarConBiometria, biometriaYaActivada } from '../utils/biometria';
-import { CATEGORIAS_CON_TODOS, coincideCategoria, esRepuesto } from '../utils/categorias';
+import { CATEGORIAS_CON_TODOS, coincideCategoria, esInterno } from '../utils/categorias';
 import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
 import { useToast } from './ui/Overlays';
@@ -1088,7 +1088,10 @@ export default function PublicStore({
   const filteredProducts = useMemo(() => products.filter(p => { if (!p) return false;
     // 0. Hidden/Inactive filter
     if (p.active === false) return false;
-    if (esRepuesto(p.category)) return false;
+    // Repuestos E INSUMOS quedan fuera del catálogo. Antes preguntaba solo
+    // por repuestos; con los insumos nuevos, eso habría puesto los
+    // temperados y las micas a la venta al precio de costo.
+    if (esInterno(p.category)) return false;
 
     // 1. Category filter
     if (selectedCategory && selectedCategory !== 'Todos') {

@@ -1,13 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, InventoryMovement, MarketingRequest } from '../types';
 import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
-import { CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria } from '../utils/categorias';
+import { CATEGORIAS_INSUMO, esInsumo, CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria } from '../utils/categorias';
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
 import { 
   Package, Plus, Edit, Trash2, Search, Filter, History, MapPin, 
   Box, FileText, AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronRight, X, Image as ImageIcon, Save, Download,
-  Upload, Check, AlertCircle, Sparkles, Send
+  Upload, Check, AlertCircle, Sparkles, Send, Boxes
 } from 'lucide-react';
 
 // CAABYS genérico ("Otros servicios n.c.p."), respaldo mientras se clasifica
@@ -57,8 +57,8 @@ interface ExtractedRow {
 interface InventarioControlProps {
   currentUser: any;
   onDataChanged: () => void;
-  defaultSubTab?: 'productos' | 'movimientos' | 'reportes' | 'repuestos';
-  onTabChange?: (tab: 'productos' | 'movimientos' | 'reportes' | 'repuestos') => void;
+  defaultSubTab?: 'productos' | 'movimientos' | 'reportes' | 'repuestos' | 'insumos';
+  onTabChange?: (tab: 'productos' | 'movimientos' | 'reportes' | 'repuestos' | 'insumos') => void;
 }
 
 
@@ -73,7 +73,7 @@ function usePagination(items, itemsPerPage = 10) {
 
 export default function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'productos', onTabChange }: InventarioControlProps) {
   const toast = useToast();
-  const [activeSubTab, setActiveSubTab] = useState<'productos' | 'movimientos' | 'reportes' | 'repuestos'>(defaultSubTab);
+  const [activeSubTab, setActiveSubTab] = useState<'productos' | 'movimientos' | 'reportes' | 'repuestos' | 'insumos'>(defaultSubTab);
 
   useEffect(() => {
     setActiveSubTab(defaultSubTab);
@@ -734,8 +734,10 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   const skuSuggestions = historicalSkus.filter(h => {
     if (!h) return false;
     const isSpare = h.category === 'Repuestos' || sparePartCategories.includes(h.category);
+    const isInsumo = esInsumo(h.category);
     if (activeSubTab === 'repuestos' && !isSpare) return false;
-    if (activeSubTab === 'productos' && isSpare) return false;
+    if (activeSubTab === 'insumos' && !isInsumo) return false;
+    if (activeSubTab === 'productos' && (isSpare || isInsumo)) return false;
 
     if (prodSku) {
       const q = prodSku.toLowerCase();
@@ -1176,10 +1178,16 @@ if (!m) return null;
 
     // Sub-tab logic
     const isSpare = p.category === 'Repuestos' || sparePartCategories.includes(p.category);
+    // Los insumos son una familia aparte: no son repuestos ni catálogo.
+    // Sin esta separación aparecerían mezclados con los productos de la
+    // tienda, que es justo lo que la pestaña nueva viene a evitar.
+    const isInsumo = esInsumo(p.category);
     if (activeSubTab === 'repuestos') {
       if (!isSpare) return false;
+    } else if (activeSubTab === 'insumos') {
+      if (!isInsumo) return false;
     } else if (activeSubTab === 'productos') {
-      if (isSpare) return false;
+      if (isSpare || isInsumo) return false;
     }
     // movimientos and reportes see all
 
@@ -1210,6 +1218,7 @@ if (!m) return null;
           {[
             { id: 'productos', label: 'Productos', icon: Box },
             { id: 'repuestos', label: 'Repuestos', icon: Package },
+            { id: 'insumos', label: 'Insumos', icon: Boxes },
             { id: 'movimientos', label: 'Movimientos', icon: History },
             { id: 'reportes', label: 'Reportes', icon: FileText }
           ].map(tab => (
@@ -1226,7 +1235,7 @@ if (!m) return null;
         </div>
       </div>
 
-      {(activeSubTab === 'productos' || activeSubTab === 'repuestos') && marketingRequests.length > 0 && (
+      {(activeSubTab === 'productos' || activeSubTab === 'repuestos' || activeSubTab === 'insumos') && marketingRequests.length > 0 && (
         <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl p-4 space-y-3">
           <div className="flex items-center justify-between">
             <h4 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
@@ -1315,7 +1324,7 @@ if (!m) return null;
         </div>
       )}
 
-      {(activeSubTab === 'productos' || activeSubTab === 'repuestos') && (
+      {(activeSubTab === 'productos' || activeSubTab === 'repuestos' || activeSubTab === 'insumos') && (
         <div className="space-y-4">
           {!showProductForm ? (
             <>
@@ -1378,7 +1387,11 @@ if (!m) return null;
                     setProdClientStock('');
                     setProdLinkedSparePartSku('');
                     setProdCaabys('');
-                    setProdCategory(activeSubTab === 'repuestos' ? 'LCD' : 'Accesorios');
+                    setProdCategory(
+                      activeSubTab === 'repuestos' ? 'LCD'
+                        : activeSubTab === 'insumos' ? 'Temperado'
+                        : 'Accesorios'
+                    );
                     setSkuLoadedFromHistory(null);
                     setSkuAutoGenerated(true);
                     setSkuSeed(Math.floor(1000 + Math.random() * 9000));
@@ -1387,7 +1400,11 @@ if (!m) return null;
                   }}
                   className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-2 dark:text-slate-950"
                 >
-                  <Plus className="w-4 h-4" /> {activeSubTab === 'repuestos' ? 'Añadir Repuesto' : 'Nuevo Producto'}
+                  <Plus className="w-4 h-4" /> {
+                    activeSubTab === 'repuestos' ? 'Añadir Repuesto'
+                      : activeSubTab === 'insumos' ? 'Añadir Insumo'
+                      : 'Nuevo Producto'
+                  }
                 </button>
                 <button
                   type="button"
@@ -1728,6 +1745,12 @@ if (!m) return null;
                           options={
                             (activeSubTab === 'repuestos' || sparePartCategories.includes(prodCategory) || prodCategory === 'Repuestos'
                               ? sparePartCategories
+                              // Insumos: su propia lista, distinta de la de la tienda a
+                              // propósito. Ver el comentario de CATEGORIAS_INSUMO en
+                              // categorias.ts — si un insumo se llamara "Estuche", la
+                              // traducción de categorías lo mandaría al catálogo público.
+                              : activeSubTab === 'insumos' || esInsumo(prodCategory)
+                              ? CATEGORIAS_INSUMO
                               // HOMOLOGADO con la tienda: esta es la MISMA lista que ve el
                               // cliente en el catálogo (src/utils/categorias.ts). Antes había
                               // aquí una lista propia — Fundas, Cables, Otros… — que la tienda
