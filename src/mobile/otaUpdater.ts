@@ -40,6 +40,7 @@
 // tenía y lo vuelve a intentar en el próximo arranque.
 // =====================================================================
 
+import { useEffect, useState } from 'react';
 import { isNative } from './platform';
 
 const MANIFEST_URL = 'https://hzatdfrjcqiimgqxcwwh.supabase.co/storage/v1/object/public/ota-updates/latest.json';
@@ -51,8 +52,52 @@ interface OtaManifest {
   url: string;
 }
 
+/**
+ * Estado de la OTA, leíble desde cualquier pantalla (p. ej. el menú de
+ * cuenta en AdminShell) sin pasarlo por props.
+ *
+ * Existe porque, sin esto, quien administra la app no tenía cómo saber
+ * si lo que está viendo es la versión nueva o la vieja — "actualicé pero
+ * no veo el cambio" resultó ser, en la práctica, que la actualización
+ * todavía estaba en cola (`next()` la aplica en el próximo reinicio, no
+ * al instante) y no había ninguna pista visible de eso en la pantalla.
+ */
+export interface OtaStatus {
+  isNative: boolean;
+  /** Versión (SHA corto) del bundle que está corriendo ahora mismo. */
+  currentVersion: string | null;
+  /** Versión más reciente publicada, según el último chequeo. */
+  latestVersion: string | null;
+  /** true = ya se descargó una versión más nueva; falta reiniciar la app para verla. */
+  updatePending: boolean;
+}
+
+let otaStatus: OtaStatus = { isNative: false, currentVersion: null, latestVersion: null, updatePending: false };
+const listeners = new Set<(s: OtaStatus) => void>();
+
+function setOtaStatus(patch: Partial<OtaStatus>) {
+  otaStatus = { ...otaStatus, ...patch };
+  listeners.forEach(fn => fn(otaStatus));
+}
+
+export function getOtaStatus(): OtaStatus {
+  return otaStatus;
+}
+
+/** Hook de React: se usa donde haga falta mostrar la versión actual. */
+export function useOtaStatus(): OtaStatus {
+  const [status, setStatus] = useState(otaStatus);
+  useEffect(() => {
+    const onChange = (s: OtaStatus) => setStatus(s);
+    listeners.add(onChange);
+    return () => { listeners.delete(onChange); };
+  }, []);
+  return status;
+}
+
 export async function initOtaUpdater(): Promise<void> {
   if (!isNative()) return;
+  setOtaStatus({ isNative: true });
 
   let CapacitorUpdater: (typeof import('@capgo/capacitor-updater'))['CapacitorUpdater'];
   try {
@@ -76,12 +121,14 @@ export async function initOtaUpdater(): Promise<void> {
   try {
     const actual = await CapacitorUpdater.current();
     const versionActual = actual?.bundle?.version || null;
+    setOtaStatus({ currentVersion: versionActual });
 
     const respuesta = await fetch(MANIFEST_URL, { cache: 'no-store' });
     if (!respuesta.ok) return;
 
     const manifiesto: OtaManifest = await respuesta.json();
     if (!manifiesto?.version || !manifiesto?.url) return;
+    setOtaStatus({ latestVersion: manifiesto.version });
     if (manifiesto.version === versionActual) return; // ya está al día
 
     const nuevoBundle = await CapacitorUpdater.download({
@@ -93,6 +140,7 @@ export async function initOtaUpdater(): Promise<void> {
     // reinicio o el próximo backgrounding, sin interrumpir a quien está
     // usando la app ahora mismo con un recargado forzado.
     await CapacitorUpdater.next({ id: nuevoBundle.id });
+    setOtaStatus({ updatePending: true });
   } catch {
     // Cualquier fallo de red o de descarga se ignora en silencio: la app
     // sigue con el bundle que ya tenía instalado y lo reintenta en el

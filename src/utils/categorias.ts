@@ -69,6 +69,82 @@ export function adivinarMarca(nombre: string): string {
 }
 
 /**
+ * Ordena los repuestos por gama de teléfono (gama baja primero, gama
+ * alta al final), a partir de texto libre en el nombre del artículo.
+ *
+ * ---------------------------------------------------------------------
+ * POR QUÉ ES UN HEURÍSTICO Y NO UNA TABLA EXACTA
+ * ---------------------------------------------------------------------
+ * No existe un campo "modelo" estructurado — los nombres vienen de listas
+ * de precios de proveedores, en texto libre ("LCD A01", "Pantalla S23
+ * Ultra", "Táctil Redmi Note 12"). Esta función reconoce el patrón de
+ * nomenclatura de cada marca (la serie/línea marca la gama; el número
+ * dentro de esa línea afina el orden) y punta cada nombre en una escala
+ * continua. No es perfecto —un modelo nuevo con un nombre atípico puede
+ * caer en el nivel por defecto de su marca— pero ordena correctamente el
+ * caso común, que es lo que hace falta para navegar una lista de cientos
+ * de repuestos sin tener que adivinar dónde quedó cada uno.
+ */
+export function nivelGamaRepuesto(nombre: string, marca?: string): number {
+  const n = (nombre || '').toLowerCase();
+  const m = (marca || '').trim();
+
+  // Número de 1 a 3 cifras dentro del nombre: sirve para ordenar dentro
+  // de una misma línea (A01 antes que A54, S21 antes que S23...).
+  const numeroMatch = n.match(/\d{1,3}/);
+  const numero = numeroMatch ? Math.min(parseInt(numeroMatch[0], 10), 999) : 0;
+
+  let base = 2000; // gama media por defecto, para marcas sin reglas propias
+
+  if (m === 'Samsung') {
+    if (/\bcore\b/.test(n)) base = 0;
+    else if (/\ba0\d\b|\ba1\d\b/.test(n)) base = 1000;
+    else if (/\bm\d{2}\b/.test(n)) base = 1000;
+    else if (/\ba2\d\b|\ba3\d\b/.test(n)) base = 2000;
+    else if (/\ba5\d\b|\ba7\d\b/.test(n)) base = 3000;
+    else if (/\bfe\b|\bnote\b/.test(n)) base = 4000;
+    else if (/\bultra\b/.test(n)) base = 6000;
+    else if (/\bs\d{2}\b|\bgalaxy\s*s\b/.test(n)) base = 5000;
+    else base = 2000;
+  } else if (m === 'iPhone') {
+    if (/\bse\b/.test(n)) base = 1000;
+    else if (/\bpro\s*max\b/.test(n)) base = 5500;
+    else if (/\bpro\b/.test(n)) base = 5000;
+    else if (/\bplus\b/.test(n)) base = 4500;
+    else if (/\bmini\b/.test(n)) base = 3500;
+    else base = 4000;
+  } else if (m === 'Xiaomi') {
+    if (/\bpoco\b/.test(n)) base = 3000;
+    else if (/\bredmi\s*note\b/.test(n)) base = 2000;
+    else if (/\bredmi\b/.test(n)) base = 1000;
+    else base = 4000; // Mi / Xiaomi numerado: gama alta
+  } else if (m === 'Motorola') {
+    if (/\be\d/.test(n)) base = 1000;
+    else if (/\bg\d/.test(n)) base = 2000;
+    else if (/\brazr\b/.test(n)) base = 5000;
+    else if (/\bedge\b/.test(n)) base = 4000;
+    else base = 2000;
+  } else if (m === 'Honor') {
+    if (/\bx\d/.test(n)) base = 1000;
+    else if (/\bmagic\b/.test(n)) base = 5000;
+    else base = 3000;
+  } else if (m === 'Huawei') {
+    if (/\by\d/.test(n)) base = 1000;
+    else if (/\bnova\b/.test(n)) base = 2000;
+    else if (/\bmate\b(?!rial)/.test(n) || /\bp\d{2}\b/.test(n)) base = 4000;
+    else base = 2000;
+  } else if (m === 'Realme') {
+    if (/\bc\d/.test(n)) base = 1000;
+    else if (/\bgt\b/.test(n)) base = 4000;
+    else base = 2000;
+  } else if (m === 'Nokia') {
+    base = 2000; // sin líneas de gama diferenciadas conocidas
+  }
+
+  return base + numero;
+}
+
+/**
  * Insumos: artículos pequeños que se consumen en el trabajo o se
  * entregan como regalía. Tampoco se muestran en el catálogo público.
  *

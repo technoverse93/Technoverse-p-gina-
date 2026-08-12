@@ -3,7 +3,7 @@ import { Product, InventoryMovement, MarketingRequest } from '../types';
 import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
 import { supabase } from '../supabaseClient';
 import VinculacionComponentes from './admin/VinculacionComponentes';
-import { CATEGORIAS_INSUMO, esInsumo, CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria, MARCAS_REPUESTO, adivinarMarca } from '../utils/categorias';
+import { CATEGORIAS_INSUMO, esInsumo, CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria, MARCAS_REPUESTO, adivinarMarca, nivelGamaRepuesto } from '../utils/categorias';
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
 import { 
@@ -1315,7 +1315,14 @@ if (!m) return null;
       return nameMatch || skuMatch;
     }
     return true;
-  }), [products, activeSubTab, categoryFilter, brandFilter, searchQuery]);
+    // Repuestos: de gama baja a gama alta, para poder recorrer la lista
+    // "por teléfono" en vez de por orden de llegada al catálogo. Las
+    // demás pestañas no tienen noción de "gama", así que mantienen el
+    // orden natural.
+  }).sort((a, b) => activeSubTab === 'repuestos'
+    ? nivelGamaRepuesto(a.name, a.brand) - nivelGamaRepuesto(b.name, b.brand)
+    : 0
+  ), [products, activeSubTab, categoryFilter, brandFilter, searchQuery]);
   const { page: prodPage, setPage: setProdPage, totalPages: prodTotal, startIndex: prodStart, visibleItems: paginatedProducts } = usePagination(filteredProducts, 10);
 
   return (
@@ -1778,6 +1785,18 @@ if (!m) return null;
                     </tbody>
                   </table>
                 </div>
+                {prodTotal > 1 && (
+                  <div className="flex items-center justify-between p-4 border-t border-[var(--border-color)]/80">
+                    <span className="text-xs text-[var(--text-muted)]">
+                      Mostrando {prodStart + 1} a {Math.min(prodStart + 10, filteredProducts.length)} de {filteredProducts.length}
+                    </span>
+                    <div className="flex gap-2">
+                      <button onClick={() => setProdPage(p => Math.max(1, p - 1))} disabled={prodPage === 1} className="px-3 py-1 bg-[var(--border-color)] text-[var(--text-secondary)] rounded-lg text-xs font-bold disabled:opacity-40">Anterior</button>
+                      <span className="px-3 py-1 text-xs font-bold text-[var(--text-primary)]">{prodPage} / {prodTotal}</span>
+                      <button onClick={() => setProdPage(p => Math.min(prodTotal, p + 1))} disabled={prodPage === prodTotal} className="px-3 py-1 bg-[var(--border-color)] text-[var(--text-secondary)] rounded-lg text-xs font-bold disabled:opacity-40">Siguiente</button>
+                    </div>
+                  </div>
+                )}
               </div>
             </>
           ) : (
@@ -2347,18 +2366,6 @@ if (!m) return null;
                   )}
                 </tbody>
               </table>
-              
-  {prodTotal > 1 && (
-    <div className="flex items-center justify-between p-4 bg-[var(--bg-surface)] border-t border-[var(--border-color)]">
-      <span className="text-sm text-[var(--text-muted)]">Mostrando {prodStart + 1} a {Math.min(prodStart + 10, filteredProducts.length)} de {filteredProducts.length}</span>
-      <div className="flex gap-2">
-        <button onClick={() => setProdPage(p => Math.max(1, p - 1))} disabled={prodPage === 1} className="px-3 py-1 bg-gray-100 rounded disabled:opacity-50">Anterior</button>
-        <span className="px-3 py-1 font-bold">{prodPage} / {prodTotal}</span>
-        <button onClick={() => setProdPage(p => Math.min(prodTotal, p + 1))} disabled={prodPage === prodTotal} className="px-3 py-1 bg-gray-100 rounded disabled:opacity-50">Siguiente</button>
-      </div>
-    </div>
-  )}
-  
             </div>
           </div>
         </div>

@@ -38,6 +38,7 @@ import {
 import { NAV_GROUPS, NAV_ITEMS, DOCK_IDS, resolverModulo, grupoDe, buscarModulos } from './adminNav';
 import type { AdminNavItem } from './adminNav';
 import type { User } from '../../types';
+import { useOtaStatus } from '../../mobile/otaUpdater';
 
 const LLAVE_RIEL = 'technoverse_admin_riel_abierto';
 
@@ -118,6 +119,8 @@ export default function AdminShell({
     document.addEventListener('mousedown', alTocarFuera);
     return () => document.removeEventListener('mousedown', alTocarFuera);
   }, [menuPerfil]);
+
+  const otaStatus = useOtaStatus();
 
   const iniciales = useMemo(() => {
     const base = (currentUser?.name || currentUser?.email || 'TV').trim();
@@ -289,6 +292,30 @@ export default function AdminShell({
                   <div className="mt-2">
                     <span className="tv-chip" data-tone="accent">{currentUser?.role || 'Administrador'}</span>
                   </div>
+                  {/* Identifica qué versión del panel está corriendo AHORA en
+                      este dispositivo. Existe porque `next()` deja la
+                      actualización descargada pero solo la aplica en el
+                      próximo reinicio de la app — sin esto no había forma de
+                      confirmar si "ya cargó lo nuevo" o si todavía falta
+                      cerrar y volver a abrir. */}
+                  {otaStatus.isNative && (
+                    <div className="mt-2 pt-2 border-t border-[var(--border-color)]/50 text-[11px] text-[var(--text-muted)]">
+                      {otaStatus.updatePending ? (
+                        <span className="text-amber-500 font-bold">
+                          Hay una actualización descargada — cierre la app por completo y vuelva a abrirla para verla.
+                        </span>
+                      ) : otaStatus.currentVersion ? (
+                        <span>
+                          Versión: <span className="font-mono">{otaStatus.currentVersion}</span>
+                          {otaStatus.latestVersion && otaStatus.latestVersion === otaStatus.currentVersion && (
+                            <span className="text-emerald-500 dark:text-[var(--brand-gold-light)] font-bold"> · al día</span>
+                          )}
+                        </span>
+                      ) : (
+                        <span>Comprobando versión…</span>
+                      )}
+                    </div>
+                  )}
                 </div>
                 <div className="tv-menu-sep" />
                 <button type="button" role="menuitem" className="tv-menu-item" onClick={() => { setMenuPerfil(false); onNavigateToStore(); }}>
