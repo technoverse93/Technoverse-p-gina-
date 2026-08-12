@@ -327,7 +327,13 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
   doc.setFont(FONT, 'normal');
   doc.setFontSize(7.5);
   doc.setTextColor(255, 235, 225);
-  doc.text(`Cédula Jurídica ${data.emisorCedula}`, textX, 20.5);
+  // El emisor es una persona física, no una sociedad: la etiqueta decía
+  // "Cédula Jurídica" y era incorrecta en cada comprobante emitido. Se deja
+  // como "Cédula" a secas, que vale para la identificación personal y no
+  // afirma una figura legal que no corresponde.
+  //
+  // NADA MÁS del diseño cambia: misma posición, misma fuente, mismo tamaño.
+  doc.text(`Cédula ${data.emisorCedula}`, textX, 20.5);
   if (data.emisorTelefono) doc.text(data.emisorTelefono, textX, 24.5);
 
   drawChip(doc, docTitle, pageWidth - marginX, 8, { align: 'right', fill: [255, 255, 255], textColor: BRAND, fontSize: 8 });
