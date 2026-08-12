@@ -31,6 +31,16 @@ export interface Product {
   internalStock?: number;
   clientStock?: number;
   linkedSparePartSku?: string;
+  /**
+   * Solo aplica a los INSUMOS: los deja aparecer en el catálogo público.
+   *
+   * Por defecto ausente, que equivale a oculto. Es el valor seguro: un
+   * insumo nuevo es material interno mientras alguien no decida lo
+   * contrario, y publicar por descuido un temperado a precio de costo se
+   * descubre tarde y mal. Los repuestos no la consultan nunca — no se
+   * venden, marque lo que marque este campo.
+   */
+  visibleEnTienda?: boolean;
   // Código de 13 dígitos del Catálogo de Bienes y Servicios (CAABYS) de
   // Hacienda, requerido por línea en comprobantes electrónicos v4.3.
   caabys?: string;
