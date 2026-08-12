@@ -476,15 +476,44 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
 
     const { blob, qrText } = await buildInvoicePdfBlob(datosFactura);
 
-    // Sin `upsert`: el nombre sale del consecutivo atómico y no puede
-    // repetirse. Activarlo convertía la subida en un INSERT ... ON
-    // CONFLICT DO UPDATE, que exige una política RLS de UPDATE que el
-    // bucket no tiene, y toda subida fallaba con la venta ya cobrada.
-    const rutaPdf = `${emitida.id}.pdf`;
-    const { error: errorSubida } = await supabase.storage
-      .from('invoices')
-      .upload(rutaPdf, blob, { contentType: 'application/pdf' });
-    if (errorSubida) throw errorSubida;
+    // ---------------------------------------------------------------
+    // SUBIDA DEL PDF, A PRUEBA DE NOMBRES YA OCUPADOS
+    // ---------------------------------------------------------------
+    // Se sigue prefiriendo el nombre limpio `FE-<consecutivo>.pdf`: es
+    // el que permite encontrar un comprobante a ojo dentro del bucket.
+    //
+    // Pero ese nombre PUEDE estar ocupado, y ya ocurrió: al limpiar la
+    // base para producción se vaciaron las tablas y se reinició la
+    // numeración, sin borrar los PDF que habían quedado en el
+    // almacenamiento. La numeración volvió a 1 y al llegar al 4 chocó
+    // con un archivo viejo. La subida falló con "The resource already
+    // exists" y el cobro quedó a medias: dinero recibido, inventario
+    // descontado, consecutivo consumido y sin comprobante.
+    //
+    // No se usa `upsert: true` porque eso convierte la subida en un
+    // INSERT ... ON CONFLICT DO UPDATE, y el bucket no tiene política
+    // RLS de UPDATE: fallaría igual. Y sobrescribir sería peor —se
+    // perdería el comprobante anterior, que es un documento fiscal.
+    //
+    // Ante un choque se guarda con un sufijo único. El nombre deja de
+    // ser bonito, pero la URL se guarda en la factura, así que nada
+    // depende de adivinarlo.
+    const subirPdf = async (ruta: string) =>
+      supabase.storage.from('invoices').upload(ruta, blob, { contentType: 'application/pdf' });
+
+    let rutaPdf = `${emitida.id}.pdf`;
+    let { error: errorSubida } = await subirPdf(rutaPdf);
+
+    if (errorSubida) {
+      const yaExiste = /already exists|resource already|duplicate/i.test(
+        `${(errorSubida as any)?.message || ''} ${(errorSubida as any)?.error || ''}`
+      );
+      if (!yaExiste) throw errorSubida;
+
+      rutaPdf = `${emitida.id}-${Date.now().toString(36)}.pdf`;
+      const reintento = await subirPdf(rutaPdf);
+      if (reintento.error) throw reintento.error;
+    }
 
     const { data: publico } = supabase.storage.from('invoices').getPublicUrl(rutaPdf);
     await supabase.rpc('set_invoice_pdf', {

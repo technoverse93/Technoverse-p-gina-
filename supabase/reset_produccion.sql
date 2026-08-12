@@ -40,6 +40,31 @@
 --
 -- ⚠️ ESTO NO SE PUEDE DESHACER. Antes de correrlo, haga un respaldo en
 --    Supabase → Database → Backups. Cuesta un minuto y es la única red.
+--
+-- ---------------------------------------------------------------------------
+-- ⚠️ PASO MANUAL OBLIGATORIO: VACIAR EL BUCKET "invoices"
+-- ---------------------------------------------------------------------------
+-- Este script NO puede borrar los PDF de los comprobantes. Supabase prohíbe
+-- eliminar de `storage.objects` con SQL (lo impide el disparador
+-- storage.protect_delete), y hay que hacerlo desde Storage → invoices.
+--
+-- NO ES OPCIONAL, y se aprendió por las malas: la primera vez que se corrió
+-- este reset se vaciaron las tablas y se reinició el consecutivo a 0, pero
+-- los PDF viejos se quedaron en el bucket. Al volver a facturar, la
+-- numeración arrancó de nuevo en 1 y al llegar al 4 el nombre del archivo
+-- —FE-00100001010000000004.pdf— YA ESTABA OCUPADO.
+--
+-- El resultado fue el peor posible: la venta se cobró, el inventario se
+-- descontó, el consecutivo fiscal se consumió… y el comprobante no se pudo
+-- guardar ni enviar al cliente.
+--
+-- El código ya no se rompe por esto —ante un choque guarda el PDF con un
+-- sufijo único—, pero el bucket debe vaciarse igual: si no, quedan
+-- documentos fiscales viejos con nombres que corresponden a ventas nuevas.
+--
+--   Supabase → Storage → invoices → seleccionar todo → Delete
+--
+-- Hágalo JUSTO DESPUÉS de correr este script.
 -- ===========================================================================
 
 begin;
