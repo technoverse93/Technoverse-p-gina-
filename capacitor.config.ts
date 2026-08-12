@@ -18,6 +18,16 @@ const config: CapacitorConfig = {
       resize: KeyboardResize.None,
       style: KeyboardStyle.Default,
       resizeOnFullScreen: true
+    },
+    // Actualización OTA (src/mobile/otaUpdater.ts). `autoUpdate: false`
+    // porque el modo automático del plugin espera la nube de Capgo (un
+    // servicio de terceros); este proyecto se auto-hospeda contra Supabase
+    // Storage y hace la comprobación/descarga a mano. `appReadyTimeout` es
+    // cuánto espera la capa nativa la llamada a `notifyAppReady()` antes de
+    // revertir sola al bundle anterior por si el nuevo viniera roto.
+    CapacitorUpdater: {
+      autoUpdate: false,
+      appReadyTimeout: 10000
     }
   }
 };

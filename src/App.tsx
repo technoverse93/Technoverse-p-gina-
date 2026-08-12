@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import PublicStore from './components/PublicStore';
 import { User } from './types';
 import { initKeyboard } from './mobile/keyboard';
+import { initOtaUpdater } from './mobile/otaUpdater';
 import { OverlayProvider, useToast } from './components/ui/Overlays';
 import { conexionBloqueada, detalleDeBloqueo } from './utils/adminLogin';
 import { registrarVisita } from './utils/huella';
@@ -93,6 +94,9 @@ function AppInner() {
 
   useEffect(() => {
     initKeyboard();
+    // Fuera del render inicial y sin bloquearlo: revisa/aplica la
+    // actualización OTA en segundo plano. No hace nada en la web.
+    initOtaUpdater();
   }, []);
 
   // ---- Bloqueo de acceso a nivel de aplicación ----------------------------
