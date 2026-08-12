@@ -16,6 +16,13 @@ import {
 // cada producto con su código real de 13 dígitos del catálogo de Hacienda.
 export const DEFAULT_CAABYS = '8399000000000';
 
+// Stock inicial que trae cada fila del importador de listas de precios. Una
+// lista de proveedor no dice cuántas unidades hay físicamente, así que 0
+// sería lo exacto — pero en la práctica el negocio siempre pide una cantidad
+// aproximada de partida en vez de arrancar todo en cero. Sigue siendo
+// editable por fila antes de importar.
+const STOCK_INICIAL_IMPORTACION = 10;
+
 const TECHNOVERSE_PLACEHOLDER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNTAiIGhlaWdodD0iMTUwIiB2aWV3Qm94PSIwIDAgMTUwIDE1MCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTUwIiBmaWxsPSIjZjhmOWZhIi8+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzBmMTcyYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmF0LWJhc2VsaW5lPSJtaWRkbGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iIzM4YmRmZiI+VEVDSE5PVkVSU0U8L3RleHQ+PC9zdmc+";
 
 function ProductImage({ src, alt, className = "w-10 h-10" }: { src?: string, alt: string, className?: string }) {
@@ -394,7 +401,11 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         category,
         cost: finalCost,
         price: 0, // Precio de venta: se define aquí (o con el margen global), nunca se adivina.
-        stock: 0, // Una lista de precios no es una entrega física: el stock real se cuenta aparte.
+        // Aproximación pedida para este importador: 10 unidades por repuesto
+        // en vez de partir de 0. Sigue siendo editable fila por fila (y
+        // opcional: no es obligatorio corregirlo para poder importar) — es
+        // solo un punto de partida razonable mientras se hace el conteo real.
+        stock: STOCK_INICIAL_IMPORTACION,
         imageUrl,
         warranty,
         selected: !agotado,
