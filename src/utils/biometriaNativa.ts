@@ -460,35 +460,52 @@ export function iniciarSincronizacionBiometrica(): void {
 }
 
 /**
- * Cierra la sesión SIN invalidar el pase guardado.
+ * Termina la sesión de la forma que corresponda a este aparato.
  *
- * `signOut()` sin argumentos usa alcance global: le dice al servidor que
- * revoque TODOS los pases de esa cuenta, incluido el que está guardado
- * detrás de la huella. Con eso, cerrar sesión mataba la biometría aunque
- * el pase estuviera al día.
+ * ---------------------------------------------------------------------
+ * NO HAY NINGÚN `signOut` QUE CONSERVE EL PASE. NINGUNO.
+ * ---------------------------------------------------------------------
+ * Conviene dejarlo escrito porque el comentario que ocupaba este sitio
+ * afirmaba lo contrario —que `scope: 'local'` "borra la sesión de este
+ * aparato y deja el pase válido"— y esa frase es exactamente la creencia
+ * que produjo el fallo.
  *
- * `scope: 'local'` borra la sesión de este aparato y deja el pase válido,
- * que es exactamente lo que se necesita para volver a entrar con la
- * huella. En la web se mantiene el cierre global de siempre.
+ * Lo que ocurre de verdad: supabase-js manda `POST /logout?scope=local`
+ * CON el JWT de la sesión, y para GoTrue `local` significa "cierra solo
+ * esta sesión, no las de los demás aparatos". El pase de esta sesión
+ * —el que está guardado detrás de la huella— se revoca igual.
+ *
+ * Así que hay dos comportamientos, y ninguno intenta lo imposible:
+ *
+ *   · APK con la huella activada → se echa la LLAVE. No se llama a
+ *     `signOut` en absoluto. La sesión sigue viva en el aparato y la
+ *     aplicación la trata como cerrada hasta que la huella la abra.
+ *
+ *   · Web, o APK sin huella activada → cierre real y global de siempre.
  */
 export async function cerrarSesionConservandoBiometria(): Promise<void> {
-  try {
-    if (esAplicacionNativa() && estaMarcadaActiva()) {
-      // Cerrar CON LLAVE, no cerrar sesión. No se llama a `signOut` en
-      // absoluto: cualquier variante suya —global o local— revoca el
-      // pase en el servidor y deja la huella inservible. Véase la nota
-      // de LLAVE_BLOQUEO más arriba.
-      //
-      // Antes de echar la llave se refresca el pase guardado, para que
-      // el que queda en el llavero sea el vigente.
+  const cerrarConLlave = esAplicacionNativa() && estaMarcadaActiva();
+
+  if (cerrarConLlave) {
+    // El `try` envuelve solo el refresco del pase. Es importante que el
+    // fallo de ESTO no acabe llamando a `signOut`: antes, un tropiezo
+    // de `getSession()` caía al bloque de rescate de más abajo, que
+    // cerraba sesión de verdad y revocaba el pase — reintroduciendo el
+    // fallo justo en el camino que debía protegerlo.
+    try {
       const { data } = await supabase.auth.getSession();
       await guardarPaseActual(data?.session?.refresh_token, data?.session?.user?.email);
-      marcarBloqueo(true);
-      return;
+    } catch {
+      /* si no se pudo refrescar, sirve el pase anterior: sigue siendo válido */
     }
+    marcarBloqueo(true);
+    return;
+  }
+
+  try {
     await supabase.auth.signOut();
   } catch {
-    /* si falla, se intenta el cierre normal para no dejar la sesión viva */
+    /* si falla, se reintenta para no dejar la sesión viva por error */
     try { await supabase.auth.signOut(); } catch { /* nada más que hacer */ }
   }
 }
