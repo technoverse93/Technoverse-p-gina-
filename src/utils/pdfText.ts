@@ -26,13 +26,39 @@ export async function extractTextFromPdf(file: File): Promise<string> {
   for (let i = 1; i <= pdf.numPages; i++) {
     const pagina = await pdf.getPage(i);
     const contenido = await pagina.getTextContent();
-    // pdf.js entrega el texto como fragmentos sueltos (uno por "run" de la
-    // fuente original), no por línea. Unirlos con espacio y separar cada
-    // página con salto de línea es suficiente para el parser por líneas:
-    // una lista de precios tabular casi siempre trae cada artículo en su
-    // propia línea dentro del PDF de origen.
-    const texto = contenido.items.map((it: any) => ('str' in it ? it.str : '')).join(' ');
-    paginas.push(texto);
+
+    // FALLO CORREGIDO: esta función unía TODO el texto de la página con un
+    // solo espacio, sin ningún salto de línea entre renglones. pdf.js
+    // entrega el texto como fragmentos sueltos (uno por "run" de fuente), y
+    // NO por línea — perder esa distinción convertía una lista de 300
+    // artículos en un solo renglón gigante. `parseTextToProducts` divide el
+    // texto por saltos de línea (`text.split('\n')`), así que con todo
+    // pegado solo encontraba el PRIMER precio de la página entera y
+    // arrastraba los 300 nombres juntos como si fueran uno solo.
+    //
+    // pdf.js sí sabe dónde termina cada línea: cada fragmento trae
+    // `hasEOL`, que indica si un salto de línea le sigue en el documento
+    // original. Usarlo reconstruye los renglones tal como se ven en el PDF.
+    let renglon = '';
+    const renglones: string[] = [];
+    for (const item of contenido.items as any[]) {
+      if (!('str' in item)) continue;
+      renglon += item.str;
+      if (item.hasEOL) {
+        renglones.push(renglon);
+        renglon = '';
+      } else {
+        // Dos fragmentos seguidos SIN salto de línea son, casi siempre,
+        // columnas o palabras distintas dentro del mismo renglón (nombre,
+        // luego precio) — nunca pegadas sin espacio en el PDF de origen.
+        // Un espacio de más no daña nada: el parser ya colapsa espacios
+        // repetidos.
+        renglon += ' ';
+      }
+    }
+    if (renglon.trim()) renglones.push(renglon);
+
+    paginas.push(renglones.join('\n'));
   }
   return paginas.join('\n');
 }
