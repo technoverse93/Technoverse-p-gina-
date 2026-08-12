@@ -80,9 +80,29 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
   const [repuestoElegido, setRepuestoElegido] = useState('');
   const [insumoElegido, setInsumoElegido] = useState('');
 
+  // ---------------------------------------------------------------------
+  // CARGA DEL INVENTARIO
+  // ---------------------------------------------------------------------
+  // FALLO CORREGIDO: esto leía `getDB()` UNA sola vez, al montarse, y no
+  // volvía a mirar. Pero el inventario llega de Supabase de forma
+  // asíncrona: si se abre Cobros antes de que termine de cargar —lo normal
+  // en un teléfono con datos móviles, o al entrar directo a /admin/cobros—
+  // la lista quedaba vacía y AHÍ SE QUEDABA.
+  //
+  // El efecto era desconcertante: los desplegables de Repuestos e Insumos
+  // aparecían sin opciones, así que no había forma de añadir el temperado
+  // ni de marcarlo como regalía, y la factura salía con la línea del
+  // servicio y nada más. Parecía que la regalía no funcionaba, cuando lo
+  // que fallaba era que nunca se llegaba a seleccionar.
+  //
+  // Ahora se escucha `technoverse_db_updated`, el mismo evento que ya usan
+  // Inventario y el panel: en cuanto el inventario llega o cambia, los
+  // selectores se rellenan solos.
   useEffect(() => {
-    const db = getDB();
-    setProductos((db.products || []).filter(Boolean));
+    const releer = () => setProductos((getDB().products || []).filter(Boolean));
+    releer();
+    window.addEventListener('technoverse_db_updated', releer);
+    return () => window.removeEventListener('technoverse_db_updated', releer);
   }, []);
 
   const margen = useMemo(
@@ -420,19 +440,30 @@ function ListaDeInsumos({
     >
       <p className="tv-hint !mt-0 mb-3">{descripcion}</p>
 
-      <div className="flex flex-col sm:flex-row gap-2 mb-4">
-        <div className="flex-1 min-w-0">
-          <CustomSelect
-            value={elegido}
-            onChange={alElegir}
-            options={opciones.map(p => ({
-              value: p.id,
-              label: `${p.name} — ${p.stock} en existencia (costo ${colones(p.cost || 0)})`,
-            }))}
-          />
+      {/* Un desplegable vacío no explica nada: quien lo abre y no ve
+          opciones no sabe si el sistema falla o si le falta registrar algo.
+          Se dice cuál de las dos cosas es. */}
+      {opciones.length === 0 ? (
+        <p className="text-[12px] leading-relaxed text-[var(--text-muted)] rounded-[10px] border border-[var(--border-color)] px-3 py-2.5 mb-4">
+          No hay artículos disponibles para esta lista. Puede ser que todavía no se hayan
+          registrado en el inventario, que estén en cero, o que el inventario aún se esté
+          cargando — en ese caso aparecerán solos en un momento.
+        </p>
+      ) : (
+        <div className="flex flex-col sm:flex-row gap-2 mb-4">
+          <div className="flex-1 min-w-0">
+            <CustomSelect
+              value={elegido}
+              onChange={alElegir}
+              options={opciones.map(p => ({
+                value: p.id,
+                label: `${p.name} — ${p.stock} en existencia (costo ${colones(p.cost || 0)})`,
+              }))}
+            />
+          </div>
+          <Btn icon={Plus} onClick={alAgregar} disabled={!elegido}>Agregar</Btn>
         </div>
-        <Btn icon={Plus} onClick={alAgregar} disabled={!elegido}>Agregar</Btn>
-      </div>
+      )}
 
       {lista.length === 0 ? (
         <Empty icon={Icono} title="Nada agregado" text={vacio} />
