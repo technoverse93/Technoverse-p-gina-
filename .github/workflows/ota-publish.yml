@@ -1,0 +1,96 @@
+name: Publicar actualización OTA
+
+# En cada push a main que toque código web, compila el proyecto, empaqueta
+# dist/ en un .zip y lo sube a Supabase Storage (bucket "ota-updates")
+# junto a un manifiesto latest.json con {version, url}. La app, en cada
+# arranque (src/mobile/otaUpdater.ts), lee ese manifiesto y si la versión
+# cambió, descarga el .zip y lo deja listo para el próximo reinicio — sin
+# pasar por la Play Store ni pedirle a nadie que reinstale el APK.
+#
+# `version` es el SHA corto del commit: siempre único, siempre trazable
+# hasta el cambio exacto que lo generó.
+#
+# No corre en cambios que no toquen el bundle web (por ejemplo, editar
+# este mismo workflow, o tocar solo supabase/*.sql): evita publicar una
+# "actualización" idéntica a la que ya está.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'src/**'
+      - 'public/**'
+      - 'index.html'
+      - 'package.json'
+      - 'package-lock.json'
+      - 'vite.config.ts'
+      - 'capacitor.config.ts'
+      - 'tsconfig.json'
+  workflow_dispatch: {}
+
+jobs:
+  publish-ota:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Empaquetar dist/ en un .zip
+        run: |
+          cd dist
+          zip -r ../ota-bundle.zip .
+          cd ..
+          echo "Tamaño del bundle:"
+          du -h ota-bundle.zip
+
+      - name: Subir bundle y manifiesto a Supabase Storage
+        env:
+          SUPABASE_URL: https://hzatdfrjcqiimgqxcwwh.supabase.co
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: |
+          set -euo pipefail
+
+          if [ -z "${SUPABASE_SERVICE_ROLE_KEY:-}" ]; then
+            echo "::error::Falta el secreto SUPABASE_SERVICE_ROLE_KEY en el repositorio. Sin él no se puede publicar la actualización OTA."
+            exit 1
+          fi
+
+          VERSION="${GITHUB_SHA::7}"
+          BUNDLE_PATH="ota/${VERSION}.zip"
+          BUNDLE_URL="${SUPABASE_URL}/storage/v1/object/public/ota-updates/${BUNDLE_PATH}"
+
+          echo "Publicando versión OTA: ${VERSION}"
+
+          # Sube el .zip de esta versión. x-upsert:true por si el mismo SHA
+          # se vuelve a compilar (workflow_dispatch manual, por ejemplo).
+          curl -sSf -X POST \
+            "${SUPABASE_URL}/storage/v1/object/ota-updates/${BUNDLE_PATH}" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/zip" \
+            -H "x-upsert: true" \
+            --data-binary "@ota-bundle.zip"
+
+          # Manifiesto: se sobrescribe SIEMPRE en la misma ruta (latest.json)
+          # para que la app solo tenga que consultar una URL fija.
+          printf '{"version":"%s","url":"%s"}' "$VERSION" "$BUNDLE_URL" > latest.json
+
+          curl -sSf -X POST \
+            "${SUPABASE_URL}/storage/v1/object/ota-updates/latest.json" \
+            -H "Authorization: Bearer ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "apikey: ${SUPABASE_SERVICE_ROLE_KEY}" \
+            -H "Content-Type: application/json" \
+            -H "x-upsert: true" \
+            --data-binary "@latest.json"
+
+          echo "Publicado: ${BUNDLE_URL}"
