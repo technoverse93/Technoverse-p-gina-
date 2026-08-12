@@ -49,10 +49,10 @@ jobs:
       # ubicación por IP (que apenas acierta la ciudad).
       #
       # Se comprueba que no esté ya puesto, para que el paso sea repetible.
-      - name: Declarar permisos de ubicación y biometría en el manifiesto
+      - name: Declarar permisos de ubicación, biometría y almacenamiento en el manifiesto
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          if grep -q "ACCESS_FINE_LOCATION" "$MANIFEST" && grep -q "USE_BIOMETRIC" "$MANIFEST"; then
+          if grep -q "ACCESS_FINE_LOCATION" "$MANIFEST" && grep -q "USE_BIOMETRIC" "$MANIFEST" && grep -q "WRITE_EXTERNAL_STORAGE" "$MANIFEST"; then
             echo "El permiso ya estaba declarado; no se toca nada."
           else
             python3 - "$MANIFEST" <<'PY'
@@ -71,13 +71,21 @@ jobs:
               # `required=false` a propósito: un teléfono sin lector debe
               # poder instalar la aplicación igual y entrar con contraseña.
               '    <uses-feature android:name="android.hardware.fingerprint" android:required="false" />\n'
+              # Para @capacitor/filesystem al guardar el PDF de la factura en
+              # Directory.Documents. `maxSdkVersion="32"` a propósito: desde
+              # Android 13 (API 33) escribir en Documentos vía el plugin ya no
+              # necesita este permiso —pedirlo igual ahí solo asustaría con un
+              # diálogo de más—, pero los equipos con Android 9-12 que
+              # circulan en Costa Rica sí lo requieren.
+              '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n'
+              '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n'
               '</manifest>'
           )
           if '</manifest>' not in texto:
               raise SystemExit('No se encontró el cierre </manifest>: el manifiesto no tiene el formato esperado.')
           texto = texto.replace('</manifest>', permisos, 1)
           open(ruta, 'w', encoding='utf-8').write(texto)
-          print('Permisos de ubicación y biometría agregados al manifiesto.')
+          print('Permisos de ubicación, biometría y almacenamiento agregados al manifiesto.')
           PY
           fi
           echo "--- permisos declarados ---"
