@@ -25,7 +25,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Receipt, Gift, Wrench, Plus, Trash2, CheckCircle, Download, AlertTriangle,
+  Receipt, Gift, Wrench, Plus, Trash2, CheckCircle, Download, AlertTriangle, Link2,
 } from 'lucide-react';
 import { PageHead, Card, Btn, Field, Chip, Stat, Empty, colones } from './admin/AdminKit';
 import { CustomSelect } from './CustomSelect';
@@ -34,7 +34,7 @@ import { getDB } from '../utils/storage';
 import { validateCedula } from '../utils/invoicePdf';
 import type { IdentificacionTipo } from '../utils/invoicePdf';
 import {
-  MEDIOS_DE_COBRO, OPCIONES_GARANTIA, calcularMargen, cobrarServicio,
+  MEDIOS_DE_COBRO, OPCIONES_GARANTIA, calcularMargen, cobrarServicio, componentesDe,
 } from '../utils/facturacion';
 import type { MedioCobro, InsumoConsumido, ResultadoCobro } from '../utils/facturacion';
 import { esRepuesto, esInsumo } from '../utils/categorias';
@@ -80,6 +80,15 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
   const [repuestoElegido, setRepuestoElegido] = useState('');
   const [insumoElegido, setInsumoElegido] = useState('');
 
+  // ---- Servicio del catálogo (vinculación N-a-N) --------------------------
+  // HALLAZGO DE AUDITORÍA CORREGIDO: la tabla product_components, su vista y
+  // componentesDe() ya existían —se construyeron para esto mismo— pero
+  // ninguna pantalla los llamaba. Cobrar seguía siendo enteramente manual:
+  // se escribía la descripción a mano y se agregaban repuestos/insumos uno
+  // por uno, sin que el sistema recordara qué llevaba cada servicio.
+  const [servicioElegido, setServicioElegido] = useState('');
+  const [cargandoComponentes, setCargandoComponentes] = useState(false);
+
   // ---------------------------------------------------------------------
   // CARGA DEL INVENTARIO
   // ---------------------------------------------------------------------
@@ -115,6 +124,10 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
   // Insumos: su propia familia del inventario (temperados, micas, cables
   // de taller). Cualquiera de ellos puede marcarse como regalía.
   const opcionesInsumo = conStock.filter(p => esInsumo(p.category));
+  // Servicios del catálogo: todo lo que NO sea repuesto ni insumo. No se
+  // filtra por existencia: un servicio no se descuenta de su propio stock,
+  // solo sirve como llave para traer lo que tenga vinculado.
+  const opcionesServicio = productos.filter(p => !esRepuesto(p.category) && !esInsumo(p.category));
 
   const agregarInsumo = (
     productId: string,
@@ -132,6 +145,63 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
       ...lista,
       { productId: p.id, productName: p.name, quantity: 1, costoUnitario: p.cost || 0 },
     ]);
+  };
+
+  /**
+   * Trae los repuestos e insumos vinculados al servicio elegido y los
+   * mezcla con lo que ya esté en las listas.
+   *
+   * "Mezcla" y no "reemplaza" a propósito: quien cobra puede haber
+   * agregado ya algo a mano antes de acordarse de elegir el servicio, y
+   * reemplazar borraría ese trabajo. Un componente que ya estuviera en la
+   * lista —por vinculación o agregado a mano— no se duplica; se detecta
+   * por productId y se deja como estaba.
+   *
+   * Si el servicio no tiene nada vinculado, se avisa: un botón que no
+   * hace nada visible se lee como un error del sistema.
+   */
+  const cargarComponentesDelServicio = async () => {
+    if (!servicioElegido) return;
+    const producto = productos.find(p => p.id === servicioElegido);
+    setCargandoComponentes(true);
+    try {
+      const traidos = await componentesDe(servicioElegido);
+      if (traidos.length === 0) {
+        toast.warning(
+          producto
+            ? `${producto.name} no tiene repuestos ni insumos vinculados. Puede agregarlos a mano abajo, o vincularlos en Inventario para la próxima vez.`
+            : 'Ese servicio no tiene nada vinculado.'
+        );
+        return;
+      }
+
+      const yaEnRepuestos = new Set(repuestos.map(r => r.productId));
+      const yaEnInsumos = new Set(insumos.map(i => i.productId));
+
+      const nuevosRepuestos = traidos.filter(c => {
+        const p = productos.find(x => x.id === c.productId);
+        return p && esRepuesto(p.category) && !yaEnRepuestos.has(c.productId);
+      });
+      const nuevosInsumos = traidos.filter(c => {
+        const p = productos.find(x => x.id === c.productId);
+        return p && esInsumo(p.category) && !yaEnInsumos.has(c.productId);
+      });
+
+      if (nuevosRepuestos.length) setRepuestos(r => [...r, ...nuevosRepuestos]);
+      if (nuevosInsumos.length) setInsumos(i => [...i, ...nuevosInsumos]);
+      if (!descripcion.trim() && producto) setDescripcion(producto.name);
+
+      const total = nuevosRepuestos.length + nuevosInsumos.length;
+      const yaEstaban = traidos.length - total;
+      toast.success(
+        total > 0
+          ? `Se agregaron ${total} artículo(s) vinculado(s) a ${producto?.name || 'el servicio'}.` +
+            (yaEstaban > 0 ? ` (${yaEstaban} ya estaban en la lista.)` : '')
+          : 'Los artículos vinculados ya estaban todos en la lista.'
+      );
+    } finally {
+      setCargandoComponentes(false);
+    }
   };
 
   const cambiarCantidad = (
@@ -154,6 +224,7 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     setDescripcion(''); setMonto(''); setGarantia('3'); setMedio('SINPE');
     setRepuestos([]); setInsumos([]);
     setRepuestoElegido(''); setInsumoElegido('');
+    setServicioElegido('');
   };
 
   /** Comprueba TODO antes de tocar el inventario o quemar un consecutivo. */
@@ -283,6 +354,29 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
 
         <Card title="Cobro">
           <div className="tv-stack">
+            {opcionesServicio.length > 0 && (
+              <Field
+                label="Servicio del catálogo (opcional)"
+                hint="Si el servicio tiene repuestos o insumos vinculados desde Inventario, se agregan solos abajo."
+              >
+                <div className="flex flex-col sm:flex-row gap-2">
+                  <div className="flex-1 min-w-0">
+                    <CustomSelect
+                      value={servicioElegido}
+                      onChange={setServicioElegido}
+                      options={opcionesServicio.map(p => ({ value: p.id, label: p.name }))}
+                    />
+                  </div>
+                  <Btn
+                    icon={Link2}
+                    onClick={cargarComponentesDelServicio}
+                    disabled={!servicioElegido || cargandoComponentes}
+                  >
+                    {cargandoComponentes ? 'Cargando…' : 'Traer vinculados'}
+                  </Btn>
+                </div>
+              </Field>
+            )}
             <Field label="Servicio prestado" hint="Es lo que sale impreso como detalle en el comprobante.">
               <textarea
                 className="tv-input"

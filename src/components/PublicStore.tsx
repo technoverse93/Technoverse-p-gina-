@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 're
 import { PaginatedGrid } from './PaginationHelper';
 import { 
   ShoppingBag, Search, ChevronDown, Trash2, ArrowRight,
-  MapPin, CreditCard, CheckCircle, Smartphone, Wrench, Settings,
+  MapPin, CheckCircle, Smartphone, Wrench, Settings,
   MessageSquare, Sparkles, AlertCircle, FileDown, Heart, ShieldAlert,
   User as UserIcon, X, LogOut, Sun, Moon, Home, LayoutGrid, Fingerprint
 } from 'lucide-react';
@@ -167,10 +167,18 @@ export default function PublicStore({
   const [recipientPhone, setRecipientPhone] = useState('');
   
   // Payment States
-  const [paymentMethod, setPaymentMethod] = useState<'SINPE' | 'Tarjeta'>('SINPE');
+  // HALLAZGO DE AUDITORÍA CORREGIDO (prioridad Alta): el checkout ofrecía
+  // "Tarjeta Crédito" con un tokenizador que el propio texto de la pantalla
+  // llamaba "cifrado simulado" — no hay ningún procesador de pagos real
+  // detrás. Un cliente podía "pagar con tarjeta", ver su pedido confirmado,
+  // y la empresa nunca recibía el dinero.
+  //
+  // Se retira la opción por completo en vez de dejarla deshabilitada: un
+  // botón visible pero inactivo sigue siendo una promesa de pago que no se
+  // cumple. SINPE Móvil es el único método porque es el que de verdad se
+  // verifica a mano contra la cuenta bancaria real.
+  const paymentMethod: 'SINPE' = 'SINPE';
   const [sinpePhone, setSinpePhone] = useState('');
-  const [cardNumber, setCardNumber] = useState('');
-  const [cardName, setCardName] = useState('');
   const [confirmedOrder, setConfirmedOrder] = useState<Order | null>(null);
 
   // Datos fiscales (Facturación Electrónica CR v4.3 — registro interno)
@@ -829,8 +837,7 @@ export default function PublicStore({
       total: cartTotal,
       paymentMethod: paymentMethod,
       paymentDetails: {
-        phone: paymentMethod === 'SINPE' ? sinpePhone : undefined,
-        cardLast4: paymentMethod === 'Tarjeta' ? cardNumber.slice(-4) : undefined
+        phone: sinpePhone,
       },
       status: 'Completado',
       xmlVerified: false,
@@ -884,7 +891,7 @@ export default function PublicStore({
         // tumbaba el guardado de la factura aunque la venta ya se hubiera
         // procesado (FAC-0014).
         addressDetail: shippingAddress.trim(),
-        cardsTokenized: paymentMethod === 'Tarjeta' ? [{ last4: cardNumber.slice(-4), brand: 'Visa' }] : [],
+        cardsTokenized: [],
         balance: 0,
         notes: 'Cliente registrado automáticamente desde checkout.'
       });
@@ -926,7 +933,7 @@ export default function PublicStore({
     // quedaron confirmados arriba, así que un fallo aquí NUNCA debe revertir
     // ni bloquear la compra — solo se informa y queda pendiente de soporte.
     try {
-      const medioPago: MedioPago = paymentMethod === 'Tarjeta' ? '02' : '04';
+      const medioPago: MedioPago = '04'; // SINPE Móvil: el único método real del checkout.
       const { items: invoiceItems, subtotal: invSubtotal, ivaTotal: invIva, total: invTotal } = computeInvoiceTotals(
         cart.map(it => ({
           caabys: it.product.caabys || DEFAULT_CAABYS,
@@ -1989,92 +1996,42 @@ export default function PublicStore({
               )}
 
               {checkoutStep === 2 && (
-                /* STEP 2: Secure Payment Gateway simulator */
+                /* STEP 2: Pago por SINPE Móvil
+                   HALLAZGO DE AUDITORÍA CORREGIDO (prioridad Alta): aquí había un
+                   segundo método, "Tarjeta Crédito", con un formulario de 16
+                   dígitos y un "tokenizador" cuyo propio texto se describía como
+                   "cifrado simulado AES-256". No hay ningún procesador de pagos
+                   real detrás: un cliente podía completar la compra creyendo que
+                   había pagado con tarjeta, y el dinero nunca llegaba a ninguna
+                   cuenta. Se retiró la opción completa; SINPE es el único método,
+                   porque es el único que de verdad se verifica contra la cuenta
+                   bancaria real de la empresa. */
                 <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-blue-600 dark:text-[var(--brand-gold-light)] uppercase tracking-wider">Pasarela de Pago Segura</h4>
-                  
-                  <div className="grid grid-cols-2 gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('SINPE')}
-                      className={`py-2 text-center rounded-xl font-bold text-sm border transition cursor-pointer ${
-                        paymentMethod === 'SINPE'
-                          ? 'bg-blue-50 dark:bg-[var(--brand-gold-mid)]/10 border-blue-500 dark:border-[var(--brand-gold-dark)] text-blue-600 dark:text-[var(--brand-gold-light)]'
-                          : 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--bg-base)]'
-                      }`}
-                    >
-                      SINPE Móvil
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setPaymentMethod('Tarjeta')}
-                      className={`py-2 text-center rounded-xl font-bold text-sm border transition cursor-pointer ${
-                        paymentMethod === 'Tarjeta'
-                          ? 'bg-blue-50 dark:bg-[var(--brand-gold-mid)]/10 border-blue-500 dark:border-[var(--brand-gold-dark)] text-blue-600 dark:text-[var(--brand-gold-light)]'
-                          : 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:bg-[var(--bg-base)]'
-                      }`}
-                    >
-                      Tarjeta Crédito
-                    </button>
-                  </div>
+                  <h4 className="text-sm font-bold text-blue-600 dark:text-[var(--brand-gold-light)] uppercase tracking-wider">Pago por SINPE Móvil</h4>
 
-                  {paymentMethod === 'SINPE' ? (
-                    <div className="bg-[var(--bg-surface)] rounded-2xl p-4 border border-[var(--border-color)]/60 space-y-3">
-                      <div className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
-                        Transfiera mediante SINPE Móvil al número oficial de la empresa:
-                        <strong className="text-[var(--text-primary)] block mt-1 font-mono text-sm">+506 6421 4795</strong>
-                        Asociado a: <strong>Technoverse Costa Rica S.A.</strong>
-                      </div>
-                      <div>
-                        <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Teléfono remitente SINPE</label>
-                        <input
-                          type="text"
-                          required
-                          value={sinpePhone}
-                          onChange={(e) => setSinpePhone(e.target.value)}
-                          placeholder="Ej. 88123456"
-                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
-                        />
-                      </div>
+                  <div className="bg-[var(--bg-surface)] rounded-2xl p-4 border border-[var(--border-color)]/60 space-y-3">
+                    <div className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+                      Transfiera mediante SINPE Móvil al número oficial de la empresa:
+                      <strong className="text-[var(--text-primary)] block mt-1 font-mono text-sm">+506 6421 4795</strong>
+                      Asociado a: <strong>Technoverse Costa Rica</strong>
                     </div>
-                  ) : (
-                    <div className="bg-[var(--bg-surface)] rounded-2xl p-4 border border-[var(--border-color)]/60 space-y-3">
-                      <span className="text-[9px] text-[var(--text-primary)] block leading-relaxed uppercase font-bold tracking-wider">Tokenizador Local Seguro</span>
-                      <div>
-                        <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Número de Tarjeta (16 dígitos)</label>
-                        <input
-                          type="text"
-                          maxLength={16}
-                          required
-                          value={cardNumber}
-                          onChange={(e) => setCardNumber(e.target.value.replace(/\D/g, ''))}
-                          placeholder="4000 1234 5678 9010"
-                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
-                        />
-                      </div>
-                      <div className="grid grid-cols-2 gap-2">
-                        <div>
-                          <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Nombre en Tarjeta</label>
-                          <input
-                            type="text"
-                            required
-                            value={cardName}
-                            onChange={(e) => setCardName(e.target.value)}
-                            placeholder="Ej. JUAN SOLIS"
-                            className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none"
-                          />
-                        </div>
-                        <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl px-4 py-3 flex items-center justify-center">
-                          <CreditCard className="w-6 h-6 text-[var(--text-primary)]" />
-                        </div>
-                      </div>
+                    <div>
+                      <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Teléfono remitente SINPE</label>
+                      <input
+                        type="text"
+                        required
+                        value={sinpePhone}
+                        onChange={(e) => setSinpePhone(e.target.value)}
+                        placeholder="Ej. 88123456"
+                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
+                      />
                     </div>
-                  )}
+                  </div>
 
                   <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100 dark:border-[var(--brand-gold-dark)] text-[10px] text-blue-700 dark:text-[var(--brand-gold-light)] leading-normal flex gap-2">
                     <ShieldAlert className="w-4.5 h-4.5 flex-shrink-0 text-blue-500 dark:text-[var(--brand-gold-light)]" />
                     <span>
-                      <strong>Protección PRODHAB (Ley 8968):</strong> Los datos de pago son encriptados en tránsito (cifrado simulado AES-256) y tokenizados inmediatamente. Technoverse nunca almacena números completos de tarjetas.
+                      <strong>Protección PRODHAB (Ley 8968):</strong> El teléfono remitente se usa únicamente para verificar la transferencia contra la cuenta oficial de la empresa.
                     </span>
                   </div>
 

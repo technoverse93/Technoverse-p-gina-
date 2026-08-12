@@ -961,7 +961,18 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                         <div className="text-[9px] bg-sky-50 border border-sky-100 rounded px-1.5 py-0.5 text-sky-600 dark:text-[var(--brand-gold-light)] w-fit font-sans flex items-center gap-1 dark:border-[var(--brand-gold-dark)]">
                           <span>🏠</span> {rep.repairLocation || 'Taller en casa'}
                         </div>
-                        <div className="text-[10px] text-emerald-400 dark:text-[var(--brand-gold-light)] font-mono font-bold">₡{rep.totalCost.toLocaleString()}</div>
+                        {/* HALLAZGO DE AUDITORÍA CORREGIDO (prioridad Media): esta
+                            cifra se veía SIEMPRE, en negrita, en cada tarjeta del
+                            tablero operativo — incluido "₡0" en cualquier
+                            reparación todavía sin cobrar, porque el taller ya no
+                            calcula precio. Es justo el tipo de elemento contable
+                            que se pidió sacar del módulo del técnico. Se oculta
+                            por completo hasta que exista un cobro real (>0),
+                            igual que ya se hizo en la búsqueda pública y en el
+                            mensaje de WhatsApp de esta misma pantalla. */}
+                        {rep.totalCost > 0 && (
+                          <div className="text-[10px] text-emerald-400 dark:text-[var(--brand-gold-light)] font-mono font-bold">₡{rep.totalCost.toLocaleString()}</div>
+                        )}
                         
                         {/* Quick state switcher */}
                         <div className="flex justify-between items-center pt-1.5 border-t border-[var(--border-color)]/50 gap-1.5">

@@ -3,9 +3,10 @@ import React, { useState, useEffect, useLayoutEffect, useRef, Suspense, lazy } f
 import { PaginatedTbody } from './PaginationHelper';
 import { CustomSelect } from './CustomSelect';
 import {
-  CheckCircle, ChevronDown, Download, Edit, Eye, EyeOff, FileSpreadsheet, Key, Megaphone, Plus, RefreshCw, Save, Trash2, UserPlus, Users,
+  CheckCircle, ChevronDown, Download, Edit, Eye, EyeOff, FileSpreadsheet, Key, Mail, Megaphone, Plus, RefreshCw, Save, Trash2, UserPlus, Users,
 } from 'lucide-react';
 import { supabase } from '../supabaseClient';
+import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
 import { cerrarSesionConservandoBiometria } from '../utils/biometria';
 import { CATEGORIAS_TIENDA, normalizarCategoria, esRepuesto } from '../utils/categorias';
@@ -158,6 +159,59 @@ export default function AdminPanel({
   const [campaigns, setCampaigns] = useState<MarketingCampaign[]>([]);
   const [auditLog, setAuditLog] = useState<AuditLog[]>([]);
 
+  // ---------------------------------------------------------------------
+  // COMPROBANTES REALES (tabla invoices), por pedido
+  // ---------------------------------------------------------------------
+  // HALLAZGO DE AUDITORÍA CORREGIDO: `orders.hdaStatus` es un campo
+  // simulado, previo al motor de facturación real. La tabla `invoices`
+  // —la que crea `issue_invoice()`— sí sabe si el correo llegó
+  // (`email_status`), y esa columna no se leía en ninguna pantalla: el
+  // personal no tenía forma de saber que un comprobante no llegó al
+  // cliente sin consultar la base directamente.
+  const [facturasPorPedido, setFacturasPorPedido] = useState<
+    Record<string, { id: string; consecutivo: string; pdfUrl: string | null; emailStatus: string | null }>
+  >({});
+  const [reenviandoFactura, setReenviandoFactura] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (activeTab !== 'facturacion') return;
+    let vigente = true;
+    supabase
+      .from('invoices')
+      .select('id, order_id, consecutivo, pdf_url, email_status')
+      .then(({ data, error }) => {
+        if (!vigente || error || !data) return;
+        const mapa: typeof facturasPorPedido = {};
+        for (const f of data as any[]) {
+          mapa[f.order_id] = {
+            id: f.id, consecutivo: f.consecutivo, pdfUrl: f.pdf_url, emailStatus: f.email_status,
+          };
+        }
+        setFacturasPorPedido(mapa);
+      });
+    return () => { vigente = false; };
+  }, [activeTab, orders]);
+
+  /**
+   * Reenvía el correo de un comprobante que no llegó.
+   *
+   * Llama a la MISMA función que usa el checkout — no hay una versión
+   * distinta para reintentos — así que el resultado es idéntico a como
+   * habría salido la primera vez.
+   */
+  const reenviarComprobante = async (invoiceId: string) => {
+    setReenviandoFactura(invoiceId);
+    try {
+      const { error } = await supabase.functions.invoke('send-invoice-email', { body: { invoiceId } });
+      if (error) throw error;
+      toast.success('Se reenvió el comprobante.');
+    } catch (e: any) {
+      toast.error('No se pudo reenviar: ' + (e?.message || e));
+    } finally {
+      setReenviandoFactura(null);
+    }
+  };
+
   // Product CRUD state
   const [showProductForm, setShowProductForm] = useState(false);
   const [editingProductId, setEditingProductId] = useState<string | null>(null);
@@ -177,6 +231,7 @@ export default function AdminPanel({
   const [newUserName, setNewUserName] = useState('');
   const [newUserEmail, setNewUserEmail] = useState('');
   const [newUserPassword, setNewUserPassword] = useState('');
+  const [promotedUserEmail, setPromotedUserEmail] = useState<string | null>(null);
   const [showPassword, setShowPassword] = useState(false);
   const [isCreatingUser, setIsCreatingUser] = useState(false);
   const [generatedUserPass, setGeneratedUserPass] = useState<string | null>(null);
@@ -668,12 +723,38 @@ export default function AdminPanel({
       });
 
       if (fnError || !fnData?.success) {
-        toast.error('No se pudo crear el usuario. Detalle: ' + (fnData?.error || fnError?.message || 'error desconocido'));
+        // Cuando la Edge Function responde con un status distinto de 2xx,
+        // supabase-js NO pone el cuerpo de la respuesta en `fnData`: lo
+        // envuelve en un FunctionsHttpError genérico ("Edge Function
+        // returned a non-2xx status code") y dejamos escapar ese mensaje
+        // inútil en vez del motivo real ("este correo ya existe", "faltan
+        // datos", etc.) que la función sí manda en el cuerpo JSON.
+        let detalle = fnData?.error || fnError?.message || 'error desconocido';
+        if (fnError instanceof FunctionsHttpError) {
+          try {
+            const cuerpo = await fnError.context.json();
+            if (cuerpo?.error) detalle = cuerpo.error;
+          } catch {
+            // Cuerpo no era JSON; nos quedamos con el mensaje genérico.
+          }
+        }
+        toast.error('No se pudo crear el usuario. Detalle: ' + detalle);
         return;
       }
 
-      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Seguridad', 'Crear Usuario Administrador', `Usuario administrador creado: ${newUserName} (${newUserEmail})`);
-      setGeneratedUserPass(finalPass);
+      const yaExistia = !!fnData?.promoted;
+      addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Seguridad', yaExistia ? 'Ascender Usuario Existente a Administrador' : 'Crear Usuario Administrador', yaExistia ? `Cuenta existente ascendida a administrador: ${newUserName} (${newUserEmail})` : `Usuario administrador creado: ${newUserName} (${newUserEmail})`);
+      if (yaExistia) {
+        // Ya tenía cuenta (por ejemplo, se había registrado como cliente):
+        // solo se le subió el rol, su contraseña NO cambió. Mostrar
+        // `finalPass` aquí sería mostrar una contraseña que no sirve.
+        setGeneratedUserPass(null);
+        setPromotedUserEmail(newUserEmail.trim().toLowerCase());
+        toast.success('El correo ya tenía una cuenta: se le dio acceso de administrador. Su contraseña actual no cambió.');
+      } else {
+        setPromotedUserEmail(null);
+        setGeneratedUserPass(finalPass);
+      }
       setNewUserName('');
       setNewUserEmail('');
       setNewUserPassword('');
@@ -682,75 +763,20 @@ export default function AdminPanel({
     }
   };
 
-  const downloadFacturaPDF = (order: Order) => {
-    const db = getDB();
-    const printWindow = window.open('', '_blank');
-    if (!printWindow) return;
-    printWindow.document.write(`
-      <html>
-        <head>
-          <title>Factura ${order.id}</title>
-          <style>
-            body { font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif; padding: 40px; color: #333; }
-            .header { text-align: center; border-bottom: 2px solid #eee; padding-bottom: 20px; margin-bottom: 20px; }
-            .logo { font-size: 24px; font-weight: bold; color: #0284c7; }
-            .details { margin-bottom: 30px; font-size: 14px; }
-            .details div { margin-bottom: 5px; }
-            table { width: 100%; border-collapse: collapse; margin-bottom: 20px; }
-            th, td { padding: 10px; text-align: left; border-bottom: 1px solid #eee; }
-            th { background: #f9f9f9; }
-            .totals { width: 50%; float: right; }
-            .totals div { display: flex; justify-content: space-between; padding: 5px 0; }
-            .totals .bold { font-weight: bold; border-top: 2px solid #333; margin-top: 5px; padding-top: 5px; }
-            .footer { margin-top: 50px; text-align: center; font-size: 10px; color: #777; clear: both; }
-          </style>
-        </head>
-        <body>
-          <div class="header">
-            <div class="logo">TECHNOVERSE S.A.</div>
-            <div>Cédula Jurídica: ${db.settings?.cedulaJuridica || 'Pendiente de configurar'}</div>
-            <div>Factura Electrónica ${order.id}</div>
-          </div>
-          <div class="details">
-            <div><strong>Cliente:</strong> ${order.customerName}</div>
-            <div><strong>Fecha:</strong> ${new Date(order.timestamp).toLocaleString()}</div>
-            <div><strong>Estado:</strong> ${order.status}</div>
-          </div>
-          <table>
-            <thead>
-              <tr>
-                <th>Producto</th>
-                <th>Cant</th>
-                <th>Subtotal</th>
-              </tr>
-            </thead>
-            <tbody>
-              ${order.items.map(it => it && `
-                <tr>
-                  <td>${it.productName}</td>
-                  <td>${it.quantity}</td>
-                  <td>₡${(it.price * it.quantity).toLocaleString()}</td>
-                </tr>
-              `).join('')}
-            </tbody>
-          </table>
-          <div class="totals">
-            <div><span>Subtotal:</span> <span>₡${(order.total - order.taxAmount - order.shippingCost).toLocaleString()}</span></div>
-            <div><span>Envío:</span> <span>₡${order.shippingCost.toLocaleString()}</span></div>
-            <div><span>IVA (13%):</span> <span>₡${order.taxAmount.toLocaleString()}</span></div>
-            <div class="bold"><span>Total Pagado:</span> <span>₡${order.total.toLocaleString()}</span></div>
-          </div>
-          <div class="footer">
-            Generado por Technoverse Admin Panel de conformidad con la directriz DGT-R-48-2016 del Ministerio de Hacienda.
-          </div>
-          <script>
-            window.onload = () => { window.print(); window.close(); }
-          </script>
-        </body>
-      </html>
-    `);
-    printWindow.document.close();
-  };
+  // HALLAZGO DE AUDITORÍA CORREGIDO (prioridad Media): aquí vivía
+  // `downloadFacturaPDF()`, un SEGUNDO generador de comprobantes,
+  // independiente de src/utils/invoicePdf.ts, que imprimía "TECHNOVERSE
+  // S.A." y "Cédula Jurídica: {valor}" — el error legal que ya se había
+  // corregido en el generador real seguía vivo aquí, sin que nadie lo
+  // notara porque NINGÚN botón llamaba a esta función: era código muerto.
+  //
+  // Era una trampa: el nombre suena a una función útil ("descargar
+  // factura en PDF"), así que reconectarla a un botón algún día era un
+  // error fácil de cometer, y habría hecho reaparecer el error legal en
+  // producción. Se elimina en vez de corregirla: el comprobante real ya
+  // existe, en invoicePdf.ts, y usarlo desde aquí sería duplicar lógica
+  // que ya está probada.
+
   // Credit Note returns
   const handleIssueCreditNote = async (orderId: string) => {
     const ok = await confirm({
@@ -1175,10 +1201,14 @@ export default function AdminPanel({
                     <th style={{ textAlign: 'right' }}>IVA (13%)</th>
                     <th style={{ textAlign: 'right' }}>Total</th>
                     <th style={{ textAlign: 'center' }}>Hacienda</th>
+                    <th style={{ textAlign: 'center' }}>Correo</th>
                     <th style={{ textAlign: 'right' }}>Acciones</th>
                   </>}
                 >
-                  <PaginatedTbody items={orders} itemsPerPage={10} renderItem={(o) => (
+                  <PaginatedTbody items={orders} itemsPerPage={10} renderItem={(o) => {
+                    const factura = facturasPorPedido[o.id];
+                    const enviado = factura?.emailStatus === 'enviado';
+                    return (
                     <tr key={o.id}>
                       <td className="font-mono text-[12px] text-[var(--text-secondary)]">{o.id}</td>
                       <td className="font-semibold">{o.customerName}</td>
@@ -1188,6 +1218,29 @@ export default function AdminPanel({
                       <td style={{ textAlign: 'center' }}>
                         <Chip tone={o.hdaStatus === 'Aceptado' ? 'ok' : 'accent'}>{o.hdaStatus}</Chip>
                       </td>
+                      <td style={{ textAlign: 'center' }}>
+                        {!factura ? (
+                          <span className="text-[10px] text-[var(--text-secondary)]">Sin comprobante</span>
+                        ) : (
+                          <div className="flex items-center justify-center gap-1.5">
+                            <Chip tone={enviado ? 'ok' : 'alert'}>{enviado ? 'Enviado' : 'Pendiente'}</Chip>
+                            {!enviado && (
+                              <button
+                                type="button"
+                                className="tv-icon-btn"
+                                title="Reenviar comprobante por correo"
+                                aria-label="Reenviar comprobante por correo"
+                                disabled={reenviandoFactura === factura.id}
+                                onClick={() => reenviarComprobante(factura.id)}
+                              >
+                                {reenviandoFactura === factura.id
+                                  ? <RefreshCw className="w-4 h-4 animate-spin" />
+                                  : <Mail className="w-4 h-4" />}
+                              </button>
+                            )}
+                          </div>
+                        )}
+                      </td>
                       <td style={{ textAlign: 'right' }}>
                         {o.status !== 'Devuelto' && o.status !== 'Cancelado' ? (
                           <Btn variant="danger" onClick={() => handleIssueCreditNote(o.id)}>Nota de crédito</Btn>
@@ -1196,7 +1249,8 @@ export default function AdminPanel({
                         )}
                       </td>
                     </tr>
-                  )} />
+                    );
+                  }} />
                 </TableShell>
               )}
             </Card>
@@ -1404,7 +1458,7 @@ export default function AdminPanel({
                 </p>
 
                 <div>
-                  <Btn onClick={() => { setShowCreateUserForm(!showCreateUserForm); setGeneratedUserPass(null); }}>
+                  <Btn onClick={() => { setShowCreateUserForm(!showCreateUserForm); setGeneratedUserPass(null); setPromotedUserEmail(null); }}>
                     {showCreateUserForm ? 'Ocultar formulario' : 'Crear nuevo usuario'}
                   </Btn>
                 </div>
@@ -1453,6 +1507,16 @@ export default function AdminPanel({
                     <div className="font-mono text-[15px] font-bold text-[var(--text-primary)] break-all">{generatedUserPass}</div>
                     <p className="tv-hint">
                       Anótela ahora: no se vuelve a mostrar y no queda guardada en ninguna parte del panel.
+                    </p>
+                  </div>
+                )}
+
+                {promotedUserEmail && (
+                  <div className="rounded-[10px] border border-[var(--border-color)] bg-[var(--bg-sunken)] p-4">
+                    <div className="tv-label !mb-1">Cuenta existente ascendida</div>
+                    <div className="font-mono text-[15px] font-bold text-[var(--text-primary)] break-all">{promotedUserEmail}</div>
+                    <p className="tv-hint">
+                      Este correo ya tenía cuenta (por ejemplo, como cliente); ahora tiene acceso total al panel. Su contraseña sigue siendo la que ya tenía.
                     </p>
                   </div>
                 )}

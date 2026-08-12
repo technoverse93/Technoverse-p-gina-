@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { Product, InventoryMovement, MarketingRequest } from '../types';
 import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
+import { supabase } from '../supabaseClient';
 import VinculacionComponentes from './admin/VinculacionComponentes';
 import { CATEGORIAS_INSUMO, esInsumo, CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria } from '../utils/categorias';
 import { CustomSelect } from './CustomSelect';
@@ -1042,6 +1043,42 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   };
 
   const confirmDeleteProduct = async (p: Product) => {
+    // ---------------------------------------------------------------------
+    // HALLAZGO DE AUDITORÍA CORREGIDO (prioridad Media)
+    // ---------------------------------------------------------------------
+    // Esta función tenía dos problemas, los dos por mezclar el modelo VIEJO
+    // de vínculo único (linkedSparePartSku, un texto) con el modelo NUEVO de
+    // vinculación N-a-N (product_components, con llave foránea):
+    //
+    //   1. Borrar un repuesto/insumo BORRABA TAMBIÉN, en cascada y sin
+    //      aviso, cualquier producto cuyo linkedSparePartSku coincidiera con
+    //      su SKU. Con la vinculación N-a-N, un producto puede depender de
+    //      MUCHOS componentes; borrar uno de ellos no debería nunca destruir
+    //      el producto completo. Esa parte se retira: ahora, si un producto
+    //      quedó apuntando a un SKU que ya no existe, simplemente se le
+    //      limpia esa referencia — el producto sobrevive.
+    //
+    //   2. Si el artículo SÍ estaba vinculado vía product_components (el
+    //      modelo nuevo), la base rechaza el borrado —la llave foránea es
+    //      ON DELETE RESTRICT a propósito— pero el error que llegaba a
+    //      pantalla era el texto crudo de Postgres. Ahora se consulta ANTES
+    //      de intentar borrar, y si hay dependientes se avisa con sus
+    //      nombres, sin siquiera llegar a golpear la base.
+    const { data: dependientes } = await supabase
+      .from('v_product_components')
+      .select('product_name')
+      .eq('component_id', p.id);
+
+    if (dependientes && dependientes.length > 0) {
+      const nombres = Array.from(new Set(dependientes.map((d: any) => d.product_name))).join(', ');
+      toast.error(
+        `No se puede eliminar "${p.name}": está vinculado como componente de ${nombres}. ` +
+        `Quite el vínculo desde la ficha de ese producto (sección "Componentes de este producto") y vuelva a intentarlo.`,
+        10000
+      );
+      return;
+    }
+
     const db = getDB();
     const idx = db.products.findIndex(x => x && x.id === p.id);
     if (idx !== -1) {
@@ -1049,23 +1086,37 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       // eliminar, para poder re-agregarlo luego. Upsert: nunca se pierde.
       upsertHistoricalSku(db, p);
 
-      // Hard Delete en cascada de repuestos vinculados (prohibido dejar productos fantasma)
-      const idsToRemove = [p.id];
+      // El vínculo viejo se LIMPIA, no se propaga: un producto que apuntaba
+      // por SKU a este repuesto/insumo pierde la referencia, pero sigue
+      // existiendo. Antes se le hacía hard delete, que podía destruir un
+      // producto en venta activa por eliminar una pieza de repuesto.
       if (sparePartCategories.includes(p.category)) {
-        const linkedProducts = db.products.filter(x => x && x.linkedSparePartSku === p.sku);
-        linkedProducts.forEach(lp => {
-          idsToRemove.push(lp.id);
-          addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Eliminar Producto', `Producto vinculado (${lp.name}) eliminado (Hard Delete) por eliminación de repuesto: ${p.sku}`, db);
+        db.products.forEach(x => {
+          if (x && x.linkedSparePartSku === p.sku) {
+            x.linkedSparePartSku = undefined;
+            addAuditLog(
+              currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Desvincular Producto',
+              `"${x.name}" quedó sin vínculo: su repuesto "${p.sku}" fue eliminado.`, db
+            );
+          }
         });
       }
 
-      db.products = db.products.filter(x => x && !idsToRemove.includes(x.id));
+      db.products = db.products.filter(x => x && x.id !== p.id);
       addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Eliminar Producto', `Producto eliminado permanentemente (Hard Delete): ${p.name}`, db);
     }
     try {
       await saveDB(db);
     } catch (err: any) {
-      toast.error('No se pudo eliminar el producto en la base de datos. Detalle: ' + (err?.message || err));
+      // Red de seguridad: si algo distinto a product_components también
+      // referenciara este producto, el mensaje sigue siendo legible en vez
+      // de mostrar el texto crudo del motor de base de datos.
+      const esRestriccion = /foreign key|llave for.nea|violat.*constraint/i.test(String(err?.message || ''));
+      toast.error(
+        esRestriccion
+          ? `No se pudo eliminar "${p.name}": todavía está referenciado en otra parte del sistema.`
+          : 'No se pudo eliminar el producto en la base de datos. Detalle: ' + (err?.message || err)
+      );
       return;
     }
     loadData();
