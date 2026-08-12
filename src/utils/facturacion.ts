@@ -65,6 +65,44 @@ export const MEDIOS_DE_COBRO = [
 
 export type MedioCobro = (typeof MEDIOS_DE_COBRO)[number]['valor'];
 
+/**
+ * Periodos de garantía admitidos. NO hay ningún otro.
+ *
+ * ---------------------------------------------------------------------
+ * POR QUÉ ES UNA LISTA CERRADA Y NO UN CAMPO LIBRE
+ * ---------------------------------------------------------------------
+ * La garantía es lo que el cliente puede reclamar: si cada cobro pudiera
+ * escribir su propio plazo, dos trabajos idénticos saldrían con
+ * garantías distintas según quién los facturó, y el comprobante —que es
+ * el respaldo legal— quedaría a merced de un error de digitación.
+ *
+ * Con una lista cerrada, el plazo que sale impreso siempre es uno de
+ * estos cuatro, y `normalizarGarantia()` rechaza cualquier otro valor
+ * que llegue por otra vía.
+ */
+export const GARANTIAS_VALIDAS = [1, 3, 6, 12] as const;
+
+export type GarantiaMeses = (typeof GARANTIAS_VALIDAS)[number];
+
+/** Etiquetas para el desplegable. Sin "mínimo de ley" ni texto libre. */
+export const OPCIONES_GARANTIA = GARANTIAS_VALIDAS.map(m => ({
+  value: String(m),
+  label: m === 1 ? '1 mes' : m === 12 ? '12 meses (máximo)' : `${m} meses`,
+}));
+
+/**
+ * Devuelve un plazo válido a partir de cualquier entrada.
+ *
+ * Ante un valor que no esté en la lista se queda con 3 meses, que es el
+ * plazo intermedio y el que más se usa. Nunca devuelve 0 ni un plazo
+ * inventado: un comprobante sin garantía o con una garantía imposible es
+ * peor que uno con el plazo estándar.
+ */
+export function normalizarGarantia(meses: unknown): GarantiaMeses {
+  const n = Number(meses);
+  return (GARANTIAS_VALIDAS as readonly number[]).includes(n) ? (n as GarantiaMeses) : 3;
+}
+
 /** Un insumo del inventario consumido en el trabajo. */
 export interface InsumoConsumido {
   productId: string;
@@ -72,6 +110,52 @@ export interface InsumoConsumido {
   quantity: number;
   /** Costo unitario del inventario. Es el COSTO, nunca el precio de venta. */
   costoUnitario: number;
+  /**
+   * Marcado como regalía.
+   *
+   * Antes esto se decidía metiendo el artículo en una de DOS listas
+   * separadas. Con una marca por artículo, el mismo temperado puede ir
+   * cobrado en un trabajo y regalado en otro sin duplicar nada, y basta
+   * una casilla para cambiarlo — que es como se decide de verdad, en el
+   * mostrador y en el último momento.
+   *
+   * En los dos casos sale del inventario y cuenta como costo. La
+   * diferencia es que la regalía aparece en la factura a ₡0.
+   */
+  esRegalia?: boolean;
+}
+
+/**
+ * Trae todo lo vinculado a un producto o servicio: repuestos e insumos,
+ * con su cantidad y su costo ya resueltos.
+ *
+ * Lee de la vista `v_product_components`, que hace la unión del lado del
+ * servidor. Resolverlo aquí obligaría a una consulta por componente, y
+ * en el teléfono del mostrador eso son varios segundos de espera con el
+ * cliente delante.
+ *
+ * Ante cualquier fallo devuelve una lista vacía en vez de lanzar: un
+ * problema al sugerir componentes no puede impedir cobrar.
+ */
+export async function componentesDe(productId: string): Promise<InsumoConsumido[]> {
+  try {
+    const { data, error } = await supabase
+      .from('v_product_components')
+      .select('component_id, component_name, quantity, component_cost, tipo')
+      .eq('product_id', productId);
+    if (error || !data) return [];
+    return data.map((c: any) => ({
+      productId: c.component_id,
+      productName: c.component_name,
+      quantity: Number(c.quantity) || 1,
+      costoUnitario: Number(c.component_cost) || 0,
+      // Lo vinculado nunca se marca como regalía por su cuenta: eso lo
+      // decide quien cobra, artículo por artículo, en el mostrador.
+      esRegalia: false,
+    }));
+  } catch {
+    return [];
+  }
 }
 
 export interface DatosDeCobro {
@@ -83,12 +167,16 @@ export interface DatosDeCobro {
   descripcionServicio: string;
   /** Lo que paga el cliente, IVA incluido. */
   montoTotal: number;
+  /** Uno de GARANTIAS_VALIDAS. Cualquier otro valor se normaliza a 3. */
   garantiaMeses: number;
   medioCobro: MedioCobro;
   /** Repuestos usados: descuentan stock y bajan el margen. */
   repuestos: InsumoConsumido[];
-  /** Regalías: descuentan stock, bajan el margen y salen en la factura a ₡0. */
-  regalias: InsumoConsumido[];
+  /**
+   * Insumos del trabajo. Los marcados con `esRegalia` salen en la
+   * factura a ₡0; el resto va dentro del precio del servicio.
+   */
+  insumos: InsumoConsumido[];
   adminEmail: string;
 }
 
@@ -116,14 +204,17 @@ export interface ResumenMargen {
 export function calcularMargen(
   montoTotal: number,
   repuestos: InsumoConsumido[],
-  regalias: InsumoConsumido[]
+  insumos: InsumoConsumido[]
 ): ResumenMargen {
   const sumar = (lista: InsumoConsumido[]) =>
     lista.reduce((total, i) => total + (i.costoUnitario || 0) * (i.quantity || 0), 0);
 
   const ingreso = Math.max(0, montoTotal || 0);
-  const costoRepuestos = sumar(repuestos);
-  const costoRegalias = sumar(regalias);
+  // Los insumos NO regalados también son costo del trabajo: su precio
+  // está incluido dentro de lo que se le cobró al cliente, así que si no
+  // se restaran, el margen saldría inflado.
+  const costoRepuestos = sumar(repuestos) + sumar(insumos.filter(i => !i.esRegalia));
+  const costoRegalias = sumar(insumos.filter(i => i.esRegalia));
   const margenNeto = ingreso - costoRepuestos - costoRegalias;
 
   return {
@@ -157,9 +248,9 @@ export function calcularMargen(
  * plantilla actual.
  */
 export function construirLineasFactura(datos: DatosDeCobro) {
-  const garantia = datos.garantiaMeses > 0
-    ? `${datos.garantiaMeses} ${datos.garantiaMeses === 1 ? 'mes' : 'meses'}`
-    : undefined;
+  const meses = normalizarGarantia(datos.garantiaMeses);
+  const garantia = `${meses} ${meses === 1 ? 'mes' : 'meses'}`;
+  const regalias = datos.insumos.filter(i => i.esRegalia);
 
   const lineas = [
     {
@@ -169,7 +260,7 @@ export function construirLineasFactura(datos: DatosDeCobro) {
       unitPrice: datos.montoTotal,
       warranty: garantia,
     },
-    ...datos.regalias.map(r => ({
+    ...regalias.map(r => ({
       caabys: CAABYS_SERVICIO,
       // "Descuento 100%" va AL PRINCIPIO, no al final, y no es una cuestión
       // de estilo: la tabla del comprobante imprime únicamente la PRIMERA
@@ -218,7 +309,7 @@ export interface ResultadoCobro {
  * traduce en un mensaje que no dice qué pasó con el dinero.
  */
 export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobro> {
-  const margen = calcularMargen(datos.montoTotal, datos.repuestos, datos.regalias);
+  const margen = calcularMargen(datos.montoTotal, datos.repuestos, datos.insumos);
 
   // El número se arma con la fecha y un tramo al azar, sin consultar
   // nada: dos cobros simultáneos desde aparatos distintos no pueden
@@ -233,7 +324,7 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
   // Todo lo que sale del inventario, en un solo lote para `adjust_stock`:
   // repuestos y regalías descuentan igual, la diferencia es contable, no
   // de almacén.
-  const consumos = [...datos.repuestos, ...datos.regalias].filter(i => i.quantity > 0);
+  const consumos = [...datos.repuestos, ...datos.insumos].filter(i => i.quantity > 0);
 
   const pedido: Order = {
     id: pedidoId,
@@ -248,7 +339,7 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
         price: datos.montoTotal,
         discountApplied: 0,
       },
-      ...datos.regalias.map(r => ({
+      ...datos.insumos.filter(i => i.esRegalia).map(r => ({
         productId: r.productId,
         productName: `${r.productName} (regalía)`,
         quantity: r.quantity,
@@ -417,8 +508,9 @@ function registrarEnBitacora(
     `Cobrado ₡${Math.round(margen.ingreso).toLocaleString('es-CR')} por ${datos.medioCobro}`,
     `Costo repuestos ₡${Math.round(margen.costoRepuestos).toLocaleString('es-CR')}`,
   ];
-  if (datos.regalias.length > 0) {
-    const detalle = datos.regalias.map(r => `${r.quantity}× ${r.productName}`).join(', ');
+  const regalias = datos.insumos.filter(i => i.esRegalia);
+  if (regalias.length > 0) {
+    const detalle = regalias.map(r => `${r.quantity}× ${r.productName}`).join(', ');
     partes.push(`Regalía (${detalle}) con costo ₡${Math.round(margen.costoRegalias).toLocaleString('es-CR')}`);
   }
   partes.push(`Margen neto ₡${Math.round(margen.margenNeto).toLocaleString('es-CR')}`);

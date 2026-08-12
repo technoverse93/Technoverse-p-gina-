@@ -37,6 +37,34 @@ export const CATEGORIAS_REPUESTO = [
 ];
 
 /**
+ * Insumos: artículos pequeños que se consumen en el trabajo o se
+ * entregan como regalía. Tampoco se muestran en el catálogo público.
+ *
+ * ---------------------------------------------------------------------
+ * POR QUÉ ESTOS NOMBRES Y NO "Estuches" O "Cargadores"
+ * ---------------------------------------------------------------------
+ * Son deliberadamente DISTINTOS de los de CATEGORIAS_TIENDA, y de los
+ * que traduce EQUIVALENCIAS más abajo. Si un insumo se llamara
+ * "Estuche", `normalizarCategoria()` lo convertiría en "Estuches" —una
+ * categoría de la tienda— y ese insumo aparecería a la venta en el
+ * catálogo público al precio de costo. El mismo choque ocurriría con
+ * "Cable" (→ Cargadores) o "Audífono" (→ Audio).
+ *
+ * De ahí el sufijo "de taller": deja claro para qué es y garantiza que
+ * ninguna traducción lo empuje al escaparate.
+ */
+export const CATEGORIAS_INSUMO = [
+  'Temperado',
+  'Mica',
+  'Estuche de taller',
+  'Cable de taller',
+  'Adaptador',
+  'Limpieza',
+  'Empaque',
+  'Otro insumo',
+];
+
+/**
  * Las categorías reales del catálogo. Esta es la lista que ve el cliente
  * y la única entre las que se puede escoger al ingresar stock.
  *
@@ -127,4 +155,24 @@ export function coincideCategoria(categoriaProducto: string, categoriaTienda: st
 /** ¿Es un repuesto de taller y por lo tanto NO va al catálogo público? */
 export function esRepuesto(categoria?: string | null): boolean {
   return CATEGORIAS_REPUESTO.includes((categoria || '').trim());
+}
+
+/** ¿Es un insumo de taller? */
+export function esInsumo(categoria?: string | null): boolean {
+  return CATEGORIAS_INSUMO.includes((categoria || '').trim());
+}
+
+/**
+ * ¿Es material de uso interno —repuesto o insumo— y por tanto NO debe
+ * verse en la tienda?
+ *
+ * Existe para que la exclusión del catálogo se pregunte en UN solo sitio.
+ * Cuando solo había repuestos, la tienda preguntaba `esRepuesto()`
+ * directamente; al añadir los insumos, ese mismo filtro habría dejado
+ * los temperados y las micas a la venta al precio de costo, junto a los
+ * teléfonos. Con esta función, añadir una tercera familia mañana no
+ * obliga a acordarse de tocar la tienda.
+ */
+export function esInterno(categoria?: string | null): boolean {
+  return esRepuesto(categoria) || esInsumo(categoria);
 }
