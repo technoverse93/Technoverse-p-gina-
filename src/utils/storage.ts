@@ -960,19 +960,43 @@ async function syncTableToSupabase(cfg: TableConfig<any>, added: any[], modified
   }
 
   const errors: string[] = [];
-  for (const item of added) {
-    // insert (no upsert): Postgres exige permiso de SELECT para resolver
-    // ON CONFLICT DO UPDATE (lo que genera .upsert()) — incluso si al final no
-    // hay ningún conflicto real. El checkout/registro de clientes anónimos no
-    // tiene SELECT directo en orders/client_profiles/logistics_deliveries (por
-    // diseño, para que nadie lea pedidos ajenos), así que CUALQUIER upsert
-    // suyo fallaba con "new row violates row-level security policy". Un
-    // INSERT plano no tiene ese requisito. Para seguir tolerando un doble
-    // clic/reenvío con el mismo id sin romper la pantalla, una colisión real
-    // (código 23505, muy rara con los ids usados) se trata como éxito
+
+  // FALLO CORREGIDO: esto insertaba UNA fila por petición, en un bucle
+  // secuencial. Para un puñado de filas no se nota, pero una importación
+  // masiva de ~300-600 artículos disparaba esa misma cantidad de idas y
+  // vueltas a Supabase, una detrás de otra — varios minutos en total. Y como
+  // quien llama a `saveDB()` no esperaba a que terminara (ver
+  // `handleImportSelected` en InventarioControl.tsx), el panel mostraba
+  // "¡Éxito!" y cerraba el modal mientras la subida seguía corriendo de
+  // fondo: bastaba con cambiar de pantalla o que el teléfono bloqueara la
+  // pestaña para cortarla a la mitad. Se comprobó en producción: de una
+  // importación de 632 productos, solo 81 de sus movimientos de inventario
+  // (la fase que corre DESPUÉS de products) llegaron a guardarse.
+  //
+  // Insertar en LOTES reduce una importación de 600 filas a 1-2 peticiones
+  // en vez de 600, así que hay muchísima menos ventana para que un corte a
+  // mitad de camino deje datos a medias — y de paso es muchísimo más rápido.
+  const LOTE_INSERCION = 200;
+  for (let i = 0; i < added.length; i += LOTE_INSERCION) {
+    const lote = added.slice(i, i + LOTE_INSERCION);
+    const { error } = await supabase.from(cfg.table).insert(lote.map(cfg.toRow));
+    if (!error) continue;
+
+    // El lote completo falló (por ejemplo, una sola fila del lote choca con
+    // un id ya existente). Se reintenta fila por fila SOLO ese lote, para no
+    // perder las demás filas y para conservar la tolerancia a colisiones
+    // que ya tenía este código: insert (no upsert) porque el checkout/
+    // registro de clientes anónimos no tiene permiso de SELECT directo en
+    // orders/client_profiles/logistics_deliveries, y upsert() lo necesita
+    // para resolver ON CONFLICT DO UPDATE aunque al final no haya ningún
+    // conflicto real. Una colisión real (código 23505) se trata como éxito
     // silencioso: la fila ya existe, que es justo lo que se quería lograr.
-    const { error } = await supabase.from(cfg.table).insert(cfg.toRow(item));
-    if (error && (error as any).code !== '23505') errors.push(`crear en ${cfg.table} (${item[cfg.idKey]}): ${error.message}`);
+    for (const item of lote) {
+      const { error: errorFila } = await supabase.from(cfg.table).insert(cfg.toRow(item));
+      if (errorFila && (errorFila as any).code !== '23505') {
+        errors.push(`crear en ${cfg.table} (${item[cfg.idKey]}): ${errorFila.message}`);
+      }
+    }
   }
   for (const item of modified) {
     const { error } = await supabase.from(cfg.table).update(cfg.toRow(item)).eq(cfg.idKey, item[cfg.idKey]);
