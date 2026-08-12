@@ -104,7 +104,11 @@ export interface Order {
   shippingCost: number;
   taxAmount: number; // IVA 13%
   total: number;
-  paymentMethod: 'SINPE' | 'Tarjeta';
+  // 'Efectivo' se agrega para los cobros del módulo de facturación, que se
+  // hacen en mostrador. Es una ampliación del tipo, no un cambio: los
+  // pedidos existentes con 'SINPE' o 'Tarjeta' siguen siendo válidos y
+  // todo el código que los compara sigue funcionando igual.
+  paymentMethod: 'SINPE' | 'Tarjeta' | 'Efectivo';
   paymentDetails: {
     phone?: string;
     cardLast4?: string;
