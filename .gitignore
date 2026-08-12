@@ -9,3 +9,13 @@ coverage/
 
 # Generado por build-android.yml (npx cap add android / npx cap sync android)
 android/
+
+# Respaldos de datos tomados antes de un reset.
+#
+# NO se versionan: llevan datos personales de clientes —nombre, correo,
+# teléfono— y este repositorio termina en GitHub. Publicarlos sería
+# exactamente lo que la Ley 8968 prohíbe, y uno de los registros incluso
+# ya había sido anonimizado por derecho al olvido.
+#
+# Estos archivos se guardan fuera del repositorio, en un sitio privado.
+supabase/respaldos/
