@@ -1,10 +1,16 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, Search } from 'lucide-react';
 
 interface CustomSelectOption {
   value: string;
   label: string;
   disabled?: boolean;
+  /**
+   * Texto adicional para buscar (p. ej. el SKU) que NO se muestra en la
+   * etiqueta. Sirve para poder escribir el código de un repuesto y
+   * encontrarlo aunque el SKU no forme parte del texto visible.
+   */
+  searchText?: string;
 }
 
 interface CustomSelectProps {
@@ -14,11 +20,24 @@ interface CustomSelectProps {
   placeholder?: string;
   className?: string;
   id?: string;
+  /**
+   * Muestra un campo de búsqueda arriba de la lista. Pensado para
+   * selectores con decenas o cientos de opciones (repuestos, insumos):
+   * sin esto, encontrar un artículo obliga a hacer scroll manual sobre
+   * toda la lista.
+   */
+  searchable?: boolean;
+  searchPlaceholder?: string;
 }
 
-export function CustomSelect({ value, onChange, options, placeholder = 'Seleccionar', className = '', id }: CustomSelectProps) {
+export function CustomSelect({
+  value, onChange, options, placeholder = 'Seleccionar', className = '', id,
+  searchable = false, searchPlaceholder = 'Buscar por nombre o SKU...',
+}: CustomSelectProps) {
   const [isOpen, setIsOpen] = useState(false);
+  const [query, setQuery] = useState('');
   const rootRef = useRef<HTMLDivElement>(null);
+  const searchRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     const handleClickOutside = (e: MouseEvent) => {
@@ -30,7 +49,23 @@ export function CustomSelect({ value, onChange, options, placeholder = 'Seleccio
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
+  // Al abrir, arranca con el campo vacío y el foco puesto ahí: se abre y se
+  // escribe de inmediato, sin tocar el mouse.
+  useEffect(() => {
+    if (isOpen && searchable) {
+      setQuery('');
+      requestAnimationFrame(() => searchRef.current?.focus());
+    }
+  }, [isOpen, searchable]);
+
   const selected = options.find(o => o.value === value);
+
+  const q = query.trim().toLowerCase();
+  const opcionesFiltradas = !searchable || !q
+    ? options
+    : options.filter(o =>
+        o.label.toLowerCase().includes(q) || (o.searchText || '').toLowerCase().includes(q)
+      );
 
   return (
     <div ref={rootRef} className="relative" id={id}>
@@ -46,7 +81,25 @@ export function CustomSelect({ value, onChange, options, placeholder = 'Seleccio
       </button>
       {isOpen && (
         <div className="absolute left-0 right-0 z-[70] mt-1.5 max-h-64 overflow-y-auto glass-panel rounded-xl p-1.5 shadow-lg" role="listbox">
-          {options.map(opt => (
+          {searchable && (
+            <div className="relative mb-1.5 sticky top-0">
+              <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[var(--text-muted)]" />
+              <input
+                ref={searchRef}
+                type="text"
+                value={query}
+                onChange={e => setQuery(e.target.value)}
+                onClick={e => e.stopPropagation()}
+                onKeyDown={e => e.stopPropagation()}
+                placeholder={searchPlaceholder}
+                className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-lg pl-8 pr-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+              />
+            </div>
+          )}
+          {searchable && opcionesFiltradas.length === 0 && (
+            <p className="px-3 py-2.5 text-sm text-[var(--text-muted)]">Ningún resultado para «{query}».</p>
+          )}
+          {opcionesFiltradas.map(opt => (
             <button
               key={opt.value}
               type="button"
