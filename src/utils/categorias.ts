@@ -37,6 +37,38 @@ export const CATEGORIAS_REPUESTO = [
 ];
 
 /**
+ * Marca del dispositivo al que corresponde un repuesto. Es una dimensión
+ * aparte de CATEGORIAS_REPUESTO a propósito: la categoría dice QUÉ PIEZA
+ * es (LCD, Batería...) y la marca dice PARA QUÉ TELÉFONO — así se puede
+ * filtrar "todos los LCD de Samsung" sin que las dos cosas se mezclen en
+ * una sola lista combinatoria.
+ */
+export const MARCAS_REPUESTO = [
+  'Samsung', 'iPhone', 'Huawei', 'Honor', 'Xiaomi', 'Motorola', 'Nokia', 'Realme', 'Otra',
+];
+
+/**
+ * Adivina la marca a partir del nombre del artículo. Sirve para el
+ * importador de listas de precios: funciona bien cuando el nombre trae la
+ * marca escrita ("Honor X6B", "iPhone 13 Pro") y no adivina nada para
+ * modelos que no la mencionan (los Samsung de una lista real casi nunca
+ * dicen "Samsung" en cada línea, solo "A01", "S23 Ultra"...) — en esos
+ * casos se deja vacío para que se asigne a mano con "Marca del lote".
+ */
+export function adivinarMarca(nombre: string): string {
+  const n = (nombre || '').toLowerCase();
+  if (/\biphone\b/.test(n)) return 'iPhone';
+  if (/\bhonor\b/.test(n)) return 'Honor';
+  if (/\bhuawei\b|\bnova\b|\bmate\b(?!rial)/.test(n)) return 'Huawei';
+  if (/\bmoto(rola)?\b|\bedge\s*\d/.test(n)) return 'Motorola';
+  if (/\bnokia\b/.test(n)) return 'Nokia';
+  if (/\brealme\b/.test(n)) return 'Realme';
+  if (/\bxiaomi\b|\bredmi\b|\bpoco\b|\bmi\s*\d/.test(n)) return 'Xiaomi';
+  if (/\bsamsung\b|\bgalaxy\b/.test(n)) return 'Samsung';
+  return '';
+}
+
+/**
  * Insumos: artículos pequeños que se consumen en el trabajo o se
  * entregan como regalía. Tampoco se muestran en el catálogo público.
  *
