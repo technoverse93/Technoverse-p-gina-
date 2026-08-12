@@ -395,7 +395,8 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
     warranty: hasWarranty(data)
   });
 
-  y += 6;
+  y = renderCaabys(doc, data, y, marginX);
+  y += 5;
 
   // --------------------------------------------------- QR + Totales ---
   const qrSize = 24;
@@ -495,11 +496,18 @@ function renderItemsTable(
   let y = startY;
 
   // Anchos de columna (mm). "Garantía" solo aparece si algún ítem la trae.
-  const wN = 6, wCaabys = 20, wQty = 10, wPrice = 22, wIva = 20, wTotal = 24;
+  //
+  // EL CAABYS YA NO ES UNA COLUMNA. Tenía 20 mm asignados y sus 13 dígitos
+  // ocupan más: jsPDF no recorta el texto que se sale de su hueco, así que
+  // el código se derramaba encima del nombre del producto y las dos cosas
+  // quedaban ilegibles. Ahora va listado debajo de la tabla, por número de
+  // línea (ver `renderCaabys`), que además devuelve esos 20 mm a la
+  // descripción — donde antes se perdía la mitad del texto.
+  const wN = 6, wQty = 10, wPrice = 22, wIva = 20, wTotal = 24;
   const wWarranty = style.warranty ? 16 : 0;
-  const wDesc = usableW - (wN + wCaabys + wQty + wPrice + wIva + wTotal + wWarranty);
+  const wDesc = usableW - (wN + wQty + wPrice + wIva + wTotal + wWarranty);
 
-  const colX = { n: marginX, caabys: marginX + wN, desc: marginX + wN + wCaabys };
+  const colX = { n: marginX, desc: marginX + wN };
   const descEnd = colX.desc + wDesc;
   const warrantyX = descEnd;
   const qtyX = warrantyX + wWarranty;
@@ -518,7 +526,6 @@ function renderItemsTable(
   doc.setFontSize(style.compact ? 6.5 : 7.2);
   const headerBaseline = y + headerH - (style.compact ? 1.6 : 2.2);
   doc.text('#', colX.n + 1.5, headerBaseline);
-  doc.text('CAABYS', colX.caabys, headerBaseline);
   doc.text('Descripción', colX.desc, headerBaseline);
   if (style.warranty) doc.text('Garantía', warrantyX, headerBaseline);
   doc.text('Cant.', qtyX + wQty - 1.5, headerBaseline, { align: 'right' });
@@ -542,7 +549,6 @@ function renderItemsTable(
     doc.setTextColor(...textColor);
     const baseline = y + rowH - (style.compact ? 1.4 : 2);
     doc.text(String(idx + 1), colX.n + 1.5, baseline);
-    doc.text(it.caabys, colX.caabys, baseline);
     const descLines = doc.splitTextToSize(it.description, wDesc - 2);
     doc.text(descLines[0] || '', colX.desc, baseline);
     if (style.warranty) doc.text(it.warranty || '—', warrantyX, baseline);
@@ -554,6 +560,36 @@ function renderItemsTable(
   });
 
   return y;
+}
+
+/**
+ * Códigos CAABYS, listados debajo de la tabla.
+ *
+ * Hacienda los exige por línea, así que tienen que constar en el
+ * documento; pero son un dato de clasificación fiscal que ningún cliente
+ * lee, y no merecían una columna que además no le cabía.
+ *
+ * Se imprimen referidos al número de línea —"1) 8399000000000"— para que
+ * la correspondencia con cada artículo siga siendo exacta. Si todas las
+ * líneas comparten el mismo código, que es el caso habitual en un cobro
+ * de taller, se escribe una sola vez.
+ */
+function renderCaabys(doc: any, data: InvoiceData, startY: number, marginX: number): number {
+  const pageWidth = doc.internal.pageSize.getWidth();
+  const codigos = data.items.map(i => i.caabys || '');
+  const unicos = Array.from(new Set(codigos.filter(Boolean)));
+  if (unicos.length === 0) return startY;
+
+  const texto = unicos.length === 1
+    ? `Código CAABYS (todas las líneas): ${unicos[0]}`
+    : `Códigos CAABYS: ${codigos.map((c, i) => `${i + 1}) ${c}`).join('   ')}`;
+
+  doc.setFont(FONT, 'normal');
+  doc.setFontSize(5.8);
+  doc.setTextColor(...INK_SOFT);
+  const lineas = doc.splitTextToSize(texto, pageWidth - marginX * 2);
+  doc.text(lineas, marginX, startY + 3.2);
+  return startY + 3.2 + lineas.length * 2.4;
 }
 
 /** Punto de entrada usado por el checkout y las notas de crédito. */

@@ -270,10 +270,12 @@ export function construirLineasFactura(datos: DatosDeCobro) {
       // perdía y quedaba un artículo a ₡0,00 sin explicación, que es
       // exactamente lo que un cliente reclama y lo que un auditor marca.
       //
-      // Poniéndolo delante, sobrevive por larga que sea la descripción. El
-      // nombre del artículo se recorta a 28 caracteres para que quepan los
-      // dos en la línea aun con nombres largos.
-      description: `Descuento 100% — ${recortar(r.productName, 28)}`,
+      // Poniéndolo delante, sobrevive por larga que sea la descripción.
+      //
+      // El recorte subió de 28 a 34 caracteres: al sacar el CAABYS de la
+      // tabla, la columna de descripción ganó los 20 mm que ocupaba, y con
+      // el límite anterior se cortaban nombres que ahora sí caben.
+      description: `Descuento 100% — ${recortar(r.productName, 34)}`,
       qty: r.quantity,
       unitPrice: 0,
       warranty: garantia,
