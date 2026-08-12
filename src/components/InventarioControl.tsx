@@ -23,6 +23,12 @@ export const DEFAULT_CAABYS = '8399000000000';
 // editable por fila antes de importar.
 const STOCK_INICIAL_IMPORTACION = 10;
 
+// Aviso de stock bajo con el que arranca cada producto importado. Con el
+// disparador `archivar_producto_agotado()` (Supabase) desactivando y
+// archivando cualquier producto que llegue a 0, un aviso de 1 avisa con
+// margen suficiente para reabastecer antes de que el trigger lo retire.
+const STOCK_MINIMO_AVISO_IMPORTACION = 1;
+
 const TECHNOVERSE_PLACEHOLDER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNTAiIGhlaWdodD0iMTUwIiB2aWV3Qm94PSIwIDAgMTUwIDE1MCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTUwIiBmaWxsPSIjZjhmOWZhIi8+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzBmMTcyYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmF0LWJhc2VsaW5lPSJtaWRkbGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iIzM4YmRmZiI+VEVDSE5PVkVSU0U8L3RleHQ+PC9zdmc+";
 
 function ProductImage({ src, alt, className = "w-10 h-10" }: { src?: string, alt: string, className?: string }) {
@@ -519,7 +525,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
           price: row.price,
           cost: row.cost,
           stock: row.stock,
-          minStock: 5,
+          minStock: STOCK_MINIMO_AVISO_IMPORTACION,
           physicalLocation: 'Bodega Central',
           imageUrl: row.imageUrl || TECHNOVERSE_PLACEHOLDER,
           discountPercent: 0,
@@ -1159,10 +1165,16 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         if (p.stock !== realCount) {
           const diff = realCount - p.stock;
           p.stock = realCount;
+          // Solo para que la UI lo refleje sin esperar el viaje de ida y
+          // vuelta a Supabase: quien de verdad hace cumplir "si llega a 0,
+          // se elimina" —sin importar si fue este conteo, una venta en la
+          // tienda o un cobro de taller— es el disparador
+          // `archivar_producto_agotado()` en la base, que además archiva
+          // la ficha en historical_skus para poder recuperarla rápido.
           if (realCount === 0) {
             p.active = false;
           }
-          
+
           db.inventory_movements.unshift({
             id: `MOV-${Date.now()}-${Math.floor(Math.random() * 1000)}`,
             productId: p.id,
