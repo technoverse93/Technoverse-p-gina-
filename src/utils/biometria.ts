@@ -43,11 +43,12 @@ import {
   esAplicacionNativa, soportaBiometriaNativa, activarBiometriaNativa,
   entrarConBiometriaNativa, hayAccesoGuardado, borrarBiometriaNativa,
   iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria,
+  sesionBloqueada,
 } from './biometriaNativa';
 
 // Se reexportan para que las pantallas no tengan que saber si están en la
 // web o en la APK: llaman a lo mismo y cada camino hace lo suyo.
-export { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria };
+export { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada };
 
 // ---------------------------------------------------------------------
 // base64url ↔ binario

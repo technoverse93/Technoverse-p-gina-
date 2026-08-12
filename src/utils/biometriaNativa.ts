@@ -73,6 +73,57 @@ function estaMarcadaActiva(): boolean {
   try { return localStorage.getItem(LLAVE_ACTIVA) === '1'; } catch { return false; }
 }
 
+/**
+ * Marca de "la aplicación está cerrada con llave".
+ *
+ * ---------------------------------------------------------------------
+ * EL FALLO QUE ESTO CORRIGE, Y POR QUÉ EL INTENTO ANTERIOR NO PODÍA
+ * FUNCIONAR
+ * ---------------------------------------------------------------------
+ * La versión anterior cerraba sesión con `signOut({ scope: 'local' })`
+ * creyendo que "local" significaba "no le avises al servidor". No es
+ * eso. supabase-js manda igualmente `POST /logout?scope=local` con el
+ * JWT, y para GoTrue `local` quiere decir "cierra SOLO esta sesión, no
+ * las de los demás aparatos". El servidor revoca el pase de esa sesión
+ * de todas formas — y ese pase es justo el que estaba guardado detrás
+ * de la huella.
+ *
+ * De ahí el síntoma exacto que se reportó: con la sesión abierta la
+ * huella entraba, y al cerrar sesión y volver a intentarlo saltaba "La
+ * sesión guardada caducó". No era un pase viejo: era un pase que el
+ * propio cierre de sesión acababa de matar.
+ *
+ * NO HAY forma de conservar un pase a través de un cierre de sesión de
+ * verdad: está diseñado para lo contrario. Así que el modelo cambia. En
+ * la APK, con la huella activada, "cerrar sesión" pasa a significar
+ * CERRAR CON LLAVE: la sesión se conserva en el aparato y la aplicación
+ * se comporta como si no hubiera nadie dentro hasta que la huella la
+ * abra. Es lo que hacen las aplicaciones de banco, y es lo único
+ * compatible con "entrar con la huella sin escribir la contraseña".
+ *
+ * En la web, y en la APK sin huella activada, el cierre de sesión sigue
+ * siendo un cierre real y global, como siempre.
+ */
+const LLAVE_BLOQUEO = 'technoverse_sesion_bloqueada';
+
+function marcarBloqueo(valor: boolean): void {
+  try {
+    if (valor) localStorage.setItem(LLAVE_BLOQUEO, '1');
+    else localStorage.removeItem(LLAVE_BLOQUEO);
+  } catch { /* sin almacenamiento no se puede bloquear; se cierra de verdad */ }
+}
+
+/**
+ * ¿Hay una sesión viva que la aplicación debe tratar como cerrada?
+ *
+ * La consulta App al arrancar: si está puesta, NO restaura al usuario
+ * aunque la sesión exista, y se muestra la pantalla de acceso con el
+ * botón de huella.
+ */
+export function sesionBloqueada(): boolean {
+  try { return localStorage.getItem(LLAVE_BLOQUEO) === '1'; } catch { return false; }
+}
+
 interface PluginBiometrico {
   isAvailable(opciones?: any): Promise<{ isAvailable: boolean; biometryType?: number }>;
   verifyIdentity(opciones?: any): Promise<void>;
@@ -261,6 +312,7 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
     if (sesionVigente(yaHabia?.session)) {
       const s = yaHabia!.session!;
       await guardarPaseActual(s.refresh_token, s.user?.email);
+      marcarBloqueo(false);   // la huella abre la llave
       return { ok: true, mensaje: 'Bienvenido.', userId: s.user?.id, email: s.user?.email || undefined };
     }
 
@@ -316,6 +368,7 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
     // renovación e invalida el anterior; si no se guardara el nuevo, la
     // huella funcionaría UNA vez y nunca más.
     await guardarPaseActual(sesion.refresh_token, sesion.user?.email);
+    marcarBloqueo(false);   // la huella abre la llave
 
     return {
       ok: true,
@@ -331,6 +384,10 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
 /** Quita el acceso por huella de este teléfono, a petición de la persona. */
 export async function borrarBiometriaNativa(): Promise<void> {
   marcarActiva(false);
+  // Sin huella no puede haber llave: si quedara puesta, la aplicación
+  // se vería "cerrada" para siempre y sin forma de abrirla, porque el
+  // único gesto que la abre acaba de desactivarse.
+  marcarBloqueo(false);
   await tirarPaseInservible();
 }
 
@@ -389,6 +446,13 @@ export function iniciarSincronizacionBiometrica(): void {
       if (evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED' || evento === 'INITIAL_SESSION') {
         void guardarPaseActual(sesion?.refresh_token, sesion?.user?.email);
       }
+      // Entrar con la contraseña abre la llave igual que la huella: si
+      // no, alguien que escribiera su contraseña seguiría viendo la
+      // pantalla de acceso al reabrir la aplicación.
+      if (evento === 'SIGNED_IN') marcarBloqueo(false);
+      // Un cierre de sesión REAL (web, o APK sin huella) retira
+      // cualquier llave pendiente: ya no hay sesión que proteger.
+      if (evento === 'SIGNED_OUT') marcarBloqueo(false);
     });
   } catch {
     /* sin sincronización la huella seguirá fallando, pero nada se rompe */
@@ -410,7 +474,16 @@ export function iniciarSincronizacionBiometrica(): void {
 export async function cerrarSesionConservandoBiometria(): Promise<void> {
   try {
     if (esAplicacionNativa() && estaMarcadaActiva()) {
-      await supabase.auth.signOut({ scope: 'local' });
+      // Cerrar CON LLAVE, no cerrar sesión. No se llama a `signOut` en
+      // absoluto: cualquier variante suya —global o local— revoca el
+      // pase en el servidor y deja la huella inservible. Véase la nota
+      // de LLAVE_BLOQUEO más arriba.
+      //
+      // Antes de echar la llave se refresca el pase guardado, para que
+      // el que queda en el llavero sea el vigente.
+      const { data } = await supabase.auth.getSession();
+      await guardarPaseActual(data?.session?.refresh_token, data?.session?.user?.email);
+      marcarBloqueo(true);
       return;
     }
     await supabase.auth.signOut();
