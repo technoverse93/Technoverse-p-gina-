@@ -22,7 +22,7 @@
 import {
   LayoutDashboard, Package, Wrench, ArrowRightLeft, FileSpreadsheet,
   Cpu,
-  MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings,
+  MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -137,6 +137,14 @@ export const NAV_GROUPS: AdminNavGroup[] = [
     titulo: 'Administración',
     items: [
       {
+        id: 'cobros',
+        label: 'Cobros',
+        short: 'Cobrar',
+        icon: Receipt,
+        descripcion: 'Cobra un trabajo terminado, descuenta insumos y envía el comprobante al cliente.',
+        buscar: ['cobros', 'cobrar', 'facturar', 'venta', 'servicio', 'sinpe', 'efectivo', 'regalia', 'garantia'],
+      },
+      {
         id: 'facturacion',
         label: 'Contabilidad',
         short: 'Facturas',
@@ -185,7 +193,7 @@ export const NAV_ITEMS: AdminNavItem[] = NAV_GROUPS.flatMap(g => g.items);
  * la hoja de "Más", que además es una lista con nombres completos y no
  * abreviaturas.
  */
-export const DOCK_IDS = ['dashboard', 'inventario_productos', 'taller', 'chat'];
+export const DOCK_IDS = ['dashboard', 'taller', 'cobros', 'inventario_productos'];
 
 /**
  * Traduce un `activeTab` al módulo que le corresponde.
