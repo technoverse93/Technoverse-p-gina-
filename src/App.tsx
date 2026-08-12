@@ -5,7 +5,7 @@ import { initKeyboard } from './mobile/keyboard';
 import { OverlayProvider, useToast } from './components/ui/Overlays';
 import { conexionBloqueada, detalleDeBloqueo } from './utils/adminLogin';
 import { registrarVisita } from './utils/huella';
-import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria } from './utils/biometria';
+import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada } from './utils/biometria';
 import { supabase } from './supabaseClient';
 
 // AdminPanel carga recharts, motion y toda la lógica de taller/inventario/CRM:
@@ -197,6 +197,13 @@ function AppInner() {
 
     const recuperar = async () => {
       try {
+        // La aplicación puede estar CERRADA CON LLAVE: en la APK con
+        // huella activada, "cerrar sesión" conserva la sesión en el
+        // aparato y solo la huella la abre. Si no se comprobara esto,
+        // cerrar sesión no tendría ningún efecto visible: la pantalla
+        // volvería a entrar sola al reabrir la aplicación.
+        if (sesionBloqueada()) return;
+
         const { data } = await supabase.auth.getSession();
         const usuario = data?.session?.user;
         if (!vigente || !usuario?.id) return;
