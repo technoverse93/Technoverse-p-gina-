@@ -730,7 +730,8 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
       is_double_stock: p.isDoubleStock || false, internal_stock: p.internalStock || 0,
       client_stock: p.clientStock || 0, linked_spare_part_sku: p.linkedSparePartSku || null,
       visible_en_tienda: p.visibleEnTienda || false,
-      caabys: p.caabys || '8399000000000'
+      caabys: p.caabys || '8399000000000',
+      brand: p.brand || null
     }),
     fromRow: (r): Product => ({
       id: r.id, name: r.name, sku: r.sku, category: r.category, price: Number(r.price) || 0,
@@ -743,7 +744,8 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
       isDoubleStock: r.is_double_stock || false, internalStock: r.internal_stock ?? 0,
       clientStock: r.client_stock ?? 0, linkedSparePartSku: r.linked_spare_part_sku || undefined,
       visibleEnTienda: r.visible_en_tienda === true,
-      caabys: r.caabys || '8399000000000'
+      caabys: r.caabys || '8399000000000',
+      brand: r.brand || undefined
     })
   }),
   configFor<InventoryMovement>({

@@ -3,7 +3,7 @@ import { Product, InventoryMovement, MarketingRequest } from '../types';
 import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
 import { supabase } from '../supabaseClient';
 import VinculacionComponentes from './admin/VinculacionComponentes';
-import { CATEGORIAS_INSUMO, esInsumo, CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria } from '../utils/categorias';
+import { CATEGORIAS_INSUMO, esInsumo, CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria, MARCAS_REPUESTO, adivinarMarca } from '../utils/categorias';
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
 import { 
@@ -57,6 +57,11 @@ interface ExtractedRow {
   sku: string;
   name: string;
   category: string;
+  /** Marca del teléfono (Samsung, iPhone...). Se adivina del nombre cuando
+   *  se puede (ver adivinarMarca) y si no, queda vacía para asignarse con
+   *  "Marca del lote" — la mayoría de las listas reales no repiten la
+   *  marca en cada línea individual. */
+  brand: string;
   // Precio base (de costo/distribuidor) — lo único que trae una lista de
   // precios de proveedor. El precio de VENTA se define después, en otra
   // etapa (al cobrar); este importador no lo pide ni lo calcula.
@@ -112,6 +117,10 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   const [prodSku, setProdSku] = useState('');
   const [prodDesc, setProdDesc] = useState('');
   const [prodCategory, setProdCategory] = useState<string>('Accesorios');
+  // Marca del teléfono al que corresponde el repuesto (Samsung, iPhone...).
+  // Solo aplica a Repuestos: category ya dice qué PIEZA es, brand dice PARA
+  // QUÉ TELÉFONO — es lo que permite filtrar "todos los LCD de Samsung".
+  const [prodBrand, setProdBrand] = useState<string>('');
   const [prodPrice, setProdPrice] = useState<number | ''>('');
   const [prodCost, setProdCost] = useState<number | ''>('');
   const [prodStock, setProdStock] = useState<number | ''>('');
@@ -170,6 +179,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   // Filters
   const [searchQuery, setSearchQuery] = useState('');
   const [categoryFilter, setCategoryFilter] = useState('Todas');
+  const [brandFilter, setBrandFilter] = useState('Todas');
   const [isCountingMode, setIsCountingMode] = useState(false);
   const [countData, setCountData] = useState<Record<string, number>>({});
   
@@ -211,6 +221,10 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   // delate que es un repuesto. Se elige una vez para todo el lote y queda
   // editable fila por fila igual que la categoría de un producto normal.
   const [globalCategory, setGlobalCategory] = useState<string>('LCD');
+  // Marca aplicada por defecto a las filas que el nombre no delata (ver
+  // adivinarMarca). Mismo motivo que globalCategory: una lista real de
+  // Samsung casi nunca escribe "Samsung" en cada línea.
+  const [globalBrand, setGlobalBrand] = useState<string>('Samsung');
   const [pdfReadProgress, setPdfReadProgress] = useState<string>('');
   const [pdfRawText, setPdfRawText] = useState<string>('');
   const [activePopoverIndex, setActivePopoverIndex] = useState<number | null>(null);
@@ -309,7 +323,8 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     text: string,
     productsInDb: Product[],
     historicalSkus: any[],
-    defaultCategory: string
+    defaultCategory: string,
+    defaultBrand: string
   ): ExtractedRow[] => {
     const lines = text.split('\n');
     const results: ExtractedRow[] = [];
@@ -390,6 +405,11 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       if (!name || name.length < 2) return;
 
       const category = defaultCategory;
+      // Se adivina del nombre cuando se puede ("Honor X6B" → "Honor"); si
+      // no dice nada (la mayoría de las líneas de Samsung en una lista
+      // real, por ejemplo — "A01" no menciona la marca), se usa la marca
+      // del lote elegida arriba.
+      const brand = adivinarMarca(name) || defaultBrand;
 
       // El SKU del proveedor no sirve de nada aquí (no es el código interno
       // de Technoverse), así que se genera con la misma fórmula que usa el
@@ -406,6 +426,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
         sku,
         name,
         category,
+        brand,
         cost: finalCost,
         // Aproximación pedida para este importador: 10 unidades por repuesto
         // en vez de partir de 0. Sigue siendo editable fila por fila (y
@@ -443,7 +464,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       setExtractedProducts([]);
       return;
     }
-    const parsed = parseTextToProducts(textoExtraido, products, historicalSkus, globalCategory);
+    const parsed = parseTextToProducts(textoExtraido, products, historicalSkus, globalCategory, globalBrand);
     setExtractedProducts(parsed);
     if (parsed.length === 0) {
       showToast('No se detectó ningún artículo con precio en el archivo. Puede pegar o corregir el texto a mano en el editor de abajo.', 'warning');
@@ -511,12 +532,19 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
           return;
         }
 
+        // Endurecimiento: `Date.now()` no distingue entre dos filas de un
+        // mismo bucle síncrono de cientos de iteraciones (varias pueden
+        // caer en el mismo milisegundo), así que un id armado solo con eso
+        // + un número al azar de 100.000 corría un riesgo real de chocar
+        // en un lote de 600+ filas. `crypto.randomUUID()` no tiene ese
+        // problema.
         const newProduct: Product = {
-          id: `PROD-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+          id: `PROD-${crypto.randomUUID()}`,
           name: row.name.trim(),
           sku: trimmedSku.toUpperCase(),
           description: row.warranty ? `Garantía: ${row.warranty}. Importado mediante PDF.` : 'Importado mediante PDF.',
           category: row.category,
+          brand: row.brand || undefined,
           // Precio de venta: NO se pide ni se calcula en este módulo — se
           // define después, en otra etapa. Aquí solo importa el costo.
           price: 0,
@@ -534,7 +562,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
 
         if (row.stock > 0) {
           db.inventory_movements.unshift({
-            id: `MOV-${Date.now()}-${Math.floor(Math.random() * 100000)}`,
+            id: `MOV-${crypto.randomUUID()}`,
             productId: newProduct.id,
             productName: newProduct.name,
             quantityChange: row.stock,
@@ -642,6 +670,14 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
     setExtractedProducts(prev => {
       const copy = [...prev];
       copy[index] = { ...copy[index], category: val };
+      return copy;
+    });
+  };
+
+  const handleBrandChange = (index: number, val: string) => {
+    setExtractedProducts(prev => {
+      const copy = [...prev];
+      copy[index] = { ...copy[index], brand: val };
       return copy;
     });
   };
@@ -877,9 +913,10 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             imageUrl: prodImage || TECHNOVERSE_PLACEHOLDER,
             discountPercent: prodApplyDiscount ? finalDiscount : 0,
             warranty: prodWarranty,
-            caabys: prodCaabys.trim() || DEFAULT_CAABYS
+            caabys: prodCaabys.trim() || DEFAULT_CAABYS,
+            brand: isSparePart ? (prodBrand || undefined) : undefined
           };
-          
+
           // Cascading stock update if this is a spare part
           if (isSparePart && oldStock !== finalStock) {
             const newStock = finalStock;
@@ -951,7 +988,8 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             discountPercent: prodApplyDiscount ? finalDiscount : 0,
             active: resultingStock > 0,
             warranty: prodWarranty,
-            caabys: prodCaabys.trim() || DEFAULT_CAABYS
+            caabys: prodCaabys.trim() || DEFAULT_CAABYS,
+            brand: sparePartCategories.includes(prodCategory) ? (prodBrand || undefined) : undefined
           };
           db.products[idx] = newProduct;
           movementNote = existing.active === false
@@ -977,7 +1015,8 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             discountPercent: prodApplyDiscount ? finalDiscount : 0,
             active: finalStock > 0,
             warranty: prodWarranty,
-            caabys: prodCaabys.trim() || DEFAULT_CAABYS
+            caabys: prodCaabys.trim() || DEFAULT_CAABYS,
+            brand: sparePartCategories.includes(prodCategory) ? (prodBrand || undefined) : undefined
           };
           db.products.push(newProduct);
           addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Inventario', 'Crear Producto', `Producto creado: ${prodName} (SKU: ${newSku})`, db);
@@ -1265,6 +1304,10 @@ if (!m) return null;
     // tener que tocar nada en la base de datos.
     if (categoryFilter !== 'Todas' && p.category && !coincideCategoria(p.category, categoryFilter)) return false;
 
+    // Filtro por marca: solo tiene sentido en Repuestos (un mismo LCD sirve
+    // para un modelo específico; los productos de tienda no se separan así).
+    if (activeSubTab === 'repuestos' && brandFilter !== 'Todas' && (p.brand || 'Sin marca') !== brandFilter) return false;
+
     if (searchQuery) {
       const q = searchQuery.toLowerCase();
       const nameMatch = p.name ? p.name.toLowerCase().includes(q) : false;
@@ -1272,7 +1315,7 @@ if (!m) return null;
       return nameMatch || skuMatch;
     }
     return true;
-  }), [products, activeSubTab, categoryFilter, searchQuery]);
+  }), [products, activeSubTab, categoryFilter, brandFilter, searchQuery]);
   const { page: prodPage, setPage: setProdPage, totalPages: prodTotal, startIndex: prodStart, visibleItems: paginatedProducts } = usePagination(filteredProducts, 10);
 
   return (
@@ -1437,6 +1480,20 @@ if (!m) return null;
                     />
                   </div>
                 )}
+                {activeSubTab === 'repuestos' && (
+                  <div className="md:w-56 flex-shrink-0">
+                    <CustomSelect
+                      value={brandFilter}
+                      onChange={setBrandFilter}
+                      className="text-xs py-2"
+                      options={[
+                        { value: 'Todas', label: 'Todas las marcas' },
+                        ...MARCAS_REPUESTO.map(m => ({ value: m, label: m })),
+                        { value: 'Sin marca', label: 'Sin marca asignada' },
+                      ]}
+                    />
+                  </div>
+                )}
                 <button
                   onClick={() => {
                     setEditingProductId(null);
@@ -1462,6 +1519,7 @@ if (!m) return null;
                         : activeSubTab === 'insumos' ? 'Temperado'
                         : 'Accesorios'
                     );
+                    setProdBrand(activeSubTab === 'repuestos' && brandFilter !== 'Todas' && brandFilter !== 'Sin marca' ? brandFilter : '');
                     setSkuLoadedFromHistory(null);
                     setSkuAutoGenerated(true);
                     setSkuSeed(Math.floor(1000 + Math.random() * 9000));
@@ -1500,6 +1558,12 @@ if (!m) return null;
 
 
               {/* Table */}
+              {!isCountingMode && (activeSubTab === 'productos' || activeSubTab === 'repuestos' || activeSubTab === 'insumos') && (
+                <div className="text-xs font-bold text-[var(--text-secondary)]">
+                  Total: <span className="text-[var(--text-primary)]">{filteredProducts.length}</span> artículo{filteredProducts.length === 1 ? '' : 's'}
+                  {filteredProducts.length > 10 && ` (mostrando ${prodStart + 1}-${Math.min(prodStart + 10, filteredProducts.length)}, use "Siguiente" abajo de la tabla para ver el resto)`}
+                </div>
+              )}
               <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
                 <div className="overflow-x-auto">
                   <table className="w-full text-left text-xs border-collapse">
@@ -1568,6 +1632,7 @@ if (!m) return null;
                                       setProdSku(p.sku);
                                       setProdDesc(p.description || '');
                                       setProdCategory(p.category);
+                                      setProdBrand(p.brand || '');
                                       setProdPrice(p.price);
                                       setProdCost(p.cost || 0);
                                       setProdStock(p.stock);
@@ -1662,6 +1727,7 @@ if (!m) return null;
                                         setProdSku(p.sku);
                                         setProdDesc(p.description || '');
                                         setProdCategory(p.category);
+                                        setProdBrand(p.brand || '');
                                         setProdPrice(p.price);
                                         setProdCost(p.cost || 0);
                                         setProdStock(p.stock);
@@ -1834,6 +1900,18 @@ if (!m) return null;
                         />
                       </div>
                     </div>
+
+                    {(sparePartCategories.includes(prodCategory) || prodCategory === 'Repuestos') && (
+                      <div>
+                        <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Marca (para filtrar por teléfono)</label>
+                        <CustomSelect
+                          value={prodBrand}
+                          onChange={setProdBrand}
+                          className="text-xs py-2"
+                          options={[{ value: '', label: 'Sin marca' }, ...MARCAS_REPUESTO.map(m => ({ value: m, label: m }))]}
+                        />
+                      </div>
+                    )}
 
                     {!sparePartCategories.includes(prodCategory) && prodCategory !== 'Repuestos' && (
                       <div className="space-y-3 p-4 bg-[var(--bg-surface)] /50 border border-[var(--border-color)]/50 rounded-xl">
@@ -2508,7 +2586,7 @@ if (!m) return null;
                 <div className="space-y-6 animate-fade-in">
                   
                   {/* Configuration & Controls */}
-                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4 bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-color)]/50">
+                  <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-5 gap-4 bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-color)]/50">
 
                     {/* Categoría para todo el lote */}
                     <div className="space-y-2">
@@ -2536,6 +2614,34 @@ if (!m) return null;
                         </button>
                       </div>
                       <p className="text-[10px] text-[var(--text-secondary)]">Una lista de proveedor casi siempre es de una sola familia; edite fila por fila si no.</p>
+                    </div>
+
+                    {/* Marca para todo el lote */}
+                    <div className="space-y-2">
+                      <label className="text-xs font-bold text-[var(--text-secondary)]">
+                        Marca del lote
+                      </label>
+                      <div className="flex gap-2">
+                        <div className="flex-1 min-w-0">
+                          <CustomSelect
+                            value={globalBrand}
+                            onChange={setGlobalBrand}
+                            className="text-xs py-1.5"
+                            options={MARCAS_REPUESTO.map(m => ({ value: m, label: m }))}
+                          />
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setExtractedProducts(prev => prev.map(row => ({ ...row, brand: globalBrand })));
+                            showToast(`Marca "${globalBrand}" aplicada a todas las filas.`, 'success');
+                          }}
+                          className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-slate-950 font-bold text-xs px-4 py-1.5 rounded-xl transition"
+                        >
+                          Aplicar
+                        </button>
+                      </div>
+                      <p className="text-[10px] text-[var(--text-secondary)]">La mayoría de las listas no repiten la marca en cada línea; ya se adivinó donde el nombre la menciona.</p>
                     </div>
 
                     {/* Quick Selection Actions */}
@@ -2594,6 +2700,7 @@ if (!m) return null;
                             <th className="p-4 w-36">SKU</th>
                             <th className="p-4">Nombre del Producto</th>
                             <th className="p-4 w-32">Categoría</th>
+                            <th className="p-4 w-28">Marca</th>
                             <th className="p-4 w-28 text-right">Costo (Dist.)</th>
                             <th className="p-4 w-24 text-right">Stock</th>
                             <th className="p-4 w-28 text-center">Garantía</th>
@@ -2776,6 +2883,15 @@ if (!m) return null;
                                   />
                                 </td>
 
+                                <td className="p-3">
+                                  <CustomSelect
+                                    value={row.brand}
+                                    onChange={(val) => handleBrandChange(index, val)}
+                                    className="text-xs py-1"
+                                    options={[{ value: '', label: 'Sin marca' }, ...MARCAS_REPUESTO.map(m => ({ value: m, label: m }))]}
+                                  />
+                                </td>
+
                                 <td className="p-3 text-right font-mono text-[11px] text-sky-400 dark:text-[var(--brand-gold-light)]">
                                   ₡{(row.cost || 0).toLocaleString()}
                                 </td>
@@ -2843,7 +2959,7 @@ if (!m) return null;
                       <button
                         type="button"
                         onClick={() => {
-                          const parsed = parseTextToProducts(pdfRawText, products, historicalSkus, globalCategory);
+                          const parsed = parseTextToProducts(pdfRawText, products, historicalSkus, globalCategory, globalBrand);
                           setExtractedProducts(parsed);
                           showToast(`Se han detectado y actualizado ${parsed.length} productos mediante el Raw Text.`, 'success');
                         }}

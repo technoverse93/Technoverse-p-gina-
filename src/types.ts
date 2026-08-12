@@ -44,6 +44,14 @@ export interface Product {
   // Código de 13 dígitos del Catálogo de Bienes y Servicios (CAABYS) de
   // Hacienda, requerido por línea en comprobantes electrónicos v4.3.
   caabys?: string;
+  /**
+   * Marca del dispositivo al que corresponde el repuesto (Samsung, iPhone,
+   * Huawei, etc.). Es una dimensión aparte de `category` a propósito:
+   * `category` dice QUÉ PIEZA es (LCD, Batería, Flex...) y `brand` dice
+   * PARA QUÉ TELÉFONO — un mismo LCD sin esto era imposible de filtrar por
+   * marca sin abrir cada producto uno por uno.
+   */
+  brand?: string;
 }
 
 export interface InventoryMovement {
