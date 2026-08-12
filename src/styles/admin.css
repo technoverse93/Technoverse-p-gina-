@@ -1,1 +1,928 @@
-heredssdd
+/* =====================================================================
+   TECHNOVERSE CONSOLE — sistema visual del panel de administración
+   =====================================================================
+   Este archivo NO toca la tienda pública. Todo lo que hay aquí vive
+   debajo de `#admin-panel-root` o de clases con prefijo `tv-`, así que
+   no puede alterar ni un pixel del catálogo, el carrito o el checkout.
+
+   ---------------------------------------------------------------------
+   POR QUÉ UN ARCHIVO APARTE Y NO MÁS REGLAS EN index.css
+   ---------------------------------------------------------------------
+   index.css define el lenguaje de la MARCA (colores, tipografías,
+   superficies) y lo comparten tienda y panel. Lo de aquí es el lenguaje
+   de una HERRAMIENTA DE TRABAJO: más densa, más silenciosa, pensada
+   para mirarse ocho horas seguidas. Mezclar los dos en un solo archivo
+   fue justo lo que produjo el panel saturado que se quiere reemplazar:
+   la tienda quiere llamar la atención, el panel quiere quitarse de en
+   medio.
+
+   Se reutilizan las variables de marca ya existentes (--bg-surface,
+   --accent, --border-color…) para que el cambio de tema claro/oscuro
+   siga funcionando sin una sola línea extra de JavaScript.
+   ===================================================================== */
+
+#admin-panel-root {
+  /* Ritmo vertical único de la consola. Todo el panel mide en estos
+     tres valores; sin una escala fija es como se llega a márgenes de
+     13px al lado de otros de 28px, que es lo que hacía ver el panel
+     "desproporcionado". */
+  --tv-gap: 20px;
+  --tv-gap-sm: 12px;
+  --tv-gap-lg: 28px;
+
+  /* Anchos del riel de navegación. */
+  --tv-rail-w: 72px;
+  --tv-rail-w-open: 252px;
+
+  /* Alturas de las barras. Se usan también como padding del contenido,
+     así nada queda nunca debajo de una barra fija. */
+  --tv-topbar-h: 56px;
+  --tv-dock-h: 62px;
+
+  --tv-radius: 14px;
+  --tv-radius-sm: 10px;
+
+  /* Superficie de trabajo: un punto más profunda que la tienda para que
+     las tarjetas floten sin necesidad de sombras pesadas. */
+  --tv-canvas: var(--bg-base);
+  --tv-panel: var(--bg-surface);
+  --tv-hairline: var(--border-color);
+
+  /* Un solo color de énfasis en toda la consola. La versión anterior
+     usaba azul, ámbar, esmeralda, rosa y celeste a la vez y ninguno
+     significaba nada; aquí el acento se reserva para "esto está activo"
+     o "esto requiere acción". */
+  --tv-accent: var(--accent);
+  --tv-accent-soft: rgba(var(--accent-rgb), 0.12);
+  --tv-accent-line: rgba(var(--accent-rgb), 0.32);
+
+  --tv-danger: #E5484D;
+  --tv-danger-soft: rgba(229, 72, 77, 0.12);
+  --tv-ok: var(--ok);
+  --tv-ok-soft: var(--ok-soft);
+
+  background: var(--tv-canvas);
+}
+
+/* ---------------------------------------------------------------------
+   ESTRUCTURA
+   --------------------------------------------------------------------- */
+
+.tv-shell {
+  display: flex;
+  height: 100dvh;
+  width: 100%;
+  overflow: hidden;
+  background: var(--tv-canvas);
+}
+
+.tv-main {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.tv-scroll {
+  flex: 1;
+  overflow-y: auto;
+  overscroll-behavior-y: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: var(--tv-gap);
+  /* En móvil el dock flotante ocupa la franja inferior: sin este hueco
+     la última fila de cualquier tabla queda tapada y no hay forma de
+     llegar a ella. */
+  padding-bottom: calc(var(--tv-dock-h) + env(safe-area-inset-bottom, 0px) + 28px);
+}
+
+@media (min-width: 1024px) {
+  .tv-scroll {
+    padding: var(--tv-gap-lg);
+    padding-bottom: var(--tv-gap-lg);
+  }
+}
+
+/* Un panel de administración a 2560px de ancho con tablas estiradas de
+   borde a borde es ilegible: el ojo pierde la fila. Se limita el ancho
+   útil y se centra. */
+.tv-container {
+  width: 100%;
+  max-width: 1560px;
+  margin: 0 auto;
+}
+
+/* ---------------------------------------------------------------------
+   RIEL DE NAVEGACIÓN (escritorio)
+   --------------------------------------------------------------------- */
+
+.tv-rail {
+  display: none;
+  flex-direction: column;
+  flex-shrink: 0;
+  width: var(--tv-rail-w);
+  background: var(--tv-panel);
+  border-right: 1px solid var(--tv-hairline);
+  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+  overflow: hidden;
+}
+
+@media (min-width: 1024px) {
+  .tv-rail { display: flex; }
+}
+
+.tv-rail[data-open='true'] { width: var(--tv-rail-w-open); }
+
+.tv-rail-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: var(--tv-topbar-h);
+  padding: 0 16px;
+  border-bottom: 1px solid var(--tv-hairline);
+  flex-shrink: 0;
+}
+
+.tv-rail-body {
+  flex: 1;
+  overflow-y: auto;
+  overflow-x: hidden;
+  padding: 12px 12px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+
+/* La barra del riel no necesita scrollbar visible: se ve sucia y roba
+   ancho al único elemento que ya es estrecho a propósito. */
+.tv-rail-body::-webkit-scrollbar { width: 0; }
+
+.tv-rail-foot {
+  border-top: 1px solid var(--tv-hairline);
+  padding: 10px 12px;
+  flex-shrink: 0;
+}
+
+.tv-group-label {
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 14px 10px 6px;
+  white-space: nowrap;
+}
+
+/* Separador para el riel cerrado: cuando no hay texto, el grupo se
+   comunica con una línea. Sin esto los doce iconos se leen como una
+   lista plana sin jerarquía. */
+.tv-group-rule {
+  height: 1px;
+  background: var(--tv-hairline);
+  margin: 10px 8px 6px;
+}
+
+.tv-nav-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--tv-radius-sm);
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tv-nav-item:hover { background: var(--bg-sunken); color: var(--text-primary); }
+.dark .tv-nav-item:hover { background: rgba(255, 255, 255, 0.05); }
+
+.tv-nav-item[data-active='true'] {
+  background: var(--tv-accent-soft);
+  color: var(--tv-accent);
+}
+
+/* La marca de "estás aquí" es una barra al borde del riel, no un borde
+   completo alrededor del botón: se lee de un vistazo incluso con el
+   riel cerrado y no engorda el elemento. */
+.tv-nav-item[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 20px;
+  border-radius: 0 3px 3px 0;
+  background: var(--tv-accent);
+}
+
+.tv-nav-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  flex-shrink: 0;
+}
+
+.tv-rail[data-open='false'] .tv-nav-item { justify-content: center; padding: 9px 0; }
+.tv-rail[data-open='false'] .tv-nav-label { display: none; }
+.tv-rail[data-open='false'] .tv-group-label { display: none; }
+.tv-rail[data-open='true'] .tv-group-rule { display: none; }
+
+/* Etiqueta flotante del riel cerrado. Es un tooltip propio y no el
+   atributo `title` del navegador porque ese tarda un segundo largo en
+   aparecer: con doce iconos sin texto, esa espera vuelve inservible la
+   navegación. */
+.tv-nav-item .tv-tip {
+  position: absolute;
+  left: calc(100% + 10px);
+  top: 50%;
+  transform: translateY(-50%) translateX(-4px);
+  padding: 5px 10px;
+  border-radius: 8px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--tv-hairline);
+  box-shadow: var(--float-shadow);
+  color: var(--text-primary);
+  font-size: 12px;
+  font-weight: 600;
+  opacity: 0;
+  pointer-events: none;
+  white-space: nowrap;
+  z-index: 60;
+  transition: opacity 0.14s ease, transform 0.14s ease;
+}
+
+.tv-rail[data-open='false'] .tv-nav-item:hover .tv-tip {
+  opacity: 1;
+  transform: translateY(-50%) translateX(0);
+}
+
+.tv-rail[data-open='true'] .tv-nav-item .tv-tip { display: none; }
+
+/* ---------------------------------------------------------------------
+   BARRA SUPERIOR
+   --------------------------------------------------------------------- */
+
+.tv-topbar {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  height: var(--tv-topbar-h);
+  flex-shrink: 0;
+  padding: 0 12px;
+  background: var(--tv-panel);
+  border-bottom: 1px solid var(--tv-hairline);
+}
+
+@media (min-width: 1024px) {
+  .tv-topbar { padding: 0 20px; }
+}
+
+.tv-crumb {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  min-width: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.tv-crumb strong {
+  color: var(--text-primary);
+  font-weight: 700;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-icon-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  border-radius: var(--tv-radius-sm);
+  color: var(--text-secondary);
+  flex-shrink: 0;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tv-icon-btn:hover { background: var(--bg-sunken); color: var(--text-primary); }
+.dark .tv-icon-btn:hover { background: rgba(255, 255, 255, 0.06); }
+
+/* Disparador del buscador de módulos. En escritorio es una caja con
+   pista de teclado; en móvil se reduce a un icono, porque ahí no hay
+   atajo de teclado que anunciar y el ancho hace falta para el título. */
+.tv-omni {
+  display: none;
+  align-items: center;
+  gap: 8px;
+  height: 34px;
+  padding: 0 10px;
+  min-width: 220px;
+  border-radius: var(--tv-radius-sm);
+  background: var(--bg-sunken);
+  border: 1px solid var(--tv-hairline);
+  color: var(--text-muted);
+  font-size: 12.5px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.dark .tv-omni { background: rgba(255, 255, 255, 0.04); }
+.tv-omni:hover { border-color: var(--tv-accent-line); }
+
+@media (min-width: 900px) {
+  .tv-omni { display: flex; }
+}
+
+/* ---------------------------------------------------------------------
+   CONVIVENCIA CON LA REGLA TÁCTIL GLOBAL
+   ---------------------------------------------------------------------
+   index.css impone `display: inline-flex !important` y un mínimo de
+   40/44px a TODO `button:has(> svg.lucide)`, para garantizar objetivos
+   táctiles cómodos en la tienda. Es una regla correcta y no se toca.
+
+   El efecto colateral es que ese `!important` también gana sobre el
+   `display: none` de aquí abajo, y el buscador de módulos —que no es un
+   botón de icono, sino un campo con etiqueta y atajo de teclado—
+   aparecía en el teléfono, donde no cabe: se comía la miga de pan y
+   dejaba el nombre del módulo en "P…".
+
+   No basta con repetir `!important`: entre dos declaraciones marcadas,
+   primero decide la ESPECIFICIDAD, y `button:has(> svg.lucide)` puntúa
+   (0,1,2) —`:has()` hereda la especificidad de su argumento más
+   específico— contra el (0,1,0) de una clase suelta. Por eso se ancla al
+   id del panel, que sube a (1,1,0) y gana sin ambigüedad. */
+#admin-panel-root .tv-omni { display: none !important; }
+@media (min-width: 900px) {
+  #admin-panel-root .tv-omni { display: flex !important; min-width: 220px !important; }
+}
+
+/* Misma causa, otro efecto: la regla táctil sube a 40px (44px en
+   pantallas táctiles) la altura de todo botón con icono. Un "Guardar"
+   con icono quedaba 4px más alto que un "Cancelar" sin él, en la misma
+   fila. Se igualan todos a la altura que impone la regla táctil en vez
+   de pelearse con ella. */
+.tv-btn { height: 40px; }
+@media (pointer: coarse) { .tv-btn { height: 44px; } }
+
+.tv-kbd {
+  margin-left: auto;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--tv-hairline);
+  background: var(--tv-panel);
+  font-family: var(--font-mono);
+  font-size: 10px;
+  color: var(--text-muted);
+}
+
+.tv-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: var(--tv-accent-soft);
+  color: var(--tv-accent);
+  border: 1px solid var(--tv-accent-line);
+  font-size: 12px;
+  font-weight: 800;
+  letter-spacing: 0.02em;
+  flex-shrink: 0;
+  cursor: pointer;
+}
+
+/* ---------------------------------------------------------------------
+   MENÚS EMERGENTES
+   --------------------------------------------------------------------- */
+
+.tv-menu {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+  z-index: 80;
+  min-width: 232px;
+  padding: 6px;
+  border-radius: var(--tv-radius);
+  background: var(--bg-elevated);
+  border: 1px solid var(--tv-hairline);
+  box-shadow: var(--float-shadow-lg);
+}
+
+.tv-menu-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 9px 10px;
+  border-radius: var(--tv-radius-sm);
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.14s ease;
+}
+
+.tv-menu-item:hover { background: var(--bg-sunken); }
+.dark .tv-menu-item:hover { background: rgba(255, 255, 255, 0.06); }
+.tv-menu-item[data-danger='true'] { color: var(--tv-danger); }
+.tv-menu-item[data-danger='true']:hover { background: var(--tv-danger-soft); }
+
+.tv-menu-sep { height: 1px; background: var(--tv-hairline); margin: 5px 4px; }
+
+/* ---------------------------------------------------------------------
+   BUSCADOR DE MÓDULOS (paleta de comandos)
+   --------------------------------------------------------------------- */
+
+.tv-palette-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 100;
+  background: rgba(8, 11, 16, 0.55);
+  backdrop-filter: blur(3px);
+  -webkit-backdrop-filter: blur(3px);
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 14vh 16px 16px;
+}
+
+@media (max-width: 640px) {
+  .tv-palette-backdrop { padding: 12px; align-items: flex-start; }
+}
+
+.tv-palette {
+  width: 100%;
+  max-width: 560px;
+  border-radius: var(--tv-radius);
+  background: var(--bg-elevated);
+  border: 1px solid var(--tv-hairline);
+  box-shadow: var(--float-shadow-lg);
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  max-height: min(70vh, 520px);
+}
+
+.tv-palette-input {
+  width: 100%;
+  height: 50px;
+  padding: 0 16px;
+  background: transparent;
+  border: none;
+  border-bottom: 1px solid var(--tv-hairline);
+  color: var(--text-primary);
+  font-size: 15px;
+  font-weight: 500;
+}
+
+.tv-palette-input:focus { outline: none; }
+.tv-palette-input::placeholder { color: var(--text-muted); }
+
+.tv-palette-list {
+  overflow-y: auto;
+  padding: 6px;
+}
+
+.tv-palette-row {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 10px 11px;
+  border-radius: var(--tv-radius-sm);
+  color: var(--text-primary);
+  font-size: 13.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tv-palette-row[data-cursor='true'] { background: var(--tv-accent-soft); color: var(--tv-accent); }
+.tv-palette-row small {
+  margin-left: auto;
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* ---------------------------------------------------------------------
+   DOCK INFERIOR (móvil / APK)
+   ---------------------------------------------------------------------
+   Sustituye a la barra inferior a sangre completa. Flota separada de
+   los bordes para que se lea como un control y no como el borde de la
+   pantalla, y respeta la barra de gestos de Android/iOS. */
+
+.tv-dock {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  z-index: 45;
+  height: var(--tv-dock-h);
+  padding: 5px;
+  border-radius: 18px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--tv-hairline);
+  box-shadow: var(--float-shadow-lg);
+  align-items: stretch;
+  gap: 2px;
+  /* SIN `display` aquí a propósito: el marcado trae `flex lg:hidden` y
+     declarar display en el CSS anularía ese `hidden`, con lo que el
+     dock aparecería también en escritorio encima del riel. Es
+     exactamente el fallo de menús duplicados que tenía la barra vieja. */
+}
+
+@media (min-width: 1024px) { .tv-dock { display: none !important; } }
+
+/* En tableta el dock no debe estirarse de borde a borde: cinco destinos
+   repartidos en 800px dejan los iconos tan separados que dejan de
+   leerse como un grupo. Se limita el ancho y se centra. */
+@media (min-width: 560px) {
+  .tv-dock {
+    left: 50%;
+    right: auto;
+    width: min(540px, calc(100% - 24px));
+    transform: translateX(-50%);
+  }
+}
+
+.tv-dock-item {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 3px;
+  border-radius: 13px;
+  color: var(--text-muted);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: color 0.15s ease, background 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tv-dock-item span:last-child {
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-dock-item[data-active='true'] {
+  color: var(--tv-accent);
+  background: var(--tv-accent-soft);
+}
+
+.tv-dock-item:active { transform: scale(0.95); }
+
+/* Hoja inferior del botón "Más". */
+.tv-sheet-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 90;
+  background: rgba(8, 11, 16, 0.5);
+}
+
+.tv-sheet {
+  position: fixed;
+  left: 10px;
+  right: 10px;
+  bottom: calc(var(--tv-dock-h) + 16px + env(safe-area-inset-bottom, 0px));
+  z-index: 95;
+  max-height: 62vh;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+  padding: 8px;
+  border-radius: 18px;
+  background: var(--bg-elevated);
+  border: 1px solid var(--tv-hairline);
+  box-shadow: var(--float-shadow-lg);
+}
+
+.tv-sheet-title {
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  padding: 8px 12px 6px;
+}
+
+.tv-sheet-item {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  width: 100%;
+  padding: 12px;
+  border-radius: 12px;
+  color: var(--text-primary);
+  font-size: 14px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+}
+
+.tv-sheet-item[data-active='true'] { background: var(--tv-accent-soft); color: var(--tv-accent); }
+.tv-sheet-item[data-danger='true'] { color: var(--tv-danger); }
+
+/* ---------------------------------------------------------------------
+   PIEZAS DE CONTENIDO
+   --------------------------------------------------------------------- */
+
+.tv-page-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--tv-gap-sm);
+  flex-wrap: wrap;
+  margin-bottom: var(--tv-gap);
+}
+
+/* Dentro de una pila, el hueco lo pone la pila. Sin esto se sumaban el
+   margen del encabezado y el `gap` del contenedor, y en el teléfono
+   —donde la etiqueta de estado baja a su propia línea— quedaba un vacío
+   de casi 60px entre el título y la primera tarjeta. */
+.tv-stack > .tv-page-head { margin-bottom: 0; }
+
+.tv-page-title {
+  font-family: var(--font-display);
+  font-size: 20px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+  line-height: 1.2;
+}
+
+@media (min-width: 1024px) { .tv-page-title { font-size: 23px; } }
+
+.tv-page-sub {
+  margin-top: 3px;
+  font-size: 12.5px;
+  color: var(--text-muted);
+  max-width: 68ch;
+  line-height: 1.5;
+}
+
+.tv-card {
+  background: var(--tv-panel);
+  border: 1px solid var(--tv-hairline);
+  border-radius: var(--tv-radius);
+  /* Sin sombra por defecto. Doce tarjetas con sombra en una pantalla es
+     lo que producía la sensación de "saturado": la jerarquía la da la
+     línea de 1px, no un halo debajo de cada caja. */
+}
+
+.tv-card-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 13px 16px;
+  border-bottom: 1px solid var(--tv-hairline);
+}
+
+.tv-card-title {
+  font-size: 12px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+  color: var(--text-secondary);
+}
+
+.tv-card-body { padding: 16px; }
+
+/* Métrica. Una sola por tarjeta, con el número como protagonista. */
+.tv-stat { padding: 15px 16px; }
+
+.tv-stat-label {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tv-stat-value {
+  margin-top: 9px;
+  font-family: var(--font-display);
+  font-size: 26px;
+  font-weight: 700;
+  letter-spacing: -0.02em;
+  color: var(--text-primary);
+  line-height: 1.05;
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-stat-foot {
+  margin-top: 7px;
+  font-size: 11.5px;
+  color: var(--text-muted);
+}
+
+.tv-stat[data-alert='true'] { border-color: var(--tv-danger); }
+.tv-stat[data-alert='true'] .tv-stat-value { color: var(--tv-danger); }
+
+.tv-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 3px 9px;
+  border-radius: 999px;
+  border: 1px solid var(--tv-hairline);
+  background: var(--bg-sunken);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  color: var(--text-secondary);
+  white-space: nowrap;
+}
+
+.dark .tv-chip { background: rgba(255, 255, 255, 0.04); }
+.tv-chip[data-tone='ok'] { background: var(--tv-ok-soft); border-color: transparent; color: var(--tv-ok); }
+.tv-chip[data-tone='alert'] { background: var(--tv-danger-soft); border-color: transparent; color: var(--tv-danger); }
+.tv-chip[data-tone='accent'] { background: var(--tv-accent-soft); border-color: transparent; color: var(--tv-accent); }
+
+/* Tablas: cabecera fija, filas cómodas, scroll horizontal contenido en
+   la propia tarjeta para que la página nunca se desplace de lado. */
+.tv-table-wrap {
+  width: 100%;
+  overflow-x: auto;
+  -webkit-overflow-scrolling: touch;
+}
+
+.tv-table { width: 100%; border-collapse: collapse; font-size: 13px; }
+
+.tv-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 10px 14px;
+  background: var(--bg-sunken);
+  border-bottom: 1px solid var(--tv-hairline);
+  font-size: 10.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+  text-align: left;
+  white-space: nowrap;
+}
+
+.dark .tv-table thead th { background: rgba(255, 255, 255, 0.03); }
+.tv-table tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border-soft); color: var(--text-primary); }
+.tv-table tbody tr:last-child td { border-bottom: none; }
+.tv-table tbody tr:hover td { background: var(--bg-sunken); }
+.dark .tv-table tbody tr:hover td { background: rgba(255, 255, 255, 0.03); }
+
+.tv-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding: 44px 20px;
+  text-align: center;
+  color: var(--text-muted);
+}
+
+.tv-empty-title { font-size: 13.5px; font-weight: 700; color: var(--text-secondary); }
+.tv-empty-text { font-size: 12.5px; max-width: 42ch; line-height: 1.5; }
+
+/* Botones de la consola. */
+.tv-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 36px;
+  padding: 0 14px;
+  border-radius: var(--tv-radius-sm);
+  border: 1px solid var(--tv-hairline);
+  background: var(--tv-panel);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease, opacity 0.15s ease;
+  -webkit-tap-highlight-color: transparent;
+}
+
+.tv-btn:hover { background: var(--bg-sunken); }
+.dark .tv-btn:hover { background: rgba(255, 255, 255, 0.06); }
+.tv-btn:active { transform: scale(0.97); }
+.tv-btn:disabled { opacity: 0.45; pointer-events: none; }
+
+.tv-btn[data-variant='primary'] {
+  background: var(--tv-accent);
+  border-color: var(--tv-accent);
+  color: var(--accent-ink);
+}
+
+.tv-btn[data-variant='primary']:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+
+.tv-btn[data-variant='danger'] {
+  background: transparent;
+  border-color: rgba(229, 72, 77, 0.35);
+  color: var(--tv-danger);
+}
+
+.tv-btn[data-variant='danger']:hover { background: var(--tv-danger-soft); }
+
+.tv-btn[data-variant='ghost'] { background: transparent; border-color: transparent; color: var(--text-secondary); }
+.tv-btn[data-variant='ghost']:hover { background: var(--bg-sunken); color: var(--text-primary); }
+
+/* Campos de formulario de la consola. */
+.tv-field { display: block; }
+
+.tv-label {
+  display: block;
+  margin-bottom: 5px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+.tv-input {
+  width: 100%;
+  height: 38px;
+  padding: 0 12px;
+  border-radius: var(--tv-radius-sm);
+  border: 1px solid var(--tv-hairline);
+  background: var(--bg-sunken);
+  color: var(--text-primary);
+  font-size: 13.5px;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dark .tv-input { background: rgba(255, 255, 255, 0.04); }
+textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: vertical; }
+.tv-input:focus {
+  outline: none;
+  border-color: var(--tv-accent);
+  box-shadow: 0 0 0 3px rgba(var(--accent-rgb), 0.15);
+}
+.tv-input::placeholder { color: var(--text-muted); }
+.tv-input:disabled { opacity: 0.55; cursor: not-allowed; }
+
+.tv-hint { margin-top: 6px; font-size: 11.5px; line-height: 1.5; color: var(--text-muted); }
+
+/* Rejillas de métricas: una columna en teléfono, dos en tableta, seis
+   en escritorio. Se declara aquí y no con utilidades sueltas para que
+   todas las pantallas del panel usen exactamente el mismo ritmo. */
+.tv-grid { display: grid; gap: var(--tv-gap-sm); }
+.tv-grid-2 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.tv-grid-3 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
+.tv-grid-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+@media (min-width: 640px) {
+  .tv-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .tv-grid-6 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (min-width: 1024px) {
+  .tv-grid { gap: var(--tv-gap); }
+  .tv-grid-2 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .tv-grid-6 { grid-template-columns: repeat(6, minmax(0, 1fr)); }
+}
+
+.tv-stack { display: flex; flex-direction: column; gap: var(--tv-gap); }
+.tv-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+
+/* Respeta a quien pidió menos movimiento en el sistema operativo. */
+@media (prefers-reduced-motion: reduce) {
+  #admin-panel-root *,
+  .tv-palette-backdrop *,
+  .tv-sheet * {
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+  }
+}
