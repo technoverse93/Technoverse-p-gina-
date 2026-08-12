@@ -34,6 +34,9 @@ const InventarioControl = lazy(() => import('./InventarioControl'));
 const ChatCRM = lazy(() => import('./chat/ChatCRM'));
 const CyberSecurityPanel = lazy(() => import('./CyberSecurityPanel'));
 const ClienteFicha = lazy(() => import('./ClienteFicha'));
+// El módulo de cobros carga jsPDF y qrcode al emitir: se trae aparte para
+// no sumar ese peso al arranque del panel.
+const FacturacionPanel = lazy(() => import('./FacturacionPanel'));
 
 const TabLoadingFallback = () => (
   <div className="flex items-center justify-center py-24 text-[var(--text-muted)] text-sm gap-2">
@@ -984,6 +987,17 @@ export default function AdminPanel({
           </Suspense>
         )}
 
+        {/* ------------------------------------------------------------------
+            COBROS
+            Panel de facturación, separado del taller a propósito: el taller
+            registra el trabajo y aquí se cobra. Son dos actos distintos.
+            ------------------------------------------------------------------ */}
+        {activeTab === 'cobros' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <FacturacionPanel currentUser={currentUser} onDataChanged={loadAllAdminData} />
+          </Suspense>
+        )}
+
         {activeTab === 'chat' && (
           <Suspense fallback={<TabLoadingFallback />}>
             <ChatCRM currentUser={currentUser} onDataChanged={loadAllAdminData} />
@@ -1325,8 +1339,16 @@ export default function AdminPanel({
 
             <Card title="Datos fiscales">
               <div className="tv-grid tv-grid-2">
-                <Field label="Cédula jurídica o física">
-                  <input type="text" className="tv-input font-mono" placeholder="3-101-000000"
+                {/* El emisor es una persona física. La etiqueta decía "Cédula
+                    jurídica" y el ejemplo mostraba un número de sociedad, lo
+                    que llevaba a cargar el dato equivocado. El nombre interno
+                    del campo no cambia: renombrarlo obligaría a tocar a la vez
+                    la base, la función que emite las facturas y el PDF. */}
+                <Field
+                  label="Identificación del emisor"
+                  hint="Es la que sale impresa en cada comprobante y viaja en el QR de verificación."
+                >
+                  <input type="text" className="tv-input font-mono" placeholder="119090965"
                     value={cedulaJuridica} onChange={e => setCedulaJuridica(e.target.value)} />
                 </Field>
                 <Field label="Teléfono fiscal oficial">

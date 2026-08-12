@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
-import { Kanban, Search, Plus, Save, Clock, HelpCircle, FileText, CheckCircle2, ChevronRight, RefreshCw, Key, MessageCircle, BookMarked, EyeOff, X } from 'lucide-react';
+import { Kanban, Search, Plus, Save, Clock, HelpCircle, FileText, CheckCircle2, ChevronRight, RefreshCw, Key, MessageCircle, BookMarked, EyeOff, X, Receipt
+} from 'lucide-react';
 import { RepairOrder, Product, ClientProfile } from '../types';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { processRepairAtomic } from '../utils/transactions';
@@ -52,7 +53,10 @@ function buildWhatsAppMessage(rep: RepairOrder): string {
     `Estado actual: ${rep.status}`,
   ];
   if (rep.diagnosisManual) lines.push(`Diagnóstico: ${rep.diagnosisManual}`);
-  lines.push(`Monto: ₡${rep.totalCost.toLocaleString()}`);
+  // Igual que en la consulta pública: sin importe cobrado no se manda una
+  // cifra. "Monto: ₡0" en un WhatsApp al cliente se lee como "no le vamos a
+  // cobrar", y esa conversación después no se deshace.
+  if (rep.totalCost > 0) lines.push(`Monto: ₡${rep.totalCost.toLocaleString()}`);
   lines.push('', 'Puede consultar el estado de su equipo cuando guste indicando su número de ticket en nuestro portal de Technoverse Costa Rica.');
   return lines.join('\n');
 }
@@ -341,17 +345,25 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
   const handleSaveDiagnosisAndCost = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!selectedRepair) return;
-    if (laborCost === '') {
-      toast.warning('Por favor ingrese el costo de mano de obra.');
-      return;
-    }
 
     const db = getDB();
     const idxRep = db.repair_orders.findIndex(r => r.id === selectedRepair.id);
     if (idxRep === -1) return;
 
     const originalRepair = db.repair_orders[idxRep];
-    const finalLaborCost = Number(laborCost);
+
+    // SEPARACIÓN TALLER / FACTURACIÓN
+    // -------------------------------
+    // El taller ya no pone precios. Antes pedía "costo de mano de obra" y
+    // calculaba un total cobrable aquí mismo, mezclando el trabajo técnico
+    // con la contabilidad: el mismo formulario servía para escribir un
+    // diagnóstico y para decidir cuánto se le cobra al cliente.
+    //
+    // Ahora el importe se define UNA sola vez, en el módulo de Cobros, con
+    // el cliente delante y con su comprobante. Aquí se conserva el valor
+    // que ya tuviera la orden para no borrar el histórico de las
+    // reparaciones anteriores, pero no se calcula ninguno nuevo.
+    const finalLaborCost = originalRepair.laborCost || 0;
     
     // We need to compare repuestos selection and handle physical inventory deductions
     // Deduct stock for new parts added
@@ -382,7 +394,8 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
 
     const sparePartsTotal = repuestosSelected.reduce((sum, r) => sum + (r.price * r.quantity), 0);
-    const totalRepairCost = finalLaborCost + sparePartsTotal;
+    // Se respeta el total ya registrado: no se recalcula desde el taller.
+    const totalRepairCost = originalRepair.totalCost || 0;
 
     const newRepairData = {
       ...originalRepair,
@@ -394,7 +407,10 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
         ...originalRepair.bitacora,
         {
           status: originalRepair.status,
-          notes: `Diagnóstico y cotización actualizados. Mano de Obra: ₡${finalLaborCost}. Repuestos: ₡${sparePartsTotal}. Total: ₡${totalRepairCost}`,
+          // La bitácora del taller anota trabajo, no dinero. El costo de
+          // los repuestos queda porque es consumo de inventario —dato
+          // operativo—, no un precio de venta.
+          notes: `Diagnóstico actualizado. Repuestos consumidos: ${repuestosSelected.length} (costo interno ₡${sparePartsTotal}).`,
           timestamp: new Date().toISOString(),
           user: activeUserEmail
         }
@@ -620,7 +636,21 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                     </div>
                     <div>
                       <div>Diagnóstico Técnico: <span className="text-[var(--text-secondary)]">{publicSearchResult.diagnosisManual || 'Pendiente de revisión técnica.'}</span></div>
-                      <div>Costo Estimado: <strong className="text-emerald-400 dark:text-[var(--brand-gold-light)] font-mono">₡{publicSearchResult.totalCost.toLocaleString()}</strong></div>
+                      {/* Solo se enseña un importe cuando existe de verdad.
+                          Desde que el taller dejó de cotizar, una orden sin
+                          cobrar tiene totalCost en 0, y mostrar "Costo
+                          Estimado: ₡0" haría creer al cliente que su
+                          reparación es gratis. */}
+                      <div>
+                        Costo:{' '}
+                        {publicSearchResult.totalCost > 0 ? (
+                          <strong className="text-emerald-400 dark:text-[var(--brand-gold-light)] font-mono">
+                            ₡{publicSearchResult.totalCost.toLocaleString()}
+                          </strong>
+                        ) : (
+                          <strong className="text-[var(--text-secondary)]">Pendiente de cotizar</strong>
+                        )}
+                      </div>
                       <div>Garantía Oficial: <strong className="text-[var(--text-primary)]">{publicSearchResult.warrantyMonths} meses</strong></div>
                     </div>
                   </div>
@@ -1028,26 +1058,21 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 />
               </div>
 
-              {/* Labor Cost Field */}
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Costo Mano de Obra (Colones)</label>
-                  <input
-                    type="number"
-                    min="0"
-                    required
-                    placeholder="Ingrese el monto"
-                    value={laborCost}
-                    onChange={(e) => setLaborCost(e.target.value === '' ? '' : Math.max(0, parseInt(e.target.value) || 0))}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)] font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Total Cotización Actual</label>
-                  <div className="bg-emerald-500 dark:bg-[var(--brand-gold-mid)]/10 border border-emerald-500 dark:border-[var(--brand-gold-mid)]/20 text-emerald-400 dark:text-[var(--brand-gold-light)] font-bold text-sm px-4 py-2 rounded-xl font-mono flex items-center justify-center">
-                    ₡{(Number(laborCost || 0) + repuestosSelected.reduce((sum, r) => sum + (r.price * r.quantity), 0)).toLocaleString()}
-                  </div>
-                </div>
+              {/* SEPARACIÓN TALLER / FACTURACIÓN
+                  Aquí había dos campos de dinero: "Costo Mano de Obra" y
+                  "Total Cotización Actual". Se retiraron. El taller
+                  documenta el trabajo; el importe se define en Cobros, una
+                  sola vez, con el cliente delante y contra su comprobante.
+                  Tener el precio en los dos sitios llevaba a que la
+                  cotización del taller y lo realmente cobrado no
+                  coincidieran, sin que nadie pudiera decir cuál valía. */}
+              <div className="flex items-start gap-2.5 rounded-xl border border-[var(--border-color)] px-3.5 py-3">
+                <Receipt className="w-4 h-4 flex-shrink-0 mt-0.5 text-[var(--text-muted)]" />
+                <p className="text-[11px] leading-relaxed text-[var(--text-secondary)]">
+                  El cobro no se hace desde el taller. Cuando el equipo esté listo, pase al módulo
+                  <strong className="text-[var(--text-primary)]"> Cobros</strong> para facturar el servicio,
+                  aplicar la garantía y enviarle el comprobante al cliente.
+                </p>
               </div>
 
               {/* SPARE PARTS SELECTOR FROM DOMESTIC STOCK
