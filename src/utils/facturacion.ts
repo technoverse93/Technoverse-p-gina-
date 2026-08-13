@@ -581,6 +581,11 @@ function registrarEnBitacora(
   const partes = [
     `Pedido ${pedidoId}`,
     `Cobrado ₡${Math.round(margen.ingreso).toLocaleString('es-CR')} por ${datos.medioCobro}`,
+    // Se dice el conteo SIEMPRE, incluido "0 repuestos, 0 insumos": es la
+    // única forma de distinguir, sin ir a la base de datos, "este cobro
+    // de verdad no usó material" de "se le olvidó agregarlo" cuando
+    // alguien reclama que el inventario no bajó.
+    `${datos.repuestos.length} repuesto(s), ${datos.insumos.length} insumo(s)`,
     `Costo repuestos ₡${Math.round(margen.costoRepuestos).toLocaleString('es-CR')}`,
   ];
   const regalias = datos.insumos.filter(i => i.esRegalia);
