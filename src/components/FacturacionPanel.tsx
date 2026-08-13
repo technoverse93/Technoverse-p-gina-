@@ -39,7 +39,7 @@ import {
 import type { MedioCobro, InsumoConsumido, ResultadoCobro } from '../utils/facturacion';
 import { esRepuesto, esInsumo } from '../utils/categorias';
 import { isNative } from '../mobile/platform';
-import { descargarPdfNativo } from '../mobile/pdfDownload';
+import { guardarComprobanteNativo, descargarComprobanteWeb } from '../mobile/pdfDownload';
 import type { Product, User } from '../types';
 
 interface Props {
@@ -321,27 +321,26 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
   /**
    * En la APK, un `<a target="_blank">` a la URL de Supabase lo resuelve
    * Android, no la app: abre el navegador y saca al cajero de la pantalla
-   * de cobro. Aquí se descarga el PDF y se guarda directo en el
-   * dispositivo con @capacitor/filesystem, sin salir de la interfaz. En
-   * la web se mantiene el enlace normal, que es el comportamiento correcto
-   * ahí.
+   * de cobro. `guardarComprobanteNativo` prueba, en cascada, guardarlo
+   * directo en el dispositivo, compartirlo/abrirlo con la hoja nativa de
+   * Android, y como último recurso el navegador del sistema — así
+   * funciona sin importar si esta instalación ya trae el plugin nativo
+   * o no. En la web se fuerza la descarga real del archivo en vez de
+   * abrir una pestaña con el visor de PDF del navegador.
    */
   const descargarComprobante = async () => {
     if (!ultimoCobro?.pdfUrl) return;
     setDescargandoPdf(true);
     try {
       const nombreArchivo = `Factura-${ultimoCobro.consecutivo || ultimoCobro.pedidoId}.pdf`;
-      const resultado = await descargarPdfNativo(ultimoCobro.pdfUrl, nombreArchivo);
+      const resultado = isNative()
+        ? await guardarComprobanteNativo(ultimoCobro.pdfUrl, nombreArchivo)
+        : await descargarComprobanteWeb(ultimoCobro.pdfUrl, nombreArchivo);
       if (resultado.ok) {
-        toast.success(resultado.mensaje);
-        return;
+        if (resultado.mensaje) toast.success(resultado.mensaje);
+      } else {
+        toast.error(resultado.mensaje);
       }
-      // No se pudo guardar en el dispositivo (plugin no disponible en esta
-      // instalación, permiso denegado, sin red…). Se recurre a abrirlo con
-      // el navegador del sistema para que el cajero de todos modos pueda
-      // verlo, en vez de quedarse sin nada.
-      toast.warning(`${resultado.mensaje} Abriendo con el navegador del dispositivo…`, 9000);
-      window.open(ultimoCobro.pdfUrl, '_system');
     } finally {
       setDescargandoPdf(false);
     }
@@ -364,15 +363,10 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
             <div className="flex-1 min-w-0 space-y-2">
               <p className="text-[13px] text-[var(--text-primary)] leading-relaxed">{ultimoCobro.mensaje}</p>
               {ultimoCobro.pdfUrl && (
-                isNative() ? (
-                  <button type="button" onClick={descargarComprobante} disabled={descargandoPdf} className="tv-btn inline-flex disabled:opacity-60">
-                    <Download className="w-4 h-4" /> {descargandoPdf ? 'Guardando…' : 'Guardar el comprobante en el dispositivo'}
-                  </button>
-                ) : (
-                  <a href={ultimoCobro.pdfUrl} target="_blank" rel="noopener noreferrer" className="tv-btn inline-flex">
-                    <Download className="w-4 h-4" /> Descargar el comprobante
-                  </a>
-                )
+                <button type="button" onClick={descargarComprobante} disabled={descargandoPdf} className="tv-btn inline-flex disabled:opacity-60">
+                  <Download className="w-4 h-4" />
+                  {descargandoPdf ? 'Preparando…' : isNative() ? 'Guardar el comprobante en el dispositivo' : 'Descargar el comprobante'}
+                </button>
               )}
             </div>
           </div>

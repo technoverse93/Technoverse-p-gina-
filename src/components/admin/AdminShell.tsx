@@ -33,12 +33,13 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, PanelLeftClose, PanelLeftOpen, Sun, Moon, Store, LogOut,
-  MoreHorizontal, X, CornerDownLeft,
+  MoreHorizontal, X, CornerDownLeft, RefreshCw,
 } from 'lucide-react';
 import { NAV_GROUPS, NAV_ITEMS, DOCK_IDS, resolverModulo, grupoDe, buscarModulos } from './adminNav';
 import type { AdminNavItem } from './adminNav';
 import type { User } from '../../types';
-import { useOtaStatus } from '../../mobile/otaUpdater';
+import { useOtaStatus, verificarActualizacionManual } from '../../mobile/otaUpdater';
+import { useToast } from '../ui/Overlays';
 
 const LLAVE_RIEL = 'technoverse_admin_riel_abierto';
 
@@ -121,6 +122,40 @@ export default function AdminShell({
   }, [menuPerfil]);
 
   const otaStatus = useOtaStatus();
+  const toast = useToast();
+  const [buscandoActualizacion, setBuscandoActualizacion] = useState(false);
+
+  /**
+   * Botón de "Buscar actualización": para cuando el chequeo silencioso
+   * de arranque falló, se pospuso, o la persona simplemente quiere
+   * confirmar YA que tiene lo último sin cerrar y reabrir la app. A
+   * diferencia de ese chequeo de fondo, este SÍ recarga de inmediato si
+   * encuentra algo nuevo — es lo que se espera de un botón que la
+   * persona pulsó a propósito.
+   */
+  const buscarActualizacion = async () => {
+    setBuscandoActualizacion(true);
+    try {
+      const resultado = await verificarActualizacionManual();
+      switch (resultado.estado) {
+        case 'al-dia':
+          toast.success('Ya tiene la versión más reciente.');
+          break;
+        case 'actualizando':
+          toast.success('Actualización encontrada. Aplicando y reiniciando…');
+          break;
+        case 'sin-plugin':
+        case 'error':
+          toast.error(resultado.mensaje);
+          break;
+        case 'no-nativo':
+          toast.warning('Esto solo aplica a la app instalada; en el navegador siempre se ve la última versión.');
+          break;
+      }
+    } finally {
+      setBuscandoActualizacion(false);
+    }
+  };
 
   const iniciales = useMemo(() => {
     const base = (currentUser?.name || currentUser?.email || 'TV').trim();
@@ -317,6 +352,18 @@ export default function AdminShell({
                     </div>
                   )}
                 </div>
+                {otaStatus.isNative && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="tv-menu-item"
+                    disabled={buscandoActualizacion}
+                    onClick={buscarActualizacion}
+                  >
+                    <RefreshCw className={`w-4 h-4 ${buscandoActualizacion ? 'animate-spin' : ''}`} />
+                    {buscandoActualizacion ? 'Buscando…' : 'Buscar actualización'}
+                  </button>
+                )}
                 <div className="tv-menu-sep" />
                 <button type="button" role="menuitem" className="tv-menu-item" onClick={() => { setMenuPerfil(false); onNavigateToStore(); }}>
                   <Store className="w-4 h-4" /> Ver la tienda
