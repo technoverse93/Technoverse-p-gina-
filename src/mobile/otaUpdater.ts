@@ -147,3 +147,69 @@ export async function initOtaUpdater(): Promise<void> {
     // próximo arranque.
   }
 }
+
+// ---------------------------------------------------------------------
+// VERIFICACIÓN MANUAL ("Buscar actualización" en el menú de cuenta)
+// ---------------------------------------------------------------------
+// El chequeo de arranque es deliberadamente silencioso y nunca interrumpe
+// (deja todo en cola con `next()`). Pero si esa descarga en segundo plano
+// falla o se pospuso —o la persona simplemente quiere confirmar YA que
+// tiene lo último, sin cerrar y volver a abrir la app—, hacía falta un
+// botón que lo intente de nuevo y, si hay algo nuevo, lo aplique al
+// toque. Por eso este camino SÍ usa `set()`: a diferencia del arranque,
+// aquí la persona pidió la actualización a propósito, así que un
+// recargado inmediato es exactamente lo esperado, no una sorpresa.
+export type ResultadoVerificacion =
+  | { estado: 'no-nativo' }
+  | { estado: 'sin-plugin'; mensaje: string }
+  | { estado: 'al-dia'; version: string | null }
+  | { estado: 'actualizando' }
+  | { estado: 'error'; mensaje: string };
+
+export async function verificarActualizacionManual(): Promise<ResultadoVerificacion> {
+  if (!isNative()) return { estado: 'no-nativo' };
+
+  let CapacitorUpdater: (typeof import('@capgo/capacitor-updater'))['CapacitorUpdater'];
+  try {
+    ({ CapacitorUpdater } = await import('@capgo/capacitor-updater'));
+  } catch {
+    return {
+      estado: 'sin-plugin',
+      mensaje: 'Esta instalación no trae el sistema de actualizaciones automáticas. Se necesita descargar el APK más reciente.',
+    };
+  }
+
+  try {
+    const actual = await CapacitorUpdater.current();
+    const versionActual = actual?.bundle?.version || null;
+    setOtaStatus({ currentVersion: versionActual });
+
+    const respuesta = await fetch(MANIFEST_URL, { cache: 'no-store' });
+    if (!respuesta.ok) {
+      return { estado: 'error', mensaje: 'No se pudo consultar el servidor de actualizaciones. Revise su conexión.' };
+    }
+
+    const manifiesto: OtaManifest = await respuesta.json();
+    if (!manifiesto?.version || !manifiesto?.url) {
+      return { estado: 'error', mensaje: 'El servidor de actualizaciones respondió algo inesperado.' };
+    }
+    setOtaStatus({ latestVersion: manifiesto.version });
+
+    if (manifiesto.version === versionActual) {
+      return { estado: 'al-dia', version: versionActual };
+    }
+
+    const nuevoBundle = await CapacitorUpdater.download({
+      version: manifiesto.version,
+      url: manifiesto.url,
+    });
+
+    // `set()` recarga la app de inmediato: no hay nada útil que hacer
+    // después de esta línea, el contexto de JavaScript actual va a
+    // desaparecer con la recarga.
+    await CapacitorUpdater.set({ id: nuevoBundle.id });
+    return { estado: 'actualizando' };
+  } catch (e: any) {
+    return { estado: 'error', mensaje: e?.message || 'No se pudo completar la actualización.' };
+  }
+}
