@@ -13,16 +13,24 @@
 // huella ni contraseña. Es el hueco exacto que reporta esta auditoría.
 //
 // ---------------------------------------------------------------------
-// POR QUÉ `document.visibilitychange` Y NO UN PLUGIN NATIVO NUEVO
+// POR QUÉ DOS MECANISMOS A LA VEZ (@capacitor/app Y visibilitychange)
 // ---------------------------------------------------------------------
-// Capacitor expone la vida de la aplicación (segundo plano/vuelta) a
-// través del plugin @capacitor/app, pero agregar un plugin NATIVO
-// nuevo solo funcionaría en el próximo .apk compilado — un bundle OTA
-// nunca puede traer código nativo, la misma limitación que ya se topó
-// con @capacitor/filesystem. `visibilitychange` es un evento del propio
-// WebView/navegador, sin ninguna pieza nativa de por medio: cierra este
-// hueco de seguridad HOY, en cualquier instalación ya existente, tanto
-// en la APK como en la web.
+// La primera versión de esto usaba solo `document.visibilitychange`,
+// pensado para no depender de un plugin nativo nuevo (uno nuevo solo
+// funcionaría en el próximo .apk compilado). Probado en la APK real,
+// no bastó: el WebView de Android no siempre dispara ese evento cuando
+// la actividad pasa a segundo plano por el botón de inicio o el
+// selector de apps recientes —a diferencia de una pestaña de
+// escritorio, donde sí es fiable—, así que la app seguía entrando sola.
+//
+// @capacitor/app y su evento `appStateChange` SÍ hablan directo con el
+// ciclo de vida real de la actividad de Android, y es el mecanismo que
+// Capacitor recomienda exactamente para esto. Se usa como fuente
+// principal dentro de la APK, con `visibilitychange` como respaldo:
+// cubre la web (donde `@capacitor/app` ni se importa) y, dentro de la
+// APK, cualquier instalación anterior a este cambio que todavía no
+// traiga el plugin —un bundle OTA nunca puede agregar código nativo—,
+// hasta que se instale el próximo .apk.
 //
 // ---------------------------------------------------------------------
 // QUÉ CUENTA COMO "TIEMPO PROLONGADO"
@@ -64,12 +72,42 @@ function comprobarSiHayQueBloquear(): void {
   window.dispatchEvent(new CustomEvent(EVENTO_FORZAR_REINGRESO));
 }
 
+function esAplicacionNativa(): boolean {
+  try {
+    const cap = (window as any)?.Capacitor;
+    return typeof cap?.isNativePlatform === 'function' ? cap.isNativePlatform() : !!cap?.isNative;
+  } catch {
+    return false;
+  }
+}
+
+/**
+ * @capacitor/app solo existe dentro de la APK y solo en un .apk
+ * compilado después de agregar esta dependencia. Si no está —web, o
+ * una instalación anterior—, se sigue solo con `visibilitychange`.
+ */
+async function suscribirseAlCicloDeVidaNativo(): Promise<void> {
+  if (!esAplicacionNativa()) return;
+  try {
+    const { App } = await import('@capacitor/app');
+    App.addListener('appStateChange', ({ isActive }) => {
+      if (!isActive) marcarEnFondo();
+      else comprobarSiHayQueBloquear();
+    });
+  } catch {
+    // Plugin no disponible en esta instalación: queda visibilitychange
+    // como único mecanismo hasta el próximo .apk.
+  }
+}
+
 /**
  * Arranca la vigilancia de segundo plano. Se llama una sola vez, al
  * montar la aplicación.
  */
 export function iniciarBloqueoPorInactividad(): void {
   if (typeof document === 'undefined') return;
+
+  void suscribirseAlCicloDeVidaNativo();
 
   document.addEventListener('visibilitychange', () => {
     if (document.visibilityState === 'hidden') marcarEnFondo();
