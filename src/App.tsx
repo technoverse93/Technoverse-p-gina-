@@ -7,6 +7,7 @@ import { OverlayProvider, useToast } from './components/ui/Overlays';
 import { conexionBloqueada, detalleDeBloqueo } from './utils/adminLogin';
 import { registrarVisita } from './utils/huella';
 import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada } from './utils/biometria';
+import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO } from './mobile/appLock';
 import { supabase } from './supabaseClient';
 
 // AdminPanel carga recharts, motion y toda la lógica de taller/inventario/CRM:
@@ -146,6 +147,13 @@ function AppInner() {
     iniciarSincronizacionBiometrica();
   }, []);
 
+  // Vigila el segundo plano: si la aplicación estuvo cerrada/oculta más de
+  // dos minutos, `EVENTO_FORZAR_REINGRESO` obliga a volver a pasar por
+  // biometría/PIN/contraseña al volver. Ver src/mobile/appLock.ts.
+  useEffect(() => {
+    iniciarBloqueoPorInactividad();
+  }, []);
+
   // Theme Management
   const [theme, setTheme] = useState<'light' | 'dark'>(() => {
     const saved = localStorage.getItem('technoverse_theme');
@@ -274,6 +282,22 @@ function AppInner() {
   const triggerRefresh = () => {
     setRefreshTrigger(prev => prev + 1);
   };
+
+  // Reacciona al bloqueo por inactividad (src/mobile/appLock.ts): mismo
+  // cierre que el botón "Cerrar sesión" —conserva el pase de la huella si
+  // está activada, cierre real si no— pero además reabre el acceso de
+  // inmediato en vez de dejar a la persona en la tienda como si nada. Sin
+  // esto, el evento apagaría la sesión pero nadie pediría la
+  // re-autenticación exigida por la auditoría.
+  useEffect(() => {
+    const alForzarReingreso = () => {
+      if (!currentUser) return; // nadie con sesión abierta, no hay nada que bloquear
+      handleLogout();
+      setAutoOpenLogin(true);
+    };
+    window.addEventListener(EVENTO_FORZAR_REINGRESO, alForzarReingreso);
+    return () => window.removeEventListener(EVENTO_FORZAR_REINGRESO, alForzarReingreso);
+  }, [currentUser]);
 
   useEffect(() => {
     if (currentView === 'admin') {
