@@ -25,7 +25,7 @@ function repairToRow(o: any) {
 export async function processSaleAtomic(cart: any[], newOrder: any) {
   try {
     const items = cart.map((it: any) => ({ id: it.product.id, delta: it.quantity }));
-    const { error } = await supabase.rpc('adjust_stock', { p_items: items });
+    const { data, error } = await supabase.rpc('adjust_stock', { p_items: items });
 
     if (error) {
       const msg = error.message || '';
@@ -37,6 +37,21 @@ export async function processSaleAtomic(cart: any[], newOrder: any) {
         throw new Error('Uno de los productos del carrito ya no existe en la base de datos.');
       }
       throw new Error(msg || 'No se pudo procesar la venta.');
+    }
+
+    // Ventas reales quedaron facturadas con el inventario del repuesto/
+    // insumo usado exactamente igual, sin ningún movimiento de salida —
+    // adjust_stock() probado aparte funciona bien, así que el hueco real
+    // es que ninguna capa comprobaba que lo PEDIDO fuera lo REALMENTE
+    // procesado. adjust_stock() ahora devuelve un renglón por cada
+    // artículo que sí tocó; si la cuenta no cuadra con lo que se mandó,
+    // se bloquea la venta entera aquí, ANTES de emitir ningún
+    // comprobante, en vez de dejar pasar el hueco en silencio.
+    const tocados = Array.isArray(data) ? data.length : 0;
+    if (tocados !== items.length) {
+      throw new Error(
+        `El ajuste de inventario confirmó ${tocados} de ${items.length} artículo(s). No se completó la venta; intente de nuevo.`
+      );
     }
 
     // OJO: esta función NO guarda el pedido, y antes lo aparentaba.
@@ -78,7 +93,7 @@ export async function processRepairAtomic(originalRepair: any, repuestosSelected
       const validItems = deltas.filter((d) => existingIds.has(d.id)).map((d) => ({ id: d.id, delta: d.delta }));
 
       if (validItems.length > 0) {
-        const { error } = await supabase.rpc('adjust_stock', { p_items: validItems });
+        const { data, error } = await supabase.rpc('adjust_stock', { p_items: validItems });
         if (error) {
           const msg = error.message || '';
           if (msg.includes('INSUFFICIENT_STOCK')) {
@@ -86,6 +101,12 @@ export async function processRepairAtomic(originalRepair: any, repuestosSelected
             throw new Error(`Concurrencia: el stock del repuesto ${parts[1] || ''} cambió. Solo quedan ${parts[2] || 0} disponibles.`);
           }
           throw new Error(msg || 'No se pudo actualizar el stock de repuestos.');
+        }
+        const tocados = Array.isArray(data) ? data.length : 0;
+        if (tocados !== validItems.length) {
+          throw new Error(
+            `El ajuste de inventario confirmó ${tocados} de ${validItems.length} repuesto(s). No se guardó la reparación; intente de nuevo.`
+          );
         }
       }
     }
