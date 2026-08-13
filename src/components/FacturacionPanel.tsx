@@ -246,6 +246,22 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     const error = validar();
     if (error) { toast.warning(error); return; }
 
+    // Salvavidas contra el olvido más caro: agregar el repuesto/insumo al
+    // INVENTARIO (en la otra pantalla) y nunca traerlo hasta esta lista. El
+    // cobro sale bien, la factura se emite, y el material sigue figurando
+    // en existencia como si nadie lo hubiera tocado — nada en este punto
+    // se ve "roto", así que sin este aviso nadie se entera hasta el
+    // conteo físico. No bloquea: hay trabajos de puro diagnóstico o mano
+    // de obra que de verdad no consumen nada.
+    if (repuestos.length === 0 && insumos.length === 0) {
+      const confirmarSinMaterial = await confirm({
+        title: 'Sin repuestos ni insumos en este cobro',
+        message: 'No agregó ningún repuesto ni insumo a la lista. Si el trabajo usó material del inventario, ciérrelo y agréguelo antes de cobrar — una vez emitida la factura no se puede sumar. Si de verdad fue solo mano de obra o diagnóstico, continúe.',
+        confirmText: 'No usó material, continuar',
+      });
+      if (!confirmarSinMaterial) return;
+    }
+
     const resumen = [
       `Cliente: ${nombre.trim()}`,
       `Monto: ${colones(Number(monto))} por ${medio === 'SINPE' ? 'SINPE Móvil' : 'Efectivo'}`,
@@ -316,8 +332,16 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     try {
       const nombreArchivo = `Factura-${ultimoCobro.consecutivo || ultimoCobro.pedidoId}.pdf`;
       const resultado = await descargarPdfNativo(ultimoCobro.pdfUrl, nombreArchivo);
-      if (resultado.ok) toast.success(resultado.mensaje);
-      else toast.error(resultado.mensaje);
+      if (resultado.ok) {
+        toast.success(resultado.mensaje);
+        return;
+      }
+      // No se pudo guardar en el dispositivo (plugin no disponible en esta
+      // instalación, permiso denegado, sin red…). Se recurre a abrirlo con
+      // el navegador del sistema para que el cajero de todos modos pueda
+      // verlo, en vez de quedarse sin nada.
+      toast.warning(`${resultado.mensaje} Abriendo con el navegador del dispositivo…`, 9000);
+      window.open(ultimoCobro.pdfUrl, '_system');
     } finally {
       setDescargandoPdf(false);
     }
