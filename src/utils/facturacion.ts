@@ -111,6 +111,13 @@ export interface InsumoConsumido {
   /** Costo unitario del inventario. Es el COSTO, nunca el precio de venta. */
   costoUnitario: number;
   /**
+   * Precio de venta unitario (IVA incluido), tal como está fijado en el
+   * inventario. Es lo que sale impreso en la factura cuando el insumo NO
+   * es regalía — el costo (`costoUnitario`) nunca viaja al comprobante,
+   * es un dato interno para el margen.
+   */
+  precioUnitario: number;
+  /**
    * Marcado como regalía.
    *
    * Antes esto se decidía metiendo el artículo en una de DOS listas
@@ -141,7 +148,7 @@ export async function componentesDe(productId: string): Promise<InsumoConsumido[
   try {
     const { data, error } = await supabase
       .from('v_product_components')
-      .select('component_id, component_name, quantity, component_cost, tipo')
+      .select('component_id, component_name, quantity, component_cost, component_price, tipo')
       .eq('product_id', productId);
     if (error || !data) return [];
     return data.map((c: any) => ({
@@ -149,6 +156,7 @@ export async function componentesDe(productId: string): Promise<InsumoConsumido[
       productName: c.component_name,
       quantity: Number(c.quantity) || 1,
       costoUnitario: Number(c.component_cost) || 0,
+      precioUnitario: Number(c.component_price) || 0,
       // Lo vinculado nunca se marca como regalía por su cuenta: eso lo
       // decide quien cobra, artículo por artículo, en el mostrador.
       esRegalia: false,
@@ -229,18 +237,26 @@ export function calcularMargen(
 /**
  * Las líneas que salen impresas en el comprobante.
  *
- * Dos clases, y la distinción importa:
+ * Tres clases, y la distinción importa:
  *
- *   · El SERVICIO, con su garantía. Una sola línea por el monto
- *     acordado. Los repuestos usados NO salen desglosados: van dentro
- *     del precio del servicio, que es como se cotizó y como el cliente
- *     lo entiende. Desglosarlos invitaría a discutir el precio pieza por
- *     pieza sobre un documento que ya se cobró.
+ *   · El SERVICIO, con su garantía. Los REPUESTOS usados NO salen
+ *     desglosados: van dentro del precio del servicio, que es como se
+ *     cotizó y como el cliente lo entiende. Desglosarlos invitaría a
+ *     discutir el precio pieza por pieza sobre un documento que ya se
+ *     cobró.
+ *
+ *   · Los INSUMOS que NO son regalía SÍ salen desglosados, cada uno en su
+ *     propia línea, a su precio normal de venta — como cualquier producto
+ *     vendido. "Monto total" sigue siendo el total que paga el cliente
+ *     (así lo escribe quien cobra, sin cambiar su forma de trabajar): la
+ *     línea del servicio es ese total MENOS lo que ya se desglosó en
+ *     insumos, para que la suma de las líneas siga cuadrando exactamente
+ *     con lo cobrado — imprescindible para el comprobante fiscal.
  *
  *   · Las REGALÍAS, a precio unitario 0. Salen en la factura porque el
  *     cliente se lleva ese artículo y tiene que constar que lo recibió
  *     —para su garantía y para el inventario—, pero sin cobrarse. La
- *     descripción dice "Descuento 100%" de forma explícita para que no
+ *     descripción empieza con "Regalía" de forma explícita para que no
  *     quede duda de que fue un obsequio y no un error de digitación.
  *
  * Sale a ₡0 sin ningún cambio en el generador del PDF: una línea con
@@ -251,31 +267,43 @@ export function construirLineasFactura(datos: DatosDeCobro) {
   const meses = normalizarGarantia(datos.garantiaMeses);
   const garantia = `${meses} ${meses === 1 ? 'mes' : 'meses'}`;
   const regalias = datos.insumos.filter(i => i.esRegalia);
+  const insumosCobrados = datos.insumos.filter(i => !i.esRegalia);
+  const totalInsumosCobrados = insumosCobrados.reduce(
+    (s, i) => s + (i.precioUnitario || 0) * (i.quantity || 0), 0
+  );
+
+  // El servicio nunca sale en negativo: si los insumos desglosados suman
+  // más que el monto total (un error de digitación, o insumos agregados
+  // después de fijar el monto), el remanente se detiene en ₡0 en vez de
+  // imprimir un precio negativo en el comprobante. `validar()` en el
+  // panel ya avisa de esto ANTES de llegar aquí; esto es el resguardo
+  // final para que el documento fiscal nunca salga con un número absurdo.
+  const montoServicio = Math.max(0, datos.montoTotal - totalInsumosCobrados);
 
   const lineas = [
     {
       caabys: CAABYS_SERVICIO,
       description: datos.descripcionServicio.trim() || 'Servicio técnico',
       qty: 1,
-      unitPrice: datos.montoTotal,
+      unitPrice: montoServicio,
       warranty: garantia,
     },
+    ...insumosCobrados.map(i => ({
+      caabys: CAABYS_SERVICIO,
+      description: i.productName,
+      qty: i.quantity,
+      unitPrice: i.precioUnitario,
+      warranty: garantia,
+    })),
     ...regalias.map(r => ({
       caabys: CAABYS_SERVICIO,
-      // "Descuento 100%" va AL PRINCIPIO, no al final, y no es una cuestión
-      // de estilo: la tabla del comprobante imprime únicamente la PRIMERA
-      // línea de la descripción (`descLines[0]` en invoicePdf.ts) y descarta
-      // el resto sin avisar. Con el texto al final —"… — Regalía por primera
-      // compra (Descuento 100%)"— la frase que da sentido a la línea se
-      // perdía y quedaba un artículo a ₡0,00 sin explicación, que es
-      // exactamente lo que un cliente reclama y lo que un auditor marca.
-      //
-      // Poniéndolo delante, sobrevive por larga que sea la descripción.
-      //
-      // El recorte subió de 28 a 34 caracteres: al sacar el CAABYS de la
-      // tabla, la columna de descripción ganó los 20 mm que ocupaba, y con
-      // el límite anterior se cortaban nombres que ahora sí caben.
-      description: `Descuento 100% — ${recortar(r.productName, 34)}`,
+      // "Regalía" va AL PRINCIPIO, no al final, y no es una cuestión de
+      // estilo: si la descripción es larga y se corta, la palabra que da
+      // sentido a la línea tiene que sobrevivir. Ver `renderItemsTable` en
+      // invoicePdf.ts — ahora imprime la descripción completa en varias
+      // líneas, así que este orden ya no depende de un recorte, pero se
+      // mantiene porque es lo primero que debe leer el cliente.
+      description: `Regalía — ${r.productName.trim()}`,
       qty: r.quantity,
       unitPrice: 0,
       warranty: garantia,
@@ -285,18 +313,14 @@ export function construirLineasFactura(datos: DatosDeCobro) {
   return computeInvoiceTotals(lineas);
 }
 
-/** Recorta un texto a lo que cabe, con puntos suspensivos si sobra. */
-function recortar(texto: string, largo: number): string {
-  const limpio = (texto || '').trim();
-  return limpio.length <= largo ? limpio : `${limpio.slice(0, largo - 1)}…`;
-}
-
 export interface ResultadoCobro {
   ok: boolean;
   mensaje: string;
   /** Número del pedido. Existe aunque falle el comprobante. */
   pedidoId?: string;
   consecutivo?: string;
+  /** Id del comprobante en `invoices`. Lo necesita "Reenviar comprobante". */
+  invoiceId?: string;
   pdfUrl?: string;
   margen?: ResumenMargen;
   /** true cuando se cobró pero el comprobante no salió: hay que reemitir. */
@@ -328,19 +352,36 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
   // de almacén.
   const consumos = [...datos.repuestos, ...datos.insumos].filter(i => i.quantity > 0);
 
+  const insumosCobrados = datos.insumos.filter(i => !i.esRegalia);
+  const totalInsumosCobrados = insumosCobrados.reduce(
+    (s, i) => s + (i.precioUnitario || 0) * (i.quantity || 0), 0
+  );
+  const montoServicio = Math.max(0, datos.montoTotal - totalInsumosCobrados);
+
   const pedido: Order = {
     id: pedidoId,
     customerId: `CRM-${Math.floor(1000 + Math.random() * 9000)}`,
     customerName: datos.clienteNombre.trim(),
     customerEmail: datos.clienteEmail.trim().toLowerCase(),
+    // Refleja EXACTAMENTE las mismas líneas que `construirLineasFactura`
+    // pone en el comprobante — servicio (remanente), insumos desglosados
+    // a su precio normal, y regalías a ₡0 — para que el pedido guardado y
+    // la factura emitida nunca puedan mostrar cifras distintas.
     items: [
       {
         productId: 'SERVICIO',
         productName: datos.descripcionServicio.trim() || 'Servicio técnico',
         quantity: 1,
-        price: datos.montoTotal,
+        price: montoServicio,
         discountApplied: 0,
       },
+      ...insumosCobrados.map(i => ({
+        productId: i.productId,
+        productName: i.productName,
+        quantity: i.quantity,
+        price: i.precioUnitario,
+        discountApplied: 0,
+      })),
       ...datos.insumos.filter(i => i.esRegalia).map(r => ({
         productId: r.productId,
         productName: `${r.productName} (regalía)`,
@@ -365,6 +406,12 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
     xmlVerified: false,
     hdaStatus: 'Pendiente',
     timestamp: ahora.toISOString(),
+    // Persistidos en columnas propias (no solo en la bitácora en texto
+    // libre) para que el control de ganancias del administrador pueda
+    // sumarlos con una consulta, incluido el costo de los repuestos.
+    costoRepuestos: margen.costoRepuestos,
+    costoRegalias: margen.costoRegalias,
+    margenNeto: margen.margenNeto,
   };
 
   // ---- 1. Inventario y pedido -------------------------------------------
@@ -530,9 +577,17 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
     // correo tarda o falla, el cobro y el comprobante YA están hechos y
     // el PDF es descargable. Bloquear el cierre del cobro por un correo
     // dejaría al cliente esperando frente al mostrador.
-    supabase.functions
-      .invoke('send-invoice-email', { body: { invoiceId: emitida.id } })
-      .catch(() => {});
+    //
+    // FALLO CORREGIDO: "dispara y olvida" sin ningún reintento significa
+    // que un solo tropiezo de red —el típico en un mostrador con datos
+    // móviles, o el cajero bloqueando el teléfono justo después de cobrar,
+    // que esta misma app fuerza tras pasar a segundo plano— tumbaba el
+    // correo para siempre y nadie se enteraba: no hay indicador en pantalla
+    // ligado a esto. `enviarComprobantePorCorreo` reintenta una vez antes
+    // de rendirse, y el botón "Reenviar comprobante" del panel (que llama a
+    // `reenviarComprobantePorCorreo`) deja resolverlo a mano si aun así
+    // falla — sin necesidad de reemitir la factura.
+    enviarComprobantePorCorreo(emitida.id);
 
     registrarEnBitacora(datos, pedidoId, margen);
 
@@ -541,6 +596,7 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
       mensaje: `Cobro registrado. Comprobante ${emitida.consecutivo}.`,
       pedidoId,
       consecutivo: emitida.consecutivo,
+      invoiceId: emitida.id,
       pdfUrl: publico.publicUrl,
       margen,
     };
@@ -562,6 +618,47 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
 /** Traduce el medio de cobro al código que entiende Hacienda. */
 function medioAHacienda(medio: MedioCobro): MedioPago {
   return MEDIOS_DE_COBRO.find(m => m.valor === medio)?.codigo ?? '01';
+}
+
+/**
+ * Dispara el correo del comprobante con UN reintento, sin bloquear al
+ * llamador (no se espera esta función desde `cobrarServicio`).
+ *
+ * Un solo tropiezo —cold start de la función, un segundo de red floja, el
+ * teléfono bloqueándose justo después de cobrar— ya no basta para perder
+ * el correo en silencio: se espera 2.5s y se intenta una vez más antes de
+ * rendirse. Sigue sin bloquear el cierre del cobro ni lanzar: el estado
+ * final, éxito o fallo, queda en `invoices.email_status`, que es de donde
+ * lo lee "Reenviar comprobante" si hace falta un tercer intento a mano.
+ */
+async function enviarComprobantePorCorreo(invoiceId: string): Promise<void> {
+  for (let intento = 1; intento <= 2; intento++) {
+    try {
+      const { error } = await supabase.functions.invoke('send-invoice-email', { body: { invoiceId } });
+      if (!error) return;
+    } catch {
+      /* se reintenta abajo */
+    }
+    if (intento === 1) await new Promise(resolve => setTimeout(resolve, 2500));
+  }
+}
+
+/**
+ * Reenvía el comprobante a mano, desde el botón del panel de Cobros.
+ *
+ * A diferencia de `enviarComprobantePorCorreo` (interno, silencioso), esta
+ * SÍ devuelve el resultado: la dispara una persona que está mirando la
+ * pantalla en ese momento y necesita saber si funcionó, no un disparo de
+ * fondo tras el cobro.
+ */
+export async function reenviarComprobantePorCorreo(invoiceId: string): Promise<{ ok: boolean; mensaje: string }> {
+  try {
+    const { error } = await supabase.functions.invoke('send-invoice-email', { body: { invoiceId } });
+    if (error) throw error;
+    return { ok: true, mensaje: 'Comprobante reenviado por correo.' };
+  } catch (e: any) {
+    return { ok: false, mensaje: `No se pudo reenviar el correo: ${e?.message || e}` };
+  }
 }
 
 /**

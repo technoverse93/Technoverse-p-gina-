@@ -55,7 +55,19 @@ export default function AdminDashboard({
   const ingresos = ventasCompletadas.reduce((suma, o) => suma + (o.total || 0), 0);
   const reparacionesActivas = repairs.filter(r => r && r.status !== 'Entregada' && r.status !== 'Cancelada').length;
   const esperandoRepuestos = repairs.filter(r => r && r.status === 'Esperando repuestos').length;
-  const stockCritico = products.filter(p => p && p.stock <= 3).length;
+  // FALLO CORREGIDO: antes se comparaba contra un umbral fijo de 3
+  // unidades para CUALQUIER producto, sin importar el mínimo que el
+  // administrador hubiera configurado en Inventario (`minStock`). Un
+  // producto con mínimo real de 10 (por ejemplo, algo que se vende rápido)
+  // no se marcaba hasta caer a 3 —quedándose sin avisar mientras ya
+  // estaba crítico—, y uno con mínimo de 1 se marcaba "crítico" con 2 o 3
+  // unidades aunque estuviera perfectamente sano según su propio umbral.
+  // Eso es exactamente el "falso positivo" reportado.
+  //
+  // Ahora se lee `minStock` de cada producto. Solo cuenta el que SÍ tiene
+  // un mínimo configurado (> 0): sin umbral definido no hay nada contra
+  // qué comparar, así que no se inventa uno.
+  const stockCritico = products.filter(p => p && (p.minStock || 0) > 0 && p.stock <= (p.minStock as number)).length;
   const unidadesTotales = products.reduce((suma, p) => suma + (p ? (p.stock || 0) : 0), 0);
   const espacioLibre = Math.max(0, 100 - Math.min(100, Math.round((unidadesTotales / 300) * 100)));
 
@@ -94,6 +106,17 @@ export default function AdminDashboard({
     [orders]
   );
 
+  // Control de ganancias: antes el costo de los repuestos e insumos de
+  // cada cobro solo quedaba como texto libre dentro de la bitácora de
+  // auditoría (`audit_logs.detail`), así que ningún reporte podía
+  // sumarlo — de ahí la queja de que los repuestos "no sumaban" en
+  // ganancias. Ahora `cobrarServicio()` guarda `costoRepuestos`,
+  // `costoRegalias` y `margenNeto` como columnas propias del pedido (ver
+  // facturacion.ts), y aquí simplemente se suman.
+  const margenTotal = ventasCompletadas.reduce((s, o) => s + (o.margenNeto ?? (o.total - (o.costoRepuestos || 0) - (o.costoRegalias || 0))), 0);
+  const costoRepuestosTotal = ventasCompletadas.reduce((s, o) => s + (o.costoRepuestos || 0), 0);
+  const costoRegaliasTotal = ventasCompletadas.reduce((s, o) => s + (o.costoRegalias || 0), 0);
+
   // Solo lo que exige que alguien haga algo. Si el array queda vacío la
   // tarjeta no se dibuja: un panel de alertas siempre presente y siempre
   // en verde se vuelve invisible a la semana.
@@ -104,7 +127,7 @@ export default function AdminDashboard({
       tab: 'taller',
     },
     stockCritico > 0 && {
-      texto: `${stockCritico} ${stockCritico === 1 ? 'artículo' : 'artículos'} con 3 unidades o menos en existencia`,
+      texto: `${stockCritico} ${stockCritico === 1 ? 'artículo está' : 'artículos están'} por debajo de su mínimo configurado en Inventario`,
       accion: 'Ver productos',
       tab: 'inventario_productos',
     },
@@ -186,7 +209,7 @@ export default function AdminDashboard({
         <Stat
           label="Stock crítico"
           value={stockCritico}
-          foot={stockCritico > 0 ? '3 unidades o menos' : 'Existencias sanas'}
+          foot={stockCritico > 0 ? 'Bajo su mínimo configurado' : 'Existencias sanas'}
           icon={Package}
           alert={stockCritico > 0}
         />
@@ -197,6 +220,28 @@ export default function AdminDashboard({
           icon={ShoppingBag}
         />
       </div>
+
+      <Card title="Control de ganancias">
+        <p className="tv-hint !mt-0 mb-3">
+          Suma el costo real de los repuestos e insumos facturados en cada cobro — no solo el ingreso bruto.
+        </p>
+        <div className="tv-grid tv-grid-3">
+          <Stat label="Ingresos" value={colones(ingresos)} foot="Bruto, IVA incluido" icon={TrendingUp} />
+          <Stat
+            label="Costo de repuestos e insumos"
+            value={colones(costoRepuestosTotal)}
+            foot={costoRegaliasTotal > 0 ? `+ ${colones(costoRegaliasTotal)} en regalías` : 'Sin regalías entregadas'}
+            icon={Wrench}
+          />
+          <Stat
+            label="Margen neto"
+            value={colones(margenTotal)}
+            foot={ingresos > 0 ? `${((margenTotal / ingresos) * 100).toFixed(1)}% sobre ingresos` : 'Sin ventas todavía'}
+            icon={ShieldAlert}
+            alert={margenTotal < 0}
+          />
+        </div>
+      </Card>
 
       <div className="tv-grid tv-grid-2">
         <Card title="Ventas de los últimos 7 días">

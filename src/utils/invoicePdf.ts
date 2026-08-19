@@ -536,21 +536,33 @@ function renderItemsTable(
 
   doc.setFont(font, 'normal');
   doc.setFontSize(style.compact ? 6.8 : 7.5);
-  const rowH = style.compact ? 5.2 : 6.5;
+  const baseRowH = style.compact ? 5.2 : 6.5;
+  const firstLineOffset = style.compact ? 3.8 : 4.5;
+  const lineH = style.compact ? 2.9 : 3.5;
   const textColor: [number, number, number] = [20, 20, 20];
 
   data.items.forEach((it, idx) => {
-    if (y > 265) { doc.addPage(); y = 20; }
+    // FALLO CORREGIDO: antes solo se imprimía `descLines[0]` y el resto de
+    // la descripción se descartaba sin avisar (jsPDF no recorta el texto
+    // que no cabe, así que "cortar a lo que entra en una línea" era en
+    // realidad "perder todo lo que no entra en la primera"). Un nombre de
+    // insumo o un detalle de servicio un poco largo salía mutilado en el
+    // comprobante — el límite que reportaba el cajero como "corta el
+    // texto" no estaba en ningún input de la pantalla, sino aquí. Ahora la
+    // fila crece hacia abajo lo que haga falta para imprimir la
+    // descripción COMPLETA, en tantas líneas como ocupe.
+    const descLines: string[] = doc.splitTextToSize(it.description, wDesc - 2);
+    const rowH = Math.max(baseRowH, descLines.length * lineH + (style.compact ? 2.3 : 2.8));
+    if (y + rowH > 270) { doc.addPage(); y = 20; }
     if (style.altRowFill && idx % 2 === 0) {
       doc.setFillColor(...style.altRowFill);
       doc.rect(marginX, y, usableW, rowH, 'F');
     }
     if (style.borders) doc.rect(marginX, y, usableW, rowH);
     doc.setTextColor(...textColor);
-    const baseline = y + rowH - (style.compact ? 1.4 : 2);
+    const baseline = y + firstLineOffset;
     doc.text(String(idx + 1), colX.n + 1.5, baseline);
-    const descLines = doc.splitTextToSize(it.description, wDesc - 2);
-    doc.text(descLines[0] || '', colX.desc, baseline);
+    descLines.forEach((linea, li) => doc.text(linea, colX.desc, baseline + li * lineH));
     if (style.warranty) doc.text(it.warranty || '—', warrantyX, baseline);
     doc.text(String(it.qty), qtyX + wQty - 1.5, baseline, { align: 'right' });
     drawColones(doc, it.unitPrice, priceX + wPrice - 1.5, baseline, { align: 'right' });

@@ -138,6 +138,13 @@ export interface Order {
   xmlContent?: string;
   timestamp: string;
   pickupInPerson?: boolean; // pick up at home office (shop is home)
+  // Costo real de repuestos/insumos consumidos y margen neto del cobro,
+  // persistidos en el pedido (no solo en la bitácora en texto libre) para
+  // que el módulo de control de ganancias del administrador pueda sumarlos
+  // en un reporte, en vez de tener que releer y parsear audit_logs.
+  costoRepuestos?: number;
+  costoRegalias?: number;
+  margenNeto?: number;
 }
 
 export interface ChatMessage {
