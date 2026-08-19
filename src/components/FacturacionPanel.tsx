@@ -25,7 +25,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Receipt, Gift, Wrench, Plus, Trash2, CheckCircle, Download, AlertTriangle, Link2,
+  Receipt, Gift, Wrench, Plus, Trash2, CheckCircle, Download, AlertTriangle, Link2, Mail,
 } from 'lucide-react';
 import { PageHead, Card, Btn, Field, Chip, Stat, Empty, colones } from './admin/AdminKit';
 import { CustomSelect } from './CustomSelect';
@@ -35,6 +35,7 @@ import { validateCedula } from '../utils/invoicePdf';
 import type { IdentificacionTipo } from '../utils/invoicePdf';
 import {
   MEDIOS_DE_COBRO, OPCIONES_GARANTIA, calcularMargen, cobrarServicio, componentesDe,
+  reenviarComprobantePorCorreo,
 } from '../utils/facturacion';
 import type { MedioCobro, InsumoConsumido, ResultadoCobro } from '../utils/facturacion';
 import { esRepuesto, esInsumo } from '../utils/categorias';
@@ -63,6 +64,7 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
   const [cobrando, setCobrando] = useState(false);
   const [ultimoCobro, setUltimoCobro] = useState<ResultadoCobro | null>(null);
   const [descargandoPdf, setDescargandoPdf] = useState(false);
+  const [reenviandoCorreo, setReenviandoCorreo] = useState(false);
 
   // ---- Datos del cliente -------------------------------------------------
   const [nombre, setNombre] = useState('');
@@ -146,7 +148,7 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     }
     fijar([
       ...lista,
-      { productId: p.id, productName: p.name, quantity: 1, costoUnitario: p.cost || 0 },
+      { productId: p.id, productName: p.name, quantity: 1, costoUnitario: p.cost || 0, precioUnitario: p.price || 0 },
     ]);
   };
 
@@ -239,6 +241,17 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     if (!telefono.replace(/\D/g, '')) return 'Escriba el teléfono del cliente.';
     if (!descripcion.trim()) return 'Describa el servicio que se está cobrando.';
     if (!monto || Number(monto) <= 0) return 'El monto a cobrar debe ser mayor que cero.';
+    // Los insumos que NO son regalía salen desglosados en la factura a su
+    // precio normal, tomado del "Monto total" (ver construirLineasFactura).
+    // Si suman más que el monto, la línea del servicio se quedaría en ₡0
+    // o negativa — hay que subir el monto o quitar/regalar algún insumo
+    // ANTES de quemar el consecutivo fiscal, no después.
+    const totalInsumosCobrados = insumos
+      .filter(i => !i.esRegalia)
+      .reduce((s, i) => s + i.precioUnitario * i.quantity, 0);
+    if (totalInsumosCobrados > Number(monto)) {
+      return `Los insumos desglosados suman ${colones(totalInsumosCobrados)}, más que el monto total (${colones(Number(monto))}). Suba el monto o marque el insumo como regalía.`;
+    }
     return null;
   };
 
@@ -346,6 +359,18 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     }
   };
 
+  const reenviarCorreo = async () => {
+    if (!ultimoCobro?.invoiceId) return;
+    setReenviandoCorreo(true);
+    try {
+      const resultado = await reenviarComprobantePorCorreo(ultimoCobro.invoiceId);
+      if (resultado.ok) toast.success(resultado.mensaje);
+      else toast.error(resultado.mensaje);
+    } finally {
+      setReenviandoCorreo(false);
+    }
+  };
+
   return (
     <div className="tv-stack" id="view-facturacion-cobro">
       <PageHead
@@ -362,11 +387,21 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
               : <AlertTriangle className="w-5 h-5 flex-shrink-0 text-[#E5484D]" />}
             <div className="flex-1 min-w-0 space-y-2">
               <p className="text-[13px] text-[var(--text-primary)] leading-relaxed">{ultimoCobro.mensaje}</p>
-              {ultimoCobro.pdfUrl && (
-                <button type="button" onClick={descargarComprobante} disabled={descargandoPdf} className="tv-btn inline-flex disabled:opacity-60">
-                  <Download className="w-4 h-4" />
-                  {descargandoPdf ? 'Preparando…' : isNative() ? 'Guardar el comprobante en el dispositivo' : 'Descargar el comprobante'}
-                </button>
+              {(ultimoCobro.pdfUrl || ultimoCobro.invoiceId) && (
+                <div className="flex flex-wrap gap-2">
+                  {ultimoCobro.pdfUrl && (
+                    <button type="button" onClick={descargarComprobante} disabled={descargandoPdf} className="tv-btn inline-flex disabled:opacity-60">
+                      <Download className="w-4 h-4" />
+                      {descargandoPdf ? 'Preparando…' : isNative() ? 'Guardar el comprobante en el dispositivo' : 'Descargar el comprobante'}
+                    </button>
+                  )}
+                  {ultimoCobro.invoiceId && (
+                    <button type="button" onClick={reenviarCorreo} disabled={reenviandoCorreo} className="tv-btn inline-flex disabled:opacity-60">
+                      <Mail className="w-4 h-4" />
+                      {reenviandoCorreo ? 'Enviando…' : 'Reenviar comprobante por correo'}
+                    </button>
+                  )}
+                </div>
               )}
             </div>
           </div>
@@ -494,8 +529,9 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
 
       <ListaDeInsumos
         titulo="Insumos"
-        descripcion="Temperados, micas, cables y demás material del taller. Marque la casilla para entregarlo como regalía: se descuenta igual del inventario y cuenta como gasto, pero en la factura sale a ₡0."
+        descripcion="Temperados, micas, cables y demás material del taller. Si NO se marca como regalía, sale desglosado en la factura a su precio normal (se resta del monto total). Marcado como regalía, se descuenta igual del inventario y cuenta como gasto, pero en la factura sale a ₡0."
         icono={Gift}
+        facturaEnDetalle
         opciones={opcionesInsumo}
         elegido={insumoElegido}
         alElegir={setInsumoElegido}
@@ -554,6 +590,7 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
 function ListaDeInsumos({
   titulo, descripcion, icono: Icono, opciones, elegido, alElegir,
   lista, alAgregar, alCambiarCantidad, alQuitar, alMarcarRegalia, vacio,
+  facturaEnDetalle,
 }: {
   titulo: string;
   descripcion: string;
@@ -572,6 +609,14 @@ function ListaDeInsumos({
    */
   alMarcarRegalia?: (productId: string, valor: boolean) => void;
   vacio: string;
+  /**
+   * Cuando es true (solo Insumos), lo que NO es regalía sale desglosado
+   * en la factura a `precioUnitario` — la columna de la derecha muestra
+   * ESE precio, que es lo que el cliente ve impreso. Los repuestos nunca
+   * se desglosan, así que siguen mostrando `costoUnitario`, el dato
+   * interno de cuánto cuesta la pieza.
+   */
+  facturaEnDetalle?: boolean;
 }) {
   const total = lista.reduce((s, i) => s + i.costoUnitario * i.quantity, 0);
   const regaladas = lista.filter(i => i.esRegalia).length;
@@ -607,7 +652,9 @@ function ListaDeInsumos({
               searchPlaceholder="Buscar por nombre o SKU..."
               options={opciones.map(p => ({
                 value: p.id,
-                label: `${p.name} — ${p.stock} en existencia (costo ${colones(p.cost || 0)})`,
+                label: facturaEnDetalle
+                  ? `${p.name} — ${p.stock} en existencia (precio ${colones(p.price || 0)})`
+                  : `${p.name} — ${p.stock} en existencia (costo ${colones(p.cost || 0)})`,
                 searchText: p.sku,
               }))}
             />
@@ -653,6 +700,10 @@ function ListaDeInsumos({
                 {i.esRegalia ? (
                   <span className="text-[var(--accent)]">
                     Factura ₡0
+                  </span>
+                ) : facturaEnDetalle ? (
+                  <span className="text-[var(--text-secondary)]" title="Precio que sale desglosado en la factura">
+                    {colones(i.precioUnitario * i.quantity)}
                   </span>
                 ) : (
                   <span className="text-[var(--text-muted)]">{colones(i.costoUnitario * i.quantity)}</span>

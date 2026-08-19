@@ -796,7 +796,9 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
       tax_amount: o.taxAmount || 0, total: o.total || 0, payment_method: o.paymentMethod,
       payment_details: o.paymentDetails || {}, status: o.status, xml_verified: o.xmlVerified || false,
       hda_status: o.hdaStatus || 'Pendiente', xml_content: o.xmlContent || null,
-      pickup_in_person: o.pickupInPerson || false, created_at: o.timestamp || new Date().toISOString()
+      pickup_in_person: o.pickupInPerson || false, created_at: o.timestamp || new Date().toISOString(),
+      costo_repuestos: o.costoRepuestos || 0, costo_regalias: o.costoRegalias || 0,
+      margen_neto: o.margenNeto ?? null
     }),
     fromRow: (r): Order => ({
       id: r.id, customerId: r.customer_id || '', customerName: r.customer_name || '',
@@ -805,7 +807,9 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
       taxAmount: r.tax_amount || 0, total: r.total || 0, paymentMethod: r.payment_method,
       paymentDetails: r.payment_details || {}, status: r.status, xmlVerified: r.xml_verified || false,
       hdaStatus: r.hda_status || 'Pendiente', xmlContent: r.xml_content || undefined,
-      pickupInPerson: r.pickup_in_person || false, timestamp: r.created_at
+      pickupInPerson: r.pickup_in_person || false, timestamp: r.created_at,
+      costoRepuestos: Number(r.costo_repuestos) || 0, costoRegalias: Number(r.costo_regalias) || 0,
+      margenNeto: r.margen_neto === null || r.margen_neto === undefined ? undefined : Number(r.margen_neto)
     })
   }),
   configFor<AuditLog>({

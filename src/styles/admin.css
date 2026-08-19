@@ -737,12 +737,16 @@
   color: var(--text-primary);
   line-height: 1.05;
   font-variant-numeric: tabular-nums;
+  /* Un monto grande en colones no trae ningún punto de quiebre natural
+     para el navegador; sin esto, se salía de la tarjeta en vez de partirse. */
+  overflow-wrap: anywhere;
 }
 
 .tv-stat-foot {
   margin-top: 7px;
   font-size: 11.5px;
   color: var(--text-muted);
+  overflow-wrap: anywhere;
 }
 
 .tv-stat[data-alert='true'] { border-color: var(--tv-danger); }
@@ -902,6 +906,17 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
 .tv-grid-2 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
 .tv-grid-3 { grid-template-columns: repeat(1, minmax(0, 1fr)); }
 .tv-grid-6 { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+
+/* FALLO CORREGIDO: `minmax(0, 1fr)` limita el ANCHO DE LA PISTA, pero el
+   ítem de grid que cae dentro sigue naciendo con `min-width: auto` — no
+   se encoge por debajo del ancho de su propio contenido. Un monto largo
+   en colones ("₡1.234.567,89", sin ningún punto de quiebre para el
+   navegador) o un nombre de cliente/producto largo en un Stat o una Card
+   empujaban esa tarjeta más allá de su columna, desbordando la rejilla
+   entera hacia la derecha — en la pantalla más angosta del taller esto se
+   veía como una fila descuadrada o con scroll horizontal en toda la
+   página, no solo dentro de la tarjeta. */
+.tv-grid > * { min-width: 0; }
 
 @media (min-width: 640px) {
   .tv-grid-3 { grid-template-columns: repeat(3, minmax(0, 1fr)); }
