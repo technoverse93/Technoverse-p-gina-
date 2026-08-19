@@ -55,19 +55,11 @@ export default function AdminDashboard({
   const ingresos = ventasCompletadas.reduce((suma, o) => suma + (o.total || 0), 0);
   const reparacionesActivas = repairs.filter(r => r && r.status !== 'Entregada' && r.status !== 'Cancelada').length;
   const esperandoRepuestos = repairs.filter(r => r && r.status === 'Esperando repuestos').length;
-  // FALLO CORREGIDO: antes se comparaba contra un umbral fijo de 3
-  // unidades para CUALQUIER producto, sin importar el mínimo que el
-  // administrador hubiera configurado en Inventario (`minStock`). Un
-  // producto con mínimo real de 10 (por ejemplo, algo que se vende rápido)
-  // no se marcaba hasta caer a 3 —quedándose sin avisar mientras ya
-  // estaba crítico—, y uno con mínimo de 1 se marcaba "crítico" con 2 o 3
-  // unidades aunque estuviera perfectamente sano según su propio umbral.
-  // Eso es exactamente el "falso positivo" reportado.
-  //
-  // Ahora se lee `minStock` de cada producto. Solo cuenta el que SÍ tiene
-  // un mínimo configurado (> 0): sin umbral definido no hay nada contra
-  // qué comparar, así que no se inventa uno.
-  const stockCritico = products.filter(p => p && (p.minStock || 0) > 0 && p.stock <= (p.minStock as number)).length;
+  // REGLA SIMPLIFICADA A PROPÓSITO (orden explícita): "última unidad" y
+  // nada más. Ni umbral fijo ni `minStock` configurable — cantidad == 1
+  // dispara la alerta, cantidad > 1 no dispara nada. Sin configuración
+  // que mantener ni que se pueda desalinear entre productos.
+  const stockCritico = products.filter(p => p && p.stock === 1).length;
   const unidadesTotales = products.reduce((suma, p) => suma + (p ? (p.stock || 0) : 0), 0);
   const espacioLibre = Math.max(0, 100 - Math.min(100, Math.round((unidadesTotales / 300) * 100)));
 
@@ -127,7 +119,7 @@ export default function AdminDashboard({
       tab: 'taller',
     },
     stockCritico > 0 && {
-      texto: `${stockCritico} ${stockCritico === 1 ? 'artículo está' : 'artículos están'} por debajo de su mínimo configurado en Inventario`,
+      texto: `${stockCritico} ${stockCritico === 1 ? 'artículo tiene' : 'artículos tienen'} última unidad en existencia`,
       accion: 'Ver productos',
       tab: 'inventario_productos',
     },
@@ -207,9 +199,9 @@ export default function AdminDashboard({
           alert={esperandoRepuestos > 0}
         />
         <Stat
-          label="Stock crítico"
+          label="Última unidad"
           value={stockCritico}
-          foot={stockCritico > 0 ? 'Bajo su mínimo configurado' : 'Existencias sanas'}
+          foot={stockCritico > 0 ? 'Con 1 unidad en existencia' : 'Ninguno en última unidad'}
           icon={Package}
           alert={stockCritico > 0}
         />

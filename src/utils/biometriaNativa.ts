@@ -163,7 +163,17 @@ export async function soportaBiometriaNativa(): Promise<boolean> {
   try {
     const p = plugin();
     if (!p) return false;
-    const r = await p.isAvailable({ useFallback: false });
+    // FALLO CORREGIDO: `useFallback: false` le pide a Android que solo
+    // reporte disponibilidad si hay biometría PURA configurada, sin
+    // contar el bloqueo de pantalla como respaldo. En algunos teléfonos
+    // con lector de huella EN PANTALLA (óptico, bajo el vidrio) el driver
+    // reporta la biometría como "no disponible" bajo esa combinación
+    // exacta de flags, aunque el sensor funcione perfectamente — es el
+    // "fallo en sensores de huella en pantalla" reportado. Con
+    // `useFallback: true`, Android evalúa la disponibilidad real
+    // (biometría O bloqueo de pantalla) y dejar de bloquear el botón en
+    // esos teléfonos.
+    const r = await p.isAvailable({ useFallback: true });
     return r?.isAvailable === true;
   } catch {
     return false;
@@ -254,11 +264,18 @@ export async function activarBiometriaNativa(): Promise<ResultadoNativo> {
     // Se pide la huella ANTES de guardar: así se confirma que quien
     // activa esto es quien tiene el dedo, no alguien que agarró el
     // teléfono desbloqueado.
+    //
+    // `useFallback: true`: si el sensor (sobre todo el óptico en pantalla)
+    // no logra leer la huella tras varios intentos, el propio diálogo de
+    // Android ofrece el PIN/patrón/contraseña del teléfono como respaldo,
+    // sin salir de la verificación nativa. Ni aquí ni en ningún otro punto
+    // se borra `LLAVE_ACTIVA` por un fallo del sensor — ver su comentario.
     await p.verifyIdentity({
       reason: 'Confirme su identidad para activar el acceso con huella',
       title: 'Technoverse',
       subtitle: correo,
       description: '',
+      useFallback: true,
     });
 
     await p.setCredentials({ username: correo, password: token, server: LLAVERO });
@@ -288,11 +305,15 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
       return { ok: false, mensaje: 'Todavía no ha activado la huella en este teléfono.' };
     }
 
+    // Mismo respaldo nativo que en `activarBiometriaNativa`: si el sensor
+    // falla, Android ofrece PIN/patrón/contraseña dentro del mismo
+    // diálogo, sin tocar `LLAVE_ACTIVA`.
     await p.verifyIdentity({
       reason: 'Confirme su identidad para entrar',
       title: 'Technoverse',
       subtitle: guardado.username || '',
       description: '',
+      useFallback: true,
     });
 
     // -----------------------------------------------------------------

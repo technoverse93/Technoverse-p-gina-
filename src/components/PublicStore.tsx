@@ -157,6 +157,14 @@ export default function PublicStore({
   const [cart, setCart] = useState<{ product: Product; quantity: number }[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
 
+  // FALLO CORREGIDO: imágenes de producto sin `onError` en el buscador, el
+  // carrito y el checkout — una imageUrl rota dejaba el ícono partido del
+  // navegador en vez de caer al mismo estado "sin imagen" que ya existía
+  // para cuando el producto no tenía ninguna. Un solo Set por id de
+  // producto cubre las cuatro vistas sin duplicar estado por fila.
+  const [imagenesRotas, setImagenesRotas] = useState<Set<string>>(new Set());
+  const marcarImagenRota = (id: string) => setImagenesRotas(prev => (prev.has(id) ? prev : new Set(prev).add(id)));
+
   // Checkout process state
   const [checkoutStep, setCheckoutStep] = useState<number>(0); // 0 = cart, 1 = contacto, 2 = payment, 3 = confirmed
   // La entrega se coordina 100% manual contactando al cliente: no hay
@@ -1248,8 +1256,8 @@ export default function PublicStore({
                   >
                     <div className="flex items-center gap-3">
                       <div className="w-10 h-10 bg-transparent border border-[var(--border-color)] rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {p.imageUrl ? (
-                          <img src={p.imageUrl} alt="" className="w-full h-full object-contain" />
+                        {p.imageUrl && !imagenesRotas.has(p.id) ? (
+                          <img src={p.imageUrl} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" onError={() => marcarImagenRota(p.id)} />
                         ) : (
                           <Smartphone className="w-5 h-5 text-[var(--text-muted)]" />
                         )}
@@ -1513,8 +1521,8 @@ export default function PublicStore({
                       cart.map((it, idx) => (
                         <div key={idx} className="flex gap-4 group/item">
                           <div className="product-media w-16 h-16 rounded-xl border border-[var(--border-color)] flex-shrink-0 flex items-center justify-center overflow-hidden p-1">
-                            {it.product.imageUrl ? (
-                              <img src={it.product.imageUrl} alt="" className="w-full h-full object-contain group-hover/item:scale-110 transition-transform duration-300" />
+                            {it.product.imageUrl && !imagenesRotas.has(it.product.id) ? (
+                              <img src={it.product.imageUrl} alt="" className="w-full h-full object-contain group-hover/item:scale-110 transition-transform duration-300" loading="lazy" decoding="async" onError={() => marcarImagenRota(it.product.id)} />
                             ) : (
                               <Smartphone className="w-6 h-6 text-[var(--text-muted)]" />
                             )}
@@ -1907,8 +1915,8 @@ export default function PublicStore({
                     cart.map((it, idx) => (
                       <div key={idx} className="bg-[var(--bg-surface)] p-3 rounded-2xl border border-[var(--border-color)]/40 flex gap-3 text-sm justify-between items-center">
                         <div className="flex gap-2.5 truncate items-center">
-                          {it.product.imageUrl ? (
-                            <img src={it.product.imageUrl} alt="" className="w-12 h-12 object-contain bg-transparent border border-[var(--border-color)] rounded-lg p-1" />
+                          {it.product.imageUrl && !imagenesRotas.has(it.product.id) ? (
+                            <img src={it.product.imageUrl} alt="" className="w-12 h-12 object-contain bg-transparent border border-[var(--border-color)] rounded-lg p-1" loading="lazy" decoding="async" onError={() => marcarImagenRota(it.product.id)} />
                           ) : (
                             <div className="w-12 h-12 bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg flex items-center justify-center text-sm">📱</div>
                           )}
@@ -2449,12 +2457,15 @@ export default function PublicStore({
           >
             {/* Left side: Photo */}
             <div className="product-media md:w-1/2 flex items-center justify-center p-6 relative min-h-[220px]">
-              {selectedProductDetail.imageUrl ? (
-                <img 
-                  src={selectedProductDetail.imageUrl} 
-                  alt={selectedProductDetail.name} 
+              {selectedProductDetail.imageUrl && !imagenesRotas.has(selectedProductDetail.id) ? (
+                <img
+                  src={selectedProductDetail.imageUrl}
+                  alt={selectedProductDetail.name}
                   className="max-h-56 max-w-full object-contain rounded-xl"
                   referrerPolicy="no-referrer"
+                  loading="lazy"
+                  decoding="async"
+                  onError={() => marcarImagenRota(selectedProductDetail.id)}
                 />
               ) : (
                 <div className="flex flex-col items-center justify-center text-[var(--text-primary)]">

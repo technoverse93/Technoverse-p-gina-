@@ -147,9 +147,10 @@ function AppInner() {
     iniciarSincronizacionBiometrica();
   }, []);
 
-  // Vigila el segundo plano: si la aplicación estuvo cerrada/oculta más de
-  // dos minutos, `EVENTO_FORZAR_REINGRESO` obliga a volver a pasar por
-  // biometría/PIN/contraseña al volver. Ver src/mobile/appLock.ts.
+  // Vigila el segundo plano: CUALQUIER minimizado dispara
+  // `EVENTO_FORZAR_REINGRESO` y obliga a volver a pasar por
+  // biometría/PIN/contraseña al volver, sin período de gracia. Ver
+  // src/mobile/appLock.ts.
   useEffect(() => {
     iniciarBloqueoPorInactividad();
   }, []);

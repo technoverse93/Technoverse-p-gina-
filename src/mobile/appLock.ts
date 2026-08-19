@@ -33,11 +33,14 @@
 // hasta que se instale el próximo .apk.
 //
 // ---------------------------------------------------------------------
-// QUÉ CUENTA COMO "TIEMPO PROLONGADO"
+// SIN PERÍODO DE GRACIA (orden explícita, "cero tolerancia")
 // ---------------------------------------------------------------------
-// Dos minutos. Ni tan corto que bloquee por cambiar a WhatsApp a
-// responder un cliente, ni tan largo que deje el teléfono expuesto de
-// verdad si alguien lo toma mientras está desatendido.
+// Versión anterior: solo bloqueaba si la aplicación pasó más de dos
+// minutos en segundo plano. La auditoría de seguridad de este proyecto
+// lo marcó como inaceptable — "el sistema DEBE bloquear el acceso y
+// pedir re-autenticación al retomar la app", sin excepción por tiempo.
+// Cualquier minimizado, por breve que sea, marca `requiere_auth` y exige
+// biometría/PIN al volver.
 //
 // La marca de tiempo se guarda en localStorage, no en memoria: así
 // sobrevive a que Android mate el proceso por falta de memoria mientras
@@ -48,7 +51,6 @@
 // =====================================================================
 
 const CLAVE_EN_FONDO_DESDE = 'technoverse_en_fondo_desde';
-const UMBRAL_BLOQUEO_MS = 2 * 60 * 1000;
 
 /** Se dispara cuando hay que exigir de nuevo biometría/PIN/contraseña. */
 export const EVENTO_FORZAR_REINGRESO = 'technoverse_forzar_reingreso';
@@ -62,13 +64,13 @@ function comprobarSiHayQueBloquear(): void {
   try { desde = Number(localStorage.getItem(CLAVE_EN_FONDO_DESDE) || '0'); } catch { return; }
   if (!desde) return;
 
-  // Se limpia siempre que se comprueba, haya pasado el umbral o no: la
-  // marca solo tiene sentido para UN regreso. Dejarla puesta bloquearía
-  // de nuevo en la siguiente comprobación sin que la app volviera a
-  // pasar por segundo plano.
+  // Se limpia siempre que se comprueba: la marca solo tiene sentido para
+  // UN regreso. Dejarla puesta bloquearía de nuevo en la siguiente
+  // comprobación sin que la app volviera a pasar por segundo plano.
   try { localStorage.removeItem(CLAVE_EN_FONDO_DESDE); } catch { /* no es crítico */ }
 
-  if (Date.now() - desde < UMBRAL_BLOQUEO_MS) return;
+  // Sin umbral de tiempo: CUALQUIER paso por segundo plano exige volver
+  // a autenticarse, así haya durado un segundo o una hora.
   window.dispatchEvent(new CustomEvent(EVENTO_FORZAR_REINGRESO));
 }
 

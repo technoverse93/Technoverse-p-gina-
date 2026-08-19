@@ -615,6 +615,80 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
   }
 }
 
+/**
+ * Envía una FACTURA DE PRUEBA (modo Sandbox): valida que el correo/SMTP
+ * funcione, con un PDF real y con el mismo formato que vería un cliente,
+ * pero SIN ninguno de los efectos de un cobro real.
+ *
+ * A propósito NO llama a `issue_invoice` (no quema un consecutivo fiscal),
+ * NO llama a `processSaleAtomic`/`adjust_stock` (no toca el inventario),
+ * NO guarda nada en `orders` (no aparece en ventas ni en el control de
+ * ganancias) y NO escribe en `invoices` — la Edge Function recibe el PDF
+ * ya armado como data URL y lo manda por el mismo cliente SMTP que usa un
+ * envío real, así que SÍ prueba de verdad que Gmail está funcionando.
+ */
+export async function enviarFacturaDePrueba(datos: DatosDeCobro): Promise<ResultadoCobro> {
+  const ahora = new Date();
+  const idPrueba = `SANDBOX-${ahora.toISOString().slice(2, 10).replace(/-/g, '')}-${Math.random().toString(36).slice(2, 7).toUpperCase()}`;
+  const { items, subtotal, ivaTotal, total } = construirLineasFactura(datos);
+  const config = getDB().settings;
+
+  const datosFactura: InvoiceData = {
+    id: idPrueba,
+    // Ninguno de los dos es un dato fiscal real: se marcan como tales de
+    // forma explícita en vez de dejar que parezcan un comprobante válido.
+    clave: '0'.repeat(50),
+    consecutivo: 'PRUEBA — SIN CONSECUTIVO FISCAL',
+    tipoDoc: '01',
+    fechaISO: ahora.toISOString(),
+    emisorCedula: '000000000',
+    emisorNombre: 'Technoverse Costa Rica',
+    emisorTelefono: config?.companyPhone || undefined,
+    emisorDireccion: config?.companyAddress || undefined,
+    customerIdentificationType: datos.clienteIdTipo,
+    customerIdentification: datos.clienteId.replace(/\D/g, ''),
+    customerName: datos.clienteNombre.trim(),
+    customerEmail: datos.clienteEmail.trim().toLowerCase(),
+    medioPago: medioAHacienda(datos.medioCobro),
+    items,
+    subtotal,
+    ivaTotal,
+    total,
+  };
+
+  try {
+    const { blob } = await buildInvoicePdfBlob(datosFactura);
+    const pdfDataUrl: string = await new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+
+    const { data, error } = await supabase.functions.invoke('send-invoice-email', {
+      body: {
+        sandbox: true,
+        to: datos.clienteEmail.trim().toLowerCase(),
+        customerName: datos.clienteNombre.trim(),
+        pdfDataUrl,
+        subject: '[PRUEBA] Comprobante de prueba — Technoverse Costa Rica',
+      },
+    });
+    if (error || !data?.success) throw error || new Error('La función de correo no confirmó el envío.');
+
+    return {
+      ok: true,
+      mensaje: `Correo de prueba enviado a ${datos.clienteEmail.trim()}. No se descontó inventario ni se registró venta — es solo una prueba del envío.`,
+      pedidoId: idPrueba,
+    };
+  } catch (e: any) {
+    return {
+      ok: false,
+      mensaje: `No se pudo enviar el correo de prueba: ${e?.message || e}. No se tocó inventario ni ventas.`,
+    };
+  }
+}
+
 /** Traduce el medio de cobro al código que entiende Hacienda. */
 function medioAHacienda(medio: MedioCobro): MedioPago {
   return MEDIOS_DE_COBRO.find(m => m.valor === medio)?.codigo ?? '01';
