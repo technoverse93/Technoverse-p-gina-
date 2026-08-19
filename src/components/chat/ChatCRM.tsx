@@ -105,17 +105,29 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   };
 
   const handleSendMessage = async (convId: string, payload: { text: string; imageUrl?: string; isInternalNote?: boolean }) => {
+    const newMsg = {
+      id: `MSG-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      sender: 'support' as const,
+      text: payload.text,
+      timestamp: new Date().toISOString(),
+      imageUrl: payload.imageUrl,
+      isInternalNote: payload.isInternalNote
+    };
+
+    // Optimistic UI: la respuesta se ve en el hilo AHORA, antes de que
+    // termine el guardado. Si `persist()` falla, `loadConversations()`
+    // (que corre en el catch) relee de `getDB()` y esta fila optimista
+    // desaparece sola — no hace falta un rollback manual aparte.
+    if (isMountedRef.current) {
+      setConversations(prev => prev.map(c => c.id === convId
+        ? { ...c, messages: [...c.messages, newMsg], unreadCount: 0 }
+        : c));
+    }
+
     const ok = await persist(db => {
       const idx = db.chat_conversations.findIndex(c => c.id === convId);
       if (idx === -1) return;
-      db.chat_conversations[idx].messages.push({
-        id: `MSG-${Date.now()}`,
-        sender: 'support',
-        text: payload.text,
-        timestamp: new Date().toISOString(),
-        imageUrl: payload.imageUrl,
-        isInternalNote: payload.isInternalNote
-      });
+      db.chat_conversations[idx].messages.push(newMsg);
       db.chat_conversations[idx].unreadCount = 0;
     });
     if (ok) addAuditLog(currentUser?.email || 'admin', 'Soporte', payload.isInternalNote ? 'Nota Interna' : 'Respuesta Chat', `Conversación ${convId}`);

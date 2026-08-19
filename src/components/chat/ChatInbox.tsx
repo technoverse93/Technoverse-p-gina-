@@ -98,17 +98,17 @@ export default function ChatInbox({
               type="button"
               onClick={() => onSelect(conv.id)}
               className={`w-full text-left p-3 flex items-center gap-3 transition ${
-                selectedConvId === conv.id ? 'bg-[var(--brand-gold-mid)]/10' : 'hover:bg-[var(--bg-surface)]'
+                selectedConvId === conv.id ? 'bg-[var(--accent)]/10' : 'hover:bg-[var(--bg-sunken)]'
               }`}
             >
               <div className="relative shrink-0">
-                <div className="w-10 h-10 rounded-full bg-[var(--brand-gold-mid)]/20 text-[var(--brand-gold-dark)] dark:text-[var(--brand-gold-light)] flex items-center justify-center font-bold text-sm">
+                <div className="w-10 h-10 rounded-full bg-[var(--accent)]/15 text-[var(--brand-gold-dark)] dark:text-[var(--brand-gold-light)] flex items-center justify-center font-display font-bold text-sm">
                   {conv.customerName?.charAt(0).toUpperCase() || '?'}
                 </div>
                 {conv.assignedAdminEmail && (
                   <span
                     title={`Asignado a ${conv.assignedAdminEmail}`}
-                    className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-emerald-500 border-2 border-[var(--bg-surface)] flex items-center justify-center text-[7px] font-bold text-white"
+                    className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[var(--ok)] border-2 border-[var(--bg-elevated)] flex items-center justify-center text-[7px] font-bold text-white"
                   >
                     {conv.assignedAdminEmail.charAt(0).toUpperCase()}
                   </span>

@@ -1273,9 +1273,15 @@ function montarCanal() {
     });
   });
 
+  // El chat usa una ventana de coalescing mucho más corta que el resto de las
+  // tablas (30 ms en vez de los 200 ms por defecto): una conversación es lo
+  // único donde 200 ms de espera ya se siente como demora al escribir. 30 ms
+  // sigue agrupando el caso típico —un INSERT en chat_messages seguido del
+  // UPDATE de chat_conversations que toca el mismo guardado— en una sola
+  // recarga, sin que se note el retraso.
   channel
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations' }, () => coalesce('chat', () => refreshChatFromSupabase()))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => coalesce('chat', () => refreshChatFromSupabase()))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations' }, () => coalesce('chat', () => refreshChatFromSupabase(), 30))
+    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => coalesce('chat', () => refreshChatFromSupabase(), 30))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => coalesce('settings', () => refreshSettingsFromSupabase()))
     .subscribe();
 
