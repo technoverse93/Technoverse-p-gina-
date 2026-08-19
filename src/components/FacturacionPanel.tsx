@@ -35,7 +35,7 @@ import { validateCedula } from '../utils/invoicePdf';
 import type { IdentificacionTipo } from '../utils/invoicePdf';
 import {
   MEDIOS_DE_COBRO, OPCIONES_GARANTIA, calcularMargen, cobrarServicio, componentesDe,
-  reenviarComprobantePorCorreo,
+  reenviarComprobantePorCorreo, enviarFacturaDePrueba,
 } from '../utils/facturacion';
 import type { MedioCobro, InsumoConsumido, ResultadoCobro } from '../utils/facturacion';
 import { esRepuesto, esInsumo } from '../utils/categorias';
@@ -78,6 +78,9 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
   const [monto, setMonto] = useState<number | ''>('');
   const [garantia, setGarantia] = useState('3');
   const [medio, setMedio] = useState<MedioCobro>('SINPE');
+  // Modo Sandbox: prueba el envío de correo con un PDF real, sin tocar
+  // inventario, ventas ni el control de ganancias. Ver enviarFacturaDePrueba().
+  const [modoPrueba, setModoPrueba] = useState(false);
 
   // ---- Insumos -----------------------------------------------------------
   const [repuestos, setRepuestos] = useState<InsumoConsumido[]>([]);
@@ -229,7 +232,7 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     setDescripcion(''); setMonto(''); setGarantia('3'); setMedio('SINPE');
     setRepuestos([]); setInsumos([]);
     setRepuestoElegido(''); setInsumoElegido('');
-    setServicioElegido('');
+    setServicioElegido(''); setModoPrueba(false);
   };
 
   /** Comprueba TODO antes de tocar el inventario o quemar un consecutivo. */
@@ -259,14 +262,10 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     const error = validar();
     if (error) { toast.warning(error); return; }
 
-    // Salvavidas contra el olvido más caro: agregar el repuesto/insumo al
-    // INVENTARIO (en la otra pantalla) y nunca traerlo hasta esta lista. El
-    // cobro sale bien, la factura se emite, y el material sigue figurando
-    // en existencia como si nadie lo hubiera tocado — nada en este punto
-    // se ve "roto", así que sin este aviso nadie se entera hasta el
-    // conteo físico. No bloquea: hay trabajos de puro diagnóstico o mano
-    // de obra que de verdad no consumen nada.
-    if (repuestos.length === 0 && insumos.length === 0) {
+    // El aviso de "sin material" solo tiene sentido en un cobro real: en
+    // modo Sandbox nunca se toca el inventario, así que preguntar por eso
+    // aquí solo confundiría (parecería que la prueba SÍ va a descontar algo).
+    if (!modoPrueba && repuestos.length === 0 && insumos.length === 0) {
       const confirmarSinMaterial = await confirm({
         title: 'Sin repuestos ni insumos en este cobro',
         message: 'No agregó ningún repuesto ni insumo a la lista. Si el trabajo usó material del inventario, ciérrelo y agréguelo antes de cobrar — una vez emitida la factura no se puede sumar. Si de verdad fue solo mano de obra o diagnóstico, continúe.',
@@ -275,26 +274,30 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
       if (!confirmarSinMaterial) return;
     }
 
-    const resumen = [
-      `Cliente: ${nombre.trim()}`,
-      `Monto: ${colones(Number(monto))} por ${medio === 'SINPE' ? 'SINPE Móvil' : 'Efectivo'}`,
-      insumos.some(i => i.esRegalia)
-        ? `Incluye ${insumos.filter(i => i.esRegalia).length} artículo(s) de regalía`
-        : null,
-      `Se enviará el comprobante a ${correo.trim()}`,
-    ].filter(Boolean).join('\n');
-
-    const seguir = await confirm({
-      title: 'Confirmar el cobro',
-      message: `${resumen}\n\nEsta acción descuenta el inventario y emite un comprobante con número fiscal. No se puede deshacer.`,
-      confirmText: 'Cobrar',
-    });
+    const seguir = modoPrueba
+      ? await confirm({
+          title: 'Enviar factura de prueba (Sandbox)',
+          message: `Se enviará un correo de PRUEBA a ${correo.trim()} con un PDF de ejemplo, para validar que el envío por correo funciona.\n\nNO descuenta inventario, NO registra una venta y NO suma al control de ganancias — no consume número fiscal.`,
+          confirmText: 'Enviar prueba',
+        })
+      : await confirm({
+          title: 'Confirmar el cobro',
+          message: `${[
+            `Cliente: ${nombre.trim()}`,
+            `Monto: ${colones(Number(monto))} por ${medio === 'SINPE' ? 'SINPE Móvil' : 'Efectivo'}`,
+            insumos.some(i => i.esRegalia)
+              ? `Incluye ${insumos.filter(i => i.esRegalia).length} artículo(s) de regalía`
+              : null,
+            `Se enviará el comprobante a ${correo.trim()}`,
+          ].filter(Boolean).join('\n')}\n\nEsta acción descuenta el inventario y emite un comprobante con número fiscal. No se puede deshacer.`,
+          confirmText: 'Cobrar',
+        });
     if (!seguir) return;
 
     setCobrando(true);
     setUltimoCobro(null);
     try {
-      const resultado = await cobrarServicio({
+      const datosCobro = {
         clienteNombre: nombre,
         clienteIdTipo: idTipo,
         clienteId: idValor,
@@ -307,7 +310,10 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
         repuestos,
         insumos,
         adminEmail: currentUser?.email || 'admin',
-      });
+      };
+      const resultado = modoPrueba
+        ? await enviarFacturaDePrueba(datosCobro)
+        : await cobrarServicio(datosCobro);
 
       setUltimoCobro(resultado);
       if (resultado.ok) {
@@ -376,8 +382,31 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
       <PageHead
         title="Cobro de servicios"
         subtitle="Cobra un trabajo terminado, descuenta los insumos del inventario y envía el comprobante al cliente."
-        actions={<Chip tone="accent">SINPE Móvil y Efectivo</Chip>}
+        actions={<>
+          <label className="flex items-center gap-2 text-[12px] font-semibold cursor-pointer select-none px-3 py-1.5 rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)]">
+            <input
+              type="checkbox"
+              checked={modoPrueba}
+              onChange={e => setModoPrueba(e.target.checked)}
+              className="w-4 h-4 accent-amber-500 cursor-pointer"
+            />
+            <span className={modoPrueba ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--text-secondary)]'}>
+              Factura de prueba (Sandbox)
+            </span>
+          </label>
+          <Chip tone="accent">SINPE Móvil y Efectivo</Chip>
+        </>}
       />
+
+      {modoPrueba && (
+        <Card className="!border-amber-500/50 !bg-amber-400/10">
+          <p className="text-[12.5px] leading-relaxed text-amber-700 dark:text-amber-300">
+            <strong>Modo Sandbox activo.</strong> Al enviar, se manda un correo real de prueba (para validar SMTP)
+            con un PDF de ejemplo — pero NO se descuenta inventario, NO se registra la venta y NO cuenta para
+            el control de ganancias. No consume número fiscal.
+          </p>
+        </Card>
+      )}
 
       {ultimoCobro && (
         <Card title={ultimoCobro.ok ? 'Último cobro' : 'Atención'}>
@@ -546,7 +575,9 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
 
       <Card title="Resultado interno de la operación">
         <p className="tv-hint !mt-0 mb-3">
-          Este bloque es solo para uso interno: no aparece en la factura ni en ningún documento que reciba el cliente.
+          {modoPrueba
+            ? 'Vista previa de cómo se vería el cobro. En modo Sandbox estos números NO se guardan ni afectan el control de ganancias.'
+            : 'Este bloque es solo para uso interno: no aparece en la factura ni en ningún documento que reciba el cliente.'}
         </p>
         <div className="tv-grid tv-grid-6">
           <Stat label="Se cobra" value={colones(margen.ingreso)} foot="IVA incluido" />
@@ -571,8 +602,8 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
 
       <div className="flex flex-wrap justify-end gap-2">
         <Btn variant="ghost" onClick={limpiar} disabled={cobrando}>Limpiar formulario</Btn>
-        <Btn variant="primary" icon={Receipt} onClick={procesarCobro} disabled={cobrando}>
-          {cobrando ? 'Procesando…' : 'Cobrar y enviar comprobante'}
+        <Btn variant="primary" icon={modoPrueba ? Mail : Receipt} onClick={procesarCobro} disabled={cobrando}>
+          {cobrando ? 'Procesando…' : modoPrueba ? 'Enviar correo de prueba' : 'Cobrar y enviar comprobante'}
         </Btn>
       </div>
     </div>

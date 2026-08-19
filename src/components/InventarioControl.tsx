@@ -6,6 +6,7 @@ import VinculacionComponentes from './admin/VinculacionComponentes';
 import { CATEGORIAS_INSUMO, esInsumo, CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria, MARCAS_REPUESTO, adivinarMarca, nivelGamaRepuesto } from '../utils/categorias';
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
+import { ProductImage } from './ProductImage';
 import { 
   Package, Plus, Edit, Trash2, Search, Filter, History, MapPin, 
   Box, FileText, AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronRight, X, Image as ImageIcon, Save, Download,
@@ -27,31 +28,9 @@ const STOCK_INICIAL_IMPORTACION = 10;
 // disparador `archivar_producto_agotado()` (Supabase) desactivando y
 // archivando cualquier producto que llegue a 0, un aviso de 1 avisa con
 // margen suficiente para reabastecer antes de que el trigger lo retire.
-const STOCK_MINIMO_AVISO_IMPORTACION = 1;
 
 const TECHNOVERSE_PLACEHOLDER = "data:image/svg+xml;base64,PHN2ZyB4bWxucz0iaHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmciIHdpZHRoPSIxNTAiIGhlaWdodD0iMTUwIiB2aWV3Qm94PSIwIDAgMTUwIDE1MCI+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTUwIiBmaWxsPSIjZjhmOWZhIi8+PHJlY3Qgd2lkdGg9IjEwMCUiIGhlaWdodD0iMTAwJSIgZmlsbD0iIzBmMTcyYSIvPjx0ZXh0IHg9IjUwJSIgeT0iNTAlIiBkb21pbmF0LWJhc2VsaW5lPSJtaWRkbGUiIHRleHQtYW5jaG9yPSJtaWRkbGUiIGZvbnQtZmFtaWx5PSJzYW5zLXNlcmlmIiBmb250LXNpemU9IjE2IiBmb250LXdlaWdodD0iYm9sZCIgZmlsbD0iIzM4YmRmZiI+VEVDSE5PVkVSU0U8L3RleHQ+PC9zdmc+";
 
-function ProductImage({ src, alt, className = "w-10 h-10" }: { src?: string, alt: string, className?: string }) {
-  const [error, setError] = React.useState(false);
-
-  if (!src || error) {
-    return (
-      <div className={`${className} rounded-lg bg-[var(--bg-surface)] border border-[var(--border-color)] flex items-center justify-center text-[var(--text-muted)]`}>
-        <Package className="w-5 h-5 opacity-50" />
-      </div>
-    );
-  }
-
-  return (
-    <img 
-      src={src} 
-      alt={alt} 
-      className={`${className} product-thumb rounded-lg object-contain p-0.5 border border-[var(--border-color)]/80`}
-      onError={() => setError(true)}
-      referrerPolicy="no-referrer"
-    />
-  );
-}
 
 interface ExtractedRow {
   sku: string;
@@ -124,7 +103,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   const [prodPrice, setProdPrice] = useState<number | ''>('');
   const [prodCost, setProdCost] = useState<number | ''>('');
   const [prodStock, setProdStock] = useState<number | ''>('');
-  const [prodMinStock, setProdMinStock] = useState<number | ''>('');
   const [prodLocation, setProdLocation] = useState('');
   const [prodImage, setProdImage] = useState('');
   const [prodApplyDiscount, setProdApplyDiscount] = useState(false);
@@ -550,7 +528,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
           price: 0,
           cost: row.cost,
           stock: row.stock,
-          minStock: STOCK_MINIMO_AVISO_IMPORTACION,
           physicalLocation: 'Bodega Central',
           imageUrl: row.imageUrl || TECHNOVERSE_PLACEHOLDER,
           discountPercent: 0,
@@ -864,15 +841,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       setFormError('El stock inicial no puede ser negativo.');
       return;
     }
-    if (prodMinStock === '') {
-      setFormError('El stock mínimo es obligatorio.');
-      return;
-    }
-    if (prodMinStock < 0) {
-      setFormError('El stock mínimo no puede ser negativo.');
-      return;
-    }
-
     setSavingProduct(true);
     try {
       const db = getDB();
@@ -888,7 +856,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       const finalPrice = Number(prodPrice) || 0;
       const finalCost = Number(prodCost) || 0;
       const finalStock = Number(prodStock) || 0;
-      const finalMinStock = Number(prodMinStock) || 0;
       const finalDiscount = Number(prodDiscount) || 0;
 
       if (editingProductId) {
@@ -906,7 +873,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             price: finalPrice,
             cost: finalCost,
             stock: finalStock,
-            minStock: finalMinStock,
             linkedSparePartSku: isSparePart ? undefined : prodLinkedSparePartSku,
             visibleEnTienda: esInsumo(prodCategory) ? prodVisibleEnTienda : false,
             physicalLocation: locationValue,
@@ -980,7 +946,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             price: finalPrice,
             cost: finalCost,
             stock: resultingStock,
-            minStock: finalMinStock,
             linkedSparePartSku: sparePartCategories.includes(prodCategory) ? undefined : prodLinkedSparePartSku,
             visibleEnTienda: esInsumo(prodCategory) ? prodVisibleEnTienda : false,
             physicalLocation: locationValue,
@@ -1007,7 +972,6 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
             price: finalPrice,
             cost: finalCost,
             stock: finalStock,
-            minStock: finalMinStock,
             linkedSparePartSku: sparePartCategories.includes(prodCategory) ? undefined : prodLinkedSparePartSku,
             visibleEnTienda: esInsumo(prodCategory) ? prodVisibleEnTienda : false,
             physicalLocation: locationValue,
@@ -1510,7 +1474,6 @@ if (!m) return null;
                     setProdPrice('');
                     setProdCost('');
                     setProdStock('');
-                    setProdMinStock('');
                     setProdLocation('');
                     setProdImage('');
                     setProdApplyDiscount(false);
@@ -1620,7 +1583,7 @@ if (!m) return null;
                                 </span>
                               </td>
                               <td className="p-4 text-center">
-                                <span className={`font-mono font-bold ${p.stock <= (p.minStock || 5) ? 'text-amber-500' : 'text-emerald-500 dark:text-[var(--brand-gold-light)]'}`}>
+                                <span className={`font-mono font-bold ${p.stock === 1 ? 'text-amber-500' : 'text-emerald-500 dark:text-[var(--brand-gold-light)]'}`}>
                                   {p.stock} u.
                                 </span>
                               </td>
@@ -1643,7 +1606,6 @@ if (!m) return null;
                                       setProdPrice(p.price);
                                       setProdCost(p.cost || 0);
                                       setProdStock(p.stock);
-                                      setProdMinStock(p.minStock || 5);
                                       setProdLocation(p.physicalLocation || '');
                                       setProdImage(p.imageUrl);
                                       setProdWarranty(p.warranty || '15 días');
@@ -1692,11 +1654,11 @@ if (!m) return null;
                               </td>
                               <td className="p-4">
                                 <div className="flex items-center gap-2">
-                                  <span className={`font-mono font-bold ${p.stock <= (p.minStock || 5) ? 'text-amber-500' : 'text-[var(--text-secondary)]'}`}>
+                                  <span className={`font-mono font-bold ${p.stock === 1 ? 'text-amber-500' : 'text-[var(--text-secondary)]'}`}>
                                     {p.stock} u.
                                   </span>
-                                  {p.stock <= (p.minStock || 5) && (
-                                    <span className="flex items-center gap-1.5 text-xs font-bold text-amber-500" title="Stock bajo">
+                                  {p.stock === 1 && (
+                                    <span className="flex items-center gap-1.5 text-xs font-bold text-amber-500" title="Última unidad">
                                       <span>⚠️</span>
                                       <span className="w-1.5 h-1.5 rounded-full bg-amber-500" />
                                     </span>
@@ -1738,7 +1700,6 @@ if (!m) return null;
                                         setProdPrice(p.price);
                                         setProdCost(p.cost || 0);
                                         setProdStock(p.stock);
-                                        setProdMinStock(p.minStock || 5);
                                         setProdLocation(p.physicalLocation || '');
                                         setProdImage(p.imageUrl);
                                         setProdWarranty(p.warranty || '15 días');
@@ -2035,30 +1996,21 @@ if (!m) return null;
 
                   {/* Right Column */}
                   <div className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div>
-                        <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Stock Inicial *</label>
-                        <input 
-                          type="number" 
-                          min="0" 
-                          placeholder="Cantidad de stock"
-                          value={prodStock} 
-                          onChange={e => setProdStock(e.target.value === '' ? '' : Number(e.target.value))} 
-                          className={`w-full border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] font-mono ${prodLinkedSparePartSku ? 'bg-[var(--bg-surface)] text-[var(--text-muted)] cursor-not-allowed' : 'bg-[var(--bg-surface)] '}`}
-                          disabled={!!prodLinkedSparePartSku}
-                        />
-                      </div>
-                      <div>
-                        <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Stock Mínimo (Alerta)</label>
-                        <input 
-                          type="number" 
-                          min="0" 
-                          placeholder="Mínimo para alerta"
-                          value={prodMinStock} 
-                          onChange={e => setProdMinStock(e.target.value === '' ? '' : Number(e.target.value))} 
-                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] font-mono" 
-                        />
-                      </div>
+                    <div>
+                      {/* La alerta de inventario ya no usa un mínimo configurable
+                          por producto — regla fija: última unidad (stock == 1).
+                          Pedir este número aquí era exactamente la "configuración
+                          de mínimos" que se prohibió explícitamente. */}
+                      <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Stock Inicial *</label>
+                      <input
+                        type="number"
+                        min="0"
+                        placeholder="Cantidad de stock"
+                        value={prodStock}
+                        onChange={e => setProdStock(e.target.value === '' ? '' : Number(e.target.value))}
+                        className={`w-full border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] font-mono ${prodLinkedSparePartSku ? 'bg-[var(--bg-surface)] text-[var(--text-muted)] cursor-not-allowed' : 'bg-[var(--bg-surface)] '}`}
+                        disabled={!!prodLinkedSparePartSku}
+                      />
                     </div>
                     <div>
                       <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Ubicación Física en Casa</label>

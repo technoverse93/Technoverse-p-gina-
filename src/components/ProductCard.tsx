@@ -20,6 +20,12 @@ interface ProductCardProps {
  * carrito y de precios que antes.
  */
 export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPrice }: ProductCardProps) {
+  // FALLO CORREGIDO: sin esto, una imageUrl rota (archivo borrado del
+  // Storage, dominio caído) dejaba el ícono de imagen partida del
+  // navegador en la tarjeta, en vez de caer al mismo estado "Sin
+  // imagen" que ya existía para cuando el producto no tiene ninguna.
+  const [imagenRota, setImagenRota] = React.useState(false);
+  React.useEffect(() => { setImagenRota(false); }, [prod.imageUrl]);
   const discountedPrice = getProductDiscountedPrice(prod);
   const isDiscounted = discountedPrice < prod.price;
   const discountPct = isDiscounted
@@ -51,7 +57,7 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
           oscuro, agrega placa elevada + foco radial + halo de contorno para que
           un producto negro no se pierda contra el fondo. Ver src/index.css. */}
       <div className="product-media relative flex items-center justify-center h-32 sm:h-36 p-4">
-        {prod.imageUrl ? (
+        {prod.imageUrl && !imagenRota ? (
           <img
             src={prod.imageUrl}
             alt={prod.name}
@@ -59,6 +65,7 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
             decoding="async"
             className="max-h-full max-w-full object-contain transition-transform duration-200 group-hover:scale-105"
             referrerPolicy="no-referrer"
+            onError={() => setImagenRota(true)}
           />
         ) : (
           <div className="flex flex-col items-center justify-center text-[var(--text-muted)] text-center">
