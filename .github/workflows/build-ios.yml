@@ -1,0 +1,110 @@
+name: Build iOS App
+
+# =====================================================================
+# PARA QUÉ SIRVE ESTE WORKFLOW, Y QUÉ NO HACE
+# =====================================================================
+# Compila la app para iPhone (13 Pro Max en adelante, cualquier modelo
+# hasta el 17 Pro Max — todos corren iOS 15 o más nuevo, que es el
+# mínimo que ya trae este proyecto) SIN pasar por la App Store, igual
+# que build-android.yml genera un .apk de depuración instalable
+# directamente y no un paquete para Google Play.
+#
+# La carpeta ios/ no vive en el repositorio, por el mismo motivo que
+# android/ tampoco: `cap add ios` la genera de cero en cada corrida, así
+# que cualquier ajuste nativo —aquí, el permiso de Face ID— se inyecta
+# DESPUÉS de generarla, en este workflow.
+#
+# LO QUE ESTE WORKFLOW NO PUEDE HACER POR SU CUENTA: firmar la app.
+# Apple exige una firma de código válida —de una cuenta de Apple
+# Developer— para instalar en un iPhone físico, incluso fuera de la App
+# Store (distribución ad-hoc o empresarial). Sin un certificado y un
+# perfil de aprovisionamiento reales no hay forma de producir un .ipa
+# instalable, y esos dos archivos no pueden inventarse: los emite Apple
+# contra una cuenta de pago. Este workflow compila SIN firma
+# (CODE_SIGNING_ALLOWED=NO) y deja el .app listo para firmar; en cuanto
+# el proyecto tenga certificado + perfil (como secretos de GitHub), este
+# mismo workflow se puede extender para firmar y exportar un .ipa
+# instalable directo, sin tocar nada de lo de aquí.
+on:
+  push:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  build:
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Setup Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: 22
+
+      - name: Install dependencies
+        run: npm install
+
+      - name: Build web app
+        run: npm run build
+
+      - name: Add iOS platform
+        run: npx cap add ios
+
+      - name: Sync Capacitor
+        run: npx cap sync ios
+
+      # Face ID EXIGE esta clave en Info.plist — sin ella, iOS rechaza
+      # cualquier intento de usar LocalAuthentication (lo que hace por
+      # debajo `@capgo/capacitor-native-biometric`) y la app se cierra
+      # sola en cuanto se pide la biometría, en vez de mostrar el
+      # diálogo. Es el equivalente exacto, del lado de iOS, al permiso
+      # USE_BIOMETRIC que build-android.yml ya inyecta en el manifiesto
+      # de Android — mismo motivo, misma idea, plataforma distinta.
+      - name: Declarar el permiso de Face ID en Info.plist
+        run: |
+          PLIST=ios/App/App/Info.plist
+          if /usr/libexec/PlistBuddy -c "Print :NSFaceIDUsageDescription" "$PLIST" >/dev/null 2>&1; then
+            echo "La clave ya estaba declarada; no se toca nada."
+          else
+            /usr/libexec/PlistBuddy -c "Add :NSFaceIDUsageDescription string 'Technoverse usa Face ID para confirmar su identidad y abrir el panel sin escribir la contraseña cada vez.'" "$PLIST"
+            echo "NSFaceIDUsageDescription agregada a Info.plist."
+          fi
+          echo "--- Info.plist ---"
+          /usr/libexec/PlistBuddy -c "Print :NSFaceIDUsageDescription" "$PLIST"
+
+      - name: Instalar CocoaPods (dependencias nativas)
+        working-directory: ios/App
+        run: pod install --repo-update
+
+      # Sin firma a propósito — ver el comentario de arriba del todo del
+      # archivo. `build` (no `archive`) es lo único que xcodebuild acepta
+      # hacer sin una identidad de firma real.
+      - name: Compilar sin firma (build, no archive)
+        working-directory: ios/App
+        run: |
+          xcodebuild \
+            -workspace App.xcworkspace \
+            -scheme App \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination "generic/platform=iOS" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY="" \
+            build
+
+      - name: Empaquetar el .app compilado
+        run: |
+          APP_PATH=$(find ~/Library/Developer/Xcode/DerivedData -name "App.app" -path "*Release-iphoneos*" -print -quit)
+          if [ -z "$APP_PATH" ]; then
+            echo "No se encontró App.app compilado." >&2
+            exit 1
+          fi
+          mkdir -p dist-ios
+          cp -R "$APP_PATH" dist-ios/App.app
+
+      - name: Upload build (sin firmar)
+        uses: actions/upload-artifact@v4
+        with:
+          name: technoverse-admin-ios-unsigned
+          path: dist-ios/App.app

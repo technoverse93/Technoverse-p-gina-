@@ -27,6 +27,7 @@ import AdminShell from './admin/AdminShell';
 import AdminDashboard from './admin/AdminDashboard';
 import { PageHead, Card, Btn, Field, Chip, TableShell, Empty } from './admin/AdminKit';
 import { resolverModulo } from './admin/adminNav';
+import { esAdminSupremo } from '../utils/securityPin';
 
 // Cargados solo cuando se visita su pestaña: reduce el JS que el A12 tiene
 // que parsear/ejecutar en el arranque del panel.
@@ -38,6 +39,7 @@ const ClienteFicha = lazy(() => import('./ClienteFicha'));
 // El módulo de cobros carga jsPDF y qrcode al emitir: se trae aparte para
 // no sumar ese peso al arranque del panel.
 const FacturacionPanel = lazy(() => import('./FacturacionPanel'));
+const GestionUsuariosPanel = lazy(() => import('./admin/GestionUsuariosPanel'));
 
 const TabLoadingFallback = () => (
   <div className="flex items-center justify-center py-24 text-[var(--text-muted)] text-sm gap-2">
@@ -1578,6 +1580,22 @@ export default function AdminPanel({
               </div>
             </details>
           </div>
+        )}
+
+        {/* ------------------------------------------------------------------
+            GESTIÓN DE USUARIOS — solo administrador supremo
+            ------------------------------------------------------------------
+            Doble gateo, a propósito: AdminShell.tsx ya oculta la entrada de
+            menú para llegar a `activeTab === 'gestion_usuarios'` si la cuenta
+            no es la supremo, pero eso no impide que alguien fuerce el tab a
+            mano. Este `esAdminSupremo(...)` de aquí es la comprobación de
+            frontend que de verdad bloquea el RENDERIZADO del panel — y aun
+            así, cada función que el panel llama vuelve a comprobarlo en el
+            servidor (ver GestionUsuariosPanel.tsx). */}
+        {activeTab === 'gestion_usuarios' && esAdminSupremo(currentUser?.email) && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <GestionUsuariosPanel currentUser={currentUser} />
+          </Suspense>
         )}
         </motion.div>
       </AnimatePresence>

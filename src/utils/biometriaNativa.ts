@@ -563,22 +563,72 @@ export async function cerrarSesionConservandoBiometria(): Promise<void> {
   }
 }
 
-/** Traduce los errores del plugin a algo que se pueda leer. */
+/**
+ * Traduce los errores del plugin a algo que se pueda leer.
+ *
+ * ---------------------------------------------------------------------
+ * FALLO CORREGIDO: los códigos estaban desalineados con la tabla real
+ * del plugin, y eso pegaba más fuerte en iOS que en Android
+ * ---------------------------------------------------------------------
+ * La versión anterior trataba el código 10 como "cancelado por la
+ * persona" y el 14/15 como "no hay huella"/"falta bloqueo de pantalla".
+ * Según la tabla de errores que documenta el propio plugin
+ * (`@capgo/capacitor-native-biometric`, ver su README): 10 es
+ * "Authentication Failed" —la persona SÍ lo intentó y el sensor no la
+ * reconoció, no que haya cancelado nada—, 3 es "Biometrics Not
+ * Enrolled" y 14 es en realidad "Passcode Not Set". Con la tabla vieja,
+ * un intento fallido real se le mostraba a la persona como si hubiera
+ * cancelado —silencioso, sin pista de qué pasó— y un teléfono sin
+ * bloqueo de pantalla configurado le hubiera dicho "no hay huella
+ * registrada", que es otra cosa.
+ *
+ * Esto afecta más a iOS que a Android porque iOS tiene sus PROPIOS
+ * códigos que la tabla vieja no contemplaba en absoluto: 11 (App
+ * Cancel), 12 (Invalid Context), 13 (Not Interactive), 15 (System
+ * Cancel), 16 (User Cancel), 17 (User Fallback). Sin esos números, casi
+ * cualquier cancelación de Face ID caía al mensaje genérico de error en
+ * vez de tratarse como lo que es: la persona canceló, no hay nada que
+ * reportarle como fallo.
+ *
+ * Se lee `e.code` como NÚMERO — antes se armaba un string mezclando
+ * código y mensaje y se le aplicaban regex de texto, fáciles de que
+ * matchearan por accidente (p. ej. cualquier mensaje que contuviera la
+ * palabra "cancel" en otro idioma o contexto).
+ */
 function interpretar(e: any): ResultadoNativo {
-  const codigo = String(e?.code ?? e?.message ?? '');
-  if (/tiempo agotado/i.test(codigo)) {
+  if (/tiempo agotado/i.test(String(e?.message ?? ''))) {
     return { ok: false, mensaje: 'No hubo respuesta del servidor. Revise su conexión e inténtelo otra vez.' };
   }
-  // 10 = cancelado por la persona, 14 = no hay huellas registradas,
-  // 15 = no hay bloqueo de pantalla configurado.
-  if (/10|cancel/i.test(codigo)) {
+
+  const codigo = Number(e?.code);
+
+  // Cancelado por la persona o por el sistema: nada que reportar como
+  // error. 11/12/13/15/16/17 son de iOS; Android usa 15/16.
+  if ([11, 12, 13, 15, 16, 17].includes(codigo)) {
     return { ok: false, cancelado: true, mensaje: 'Se canceló la verificación.' };
   }
-  if (/14|not enrolled|no biometrics/i.test(codigo)) {
-    return { ok: false, mensaje: 'No hay ninguna huella registrada en este teléfono. Agréguela en los ajustes de Android.' };
+  if (codigo === 3) {
+    return { ok: false, mensaje: 'No hay ninguna huella ni rostro registrado en este teléfono. Agréguelo en los ajustes.' };
   }
-  if (/15|no.*credential|passcode/i.test(codigo)) {
-    return { ok: false, mensaje: 'Configure un bloqueo de pantalla en el teléfono para poder usar la huella.' };
+  if (codigo === 14) {
+    return { ok: false, mensaje: 'Configure un bloqueo de pantalla en el teléfono para poder usar la biometría.' };
   }
-  return { ok: false, mensaje: e?.message || 'No se pudo verificar la huella.' };
+  if (codigo === 2 || codigo === 4) {
+    return { ok: false, mensaje: 'Demasiados intentos fallidos. Espere un momento e intente de nuevo, o use su contraseña.' };
+  }
+  if (codigo === 10) {
+    return { ok: false, mensaje: 'No se pudo verificar la identidad. Intente de nuevo.' };
+  }
+  if (codigo === 1) {
+    return { ok: false, mensaje: 'La biometría no está disponible en este teléfono en este momento.' };
+  }
+
+  // Respaldo si el código no llegó como número (versión vieja del
+  // plugin, o un error fuera de esta lista): se mira el texto por si
+  // acaso, pero ya no es el camino principal.
+  const texto = String(e?.message ?? '');
+  if (/cancel/i.test(texto)) {
+    return { ok: false, cancelado: true, mensaje: 'Se canceló la verificación.' };
+  }
+  return { ok: false, mensaje: texto || 'No se pudo verificar la identidad.' };
 }

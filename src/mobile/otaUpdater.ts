@@ -175,7 +175,7 @@ export async function verificarActualizacionManual(): Promise<ResultadoVerificac
   } catch {
     return {
       estado: 'sin-plugin',
-      mensaje: 'Esta instalación no trae el sistema de actualizaciones automáticas. Se necesita descargar el APK más reciente.',
+      mensaje: 'Esta instalación no trae el sistema de actualizaciones automáticas. Se necesita descargar la versión más reciente de la aplicación.',
     };
   }
 
