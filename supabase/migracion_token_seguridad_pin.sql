@@ -45,11 +45,15 @@ $$;
 -- — nunca se recibe un id de usuario por parámetro, así nadie puede fijar
 -- el token de otra cuenta).
 -- ---------------------------------------------------------------------
+-- `extensions` en el search_path: pgcrypto (crypt/gen_salt) vive ahí en
+-- Supabase, no en `public`. Sin esto, `gen_salt('bf')` falla con
+-- "function gen_salt(unknown) does not exist" en cuanto alguien intenta
+-- crear el token — el fallo real que se vio en producción.
 create or replace function public.set_security_pin(p_pin text)
 returns void
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_uid uuid := auth.uid();
@@ -79,11 +83,12 @@ $$;
 -- Con bloqueo por intentos: 5 fallos consecutivos = 15 minutos de espera,
 -- imprescindible con solo 10.000 combinaciones posibles.
 -- ---------------------------------------------------------------------
+-- Mismo motivo que set_security_pin(): crypt() también vive en `extensions`.
 create or replace function public.verify_security_pin(p_pin text)
 returns boolean
 language plpgsql
 security definer
-set search_path = public
+set search_path = public, extensions
 as $$
 declare
   v_uid uuid := auth.uid();
