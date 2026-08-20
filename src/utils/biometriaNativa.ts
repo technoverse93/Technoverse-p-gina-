@@ -106,7 +106,13 @@ function estaMarcadaActiva(): boolean {
  */
 const LLAVE_BLOQUEO = 'technoverse_sesion_bloqueada';
 
-function marcarBloqueo(valor: boolean): void {
+/**
+ * Se exporta a propósito: `appLock.ts` la llama DIRECTAMENTE y de forma
+ * SÍNCRONA en cuanto detecta que la aplicación volvió de segundo plano —
+ * ver el comentario de `comprobarSiHayQueBloquear()` allá para el porqué
+ * exacto (cierra una condición de carrera real, no una precaución).
+ */
+export function marcarBloqueo(valor: boolean): void {
   try {
     if (valor) localStorage.setItem(LLAVE_BLOQUEO, '1');
     else localStorage.removeItem(LLAVE_BLOQUEO);
@@ -160,24 +166,38 @@ function plugin(): PluginBiometrico | null {
  * pantalla: no ofrecer el botón.
  */
 export async function soportaBiometriaNativa(): Promise<boolean> {
-  try {
-    const p = plugin();
-    if (!p) return false;
-    // FALLO CORREGIDO: `useFallback: false` le pide a Android que solo
-    // reporte disponibilidad si hay biometría PURA configurada, sin
-    // contar el bloqueo de pantalla como respaldo. En algunos teléfonos
-    // con lector de huella EN PANTALLA (óptico, bajo el vidrio) el driver
-    // reporta la biometría como "no disponible" bajo esa combinación
-    // exacta de flags, aunque el sensor funcione perfectamente — es el
-    // "fallo en sensores de huella en pantalla" reportado. Con
-    // `useFallback: true`, Android evalúa la disponibilidad real
-    // (biometría O bloqueo de pantalla) y dejar de bloquear el botón en
-    // esos teléfonos.
-    const r = await p.isAvailable({ useFallback: true });
-    return r?.isAvailable === true;
-  } catch {
-    return false;
+  const p = plugin();
+  if (!p) return false;
+  // FALLO CORREGIDO: `useFallback: false` le pide a Android que solo
+  // reporte disponibilidad si hay biometría PURA configurada, sin
+  // contar el bloqueo de pantalla como respaldo. En algunos teléfonos
+  // con lector de huella EN PANTALLA (óptico, bajo el vidrio) el driver
+  // reporta la biometría como "no disponible" bajo esa combinación
+  // exacta de flags, aunque el sensor funcione perfectamente — es el
+  // "fallo en sensores de huella en pantalla" reportado. Con
+  // `useFallback: true`, Android evalúa la disponibilidad real
+  // (biometría O bloqueo de pantalla) y deja de bloquear el botón en
+  // esos teléfonos.
+  //
+  // FALLO CORREGIDO (hardware moderno): en algunos sensores ópticos en
+  // pantalla, `BiometricManager` responde "no disponible" en la PRIMERA
+  // consulta justo después de que el WebView termina de arrancar —el
+  // demonio de biometría del sistema todavía no terminó de inicializar—
+  // y sí responde bien medio segundo después. Sin reintento, esos
+  // teléfonos veían el botón de huella desaparecer aunque el sensor
+  // funcionara perfectamente. Un solo reintento, con una pausa breve,
+  // cubre ese arranque en frío sin notarse en los teléfonos que sí
+  // responden bien a la primera.
+  for (let intento = 1; intento <= 2; intento++) {
+    try {
+      const r = await p.isAvailable({ useFallback: true });
+      if (r?.isAvailable === true) return true;
+    } catch {
+      /* se reintenta abajo */
+    }
+    if (intento === 1) await new Promise(resolve => setTimeout(resolve, 400));
   }
+  return false;
 }
 
 /**
@@ -461,18 +481,30 @@ async function guardarPaseActual(token?: string | null, correo?: string | null):
  * guardado se actualiza al vigente.
  */
 export function iniciarSincronizacionBiometrica(): void {
-  if (!esAplicacionNativa()) return;
   try {
     supabase.auth.onAuthStateChange((evento, sesion) => {
-      if (evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED' || evento === 'INITIAL_SESSION') {
+      // El guardado del pase SÍ es exclusivo de la APK: en la web no
+      // existe el Keystore/Keychain donde guardarlo.
+      if (esAplicacionNativa() && (evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED' || evento === 'INITIAL_SESSION')) {
         void guardarPaseActual(sesion?.refresh_token, sesion?.user?.email);
       }
-      // Entrar con la contraseña abre la llave igual que la huella: si
-      // no, alguien que escribiera su contraseña seguiría viendo la
-      // pantalla de acceso al reabrir la aplicación.
+      // FALLO CORREGIDO: esto estaba detrás de un `if (!esAplicacionNativa())
+      // return` al inicio de la función — en la web, `marcarBloqueo(false)`
+      // NUNCA se llamaba. No importaba mientras el bloqueo por inactividad
+      // solo se activara en la APK, pero ahora `comprobarSiHayQueBloquear()`
+      // (appLock.ts) marca el bloqueo en las DOS plataformas de forma
+      // síncrona para cerrar la condición de carrera de más abajo. Sin
+      // sacar esto del guardado nativo-only, la web se hubiera quedado
+      // bloqueada para siempre tras el primer regreso de segundo plano,
+      // incluso con una contraseña correcta.
+      //
+      // Entrar con la contraseña (o con la huella, que además lo hace
+      // directamente en `entrarConBiometriaNativa`) abre la llave: si no,
+      // alguien que escribiera su contraseña seguiría viendo la pantalla
+      // de acceso al reabrir la aplicación.
       if (evento === 'SIGNED_IN') marcarBloqueo(false);
-      // Un cierre de sesión REAL (web, o APK sin huella) retira
-      // cualquier llave pendiente: ya no hay sesión que proteger.
+      // Un cierre de sesión REAL retira cualquier llave pendiente: ya no
+      // hay sesión que proteger.
       if (evento === 'SIGNED_OUT') marcarBloqueo(false);
     });
   } catch {

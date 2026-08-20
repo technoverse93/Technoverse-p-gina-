@@ -33,13 +33,14 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, PanelLeftClose, PanelLeftOpen, Sun, Moon, Store, LogOut,
-  MoreHorizontal, X, CornerDownLeft, RefreshCw,
+  MoreHorizontal, X, CornerDownLeft, RefreshCw, KeyRound,
 } from 'lucide-react';
 import { NAV_GROUPS, NAV_ITEMS, DOCK_IDS, resolverModulo, grupoDe, buscarModulos } from './adminNav';
 import type { AdminNavItem } from './adminNav';
 import type { User } from '../../types';
 import { useOtaStatus, verificarActualizacionManual } from '../../mobile/otaUpdater';
 import { useToast } from '../ui/Overlays';
+import CambiarContrasenaModal from '../security/CambiarContrasenaModal';
 
 const LLAVE_RIEL = 'technoverse_admin_riel_abierto';
 
@@ -124,6 +125,10 @@ export default function AdminShell({
   const otaStatus = useOtaStatus();
   const toast = useToast();
   const [buscandoActualizacion, setBuscandoActualizacion] = useState(false);
+  // Cambio de contraseña: ÚNICA vía en todo el sistema, y vive a propósito
+  // en esta misma sección del menú plegable — junto a "Buscar
+  // actualización" — y no en ningún otro lugar. Ver CambiarContrasenaModal.
+  const [modalContrasenaAbierto, setModalContrasenaAbierto] = useState(false);
 
   /**
    * Botón de "Buscar actualización": para cuando el chequeo silencioso
@@ -364,6 +369,17 @@ export default function AdminShell({
                     {buscandoActualizacion ? 'Buscando…' : 'Buscar actualización'}
                   </button>
                 )}
+                {/* Única vía de cambio de contraseña de todo el sistema —
+                    exige el token de seguridad de 4 dígitos como seguro
+                    maestro. No debe existir en ningún otro lugar. */}
+                <button
+                  type="button"
+                  role="menuitem"
+                  className="tv-menu-item"
+                  onClick={() => { setMenuPerfil(false); setModalContrasenaAbierto(true); }}
+                >
+                  <KeyRound className="w-4 h-4" /> Cambiar contraseña
+                </button>
                 <div className="tv-menu-sep" />
                 <button type="button" role="menuitem" className="tv-menu-item" onClick={() => { setMenuPerfil(false); onNavigateToStore(); }}>
                   <Store className="w-4 h-4" /> Ver la tienda
@@ -446,6 +462,8 @@ export default function AdminShell({
           onCerrar={() => setBuscadorAbierto(false)}
         />
       )}
+
+      <CambiarContrasenaModal open={modalContrasenaAbierto} onClose={() => setModalContrasenaAbierto(false)} />
     </div>
   );
 }
