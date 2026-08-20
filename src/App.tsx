@@ -9,6 +9,8 @@ import { registrarVisita } from './utils/huella';
 import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada } from './utils/biometria';
 import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO } from './mobile/appLock';
 import { supabase } from './supabaseClient';
+import { tieneTokenSeguridad } from './utils/securityPin';
+import CrearTokenModal from './components/security/CrearTokenModal';
 
 // AdminPanel carga recharts, motion y toda la lógica de taller/inventario/CRM:
 // era el bloque más pesado del bundle principal (>300 KB gzip) y se estaba
@@ -221,9 +223,14 @@ function AppInner() {
         const usuario = data?.session?.user;
         if (!vigente || !usuario?.id) return;
 
+        // Columnas explícitas, no `select('*')`: `profiles` guarda el hash
+        // del token de seguridad de 4 dígitos (ver migración del PIN), y
+        // ese hash tiene revocado el SELECT a nivel de columna para
+        // cualquier rol del cliente. Un `select('*')` fallaría entero con
+        // "permission denied for column" en vez de solo omitirla.
         const { data: perfil } = await supabase
           .from('profiles')
-          .select('*')
+          .select('id, email, name, role, created_at')
           .eq('id', usuario.id)
           .maybeSingle();
 
@@ -265,6 +272,27 @@ function AppInner() {
     setAutoOpenLogin(false);
     triggerRefresh();
   };
+
+  // ---- Token de seguridad de 4 dígitos: creación forzada -------------------
+  //
+  // Toda cuenta Administrador (Dueño) tiene que tener este PIN configurado
+  // antes de poder usar el resto del panel: es el seguro maestro que exige
+  // el cambio de contraseña. Se comprueba en CADA inicio de sesión de una
+  // cuenta Dueño —no solo la primera vez que existió la función— para que
+  // una cuenta creada antes de este seguro quede forzada a configurarlo en
+  // su próximo ingreso, tal como pide la orden.
+  const [requiereTokenSeguridad, setRequiereTokenSeguridad] = useState(false);
+  useEffect(() => {
+    let vigente = true;
+    if (!currentUser || currentUser.role !== 'Dueño') {
+      setRequiereTokenSeguridad(false);
+      return;
+    }
+    tieneTokenSeguridad().then(tiene => {
+      if (vigente) setRequiereTokenSeguridad(!tiene);
+    });
+    return () => { vigente = false; };
+  }, [currentUser]);
 
   const handleLogout = () => {
     // FALLO CORREGIDO: esto vaciaba el estado de la pantalla pero NO cerraba
@@ -388,6 +416,12 @@ function AppInner() {
             toggleTheme={toggleTheme}
           />
         </Suspense>
+      )}
+
+      {/* Bloqueante a propósito: sin `onClose`, cubre cualquier vista que
+          esté debajo hasta que la cuenta Dueño configure su token. */}
+      {requiereTokenSeguridad && (
+        <CrearTokenModal open={requiereTokenSeguridad} onCreado={() => setRequiereTokenSeguridad(false)} />
       )}
     </div>
   );

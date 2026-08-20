@@ -301,8 +301,17 @@ export default function PublicStore({
    * no deje a la persona dando vueltas en el mismo aviso.
    */
   useEffect(() => {
-    if (currentUser) return;                       // ya está dentro
-    if (!hayBiometria || !biometriaLista) return;  // no configurada en este aparato
+    if (currentUser) return;   // ya está dentro
+    // FALLO CORREGIDO: antes también exigía `hayBiometria` (un chequeo de
+    // hardware en vivo) además de `biometriaLista` (la marca guardada). En
+    // sensores en pantalla con detección intermitente, un `hayBiometria`
+    // en falso apagaba el intento automático aunque la huella SÍ estuviera
+    // activada — el aviso simplemente nunca aparecía, sin ningún error que
+    // explicara por qué. Ahora se intenta siempre que esté activada; si el
+    // sensor de verdad no responde en este momento, `entrarConBiometria`
+    // (dentro de `accederConBiometria`) lo dice con un error claro, en vez
+    // de fallar en silencio antes de intentarlo siquiera.
+    if (!biometriaLista) return;  // no configurada en este aparato
     if (yaSeOfrecio.current) return;
 
     // El acceso se abre por DOS caminos: el modal y el desplegable de
@@ -444,9 +453,12 @@ export default function PublicStore({
     let profile: any = null;
     for (let intento = 0; intento < 2 && !profile; intento++) {
       if (intento > 0) await new Promise(r => setTimeout(r, 400));
+      // Columnas explícitas: `profiles.security_pin_hash` tiene el SELECT
+      // revocado a nivel de columna para el cliente, así que un
+      // `select('*')` fallaría entero en vez de solo omitirla.
       const { data } = await supabase
         .from('profiles')
-        .select('*')
+        .select('id, email, name, role, created_at')
         .eq('id', userId)
         .maybeSingle();
       profile = data;
@@ -1376,7 +1388,13 @@ export default function PublicStore({
                         {entrandoSesion ? 'Verificando acceso…' : 'Iniciar Sesión'}
                       </button>
 
-                      {hayBiometria && (
+                      {/* `biometriaLista` entra en el OR a propósito: si ya se
+                          activó una vez en este aparato, el botón no debe
+                          desaparecer solo porque el chequeo de hardware en
+                          vivo falló de forma transitoria (sensores en
+                          pantalla). Si de verdad no responde, el intento en
+                          sí lo dice con un error claro. */}
+                      {(hayBiometria || biometriaLista) && (
                         <button
                           type="button"
                           onClick={accederConBiometria}
@@ -2419,7 +2437,7 @@ export default function PublicStore({
                   {entrandoSesion ? 'Verificando acceso…' : 'Iniciar Sesión'}
                 </button>
 
-                {hayBiometria && (
+                {(hayBiometria || biometriaLista) && (
                   <button
                     type="button"
                     onClick={accederConBiometria}

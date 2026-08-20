@@ -50,6 +50,8 @@
 // de cero— la marca sigue ahí y el bloqueo se aplica igual.
 // =====================================================================
 
+import { marcarBloqueo } from '../utils/biometriaNativa';
+
 const CLAVE_EN_FONDO_DESDE = 'technoverse_en_fondo_desde';
 
 /** Se dispara cuando hay que exigir de nuevo biometría/PIN/contraseña. */
@@ -59,6 +61,39 @@ function marcarEnFondo(): void {
   try { localStorage.setItem(CLAVE_EN_FONDO_DESDE, String(Date.now())); } catch { /* sin storage no hay marca que poner */ }
 }
 
+/**
+ * FALLO DE SEGURIDAD CORREGIDO — condición de carrera en el arranque en
+ * frío.
+ * ---------------------------------------------------------------------
+ * Este era el hueco real detrás de "a veces deja entrar como si nada":
+ * Android puede MATAR el proceso de la app mientras está en segundo
+ * plano (por memoria, es lo normal, no una falla). Al reabrirla, React
+ * arranca de cero con `currentUser = null`, y la sesión de Supabase se
+ * restaura en un efecto ASÍNCRONO en App.tsx.
+ *
+ * Esta función se llamaba también al arrancar, y antes SOLO disparaba el
+ * evento `EVENTO_FORZAR_REINGRESO` — dejando que App.tsx decidiera si
+ * bloquear. Pero su manejador tenía (y sigue teniendo, por UX) un guard
+ * `if (!currentUser) return`. En un arranque en frío ese guard SIEMPRE
+ * se cumplía, porque el evento se disparaba antes de que el efecto
+ * asíncrono de recuperación de sesión llegara a poner `currentUser`. El
+ * evento se disparaba, el manejador lo ignoraba por completo, y la
+ * recuperación de sesión seguía su curso libremente: `sesionBloqueada()`
+ * nunca se había puesto en `true`, así que la sesión —perfectamente
+ * válida en el almacenamiento de Supabase, porque nunca se cerró de
+ * verdad— se restauraba sola. Ese es exactamente el "entra sin pedir
+ * nada" reportado, y por qué era intermitente: en una reanudación
+ * "tibia" (proceso no matado) `currentUser` ya estaba poblado y todo
+ * funcionaba; solo fallaba tras un arranque en frío real.
+ *
+ * La corrección: marcar el bloqueo AQUÍ, de forma síncrona, ANTES de
+ * disparar el evento y sin depender de ningún estado de React. Así,
+ * cuando el efecto de recuperación de sesión de App.tsx llegue a
+ * comprobar `sesionBloqueada()` —milisegundos después, ya asíncrono—,
+ * la respuesta va a ser `true` sin importar si `currentUser` alcanzó a
+ * poblarse o no. El evento sigue disparándose después, para la UX de
+ * cerrar la sesión visible al instante si la pestaña seguía montada.
+ */
 function comprobarSiHayQueBloquear(): void {
   let desde = 0;
   try { desde = Number(localStorage.getItem(CLAVE_EN_FONDO_DESDE) || '0'); } catch { return; }
@@ -70,7 +105,9 @@ function comprobarSiHayQueBloquear(): void {
   try { localStorage.removeItem(CLAVE_EN_FONDO_DESDE); } catch { /* no es crítico */ }
 
   // Sin umbral de tiempo: CUALQUIER paso por segundo plano exige volver
-  // a autenticarse, así haya durado un segundo o una hora.
+  // a autenticarse, así haya durado un segundo o una hora. Y sin esperar
+  // a React: ver el comentario de la función.
+  marcarBloqueo(true);
   window.dispatchEvent(new CustomEvent(EVENTO_FORZAR_REINGRESO));
 }
 

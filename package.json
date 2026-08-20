@@ -17,7 +17,7 @@
     "@capacitor/core": "^8.4.2",
     "@capacitor/filesystem": "^8.1.2",
     "@capacitor/keyboard": "^8.0.5",
-    "@capgo/capacitor-native-biometric": "^8.6.4",
+    "@capgo/capacitor-native-biometric": "^8.6.6",
     "@capgo/capacitor-updater": "^8.51.4",
     "@supabase/supabase-js": "^2.45.0",
     "@tailwindcss/vite": "^4.1.14",

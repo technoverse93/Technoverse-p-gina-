@@ -1852,7 +1852,20 @@ export default function CyberSecurityPanel({
           </p>
 
           <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-4 space-y-3">
-            {hayBiometria ? (
+            {/* FALLO CORREGIDO: esto se gateaba SOLO por `hayBiometria`, un
+                chequeo de hardware en vivo (`isAvailable()`) que en algunos
+                sensores en pantalla puede fallar de forma transitoria. Con
+                eso, un teléfono que YA tenía la huella activada perdía sus
+                controles —incluido "Quitar de este teléfono"— y mostraba el
+                mensaje de "este aparato no ofrece acceso biométrico", que es
+                justo el "me hace reconfigurar todo de cero" reportado: no
+                era que se hubiera desactivado, era que la pantalla dejaba de
+                mostrar que SÍ estaba activada. `huellaActivada` no depende
+                de ningún chequeo de hardware —es la marca guardada—, así que
+                si ya se activó una vez en este teléfono, los controles se
+                quedan visibles sin importar lo que responda el chequeo en
+                vivo en este instante. */}
+            {(hayBiometria || (esApk && huellaActivada)) ? (
               <div className="flex flex-wrap gap-2">
                 <button
                   onClick={activarBiometria}
