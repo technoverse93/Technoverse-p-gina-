@@ -17,6 +17,18 @@ export interface ResultadoPin {
   mensaje: string;
 }
 
+// Único correo autorizado a cambiar/restablecer un token de seguridad que
+// YA existe (ver set_security_pin en la migración: el servidor aplica la
+// misma regla, esto solo evita mostrar la opción a quien nunca podría
+// usarla). La creación inicial del token — cuando todavía no existe uno —
+// sigue abierta a cualquier cuenta Dueño, sin este filtro.
+const CORREO_ADMIN_SUPREMO = 'technoverse.admin@gmail.com';
+
+/** ¿Esta cuenta es el administrador supremo, el único que puede cambiar un token de seguridad ya configurado? */
+export function esAdminSupremo(email?: string | null): boolean {
+  return (email || '').trim().toLowerCase() === CORREO_ADMIN_SUPREMO;
+}
+
 /** ¿Esta cuenta ya tiene un token de seguridad configurado? */
 export async function tieneTokenSeguridad(): Promise<boolean> {
   try {

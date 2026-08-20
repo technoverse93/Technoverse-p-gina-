@@ -33,7 +33,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, PanelLeftClose, PanelLeftOpen, Sun, Moon, Store, LogOut,
-  MoreHorizontal, X, CornerDownLeft, RefreshCw, KeyRound,
+  MoreHorizontal, X, CornerDownLeft, RefreshCw, KeyRound, Hash,
 } from 'lucide-react';
 import { NAV_GROUPS, NAV_ITEMS, DOCK_IDS, resolverModulo, grupoDe, buscarModulos } from './adminNav';
 import type { AdminNavItem } from './adminNav';
@@ -41,6 +41,8 @@ import type { User } from '../../types';
 import { useOtaStatus, verificarActualizacionManual } from '../../mobile/otaUpdater';
 import { useToast } from '../ui/Overlays';
 import CambiarContrasenaModal from '../security/CambiarContrasenaModal';
+import CambiarPinModal from '../security/CambiarPinModal';
+import { esAdminSupremo } from '../../utils/securityPin';
 
 const LLAVE_RIEL = 'technoverse_admin_riel_abierto';
 
@@ -129,6 +131,11 @@ export default function AdminShell({
   // en esta misma sección del menú plegable — junto a "Buscar
   // actualización" — y no en ningún otro lugar. Ver CambiarContrasenaModal.
   const [modalContrasenaAbierto, setModalContrasenaAbierto] = useState(false);
+  // Cambiar PIN: solo el administrador supremo (correo exacto) ve este
+  // botón. El filtro real vive también en el servidor (set_security_pin),
+  // esto solo evita mostrarlo a quien nunca podría usarlo.
+  const [modalPinAbierto, setModalPinAbierto] = useState(false);
+  const esSupremo = esAdminSupremo(currentUser?.email);
 
   /**
    * Botón de "Buscar actualización": para cuando el chequeo silencioso
@@ -380,6 +387,19 @@ export default function AdminShell({
                 >
                   <KeyRound className="w-4 h-4" /> Cambiar contraseña
                 </button>
+                {/* Cambiar PIN: control de acceso supremo — ver esAdminSupremo
+                    arriba. Nadie más ve este botón, y aunque lo vieran, el
+                    servidor rechaza igual el cambio si el correo no calza. */}
+                {esSupremo && (
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="tv-menu-item"
+                    onClick={() => { setMenuPerfil(false); setModalPinAbierto(true); }}
+                  >
+                    <Hash className="w-4 h-4" /> Cambiar PIN
+                  </button>
+                )}
                 <div className="tv-menu-sep" />
                 <button type="button" role="menuitem" className="tv-menu-item" onClick={() => { setMenuPerfil(false); onNavigateToStore(); }}>
                   <Store className="w-4 h-4" /> Ver la tienda
@@ -464,6 +484,9 @@ export default function AdminShell({
       )}
 
       <CambiarContrasenaModal open={modalContrasenaAbierto} onClose={() => setModalContrasenaAbierto(false)} />
+      {esSupremo && (
+        <CambiarPinModal open={modalPinAbierto} onClose={() => setModalPinAbierto(false)} />
+      )}
     </div>
   );
 }
