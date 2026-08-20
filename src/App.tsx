@@ -426,8 +426,10 @@ function AppInner() {
 
       {/* Candado de ausencia breve — ver el efecto que lo activa, arriba.
           También bloqueante a propósito: no tiene `onClose` ni cierre por
-          backdrop, solo dos salidas explícitas (autenticarse o cerrar
-          sesión), igual que CrearTokenModal. */}
+          backdrop. Solo pide huella/Face ID (sin contraseña) y, si no se
+          aprueba, cae directo en el mismo cierre de sesión que una
+          ausencia larga — igual que CrearTokenModal, sin escapatoria a
+          medias. */}
       {requiereReautenticacionRapida && currentUser && (
         <ReautenticacionRapidaOverlay
           email={currentUser.email}
@@ -435,7 +437,7 @@ function AppInner() {
             marcarBloqueo(false);
             setRequiereReautenticacionRapida(false);
           }}
-          onCerrarSesion={() => {
+          onFalloTotal={() => {
             setRequiereReautenticacionRapida(false);
             handleLogout();
             setAutoOpenLogin(true);
