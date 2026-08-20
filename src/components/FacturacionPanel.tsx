@@ -25,7 +25,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import {
-  Receipt, Gift, Wrench, Plus, Trash2, CheckCircle, Download, AlertTriangle, Link2, Mail,
+  Receipt, Gift, Wrench, Plus, Trash2, CheckCircle, Download, AlertTriangle, Link2, Mail, ShoppingBag,
 } from 'lucide-react';
 import { PageHead, Card, Btn, Field, Chip, Stat, Empty, colones } from './admin/AdminKit';
 import { CustomSelect } from './CustomSelect';
@@ -56,6 +56,24 @@ const TIPOS_IDENTIFICACION = [
   { value: '04', label: 'NITE' },
 ];
 
+/**
+ * Traduce la garantía guardada en el producto (texto: "1 mes", "3 meses",
+ * "12 meses") al valor que espera el desplegable de Facturación ('1'/'3'/
+ * '12'). Se busca por dígitos y no por igualdad exacta a propósito: un
+ * producto creado antes de la estandarización puede traer todavía texto
+ * legado ("15 días", "60 días"), y aun así hay que poder auto-rellenar
+ * algo razonable en vez de dejar el campo vacío. Ante cualquier duda cae
+ * a '3', el mismo valor por defecto que ya usa `normalizarGarantia` en
+ * facturacion.ts.
+ */
+function garantiaDesdeProducto(warranty?: string): string {
+  const texto = (warranty || '').toLowerCase();
+  if (/\b12\b/.test(texto)) return '12';
+  if (/\b1\b/.test(texto)) return '1';
+  if (/\b3\b/.test(texto)) return '3';
+  return '3';
+}
+
 export default function FacturacionPanel({ currentUser, onDataChanged }: Props) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -81,6 +99,15 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
   // Modo Sandbox: prueba el envío de correo con un PDF real, sin tocar
   // inventario, ventas ni el control de ganancias. Ver enviarFacturaDePrueba().
   const [modoPrueba, setModoPrueba] = useState(false);
+
+  // ---- Motor de cobro bifurcado: Venta de Inventario vs Reparación ------
+  // "Reparación" es el flujo por defecto porque es exactamente el
+  // formulario que ya existía (servicio libre + monto + garantía manual):
+  // no cambia nada para quien ya lo usaba así. "Venta" es el flujo nuevo,
+  // pensado para despachar un producto del catálogo sin escribir nada.
+  const [modoCobro, setModoCobro] = useState<'venta' | 'reparacion'>('reparacion');
+  const [productoVentaId, setProductoVentaId] = useState('');
+  const [productoVentaCantidad, setProductoVentaCantidad] = useState(1);
 
   // ---- Insumos -----------------------------------------------------------
   const [repuestos, setRepuestos] = useState<InsumoConsumido[]>([]);
@@ -122,11 +149,6 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     return () => window.removeEventListener('technoverse_db_updated', releer);
   }, []);
 
-  const margen = useMemo(
-    () => calcularMargen(Number(monto) || 0, repuestos, insumos),
-    [monto, repuestos, insumos]
-  );
-
   const conStock = productos.filter(p => (p.stock || 0) > 0);
   const opcionesRepuesto = conStock.filter(p => esRepuesto(p.category));
   // Insumos: su propia familia del inventario (temperados, micas, cables
@@ -136,6 +158,57 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
   // filtra por existencia: un servicio no se descuenta de su propio stock,
   // solo sirve como llave para traer lo que tenga vinculado.
   const opcionesServicio = productos.filter(p => !esRepuesto(p.category) && !esInsumo(p.category));
+  // Modo Venta de Inventario: mismo universo que "servicio del catálogo"
+  // (ni repuesto ni insumo — son la tienda pública), pero CON existencia:
+  // esto sí descuenta su propia unidad, así que sin stock no se puede elegir.
+  const opcionesProductoVenta = conStock.filter(p => !esRepuesto(p.category) && !esInsumo(p.category));
+  const productoVenta = opcionesProductoVenta.find(p => p.id === productoVentaId) || null;
+
+  // Al elegir el producto en Modo Venta, la garantía se rellena sola desde
+  // la que trae configurada el producto — el vendedor no la toca. Cambiar
+  // de producto vuelve a auto-rellenar; cambiar de modo no toca nada.
+  useEffect(() => {
+    if (modoCobro === 'venta' && productoVenta) {
+      setGarantia(garantiaDesdeProducto(productoVenta.warranty));
+    }
+  }, [modoCobro, productoVenta?.id, productoVenta?.warranty]);
+
+  // En Modo Venta, el "producto principal" se comporta como un repuesto
+  // más para efectos de stock y de margen (descuenta su propia unidad y
+  // su costo real entra al cálculo de ganancia) — pero NO se guarda en
+  // `repuestos`: esa lista sigue siendo solo lo que el vendedor agregó a
+  // mano, para que la sección "Repuestos usados" no se llene sola y
+  // confunda. Se mezcla recién aquí, al calcular y al cobrar.
+  const repuestosEfectivos = useMemo(() => {
+    if (modoCobro === 'venta' && productoVenta) {
+      const principal: InsumoConsumido = {
+        productId: productoVenta.id,
+        productName: productoVenta.name,
+        quantity: productoVentaCantidad,
+        costoUnitario: productoVenta.cost || 0,
+        precioUnitario: productoVenta.price || 0,
+      };
+      return [principal, ...repuestos];
+    }
+    return repuestos;
+  }, [modoCobro, productoVenta, productoVentaCantidad, repuestos]);
+
+  // Lo que de verdad se cobra: en Venta es precio × cantidad del producto
+  // elegido (nadie lo escribe); en Reparación es el monto que se tipeó.
+  const montoEfectivo = modoCobro === 'venta' && productoVenta
+    ? (productoVenta.price || 0) * productoVentaCantidad
+    : Number(monto) || 0;
+
+  // La descripción que sale impresa: el nombre exacto del producto en
+  // Venta, o el texto libre del trabajo en Reparación.
+  const descripcionEfectiva = modoCobro === 'venta' && productoVenta
+    ? productoVenta.name
+    : descripcion;
+
+  const margen = useMemo(
+    () => calcularMargen(montoEfectivo, repuestosEfectivos, insumos),
+    [montoEfectivo, repuestosEfectivos, insumos]
+  );
 
   const agregarInsumo = (
     productId: string,
@@ -227,12 +300,26 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     fijar(lista.map(i => (i.productId === productId ? { ...i, quantity: Math.max(1, cantidad) } : i)));
   };
 
+  /** Igual que `cambiarCantidad`, pero para el producto principal de Modo Venta. */
+  const cambiarCantidadProductoVenta = (cantidad: number) => {
+    const tope = productoVenta?.stock ?? 0;
+    if (cantidad > tope) {
+      toast.warning(`Solo hay ${tope} unidades de ${productoVenta?.name} en existencia.`);
+      cantidad = tope;
+    }
+    setProductoVentaCantidad(Math.max(1, cantidad));
+  };
+
   const limpiar = () => {
     setNombre(''); setIdValor(''); setCorreo(''); setTelefono('');
     setDescripcion(''); setMonto(''); setGarantia('3'); setMedio('SINPE');
     setRepuestos([]); setInsumos([]);
     setRepuestoElegido(''); setInsumoElegido('');
     setServicioElegido(''); setModoPrueba(false);
+    // El modo (Venta/Reparación) NO se reinicia a propósito: quien cobra
+    // suele encadenar varias operaciones del mismo tipo seguidas, y
+    // obligarlo a re-elegir el modo en cada una sería fricción sin motivo.
+    setProductoVentaId(''); setProductoVentaCantidad(1);
   };
 
   /** Comprueba TODO antes de tocar el inventario o quemar un consecutivo. */
@@ -242,18 +329,22 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     if (errorCedula) return errorCedula;
     if (!/^[^@\s]+@[^@\s]+\.[^@\s]+$/.test(correo.trim())) return 'El correo no tiene un formato válido.';
     if (!telefono.replace(/\D/g, '')) return 'Escriba el teléfono del cliente.';
-    if (!descripcion.trim()) return 'Describa el servicio que se está cobrando.';
-    if (!monto || Number(monto) <= 0) return 'El monto a cobrar debe ser mayor que cero.';
+    if (modoCobro === 'venta') {
+      if (!productoVenta) return 'Seleccione el producto que se está vendiendo.';
+    } else {
+      if (!descripcion.trim()) return 'Describa el servicio que se está cobrando.';
+      if (!monto || Number(monto) <= 0) return 'El monto a cobrar debe ser mayor que cero.';
+    }
     // Los insumos que NO son regalía salen desglosados en la factura a su
-    // precio normal, tomado del "Monto total" (ver construirLineasFactura).
-    // Si suman más que el monto, la línea del servicio se quedaría en ₡0
-    // o negativa — hay que subir el monto o quitar/regalar algún insumo
+    // precio normal, tomado del monto total (ver construirLineasFactura).
+    // Si suman más que el monto, la línea principal se quedaría en ₡0 o
+    // negativa — hay que subir el monto o quitar/regalar algún insumo
     // ANTES de quemar el consecutivo fiscal, no después.
     const totalInsumosCobrados = insumos
       .filter(i => !i.esRegalia)
       .reduce((s, i) => s + i.precioUnitario * i.quantity, 0);
-    if (totalInsumosCobrados > Number(monto)) {
-      return `Los insumos desglosados suman ${colones(totalInsumosCobrados)}, más que el monto total (${colones(Number(monto))}). Suba el monto o marque el insumo como regalía.`;
+    if (totalInsumosCobrados > montoEfectivo) {
+      return `Los insumos desglosados suman ${colones(totalInsumosCobrados)}, más que el monto total (${colones(montoEfectivo)}). ${modoCobro === 'venta' ? 'Suba la cantidad del producto o marque' : 'Suba el monto o marque'} el insumo como regalía.`;
     }
     return null;
   };
@@ -262,10 +353,11 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     const error = validar();
     if (error) { toast.warning(error); return; }
 
-    // El aviso de "sin material" solo tiene sentido en un cobro real: en
-    // modo Sandbox nunca se toca el inventario, así que preguntar por eso
-    // aquí solo confundiría (parecería que la prueba SÍ va a descontar algo).
-    if (!modoPrueba && repuestos.length === 0 && insumos.length === 0) {
+    // El aviso de "sin material" solo tiene sentido en Reparación: en
+    // Venta el producto elegido YA ES el material (siempre descuenta su
+    // propia unidad), y en modo Sandbox nunca se toca el inventario, así
+    // que preguntar por eso aquí solo confundiría.
+    if (!modoPrueba && modoCobro === 'reparacion' && repuestos.length === 0 && insumos.length === 0) {
       const confirmarSinMaterial = await confirm({
         title: 'Sin repuestos ni insumos en este cobro',
         message: 'No agregó ningún repuesto ni insumo a la lista. Si el trabajo usó material del inventario, ciérrelo y agréguelo antes de cobrar — una vez emitida la factura no se puede sumar. Si de verdad fue solo mano de obra o diagnóstico, continúe.',
@@ -284,7 +376,7 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
           title: 'Confirmar el cobro',
           message: `${[
             `Cliente: ${nombre.trim()}`,
-            `Monto: ${colones(Number(monto))} por ${medio === 'SINPE' ? 'SINPE Móvil' : 'Efectivo'}`,
+            `Monto: ${colones(montoEfectivo)} por ${medio === 'SINPE' ? 'SINPE Móvil' : 'Efectivo'}`,
             insumos.some(i => i.esRegalia)
               ? `Incluye ${insumos.filter(i => i.esRegalia).length} artículo(s) de regalía`
               : null,
@@ -303,11 +395,11 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
         clienteId: idValor,
         clienteEmail: correo,
         clienteTelefono: telefono,
-        descripcionServicio: descripcion,
-        montoTotal: Number(monto),
+        descripcionServicio: descripcionEfectiva,
+        montoTotal: montoEfectivo,
         garantiaMeses: Number(garantia),
         medioCobro: medio,
-        repuestos,
+        repuestos: repuestosEfectivos,
         insumos,
         adminEmail: currentUser?.email || 'admin',
       };
@@ -398,6 +490,35 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
         </>}
       />
 
+      {/* Selector principal del motor de cobro bifurcado. La elección
+          decide qué pide el resto del formulario: en Venta, el producto
+          elegido rellena nombre/precio/garantía solo; en Reparación, se
+          escribe el trabajo a mano — es el formulario que ya existía. */}
+      <div className="tv-row" role="tablist" aria-label="Tipo de cobro">
+        <button
+          type="button"
+          role="tab"
+          aria-selected={modoCobro === 'venta'}
+          className="tv-btn flex-1"
+          data-variant={modoCobro === 'venta' ? 'primary' : 'default'}
+          onClick={() => setModoCobro('venta')}
+        >
+          <ShoppingBag className="w-4 h-4" />
+          Modo Venta de Inventario
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={modoCobro === 'reparacion'}
+          className="tv-btn flex-1"
+          data-variant={modoCobro === 'reparacion' ? 'primary' : 'default'}
+          onClick={() => setModoCobro('reparacion')}
+        >
+          <Wrench className="w-4 h-4" />
+          Modo Reparación
+        </button>
+      </div>
+
       {modoPrueba && (
         <Card className="!border-amber-500/50 !bg-amber-400/10">
           <p className="text-[12.5px] leading-relaxed text-amber-700 dark:text-amber-300">
@@ -470,59 +591,119 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
           </div>
         </Card>
 
-        <Card title="Cobro">
+        <Card title={modoCobro === 'venta' ? 'Cobro — Venta de inventario' : 'Cobro — Reparación'}>
           <div className="tv-stack">
-            {opcionesServicio.length > 0 && (
-              <Field
-                label="Servicio del catálogo (opcional)"
-                hint="Si el servicio tiene repuestos o insumos vinculados desde Inventario, se agregan solos abajo."
-              >
-                <div className="flex flex-col sm:flex-row gap-2">
-                  <div className="flex-1 min-w-0">
-                    <CustomSelect
-                      value={servicioElegido}
-                      onChange={setServicioElegido}
-                      options={opcionesServicio.map(p => ({ value: p.id, label: p.name }))}
-                    />
+            {modoCobro === 'venta' ? (
+              <>
+                <Field
+                  label="Producto"
+                  hint="Nombre, precio y garantía se rellenan solos desde el inventario — no se escribe nada a mano."
+                >
+                  <CustomSelect
+                    value={productoVentaId}
+                    onChange={v => { setProductoVentaId(v); setProductoVentaCantidad(1); }}
+                    searchable
+                    searchPlaceholder="Buscar por nombre o SKU..."
+                    options={opcionesProductoVenta.map(p => ({
+                      value: p.id,
+                      label: `${p.name} — ${p.stock} en existencia (${colones(p.price || 0)})`,
+                      searchText: p.sku,
+                    }))}
+                  />
+                </Field>
+
+                {productoVenta ? (
+                  <div className="rounded-[10px] border border-[var(--border-color)] p-3 space-y-2">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="min-w-0">
+                        <p className="text-[13px] font-bold text-[var(--text-primary)] truncate">{productoVenta.name}</p>
+                        <p className="text-[11px] text-[var(--text-muted)] font-mono">SKU {productoVenta.sku}</p>
+                      </div>
+                      <Chip tone="accent">{OPCIONES_GARANTIA.find(g => g.value === garantia)?.label || `${garantia} meses`}</Chip>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-between gap-3">
+                      <div>
+                        <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Precio unitario</span>
+                        <span className="text-[15px] font-mono font-bold text-[var(--text-primary)]">{colones(productoVenta.price || 0)}</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="text-[10px] uppercase font-bold text-[var(--text-muted)]">Cantidad</span>
+                        <input
+                          type="number"
+                          min={1}
+                          value={productoVentaCantidad}
+                          onChange={e => cambiarCantidadProductoVenta(Number(e.target.value))}
+                          className="tv-input font-mono !w-20"
+                          inputMode="numeric"
+                        />
+                      </div>
+                      <div className="text-right">
+                        <span className="text-[10px] uppercase font-bold text-[var(--text-muted)] block">Total</span>
+                        <span className="text-[15px] font-mono font-bold text-[var(--accent)]">{colones(montoEfectivo)}</span>
+                      </div>
+                    </div>
                   </div>
-                  <Btn
-                    icon={Link2}
-                    onClick={cargarComponentesDelServicio}
-                    disabled={!servicioElegido || cargandoComponentes}
+                ) : (
+                  <p className="text-[12px] leading-relaxed text-[var(--text-muted)] rounded-[10px] border border-[var(--border-color)] px-3 py-2.5">
+                    Seleccione un producto para rellenar el resto del cobro.
+                  </p>
+                )}
+              </>
+            ) : (
+              <>
+                {opcionesServicio.length > 0 && (
+                  <Field
+                    label="Servicio del catálogo (opcional)"
+                    hint="Si el servicio tiene repuestos o insumos vinculados desde Inventario, se agregan solos abajo."
                   >
-                    {cargandoComponentes ? 'Cargando…' : 'Traer vinculados'}
-                  </Btn>
+                    <div className="flex flex-col sm:flex-row gap-2">
+                      <div className="flex-1 min-w-0">
+                        <CustomSelect
+                          value={servicioElegido}
+                          onChange={setServicioElegido}
+                          options={opcionesServicio.map(p => ({ value: p.id, label: p.name }))}
+                        />
+                      </div>
+                      <Btn
+                        icon={Link2}
+                        onClick={cargarComponentesDelServicio}
+                        disabled={!servicioElegido || cargandoComponentes}
+                      >
+                        {cargandoComponentes ? 'Cargando…' : 'Traer vinculados'}
+                      </Btn>
+                    </div>
+                  </Field>
+                )}
+                <Field label="Descripción del trabajo" hint="Es lo que sale impreso como detalle en el comprobante.">
+                  <textarea
+                    className="tv-input"
+                    rows={2}
+                    value={descripcion}
+                    onChange={e => setDescripcion(e.target.value)}
+                    placeholder="Cambio de pantalla y limpieza"
+                  />
+                </Field>
+                <div className="tv-grid tv-grid-2">
+                  <Field label="Monto total" hint="IVA incluido, tal como lo paga el cliente.">
+                    <input
+                      className="tv-input font-mono"
+                      type="number"
+                      min={0}
+                      value={monto}
+                      onChange={e => setMonto(e.target.value === '' ? '' : Number(e.target.value))}
+                      placeholder="0"
+                      inputMode="numeric"
+                    />
+                  </Field>
+                  <Field
+                    label="Garantía"
+                    hint="Solo estos tres plazos. Es lo que sale impreso y lo que el cliente puede reclamar."
+                  >
+                    <CustomSelect value={garantia} onChange={setGarantia} options={OPCIONES_GARANTIA} />
+                  </Field>
                 </div>
-              </Field>
+              </>
             )}
-            <Field label="Servicio prestado" hint="Es lo que sale impreso como detalle en el comprobante.">
-              <textarea
-                className="tv-input"
-                rows={2}
-                value={descripcion}
-                onChange={e => setDescripcion(e.target.value)}
-                placeholder="Cambio de pantalla iPhone 12"
-              />
-            </Field>
-            <div className="tv-grid tv-grid-2">
-              <Field label="Monto total" hint="IVA incluido, tal como lo paga el cliente.">
-                <input
-                  className="tv-input font-mono"
-                  type="number"
-                  min={0}
-                  value={monto}
-                  onChange={e => setMonto(e.target.value === '' ? '' : Number(e.target.value))}
-                  placeholder="0"
-                  inputMode="numeric"
-                />
-              </Field>
-              <Field
-                label="Garantía"
-                hint="Solo estos cuatro plazos. Es lo que sale impreso y lo que el cliente puede reclamar."
-              >
-                <CustomSelect value={garantia} onChange={setGarantia} options={OPCIONES_GARANTIA} />
-              </Field>
-            </div>
             <Field label="Método de pago" hint="La tarjeta está deshabilitada: no hay procesador de pagos contratado.">
               <div className="tv-row">
                 {MEDIOS_DE_COBRO.map(m => (
@@ -544,8 +725,11 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
 
       <ListaDeInsumos
         titulo="Repuestos usados"
-        descripcion="Se descuentan del inventario y bajan el margen. No salen desglosados en la factura: van dentro del precio del servicio."
+        descripcion={modoCobro === 'venta'
+          ? 'Repuestos adicionales que se agregan a la venta (aparte del producto principal de arriba). Se descuentan del inventario y bajan el margen; no salen desglosados en la factura.'
+          : 'Se descuentan del inventario y bajan el margen. No salen desglosados en la factura: van dentro del precio del trabajo.'}
         icono={Wrench}
+        botonAgregar="+ Añadir Repuesto"
         opciones={opcionesRepuesto}
         elegido={repuestoElegido}
         alElegir={setRepuestoElegido}
@@ -553,13 +737,14 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
         alAgregar={() => { agregarInsumo(repuestoElegido, repuestos, setRepuestos); setRepuestoElegido(''); }}
         alCambiarCantidad={(id, c) => cambiarCantidad(id, c, repuestos, setRepuestos)}
         alQuitar={id => setRepuestos(repuestos.filter(i => i.productId !== id))}
-        vacio="Sin repuestos. Si el trabajo no consumió piezas, deje esta lista vacía."
+        vacio="Sin repuestos adicionales en este cobro."
       />
 
       <ListaDeInsumos
         titulo="Insumos"
         descripcion="Temperados, micas, cables y demás material del taller. Si NO se marca como regalía, sale desglosado en la factura a su precio normal (se resta del monto total). Marcado como regalía, se descuenta igual del inventario y cuenta como gasto, pero en la factura sale a ₡0."
         icono={Gift}
+        botonAgregar="+ Añadir Insumo"
         facturaEnDetalle
         opciones={opcionesInsumo}
         elegido={insumoElegido}
@@ -582,9 +767,9 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
         <div className="tv-grid tv-grid-6">
           <Stat label="Se cobra" value={colones(margen.ingreso)} foot="IVA incluido" />
           <Stat
-            label="Costo del trabajo"
+            label={modoCobro === 'venta' ? 'Costo de mercancía' : 'Costo del trabajo'}
             value={colones(margen.costoRepuestos)}
-            foot={`${repuestos.length} repuesto(s) + ${insumos.filter(i => !i.esRegalia).length} insumo(s)`}
+            foot={`${repuestosEfectivos.length} repuesto(s)/producto(s) + ${insumos.filter(i => !i.esRegalia).length} insumo(s)`}
           />
           <Stat
             label="Costo regalía"
@@ -621,11 +806,13 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
 function ListaDeInsumos({
   titulo, descripcion, icono: Icono, opciones, elegido, alElegir,
   lista, alAgregar, alCambiarCantidad, alQuitar, alMarcarRegalia, vacio,
-  facturaEnDetalle,
+  facturaEnDetalle, botonAgregar = 'Agregar',
 }: {
   titulo: string;
   descripcion: string;
   icono: any;
+  /** Texto del botón de agregar — "+ Añadir Repuesto" / "+ Añadir Insumo". */
+  botonAgregar?: string;
   opciones: Product[];
   elegido: string;
   alElegir: (v: string) => void;
@@ -690,7 +877,7 @@ function ListaDeInsumos({
               }))}
             />
           </div>
-          <Btn icon={Plus} onClick={alAgregar} disabled={!elegido}>Agregar</Btn>
+          <Btn icon={Plus} onClick={alAgregar} disabled={!elegido}>{botonAgregar}</Btn>
         </div>
       )}
 

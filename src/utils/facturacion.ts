@@ -77,10 +77,15 @@ export type MedioCobro = (typeof MEDIOS_DE_COBRO)[number]['valor'];
  * el respaldo legal— quedaría a merced de un error de digitación.
  *
  * Con una lista cerrada, el plazo que sale impreso siempre es uno de
- * estos cuatro, y `normalizarGarantia()` rechaza cualquier otro valor
- * que llegue por otra vía.
+ * estos tres, y `normalizarGarantia()` rechaza cualquier otro valor que
+ * llegue por otra vía. Se quitaron los 6 meses (orden explícita de
+ * estandarización): quedan solo 1, 3 y 12 — los mismos tres que ahora
+ * usa el desplegable de garantía en Inventario al crear un producto, para
+ * que no puedan volver a existir dos escalas de garantía distintas en el
+ * sistema (antes Inventario ofrecía días —15/60/90— y Facturación meses,
+ * y ninguna de las dos combinaciones coincidía nunca).
  */
-export const GARANTIAS_VALIDAS = [1, 3, 6, 12] as const;
+export const GARANTIAS_VALIDAS = [1, 3, 12] as const;
 
 export type GarantiaMeses = (typeof GARANTIAS_VALIDAS)[number];
 
