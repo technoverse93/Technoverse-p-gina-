@@ -33,14 +33,16 @@
 // hasta que se instale el próximo .apk.
 //
 // ---------------------------------------------------------------------
-// SIN PERÍODO DE GRACIA (orden explícita, "cero tolerancia")
+// SIN PERÍODO DE GRACIA PARA LA AUTENTICACIÓN (orden explícita, "cero
+// tolerancia") — esto NO cambió
 // ---------------------------------------------------------------------
-// Versión anterior: solo bloqueaba si la aplicación pasó más de dos
-// minutos en segundo plano. La auditoría de seguridad de este proyecto
-// lo marcó como inaceptable — "el sistema DEBE bloquear el acceso y
-// pedir re-autenticación al retomar la app", sin excepción por tiempo.
-// Cualquier minimizado, por breve que sea, marca `requiere_auth` y exige
-// biometría/PIN al volver.
+// Versión anterior a esta auditoría: solo bloqueaba si la aplicación
+// pasó más de dos minutos en segundo plano. Se marcó como inaceptable —
+// "el sistema DEBE bloquear el acceso y pedir re-autenticación al
+// retomar la app", sin excepción por tiempo. Cualquier minimizado, por
+// breve que sea, marca `requiere_auth` y exige biometría/contraseña al
+// volver: eso sigue siendo así, sin excepción, más abajo en esta misma
+// función.
 //
 // La marca de tiempo se guarda en localStorage, no en memoria: así
 // sobrevive a que Android mate el proceso por falta de memoria mientras
@@ -48,14 +50,53 @@
 // aplicación" del reporte) y a que se cierre la pestaña del navegador
 // en la web. Al volver —aunque sea con la aplicación recién arrancada
 // de cero— la marca sigue ahí y el bloqueo se aplica igual.
+//
+// ---------------------------------------------------------------------
+// LOS 2 MINUTOS QUE SÍ SE AGREGARON: no son un plazo de gracia para
+// ENTRAR, son un umbral para decidir QUÉ HACER DESPUÉS de entrar
+// ---------------------------------------------------------------------
+// Se reportó que, tras cualquier regreso de segundo plano, la app
+// "reiniciaba" — cerraba sesión de verdad y mandaba a la persona a la
+// tienda pública, perdiendo lo que estuviera a medio llenar (p. ej. un
+// cobro). Eso pasaba SIEMPRE, sin importar si habían pasado 3 segundos
+// o 3 horas, porque `App.tsx` reaccionaba a este evento con un cierre
+// de sesión completo en todos los casos.
+//
+// La corrección no toca la exigencia de autenticación (arriba): sigue
+// siendo obligatoria en el 100% de los regresos. Lo que cambia es qué
+// hace `App.tsx` una vez que la persona ya se autenticó, y depende de
+// cuánto duró la ausencia — por eso el tiempo transcurrido viaja en el
+// propio evento, calculado aquí, antes de borrar la marca:
+//
+//   · Ausencia ≤ 2 minutos: `App.tsx` NO desmonta nada — solo superpone
+//     un candado de re-autenticación encima de la pantalla actual.
+//     Como ningún componente se destruye, la vista y cualquier dato sin
+//     guardar (un formulario de cobro a medias, por ejemplo) siguen
+//     exactamente donde estaban al validar la huella/contraseña.
+//   · Ausencia > 2 minutos: comportamiento de siempre — cierre de
+//     sesión real (conservando el pase de la huella si está activada,
+//     ver `cerrarSesionConservandoBiometria`) y vuelta a la tienda
+//     pública. Cualquier borrador se pierde porque el componente que lo
+//     tenía en memoria se desmonta; hay que iniciar sesión desde cero.
 // =====================================================================
 
 import { marcarBloqueo } from '../utils/biometriaNativa';
 
 const CLAVE_EN_FONDO_DESDE = 'technoverse_en_fondo_desde';
 
-/** Se dispara cuando hay que exigir de nuevo biometría/PIN/contraseña. */
+/**
+ * Se dispara cuando hay que exigir de nuevo biometría/contraseña.
+ *
+ * El evento viaja con `detail.ausenteMs`: milisegundos que la app pasó
+ * en segundo plano, calculados aquí de forma síncrona. `App.tsx` lo usa
+ * SOLO para decidir si restaura la pantalla actual o cierra sesión — la
+ * exigencia de re-autenticación en sí es incondicional, ver el bloque de
+ * comentarios de arriba.
+ */
 export const EVENTO_FORZAR_REINGRESO = 'technoverse_forzar_reingreso';
+
+/** Umbral de "ausencia breve": por debajo de esto se restaura la pantalla en vez de cerrar sesión. */
+export const UMBRAL_REINGRESO_RAPIDO_MS = 2 * 60 * 1000;
 
 function marcarEnFondo(): void {
   try { localStorage.setItem(CLAVE_EN_FONDO_DESDE, String(Date.now())); } catch { /* sin storage no hay marca que poner */ }
@@ -104,11 +145,15 @@ function comprobarSiHayQueBloquear(): void {
   // comprobación sin que la app volviera a pasar por segundo plano.
   try { localStorage.removeItem(CLAVE_EN_FONDO_DESDE); } catch { /* no es crítico */ }
 
-  // Sin umbral de tiempo: CUALQUIER paso por segundo plano exige volver
-  // a autenticarse, así haya durado un segundo o una hora. Y sin esperar
-  // a React: ver el comentario de la función.
+  const ausenteMs = Math.max(0, Date.now() - desde);
+
+  // Sin umbral de tiempo para ESTO: CUALQUIER paso por segundo plano
+  // exige volver a autenticarse, así haya durado un segundo o una hora.
+  // Y sin esperar a React: ver el comentario de la función de arriba.
+  // `ausenteMs` solo decide, del lado de App.tsx, si además hay que
+  // cerrar sesión — nunca si hay que pedir la huella.
   marcarBloqueo(true);
-  window.dispatchEvent(new CustomEvent(EVENTO_FORZAR_REINGRESO));
+  window.dispatchEvent(new CustomEvent(EVENTO_FORZAR_REINGRESO, { detail: { ausenteMs } }));
 }
 
 function esAplicacionNativa(): boolean {

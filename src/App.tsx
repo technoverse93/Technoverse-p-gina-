@@ -7,10 +7,12 @@ import { OverlayProvider, useToast } from './components/ui/Overlays';
 import { conexionBloqueada, detalleDeBloqueo } from './utils/adminLogin';
 import { registrarVisita } from './utils/huella';
 import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada } from './utils/biometria';
-import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO } from './mobile/appLock';
+import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO, UMBRAL_REINGRESO_RAPIDO_MS } from './mobile/appLock';
+import { marcarBloqueo } from './utils/biometriaNativa';
 import { supabase } from './supabaseClient';
 import { tieneTokenSeguridad } from './utils/securityPin';
 import CrearTokenModal from './components/security/CrearTokenModal';
+import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
 
 // AdminPanel carga recharts, motion y toda la lógica de taller/inventario/CRM:
 // era el bloque más pesado del bundle principal (>300 KB gzip) y se estaba
@@ -291,15 +293,38 @@ function AppInner() {
     setRefreshTrigger(prev => prev + 1);
   };
 
-  // Reacciona al bloqueo por inactividad (src/mobile/appLock.ts): mismo
-  // cierre que el botón "Cerrar sesión" —conserva el pase de la huella si
-  // está activada, cierre real si no— pero además reabre el acceso de
-  // inmediato en vez de dejar a la persona en la tienda como si nada. Sin
-  // esto, el evento apagaría la sesión pero nadie pediría la
-  // re-autenticación exigida por la auditoría.
+  // Candado de re-autenticación por AUSENCIA BREVE (≤ 2 minutos): se
+  // superpone encima de lo que ya estuviera en pantalla, sin tocar
+  // `currentUser` ni `currentView` — ver ReautenticacionRapidaOverlay.tsx
+  // para el porqué exacto de que esto preserve un cobro a medio llenar
+  // sin necesidad de guardar y restaurar ningún borrador a mano.
+  const [requiereReautenticacionRapida, setRequiereReautenticacionRapida] = useState(false);
+
+  // Reacciona al bloqueo por inactividad (src/mobile/appLock.ts).
+  //
+  // Dos caminos según cuánto duró la ausencia (`ausenteMs`, calculado en
+  // appLock.ts en el momento exacto del regreso):
+  //
+  //   · ≤ 2 minutos: NO se cierra sesión ni se navega a ningún lado —
+  //     eso es justo lo que antes "reiniciaba" la app y perdía lo que
+  //     el administrador tenía a medio llenar. Se muestra el candado
+  //     flotante; al validarse, desaparece y la pantalla de abajo sigue
+  //     intacta porque nunca se desmontó.
+  //   · > 2 minutos: el comportamiento de siempre — mismo cierre que el
+  //     botón "Cerrar sesión" (conserva el pase de la huella si está
+  //     activada, cierre real si no) y vuelta a la tienda pública,
+  //     exigiendo iniciar sesión desde cero.
+  //
+  // En AMBOS casos la re-autenticación es obligatoria — lo único que
+  // cambia es qué pasa con la pantalla una vez que ya se autenticó.
   useEffect(() => {
-    const alForzarReingreso = () => {
+    const alForzarReingreso = (evento: Event) => {
       if (!currentUser) return; // nadie con sesión abierta, no hay nada que bloquear
+      const ausenteMs = (evento as CustomEvent<{ ausenteMs?: number }>).detail?.ausenteMs;
+      if (typeof ausenteMs === 'number' && ausenteMs <= UMBRAL_REINGRESO_RAPIDO_MS) {
+        setRequiereReautenticacionRapida(true);
+        return;
+      }
       handleLogout();
       setAutoOpenLogin(true);
     };
@@ -397,6 +422,25 @@ function AppInner() {
           esté debajo hasta que la cuenta Dueño configure su token. */}
       {requiereTokenSeguridad && (
         <CrearTokenModal open={requiereTokenSeguridad} onCreado={() => setRequiereTokenSeguridad(false)} />
+      )}
+
+      {/* Candado de ausencia breve — ver el efecto que lo activa, arriba.
+          También bloqueante a propósito: no tiene `onClose` ni cierre por
+          backdrop, solo dos salidas explícitas (autenticarse o cerrar
+          sesión), igual que CrearTokenModal. */}
+      {requiereReautenticacionRapida && currentUser && (
+        <ReautenticacionRapidaOverlay
+          email={currentUser.email}
+          onDesbloqueado={() => {
+            marcarBloqueo(false);
+            setRequiereReautenticacionRapida(false);
+          }}
+          onCerrarSesion={() => {
+            setRequiereReautenticacionRapida(false);
+            handleLogout();
+            setAutoOpenLogin(true);
+          }}
+        />
       )}
     </div>
   );
