@@ -49,6 +49,15 @@ $$;
 -- Supabase, no en `public`. Sin esto, `gen_salt('bf')` falla con
 -- "function gen_salt(unknown) does not exist" en cuanto alguien intenta
 -- crear el token — el fallo real que se vio en producción.
+--
+-- CONTROL DE ACCESO SUPREMO: la CREACIÓN inicial (cuando esta cuenta
+-- todavía no tiene `security_pin_hash`) sigue abierta a cualquier cuenta
+-- Dueño — es el flujo obligatorio de primer ingreso. Pero CAMBIAR o
+-- RESTABLECER un token que YA existe queda restringido en el propio
+-- servidor a una sola cuenta: la del correo exacto
+-- 'technoverse.admin@gmail.com' ("administrador supremo"). Se verifica
+-- contra auth.users, no contra lo que mande el cliente, así que ni una
+-- llamada directa al RPC (saltándose la UI) puede sortear esta regla.
 create or replace function public.set_security_pin(p_pin text)
 returns void
 language plpgsql
@@ -57,12 +66,24 @@ set search_path = public, extensions
 as $$
 declare
   v_uid uuid := auth.uid();
+  v_email text;
+  v_ya_existe boolean;
 begin
   if v_uid is null then
     raise exception 'No autenticado.';
   end if;
   if p_pin is null or p_pin !~ '^[0-9]{4}$' then
     raise exception 'El token debe ser exactamente 4 dígitos.';
+  end if;
+
+  select security_pin_hash is not null into v_ya_existe
+    from public.profiles where id = v_uid;
+
+  if v_ya_existe then
+    select email into v_email from auth.users where id = v_uid;
+    if lower(coalesce(v_email, '')) <> 'technoverse.admin@gmail.com' then
+      raise exception 'Solo el administrador supremo puede cambiar un token de seguridad ya configurado.';
+    end if;
   end if;
 
   update public.profiles
