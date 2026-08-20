@@ -91,6 +91,86 @@ jobs:
           echo "--- permisos declarados ---"
           grep "uses-permission" "$MANIFEST"
 
+      # Ícono del lanzador con el logo oficial de la tienda, en vez del
+      # robot de Capacitor por defecto. Igual que el manifiesto de arriba:
+      # android/ nace de cero en cada corrida, así que los mipmap/ que
+      # `cap add` generó con el ícono por defecto se SOBRESCRIBEN aquí,
+      # después de crearse.
+      #
+      # Los dos PNG maestros (resources/android-icon/) SÍ viven en el
+      # repositorio — a diferencia de android/, son la fuente de verdad
+      # que no se puede regenerar sola:
+      #   - legacy-master.png: el cuadrado completo (fondo marino + marca
+      #     dorada), tal cual public/logo.png, en alta resolución. Sirve
+      #     para el ícono clásico (pre-Android 8 / API 26) en sus 5
+      #     densidades.
+      #   - foreground-master.png: SOLO la marca dorada, con el fondo
+      #     marino recortado a transparencia (croma-key), reescalada y
+      #     centrada dentro del círculo de 66dp de "zona segura" del
+      #     ícono adaptativo de Android (108dp de lienzo total). Sin ese
+      #     margen, una máscara circular u otra forma de lanzador le corta
+      #     las puntas a la marca.
+      # El color de fondo del ícono adaptativo (#031837) es el mismo
+      # marino exacto de public/logo.png, muestreado directamente del
+      # archivo — no aproximado a mano — para que no haya ninguna costura
+      # de color entre el fondo y la marca.
+      - name: Generar el ícono del lanzador con el logo de la tienda
+        run: |
+          python3 -m pip install --quiet --disable-pip-version-check Pillow
+          python3 - <<'PY'
+          from PIL import Image, ImageDraw
+          import os
+
+          RES = 'android/app/src/main/res'
+          SRC = 'resources/android-icon'
+          BG_HEX = '#031837'
+
+          # (densidad, tamaño del ícono clásico en px, tamaño del lienzo
+          # adaptativo de 108dp en px) — la relación es siempre 108/48 por
+          # densidad, tal como Capacitor genera sus propios mipmap por
+          # defecto.
+          DENSIDADES = [
+              ('mdpi', 48, 108),
+              ('hdpi', 72, 162),
+              ('xhdpi', 96, 216),
+              ('xxhdpi', 144, 324),
+              ('xxxhdpi', 192, 432),
+          ]
+
+          legacy = Image.open(f'{SRC}/legacy-master.png').convert('RGBA')
+          foreground = Image.open(f'{SRC}/foreground-master.png').convert('RGBA')
+
+          def circular(im):
+              mascara = Image.new('L', im.size, 0)
+              ImageDraw.Draw(mascara).ellipse([0, 0, im.size[0] - 1, im.size[1] - 1], fill=255)
+              redondo = Image.new('RGBA', im.size, (0, 0, 0, 0))
+              redondo.paste(im, (0, 0), mascara)
+              return redondo
+
+          for densidad, tam_legacy, tam_adaptativo in DENSIDADES:
+              carpeta = f'{RES}/mipmap-{densidad}'
+              os.makedirs(carpeta, exist_ok=True)
+
+              cuadrado = legacy.resize((tam_legacy, tam_legacy), Image.LANCZOS)
+              cuadrado.save(f'{carpeta}/ic_launcher.png')
+              circular(cuadrado).save(f'{carpeta}/ic_launcher_round.png')
+
+              fg = foreground.resize((tam_adaptativo, tam_adaptativo), Image.LANCZOS)
+              fg.save(f'{carpeta}/ic_launcher_foreground.png')
+
+          # Color de fondo del ícono adaptativo — el mismo marino exacto
+          # del logo, no el azul genérico que trae Capacitor por defecto.
+          with open(f'{RES}/values/ic_launcher_background.xml', 'w', encoding='utf-8') as f:
+              f.write(
+                  '<?xml version="1.0" encoding="utf-8"?>\n'
+                  '<resources>\n'
+                  f'    <color name="ic_launcher_background">{BG_HEX}</color>\n'
+                  '</resources>\n'
+              )
+
+          print('Ícono del lanzador generado en las 5 densidades.')
+          PY
+
       - name: Build debug APK
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
