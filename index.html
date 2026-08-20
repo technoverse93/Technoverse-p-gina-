@@ -15,6 +15,16 @@
     <meta name="application-name" content="Technoverse Costa Rica" />
     <meta name="apple-mobile-web-app-title" content="Technoverse" />
     <meta name="theme-color" content="#0f172a" />
+    <!-- "Agregar a inicio" en iOS Safari: sin esto, el ícono del acceso
+         directo abre igual el sitio, pero DENTRO de Safari (con su barra de
+         direcciones y botones). Con `apple-mobile-web-app-capable` abre a
+         pantalla completa, como una app instalada — es lo que hace viable
+         usar esto en iPhone sin pasar por la App Store ni una cuenta de
+         Apple Developer: Face ID ya funciona en ese modo por WebAuthn (ver
+         src/utils/biometria.ts), sin necesitar el envoltorio nativo. -->
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <link rel="manifest" href="/manifest.json" />
     <link rel="icon" type="image/png" href="/logo.png" />
     <link rel="apple-touch-icon" href="/logo.png" />
 
