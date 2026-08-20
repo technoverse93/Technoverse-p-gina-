@@ -32,7 +32,7 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Search, PanelLeftClose, PanelLeftOpen, Sun, Moon, Store, LogOut,
+  Search, PanelLeftClose, PanelLeftOpen, Store, LogOut,
   MoreHorizontal, X, CornerDownLeft, RefreshCw, KeyRound, Hash,
 } from 'lucide-react';
 import { NAV_GROUPS, NAV_ITEMS, DOCK_IDS, resolverModulo, grupoDe, buscarModulos } from './adminNav';
@@ -52,8 +52,6 @@ interface AdminShellProps {
   currentUser: User | null;
   onLogout: () => void;
   onNavigateToStore: () => void;
-  theme: 'light' | 'dark';
-  toggleTheme: () => void;
   logoUrl?: string;
   children: React.ReactNode;
 }
@@ -64,8 +62,6 @@ export default function AdminShell({
   currentUser,
   onLogout,
   onNavigateToStore,
-  theme,
-  toggleTheme,
   logoUrl,
   children,
 }: AdminShellProps) {
@@ -306,15 +302,6 @@ export default function AdminShell({
 
           <button
             type="button"
-            className="tv-icon-btn"
-            onClick={toggleTheme}
-            aria-label={theme === 'dark' ? 'Cambiar a tema claro' : 'Cambiar a tema oscuro'}
-          >
-            {theme === 'dark' ? <Sun className="w-[18px] h-[18px]" /> : <Moon className="w-[18px] h-[18px]" />}
-          </button>
-
-          <button
-            type="button"
             className="tv-icon-btn hidden sm:inline-flex"
             onClick={onNavigateToStore}
             aria-label="Ver la tienda"
@@ -363,7 +350,7 @@ export default function AdminShell({
                         <span>
                           Versión: <span className="font-mono">{otaStatus.currentVersion}</span>
                           {otaStatus.latestVersion && otaStatus.latestVersion === otaStatus.currentVersion && (
-                            <span className="text-emerald-500 dark:text-[var(--brand-gold-light)] font-bold"> · al día</span>
+                            <span className="text-emerald-500 font-bold"> · al día</span>
                           )}
                         </span>
                       ) : (

@@ -54,8 +54,6 @@ interface AdminPanelProps {
   isAuthenticated: boolean;
   onLogin: (user: User) => void;
   onLogout: () => void;
-  theme: 'light' | 'dark';
-  toggleTheme: () => void;
 }
 
 
@@ -75,8 +73,6 @@ export default function AdminPanel({
   isAuthenticated,
   onLogin,
   onLogout,
-  theme,
-  toggleTheme
 }: AdminPanelProps) {
   const toast = useToast();
   const confirm = useConfirm();
@@ -989,8 +985,6 @@ export default function AdminPanel({
       currentUser={currentUser}
       onLogout={handleLogout}
       onNavigateToStore={onNavigateToStore}
-      theme={theme}
-      toggleTheme={toggleTheme}
       logoUrl={storeLogoPreview || storeLogo || undefined}
     >
       {showLoginToast && (
@@ -1015,7 +1009,6 @@ export default function AdminPanel({
               repairs={repairs}
               clients={clients}
               isMounted={isMounted}
-              theme={theme}
               onNavigate={irAModulo}
             />
           )}

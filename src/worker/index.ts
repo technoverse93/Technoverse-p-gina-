@@ -172,25 +172,25 @@ function pantallaDeBloqueo(ip: string | null): Response {
 <meta name="robots" content="noindex">
 <title>Acceso bloqueado — Technoverse Costa Rica</title>
 <style>
-  :root { color-scheme: dark; }
+  :root { color-scheme: light; }
   * { box-sizing: border-box; }
   body {
     margin: 0; min-height: 100vh; display: flex; align-items: center; justify-content: center;
-    padding: 24px; background: #0F1217; color: #E9ECF1;
+    padding: 24px; background: #F8FAFC; color: #0F172A;
     font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
   }
   .caja {
-    max-width: 520px; width: 100%; background: #171B22;
-    border: 1px solid rgba(255,255,255,0.09); border-radius: 16px; padding: 32px;
+    max-width: 520px; width: 100%; background: #FFFFFF;
+    border: 1px solid #E4E8EF; border-radius: 16px; padding: 32px;
   }
   h1 { margin: 0 0 4px; font-size: 20px; letter-spacing: -0.01em; }
-  .marca { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #FB923C; font-weight: 700; margin-bottom: 14px; }
-  p { line-height: 1.65; color: #A7AFBD; font-size: 14px; margin: 0 0 14px; }
-  .dato { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #E9ECF1;
-          background: #0F1217; border: 1px solid rgba(255,255,255,0.09); border-radius: 10px;
+  .marca { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #C2410C; font-weight: 700; margin-bottom: 14px; }
+  p { line-height: 1.65; color: #55617A; font-size: 14px; margin: 0 0 14px; }
+  .dato { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #0F172A;
+          background: #F1F4F8; border: 1px solid #E4E8EF; border-radius: 10px;
           padding: 10px 12px; margin: 18px 0; word-break: break-all; }
-  a { color: #FB923C; }
-  .pie { font-size: 11px; color: #79828F; margin: 0; padding-top: 16px; border-top: 1px solid rgba(255,255,255,0.06); }
+  a { color: #C2410C; }
+  .pie { font-size: 11px; color: #8792A8; margin: 0; padding-top: 16px; border-top: 1px solid #EEF1F6; }
 </style>
 </head>
 <body>

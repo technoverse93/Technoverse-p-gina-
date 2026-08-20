@@ -1,6 +1,5 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Space+Grotesk:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500;700&family=Gloock&display=swap');
 @import "tailwindcss";
-@custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
@@ -34,13 +33,11 @@
 /* ==========================================================================
    SISTEMA DE DISEÑO — "RETAIL LIMPIO" (Opción C)
    --------------------------------------------------------------------------
-   Regla que corrige el bug del modo claro: los grises son NEUTROS, sin tinte.
-   El azul marino y el dorado del logo se usan SOLO como acento —nunca como
-   color de fondo general ni de texto corrido—, que era exactamente lo que
-   teñía de dorado toda la interfaz.
-
-     claro  → acción principal = azul marino  (se lee sobre blanco)
-     oscuro → acción principal = dorado       (se lee sobre gris profundo)
+   Tema único (claro). Regla que corrige el bug original: los grises son
+   NEUTROS, sin tinte. El azul marino del logo se usa SOLO como acento
+   —nunca como color de fondo general ni de texto corrido—, que era
+   exactamente lo que teñía de dorado toda la interfaz. Acción principal =
+   azul marino (se lee sobre blanco).
 
    Toda la piel vive aquí: los componentes conservan sus nombres de clase, así
    que la lógica de Supabase, autenticación, carrito, IVA y facturación no se
@@ -88,51 +85,11 @@
     --radius-card: 14px;
     --radius-lg: 16px;
 
-    /* Chat: burbujas neutras en ambos modos. Nada de verde. */
+    /* Chat: burbujas neutras. */
     --bubble-in: #F1F4F8;
     --bubble-in-ink: #0F172A;
     --bubble-out: #C2410C;
     --bubble-out-ink: #FFFFFF;
-  }
-
-  .dark {
-    --bg-base: #0F1217;
-    --bg-surface: #171B22;
-    --bg-elevated: #1D222B;
-    --bg-sunken: #13171D;
-    --text-primary: #E9ECF1;
-    --text-secondary: #A7AFBD;
-    --text-muted: #79828F;
-    --border-color: rgba(255, 255, 255, 0.09);
-    --border-soft: rgba(255, 255, 255, 0.06);
-
-    --brand-navy: #0E1830;
-    --brand-navy-hover: #16233F;
-    --brand-gold-dark: #FB923C;
-    --brand-gold-mid: #FDBA74;
-    --brand-gold-light: #FED7AA;
-    --brand-gold-rgb: 251, 146, 60;
-    --gold-soft: rgba(251, 146, 60, 0.12);
-    --gold-line: rgba(251, 146, 60, 0.30);
-
-    /* Gris oscuro de fondo + naranja de acento. Sobre gris profundo el
-       naranja claro (orange-400) es el que mantiene el contraste. */
-    --accent: #FB923C;
-    --accent-hover: #FDBA74;
-    --accent-ink: #1A1206;
-    --accent-rgb: 251, 146, 60;
-
-    --ok: #5FBF8E;
-    --ok-soft: rgba(95, 191, 142, 0.12);
-
-    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
-    --float-shadow: 0 2px 6px rgba(0, 0, 0, 0.4), 0 12px 30px -16px rgba(0, 0, 0, 0.7);
-    --float-shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.45), 0 24px 50px -22px rgba(0, 0, 0, 0.8);
-
-    --bubble-in: #232932;
-    --bubble-in-ink: #E9ECF1;
-    --bubble-out: #7C3A12;
-    --bubble-out-ink: #FFEFE4;
   }
 }
 
@@ -226,7 +183,6 @@ img, svg, video, canvas { max-width: 100%; }
   box-shadow: none;
   transition: background 0.18s ease, transform 0.15s cubic-bezier(0.16, 1, 0.3, 1);
 }
-.dark .btn-glass-primary { color: var(--accent-ink); }
 .btn-glass-primary:hover {
   background: var(--accent-hover);
   border-color: var(--accent-hover);
@@ -241,7 +197,6 @@ img, svg, video, canvas { max-width: 100%; }
   color: var(--text-primary);
   transition: border-color 0.16s ease, box-shadow 0.16s ease;
 }
-.dark .glass-input { background: rgba(255, 255, 255, 0.04); }
 .glass-input:focus {
   outline: none;
   border-color: var(--accent);
@@ -450,27 +405,10 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 }
 
 /* ===================== Vitrina de producto (.product-media) =====================
-   Problema: con PNG transparentes, un producto negro —audífonos, cables,
-   fundas— desaparecía sobre el fondo oscuro del tema.
-
-   La imagen NO se toca: nada de invertir colores ni de rellenar el fondo, que
-   arruinaría la transparencia y falsearía el color real del artículo. El
-   contraste se construye DETRÁS y ALREDEDOR del producto, con la misma lógica
-   de una foto de producto real (softbox cenital + sombra de contacto), no con
-   un foco circular centrado — ESA era la versión anterior y se veía forzada,
-   como un recorte de sticker con un aro blanco parejo en todo el contorno.
-
-     1. Placa neutra elevada — un gris apenas más claro que la superficie de la
-        tarjeta, para que la silueta negra caiga sobre algo y no sobre el vacío.
-     2. Luz ambiental asimétrica — más intensa arriba (como si la luz cayera
-        desde afuera del encuadre) y una sombra de contacto tenue abajo, en vez
-        de un halo circular perfectamente centrado.
-     3. Borde casi imperceptible — drop-shadow blanco de 1px SIN desenfoque y
-        con muy poca opacidad: alcanza para separar un producto negro del
-        fondo oscuro sin leerse como un contorno dibujado.
-
-   En modo claro no se aplica ninguna de las tres: ahí el fondo es blanco y un
-   producto negro ya tiene todo el contraste que necesita. */
+   Con fondo blanco (único tema), un producto en PNG transparente ya tiene
+   todo el contraste que necesita: no hace falta placa ni luz ambiental
+   detrás. Las clases quedan como contenedores neutros para no tocar el
+   marcado de ProductCard/PublicStore/InventarioControl. */
 .product-media {
   position: relative;
   background-color: transparent;
@@ -482,36 +420,7 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   z-index: 1;
 }
 
-.dark .product-media {
-  background-color: var(--bg-elevated);
-}
-
-.dark .product-media::before {
-  content: '';
-  position: absolute;
-  inset: 0;
-  z-index: 0;
-  pointer-events: none;
-  background:
-    radial-gradient(ellipse 85% 55% at 50% 6%, rgba(255, 255, 255, 0.07) 0%, rgba(255, 255, 255, 0) 68%),
-    radial-gradient(ellipse 65% 32% at 50% 100%, rgba(0, 0, 0, 0.30) 0%, rgba(0, 0, 0, 0) 72%);
-}
-
-.dark .product-media img {
-  filter:
-    drop-shadow(0 1px 0 rgba(255, 255, 255, 0.11))
-    drop-shadow(0 10px 18px rgba(0, 0, 0, 0.38));
-}
-
-/* Miniaturas donde el propio <img> es el contenedor y no admite ::before:
-   solo placa elevada + borde sutil, sin luz ambiental (no hay espacio para
-   que se note el degradado en un recuadro de 40-64px). */
 .product-thumb { background-color: transparent; }
-
-.dark .product-thumb {
-  background-color: var(--bg-elevated);
-  filter: drop-shadow(0 1px 0 rgba(255, 255, 255, 0.11));
-}
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
@@ -567,8 +476,7 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 .text-emerald-800,
 .text-emerald-100,
 .text-emerald-300,
-.text-emerald-400,
-.dark\:text-emerald-400 { color: var(--ok) !important; }
+.text-emerald-400 { color: var(--ok) !important; }
 .hover\:text-emerald-100:hover,
 .hover\:text-emerald-300:hover { color: var(--ok) !important; }
 
@@ -582,113 +490,6 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 .shadow-emerald-500\/10 { box-shadow: var(--shadow-sm) !important; }
 .from-emerald-500 { --tw-gradient-from: var(--accent) !important; }
 
-
-/* ==========================================================================
-   Utilidades planas heredadas
-   Varios componentes traen bg-white / bg-slate-* escritos antes de este
-   sistema. En modo oscuro se reconducen a las superficies del tema para que
-   no aparezcan bloques blancos.
-   ========================================================================== */
-.dark .bg-white,
-.dark .bg-slate-50,
-.dark .bg-gray-50 { background-color: var(--bg-surface) !important; }
-.dark .bg-slate-100,
-.dark .bg-slate-200,
-.dark .bg-gray-100,
-.dark .bg-gray-200 {
-  background-color: var(--bg-sunken) !important;
-  color: var(--text-primary);
-}
-.dark .bg-blue-50 { background-color: rgba(var(--accent-rgb), 0.12) !important; }
-.dark .border-slate-100,
-.dark .border-slate-200,
-.dark .border-gray-100,
-.dark .border-gray-200 { border-color: var(--border-color) !important; }
-.dark .text-slate-900,
-.dark .text-gray-900,
-.dark .text-slate-800 { color: var(--text-primary) !important; }
-.dark .text-slate-500,
-.dark .text-slate-600,
-.dark .text-gray-500,
-.dark .text-gray-600 { color: var(--text-secondary) !important; }
-
-/* ==========================================================================
-   Elevación en tema oscuro — Tienda y Login
-   ========================================================================== */
-.dark #store-page-root {
-  --bg-base: #0F1217 !important;
-  --bg-surface: #171B22 !important;
-  --text-primary: #E9ECF1 !important;
-  --text-secondary: #A7AFBD !important;
-  --border-color: rgba(255, 255, 255, 0.09) !important;
-
-  background-color: var(--bg-base) !important;
-  color: var(--text-primary) !important;
-}
-
-.dark #store-page-root #catalog-dropdown,
-.dark #store-page-root #search-suggestions-dropdown,
-.dark #store-page-root #account-dropdown,
-.dark #store-page-root #cart-dropdown,
-.dark #store-page-root #login-register-modal,
-.dark #store-page-root #product-detail-modal,
-.dark #store-page-root #checkout-cart-modal-container,
-.dark #store-page-root #floating-chat-window {
-  --bg-surface: #1D222B !important;
-  --bg-base: #1D222B !important;
-  background-color: #1D222B !important;
-  border: 1px solid rgba(255, 255, 255, 0.10) !important;
-  border-radius: var(--radius-lg) !important;
-  box-shadow: var(--float-shadow-lg) !important;
-  color: #E9ECF1 !important;
-}
-
-.dark #store-page-root #catalog-dropdown *,
-.dark #store-page-root #search-suggestions-dropdown *,
-.dark #store-page-root #account-dropdown *,
-.dark #store-page-root #cart-dropdown *,
-.dark #store-page-root #login-register-modal *,
-.dark #store-page-root #product-detail-modal *,
-.dark #store-page-root #checkout-cart-modal-container *,
-.dark #store-page-root #floating-chat-window * {
-  --text-primary: #E9ECF1 !important;
-  --text-secondary: #A7AFBD !important;
-}
-
-.dark #store-page-root #catalog-dropdown a:hover,
-.dark #store-page-root #catalog-dropdown button:hover,
-.dark #store-page-root #search-suggestions-dropdown button:hover,
-.dark #store-page-root #account-dropdown button:hover,
-.dark #store-page-root #account-dropdown a:hover,
-.dark #store-page-root #cart-dropdown button:hover,
-.dark #store-page-root #cart-dropdown a:hover,
-.dark #store-page-root #checkout-cart-modal-container button:hover,
-.dark #store-page-root #checkout-cart-modal-container a:hover,
-.dark #store-page-root #product-detail-modal button:hover {
-  background-color: rgba(255, 255, 255, 0.06) !important;
-  color: #E9ECF1 !important;
-}
-
-.dark #store-page-root #account-dropdown input,
-.dark #store-page-root #account-dropdown select,
-.dark #store-page-root #login-register-modal input,
-.dark #store-page-root #login-register-modal select,
-.dark #store-page-root #product-detail-modal input,
-.dark #store-page-root #product-detail-modal select,
-.dark #store-page-root #checkout-cart-modal-container input,
-.dark #store-page-root #checkout-cart-modal-container select {
-  background-color: rgba(255, 255, 255, 0.05) !important;
-  border: 1px solid rgba(255, 255, 255, 0.10) !important;
-  border-radius: 10px !important;
-  color: #E9ECF1 !important;
-}
-
-.dark #store-page-root .hover\:bg-slate-50:hover { background-color: rgba(255, 255, 255, 0.06) !important; }
-.dark #store-page-root .disabled\:bg-slate-200:disabled {
-  background-color: rgba(255, 255, 255, 0.05) !important;
-  color: var(--text-muted) !important;
-}
-.dark #store-page-root .hover\:bg-slate-200:hover { background-color: rgba(255, 255, 255, 0.08) !important; }
 
 /* ==========================================================================
    Grilla de productos — retail ordenada
@@ -710,9 +511,9 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 /* ==========================================================================
    Remapeo de azules heredados (sky-* / blue-*) al acento del tema
    El panel admin y el taller traen utilidades sky/blue escritas antes del
-   rediseño retail; chocaban con la propuesta (marino en claro, dorado en
-   oscuro). Igual que con emerald, se reconducen aquí en vez de reescribir
-   componentes con lógica: mismo look del mockup en TODA la plataforma.
+   rediseño retail; chocaban con la propuesta (marino como acento). Igual
+   que con emerald, se reconducen aquí en vez de reescribir componentes
+   con lógica: mismo look del mockup en TODA la plataforma.
    ========================================================================== */
 .bg-sky-500, .bg-sky-600, .bg-blue-500, .bg-blue-600 {
   background-color: var(--accent) !important;
@@ -731,7 +532,6 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 .hover\:text-blue-600:hover, .hover\:text-sky-400:hover {
   color: var(--accent) !important;
 }
-/* En claro el acento es marino oscuro: legible. En oscuro es dorado: legible. */
 .border-sky-500, .border-blue-500, .border-blue-100,
 .focus\:border-sky-500:focus, .focus\:border-blue-500:focus {
   border-color: var(--accent) !important;

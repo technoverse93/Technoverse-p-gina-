@@ -43,13 +43,12 @@ interface Props {
   repairs: RepairOrder[];
   clients: ClientProfile[];
   isMounted: boolean;
-  theme: 'light' | 'dark';
   /** Salta a otro módulo. Alimenta los botones de "Atención requerida". */
   onNavigate: (tab: string) => void;
 }
 
 export default function AdminDashboard({
-  products, orders, repairs, clients, isMounted, theme, onNavigate,
+  products, orders, repairs, clients, isMounted, onNavigate,
 }: Props) {
   const ventasCompletadas = orders.filter(o => o && o.status === 'Completado');
   const ingresos = ventasCompletadas.reduce((suma, o) => suma + (o.total || 0), 0);
@@ -127,17 +126,16 @@ export default function AdminDashboard({
 
   if (!isMounted) return <Esqueleto />;
 
-  // Los gráficos leen los colores del tema activo. Antes estaban fijos
-  // en tonos claros: en modo oscuro la rejilla y el globo de datos
-  // quedaban en blanco sobre negro, ilegibles.
-  const oscuro = theme === 'dark';
-  const ejes = oscuro ? '#79828F' : '#8792A8';
-  const rejilla = oscuro ? 'rgba(255,255,255,0.07)' : '#EEF1F6';
+  // Recharts pinta sus SVG con estilos en línea: no puede leer las
+  // variables CSS del tema, así que los colores van fijos aquí. Único
+  // tema (claro), sin rama que mantener.
+  const ejes = '#8792A8';
+  const rejilla = '#EEF1F6';
   const globo = {
-    background: oscuro ? '#1D222B' : '#FFFFFF',
-    border: `1px solid ${oscuro ? 'rgba(255,255,255,0.12)' : '#E4E8EF'}`,
+    background: '#FFFFFF',
+    border: '1px solid #E4E8EF',
     borderRadius: '10px',
-    color: oscuro ? '#E9ECF1' : '#0F172A',
+    color: '#0F172A',
     fontSize: '12px',
     fontWeight: 600,
     boxShadow: '0 10px 26px -14px rgba(0,0,0,0.35)',

@@ -482,7 +482,7 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
               onChange={e => setModoPrueba(e.target.checked)}
               className="w-4 h-4 accent-amber-500 cursor-pointer"
             />
-            <span className={modoPrueba ? 'text-amber-600 dark:text-amber-400' : 'text-[var(--text-secondary)]'}>
+            <span className={modoPrueba ? 'text-amber-600 ' : 'text-[var(--text-secondary)]'}>
               Factura de prueba (Sandbox)
             </span>
           </label>
@@ -521,7 +521,7 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
 
       {modoPrueba && (
         <Card className="!border-amber-500/50 !bg-amber-400/10">
-          <p className="text-[12.5px] leading-relaxed text-amber-700 dark:text-amber-300">
+          <p className="text-[12.5px] leading-relaxed text-amber-700 ">
             <strong>Modo Sandbox activo.</strong> Al enviar, se manda un correo real de prueba (para validar SMTP)
             con un PDF de ejemplo — pero NO se descuenta inventario, NO se registra la venta y NO cuenta para
             el control de ganancias. No consume número fiscal.

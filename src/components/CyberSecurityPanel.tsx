@@ -830,7 +830,7 @@ export default function CyberSecurityPanel({
       {/* ---- Encabezado ---- */}
       <div className="flex flex-wrap justify-between items-center gap-3 border-b border-[var(--border-color)]/50 pb-3">
         <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-          <ShieldAlert className="w-5 h-5 text-rose-500 dark:text-[var(--brand-gold-light)]" />
+          <ShieldAlert className="w-5 h-5 text-rose-500 " />
           Centro de Ciberseguridad
         </h3>
         <button
@@ -1472,7 +1472,7 @@ export default function CyberSecurityPanel({
                       </td>
                       <td className="p-3 font-medium text-[var(--text-primary)]">{log.userEmail}</td>
                       <td className="p-3 text-center">
-                        <span className="bg-blue-50 text-blue-600 dark:text-[var(--brand-gold-light)] border border-blue-100 px-2 py-0.5 rounded text-[10px] uppercase font-bold dark:bg-[var(--brand-gold-mid)] dark:border-[var(--brand-gold-dark)]">
+                        <span className="bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded text-[10px] uppercase font-bold ">
                           {log.module}
                         </span>
                       </td>
@@ -1870,7 +1870,7 @@ export default function CyberSecurityPanel({
                 <button
                   onClick={activarBiometria}
                   disabled={registrandoLlave}
-                  className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white dark:text-slate-950 text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 disabled:opacity-60"
+                  className="bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 disabled:opacity-60"
                 >
                   <Fingerprint className="w-4 h-4" />
                   {registrandoLlave

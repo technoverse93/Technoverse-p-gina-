@@ -17,8 +17,8 @@
    medio.
 
    Se reutilizan las variables de marca ya existentes (--bg-surface,
-   --accent, --border-color…) para que el cambio de tema claro/oscuro
-   siga funcionando sin una sola línea extra de JavaScript.
+   --accent, --border-color…) para que la piel del panel se mantenga
+   coherente con la de la tienda sin una sola línea extra de JavaScript.
    ===================================================================== */
 
 #admin-panel-root {
@@ -201,7 +201,6 @@
 }
 
 .tv-nav-item:hover { background: var(--bg-sunken); color: var(--text-primary); }
-.dark .tv-nav-item:hover { background: rgba(255, 255, 255, 0.05); }
 
 .tv-nav-item[data-active='true'] {
   background: var(--tv-accent-soft);
@@ -319,7 +318,6 @@
 }
 
 .tv-icon-btn:hover { background: var(--bg-sunken); color: var(--text-primary); }
-.dark .tv-icon-btn:hover { background: rgba(255, 255, 255, 0.06); }
 
 /* Disparador del buscador de módulos. En escritorio es una caja con
    pista de teclado; en móvil se reduce a un icono, porque ahí no hay
@@ -340,7 +338,6 @@
   transition: border-color 0.15s ease, background 0.15s ease;
 }
 
-.dark .tv-omni { background: rgba(255, 255, 255, 0.04); }
 .tv-omni:hover { border-color: var(--tv-accent-line); }
 
 @media (min-width: 900px) {
@@ -439,7 +436,6 @@
 }
 
 .tv-menu-item:hover { background: var(--bg-sunken); }
-.dark .tv-menu-item:hover { background: rgba(255, 255, 255, 0.06); }
 .tv-menu-item[data-danger='true'] { color: var(--tv-danger); }
 .tv-menu-item[data-danger='true']:hover { background: var(--tv-danger-soft); }
 
@@ -767,7 +763,6 @@
   white-space: nowrap;
 }
 
-.dark .tv-chip { background: rgba(255, 255, 255, 0.04); }
 .tv-chip[data-tone='ok'] { background: var(--tv-ok-soft); border-color: transparent; color: var(--tv-ok); }
 .tv-chip[data-tone='alert'] { background: var(--tv-danger-soft); border-color: transparent; color: var(--tv-danger); }
 .tv-chip[data-tone='accent'] { background: var(--tv-accent-soft); border-color: transparent; color: var(--tv-accent); }
@@ -798,11 +793,9 @@
   white-space: nowrap;
 }
 
-.dark .tv-table thead th { background: rgba(255, 255, 255, 0.03); }
 .tv-table tbody td { padding: 11px 14px; border-bottom: 1px solid var(--border-soft); color: var(--text-primary); }
 .tv-table tbody tr:last-child td { border-bottom: none; }
 .tv-table tbody tr:hover td { background: var(--bg-sunken); }
-.dark .tv-table tbody tr:hover td { background: rgba(255, 255, 255, 0.03); }
 
 .tv-empty {
   display: flex;
@@ -839,7 +832,6 @@
 }
 
 .tv-btn:hover { background: var(--bg-sunken); }
-.dark .tv-btn:hover { background: rgba(255, 255, 255, 0.06); }
 .tv-btn:active { transform: scale(0.97); }
 .tv-btn:disabled { opacity: 0.45; pointer-events: none; }
 
@@ -887,7 +879,6 @@
   transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.dark .tv-input { background: rgba(255, 255, 255, 0.04); }
 textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: vertical; }
 .tv-input:focus {
   outline: none;

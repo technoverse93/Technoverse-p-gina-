@@ -398,7 +398,7 @@ export default function LiveChat() {
                     Para brindarte asistencia fiscal, de garantías y consultas en tiempo real conforme a la Ley costarricense, indícanos tus datos:
                   </p>
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wide text-[var(--brand-gold-dark)] dark:text-[var(--brand-gold-light)] mb-1">Nombre Completo</label>
+                    <label className="block text-[10px] font-bold uppercase tracking-wide text-[var(--brand-gold-dark)] mb-1">Nombre Completo</label>
                     <input
                       type="text"
                       required
@@ -409,7 +409,7 @@ export default function LiveChat() {
                     />
                   </div>
                   <div>
-                    <label className="block text-[10px] font-bold uppercase tracking-wide text-[var(--brand-gold-dark)] dark:text-[var(--brand-gold-light)] mb-1">Correo Electrónico</label>
+                    <label className="block text-[10px] font-bold uppercase tracking-wide text-[var(--brand-gold-dark)] mb-1">Correo Electrónico</label>
                     <input
                       type="email"
                       required
@@ -569,7 +569,7 @@ export default function LiveChat() {
 
                   <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-3">
                     <div>
-                      <span className="text-[10px] font-bold uppercase text-[var(--brand-gold-dark)] dark:text-[var(--brand-gold-light)] tracking-wider">Chats Activos</span>
+                      <span className="text-[10px] font-bold uppercase text-[var(--brand-gold-dark)] tracking-wider">Chats Activos</span>
                       <div className="mt-1.5 space-y-1.5">
                         {activeChats.length === 0 && (
                           <p className="text-[11px] text-[var(--text-muted)] px-1">Sin consultas activas.</p>

@@ -43,7 +43,7 @@ export default function ChatActionsMenu({ conversation, staffEmails, onClose, on
                 type="button"
                 onClick={() => { onAssign(email); onClose(); }}
                 className={`w-full text-left px-2 py-1.5 rounded-lg text-[11px] truncate hover:bg-[var(--bg-surface)] ${
-                  conversation.assignedAdminEmail === email ? 'text-[var(--brand-gold-dark)] dark:text-[var(--brand-gold-light)] font-bold' : 'text-[var(--text-secondary)]'
+                  conversation.assignedAdminEmail === email ? 'text-[var(--brand-gold-dark)] font-bold' : 'text-[var(--text-secondary)]'
                 }`}
               >
                 {email}

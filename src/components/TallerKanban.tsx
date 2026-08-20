@@ -583,7 +583,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
         {/* PUBLIC LOOKUP PORTAL */}
         <div className="lg:col-span-2 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 text-[var(--text-primary)]">
           <div className="flex items-center gap-2 mb-3">
-            <Search className="w-5 h-5 text-emerald-400 dark:text-[var(--brand-gold-light)]" />
+            <Search className="w-5 h-5 text-emerald-400 " />
             <div>
               <h3 className="font-bold text-sm">Portal Público de Consulta de Reparación</h3>
               <p className="text-[10px] text-[var(--text-secondary)]">Verifica el estado real de tu dispositivo y su garantía de forma abierta.</p>
@@ -596,18 +596,18 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
               value={searchTicket}
               onChange={(e) => setSearchTicket(e.target.value)}
               placeholder="Número de Ticket (ej: TKT-123)"
-              className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)] font-mono"
+              className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 font-mono"
             />
             <input
               type="email"
               value={searchEmail}
               onChange={(e) => setSearchEmail(e.target.value)}
               placeholder="Correo electrónico registrado"
-              className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
+              className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 "
             />
             <button
               type="submit"
-              className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white font-bold text-xs rounded-xl py-2 shadow-sm transition dark:text-slate-950"
+              className="bg-emerald-500 hover:bg-emerald-600 text-white font-bold text-xs rounded-xl py-2 shadow-sm transition "
             >
               Consultar Estado En Vivo
             </button>
@@ -621,9 +621,9 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                   <div className="flex flex-wrap justify-between items-center pb-2 border-b border-[var(--border-color)]/50">
                     <div>
                       <span className="text-[10px] uppercase font-bold text-[var(--text-secondary)] font-mono">Ticket de Servicio</span>
-                      <h4 className="text-sm font-bold text-emerald-400 dark:text-[var(--brand-gold-light)] font-mono">{publicSearchResult.ticket} / {publicSearchResult.id}</h4>
+                      <h4 className="text-sm font-bold text-emerald-400 font-mono">{publicSearchResult.ticket} / {publicSearchResult.id}</h4>
                     </div>
-                    <span className="bg-sky-50 border border-sky-200 dark:border-[var(--brand-gold-dark)] text-sky-600 dark:text-[var(--brand-gold-light)] font-bold text-xs px-3 py-1 rounded-full uppercase">
+                    <span className="bg-sky-50 border border-sky-200 text-sky-600 font-bold text-xs px-3 py-1 rounded-full uppercase">
                       {publicSearchResult.status}
                     </span>
                   </div>
@@ -644,7 +644,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                       <div>
                         Costo:{' '}
                         {publicSearchResult.totalCost > 0 ? (
-                          <strong className="text-emerald-400 dark:text-[var(--brand-gold-light)] font-mono">
+                          <strong className="text-emerald-400 font-mono">
                             ₡{publicSearchResult.totalCost.toLocaleString()}
                           </strong>
                         ) : (
@@ -657,10 +657,10 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
                   {/* Cryptographic hash */}
                   {publicSearchResult.blockchainHash && (
-                    <div className="mt-3 bg-indigo-950/40 dark:bg-[var(--brand-gold-mid)]/10 border border-indigo-500/30 dark:border-[var(--brand-gold-dark)] p-2.5 rounded-lg flex items-start gap-2">
-                      <Key className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5 dark:text-[var(--brand-gold-light)]" />
+                    <div className="mt-3 bg-indigo-950/40 border border-indigo-500/30 p-2.5 rounded-lg flex items-start gap-2">
+                      <Key className="w-4 h-4 text-indigo-400 flex-shrink-0 mt-0.5 " />
                       <div className="font-mono text-[9px]">
-                        <span className="text-indigo-300 font-bold uppercase block dark:text-[var(--brand-gold-light)]">Garantía Blockchain Trazable:</span>
+                        <span className="text-indigo-300 font-bold uppercase block ">Garantía Blockchain Trazable:</span>
                         <span className="text-[var(--text-secondary)] break-all">{publicSearchResult.blockchainHash}</span>
                       </div>
                     </div>
@@ -673,8 +673,8 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                     </span>
                     <div className="space-y-2 max-h-32 overflow-y-auto">
                       {publicSearchResult.bitacora.map((evt, i) => (
-                        <div key={i} className="flex gap-2 text-[10px] text-[var(--text-secondary)] border-l border-emerald-500 dark:border-[var(--brand-gold-mid)]/30 pl-3 ml-1 relative">
-                          <span className="absolute -left-1 top-1.5 w-2 h-2 rounded-full bg-emerald-500 dark:bg-[var(--brand-gold-mid)]" />
+                        <div key={i} className="flex gap-2 text-[10px] text-[var(--text-secondary)] border-l border-emerald-500 pl-3 ml-1 relative">
+                          <span className="absolute -left-1 top-1.5 w-2 h-2 rounded-full bg-emerald-500 " />
                           <div>
                             <span className="font-bold text-[var(--text-primary)]">{evt.status}</span>
                             <span className="text-[8px] ml-1.5 text-[var(--text-secondary)]">{new Date(evt.timestamp).toLocaleString()}</span>
@@ -698,7 +698,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
         <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 text-[var(--text-primary)] flex flex-col justify-between">
           <div>
             <h3 className="font-bold text-sm mb-1 flex items-center gap-1.5">
-              <Kanban className="w-5 h-5 text-sky-400 dark:text-[var(--brand-gold-light)]" /> Servicio Técnico Interno
+              <Kanban className="w-5 h-5 text-sky-400 " /> Servicio Técnico Interno
             </h3>
             <p className="text-[10px] text-[var(--text-secondary)] mb-3">Ingresa un nuevo dispositivo para diagnóstico e inicio del flujo de soporte legal.</p>
             <button
@@ -716,7 +716,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 setShowAddForm(true);
                 loadTallerData(); // refresh product stocks
               }}
-              className="w-full bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white font-bold text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition shadow-sm dark:text-slate-950"
+              className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs py-3 rounded-xl flex items-center justify-center gap-2 transition shadow-sm "
             >
               <Plus className="w-4 h-4" /> Registrar Nueva Orden Técnica
             </button>
@@ -734,7 +734,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
       {/* NEW ORDER FORM DROPDOWN */}
       {showAddForm && (
         <form onSubmit={handleCreateRepair} className="bg-[var(--bg-surface)] /90 border border-[var(--border-color)]/80 rounded-2xl p-6 space-y-4 text-[var(--text-primary)] animate-in slide-in-from-top-4 duration-200">
-          <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 dark:text-[var(--brand-gold-light)] pb-2 border-b border-[var(--border-color)]/50">Nueva Orden de Reparación de Hardware</h4>
+          <h4 className="text-xs font-bold uppercase tracking-wider text-sky-400 pb-2 border-b border-[var(--border-color)]/50">Nueva Orden de Reparación de Hardware</h4>
           
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
@@ -745,7 +745,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 value={newCustomerName}
                 onChange={(e) => setNewCustomerName(e.target.value)}
                 placeholder="Ej. María Chinchilla Solano"
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 "
               />
             </div>
             <div>
@@ -756,7 +756,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 value={newCustomerEmail}
                 onChange={(e) => setNewCustomerEmail(e.target.value)}
                 placeholder="maria@correo.cr"
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 "
               />
             </div>
           </div>
@@ -770,7 +770,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 value={newCustomerPhone}
                 onChange={(e) => setNewCustomerPhone(e.target.value)}
                 placeholder="Ej. 8812 3456"
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)] font-mono"
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 font-mono"
               />
               <span className="text-[8px] text-[var(--text-secondary)] block mt-1 leading-relaxed">
                 Se usa para notificarle por WhatsApp el estado de su orden.
@@ -785,7 +785,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 placeholder="Meses de garantía"
                 value={newWarrantyMonths}
                 onChange={(e) => setNewWarrantyMonths(e.target.value === '' ? '' : Math.max(3, parseInt(e.target.value) || 3))}
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)] font-mono"
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 font-mono"
               />
               <span className="text-[8px] text-amber-400 block mt-1 leading-relaxed">
                 *Min. de 3 meses de garantía obligatoria por Ley 7472.
@@ -832,7 +832,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                     value={newDeviceModelOther}
                     onChange={(e) => setNewDeviceModelOther(e.target.value)}
                     placeholder="Especifique el modelo"
-                    className="w-full mt-2 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                    className="w-full mt-2 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 "
                   />
                   {/* Así crece el catálogo: con los equipos que de verdad
                       entran al taller, en el momento en que entran. No hay
@@ -885,7 +885,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 value={newNeededTools}
                 onChange={(e) => setNewNeededTools(e.target.value)}
                 placeholder="Ej. Kit iFixit, Soldador, Multímetro, Cinta Kapton"
-                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 "
               />
             </div>
           </div>
@@ -898,13 +898,13 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
               value={newDamageReported}
               onChange={(e) => setNewDamageReported(e.target.value)}
               placeholder="Ej. El teléfono se cayó, la pantalla está rota y no enciende. Desea cotizar reemplazo."
-              className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)] resize-none"
+              className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 resize-none"
             />
           </div>
 
           <button
             type="submit"
-            className="w-full bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white font-bold text-xs py-3 rounded-xl transition shadow-sm uppercase tracking-wider dark:text-slate-950"
+            className="w-full bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs py-3 rounded-xl transition shadow-sm uppercase tracking-wider "
           >
             Abrir Ticket de Soporte Técnico
           </button>
@@ -913,8 +913,8 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
       {/* ADMIN KANBAN COLUMNS BOARD */}
       <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 text-[var(--text-primary)]">
-        <h3 className="font-bold text-sm mb-4 text-sky-400 dark:text-[var(--brand-gold-light)] flex items-center gap-1.5">
-          <Kanban className="w-5 h-5 text-sky-400 dark:text-[var(--brand-gold-light)]" /> Tablero Kanban de Órdenes de Servicio
+        <h3 className="font-bold text-sm mb-4 text-sky-400 flex items-center gap-1.5">
+          <Kanban className="w-5 h-5 text-sky-400 " /> Tablero Kanban de Órdenes de Servicio
         </h3>
 
         {/* Scrollable Columns wrapper */}
@@ -931,7 +931,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 {/* Column Title Header */}
                 <div className="flex justify-between items-center mb-3 pb-1.5 border-b border-[var(--border-color)]/50">
                   <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wide">{col}</span>
-                  <span className="text-[10px] bg-slate-800 dark:bg-transparent border border-[var(--border-color)]/80 text-sky-400 dark:text-[var(--brand-gold-light)] px-2 py-0.5 rounded-full font-bold">
+                  <span className="text-[10px] bg-slate-800 border border-[var(--border-color)]/80 text-sky-400 px-2 py-0.5 rounded-full font-bold">
                     {colRepairs.length}
                   </span>
                 </div>
@@ -947,18 +947,18 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                       <div
                         key={rep.id}
                         onClick={() => handleSelectRepairForEdit(rep)}
-                        className="bg-[var(--bg-surface)] hover:bg-[var(--bg-surface)] border border-[var(--border-color)]/50 hover:border-sky-500 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50 rounded-xl p-3 text-xs space-y-2 cursor-pointer transition duration-150 active:scale-98"
+                        className="bg-[var(--bg-surface)] hover:bg-[var(--bg-surface)] border border-[var(--border-color)]/50 hover:border-sky-500 rounded-xl p-3 text-xs space-y-2 cursor-pointer transition duration-150 active:scale-98"
                         draggable
                         onDragStart={(e) => handleDragStart(e, rep.id)}
                         style={{ opacity: draggedRepairId === rep.id ? 0.5 : 1, cursor: 'grab' }}
                       >
                         <div className="flex justify-between font-mono text-[9px] text-[var(--text-secondary)]">
-                          <span className="font-bold text-sky-400 dark:text-[var(--brand-gold-light)]">{rep.ticket}</span>
+                          <span className="font-bold text-sky-400 ">{rep.ticket}</span>
                           <span>{new Date(rep.createdAt).toLocaleDateString([], { month: 'short', day: 'numeric' })}</span>
                         </div>
                         <div className="font-bold text-[var(--text-primary)] truncate">{rep.device}</div>
                         <div className="text-[var(--text-secondary)] text-[10px] truncate">Cliente: {rep.customerName}</div>
-                        <div className="text-[9px] bg-sky-50 border border-sky-100 rounded px-1.5 py-0.5 text-sky-600 dark:text-[var(--brand-gold-light)] w-fit font-sans flex items-center gap-1 dark:border-[var(--brand-gold-dark)]">
+                        <div className="text-[9px] bg-sky-50 border border-sky-100 rounded px-1.5 py-0.5 text-sky-600 w-fit font-sans flex items-center gap-1 ">
                           <span>🏠</span> {rep.repairLocation || 'Taller en casa'}
                         </div>
                         {/* HALLAZGO DE AUDITORÍA CORREGIDO (prioridad Media): esta
@@ -971,7 +971,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                             igual que ya se hizo en la búsqueda pública y en el
                             mensaje de WhatsApp de esta misma pantalla. */}
                         {rep.totalCost > 0 && (
-                          <div className="text-[10px] text-emerald-400 dark:text-[var(--brand-gold-light)] font-mono font-bold">₡{rep.totalCost.toLocaleString()}</div>
+                          <div className="text-[10px] text-emerald-400 font-mono font-bold">₡{rep.totalCost.toLocaleString()}</div>
                         )}
                         
                         {/* Quick state switcher */}
@@ -982,7 +982,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                               <CustomSelect
                                 value={rep.status}
                                 onChange={(val) => handleUpdateStatus(rep.id, val as RepairOrder['status'])}
-                                className="text-[9px] text-sky-600 dark:text-[var(--brand-gold-light)] px-1.5 py-0.5"
+                                className="text-[9px] text-sky-600 px-1.5 py-0.5"
                                 options={KANBAN_COLUMNS.map(s => ({ value: s, label: s }))}
                               />
                             </div>
@@ -1016,7 +1016,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
             {/* Header */}
             <div className="p-4 bg-[var(--bg-surface)] border-b border-[var(--border-color)]/80 flex justify-between items-center">
               <div>
-                <h3 className="font-bold text-sm text-sky-400 dark:text-[var(--brand-gold-light)]">Administrar Orden de Reparación</h3>
+                <h3 className="font-bold text-sm text-sky-400 ">Administrar Orden de Reparación</h3>
                 <p className="text-[10px] text-[var(--text-secondary)]">Ticket: <strong className="font-mono">{selectedRepair.ticket}</strong> | Cliente: <strong>{selectedRepair.customerName}</strong></p>
               </div>
               <div className="flex items-center gap-2">
@@ -1043,17 +1043,17 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
               <div className="bg-[var(--bg-surface)] p-3 rounded-xl border border-[var(--border-color)]/50 text-xs space-y-1">
                 <div>Equipo: <strong className="text-[var(--text-primary)]">{selectedRepair.device}</strong></div>
                 {selectedRepair.damageCategory && (
-                  <div>Categoría de Falla: <strong className="text-sky-600 dark:text-[var(--brand-gold-light)]">{selectedRepair.damageCategory}</strong></div>
+                  <div>Categoría de Falla: <strong className="text-sky-600 ">{selectedRepair.damageCategory}</strong></div>
                 )}
                 <div>Daño Reportado: <span className="text-[var(--text-secondary)] italic">"{selectedRepair.damageReported}"</span></div>
                 {selectedRepair.customerPhone && (
                   <div>Teléfono: <span className="text-[var(--text-secondary)] font-mono">{selectedRepair.customerPhone}</span></div>
                 )}
-                <div>Lugar de Trabajo: <strong className="text-sky-600 dark:text-[var(--brand-gold-light)]">{selectedRepair.repairLocation || 'Taller en casa'}</strong></div>
+                <div>Lugar de Trabajo: <strong className="text-sky-600 ">{selectedRepair.repairLocation || 'Taller en casa'}</strong></div>
                 {selectedRepair.neededTools && (
                   <div>Herramientas: <span className="text-amber-400 font-medium">{selectedRepair.neededTools}</span></div>
                 )}
-                <div>Garantía legal configurada: <strong className="text-emerald-400 dark:text-[var(--brand-gold-light)]">{selectedRepair.warrantyMonths} meses</strong></div>
+                <div>Garantía legal configurada: <strong className="text-emerald-400 ">{selectedRepair.warrantyMonths} meses</strong></div>
               </div>
 
               {/* Diagnosis Field */}
@@ -1065,7 +1065,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                   value={diagnosis}
                   onChange={(e) => setDiagnosis(e.target.value)}
                   placeholder="Detalla el diagnóstico exacto de la falla identificada y los repuestos a instalar..."
-                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)] resize-none"
+                  className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 resize-none"
                 />
               </div>
 
@@ -1152,7 +1152,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                   <button
                     type="button"
                     onClick={handleAddRepuesto}
-                    className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] transition px-4 text-xs font-bold rounded-xl"
+                    className="bg-sky-500 hover:bg-sky-600 transition px-4 text-xs font-bold rounded-xl"
                   >
                     Asignar
                   </button>
@@ -1171,7 +1171,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                           <span className="text-[9px] text-[var(--text-secondary)] font-mono ml-2">({rep.quantity} un. x ₡{rep.price.toLocaleString()})</span>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="font-mono font-bold text-emerald-400 dark:text-[var(--brand-gold-light)]">₡{(rep.price * rep.quantity).toLocaleString()}</span>
+                          <span className="font-mono font-bold text-emerald-400 ">₡{(rep.price * rep.quantity).toLocaleString()}</span>
                           <button
                             type="button"
                             onClick={() => handleRemoveRepuesto(idx)}
@@ -1189,7 +1189,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
               {/* Submit Buttons */}
               <button
                 type="submit"
-                className="w-full bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] transition text-white font-bold text-xs py-3 rounded-xl mt-4 uppercase tracking-wider dark:text-slate-950"
+                className="w-full bg-emerald-500 hover:bg-emerald-600 transition text-white font-bold text-xs py-3 rounded-xl mt-4 uppercase tracking-wider "
               >
                 Guardar Diagnóstico, Asignar Repuestos y Recalcular
               </button>
@@ -1239,20 +1239,20 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                     onChange={e => setNuevoModeloCat(e.target.value)}
                     list="taller-categorias"
                     placeholder="Categoría"
-                    className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                    className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 "
                   />
                   <input
                     value={nuevoModeloMarca}
                     onChange={e => setNuevoModeloMarca(e.target.value)}
                     list="taller-marcas"
                     placeholder="Marca"
-                    className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                    className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 "
                   />
                   <input
                     value={nuevoModeloNombre}
                     onChange={e => setNuevoModeloNombre(e.target.value)}
                     placeholder="Modelo"
-                    className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                    className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 "
                   />
                 </div>
                 {/* Las sugerencias salen del catálogo que ya existe, para que
@@ -1273,7 +1273,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                     toast.success(`"${nuevoModeloNombre.trim()}" agregado al catálogo.`);
                     setNuevoModeloNombre('');
                   }}
-                  className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white dark:text-slate-950 text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5"
+                  className="bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5"
                 >
                   <Plus className="w-3.5 h-3.5" /> Agregar al catálogo
                 </button>
@@ -1286,7 +1286,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                   value={buscarModelo}
                   onChange={e => setBuscarModelo(e.target.value)}
                   placeholder="Buscar un modelo en el catálogo…"
-                  className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                  className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl pl-9 pr-3 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 "
                 />
               </div>
 
