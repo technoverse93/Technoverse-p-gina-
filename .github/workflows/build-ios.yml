@@ -72,9 +72,17 @@ jobs:
           echo "--- Info.plist ---"
           /usr/libexec/PlistBuddy -c "Print :NSFaceIDUsageDescription" "$PLIST"
 
-      - name: Instalar CocoaPods (dependencias nativas)
-        working-directory: ios/App
-        run: pod install --repo-update
+      # FALLO CORREGIDO: la primera versión de este workflow traía un paso
+      # `pod install` que fallaba con "No `Podfile' found" — Capacitor 8 ya
+      # NO genera un proyecto basado en CocoaPods por defecto. Genera un
+      # paquete de Swift Package Manager (`ios/App/CapApp-SPM`, con su
+      # propio `Package.swift`) cuando, como aquí, todos los plugins
+      # instalados ya traen soporte de SPM — se puede confirmar en el log
+      # de `cap add ios`: "All Capacitor plugins have a Package.swift file
+      # and will be included in Package.swift". Sin Podfile tampoco existe
+      # `App.xcworkspace` (eso solo lo crea CocoaPods); el proyecto real es
+      # `App.xcodeproj`, y `xcodebuild` resuelve el paquete de SPM solo, sin
+      # necesitar ningún paso previo.
 
       # Sin firma a propósito — ver el comentario de arriba del todo del
       # archivo. `build` (no `archive`) es lo único que xcodebuild acepta
@@ -83,7 +91,7 @@ jobs:
         working-directory: ios/App
         run: |
           xcodebuild \
-            -workspace App.xcworkspace \
+            -project App.xcodeproj \
             -scheme App \
             -configuration Release \
             -sdk iphoneos \
