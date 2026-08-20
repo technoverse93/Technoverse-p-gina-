@@ -23,6 +23,7 @@ import {
   LayoutDashboard, Package, Wrench, ArrowRightLeft, FileSpreadsheet,
   Cpu, Boxes,
   MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
+  UserCog,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -43,6 +44,14 @@ export interface AdminNavItem {
    * Contabilidad sin saber que el módulo se llama así.
    */
   buscar: string[];
+  /**
+   * Si es `true`, el módulo solo aparece —en el riel, la hoja "Más" y el
+   * buscador— para la cuenta del administrador supremo (ver
+   * `esAdminSupremo` en securityPin.ts). Es un filtro de UI únicamente:
+   * la restricción real vive en el servidor, en las funciones que ese
+   * módulo termina llamando.
+   */
+  soloAdminSupremo?: boolean;
 }
 
 export interface AdminNavGroup {
@@ -183,6 +192,15 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         icon: Settings,
         descripcion: 'Datos fiscales, logo de la tienda y creación de administradores.',
         buscar: ['configuracion', 'ajustes', 'logo', 'cedula', 'fiscal', 'usuarios', 'administradores'],
+      },
+      {
+        id: 'gestion_usuarios',
+        label: 'Gestión de usuarios',
+        short: 'Usuarios',
+        icon: UserCog,
+        descripcion: 'Restablece la contraseña o el PIN de seguridad de otra cuenta administradora.',
+        buscar: ['usuarios', 'administradores', 'gestion', 'restablecer', 'contrasena', 'pin', 'supremo'],
+        soloAdminSupremo: true,
       },
     ],
   },

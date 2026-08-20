@@ -175,14 +175,22 @@ export default function AdminShell({
     return ((partes[0]?.[0] || 'T') + (partes[1]?.[0] || '')).toUpperCase();
   }, [currentUser]);
 
+  // Los módulos marcados `soloAdminSupremo` (ver adminNav.ts) se quitan
+  // aquí de TODAS las superficies que listan módulos — riel, dock, hoja
+  // "Más" y buscador — para cualquier cuenta que no sea la del correo
+  // supremo. Es solo la UI: la restricción de verdad vive en el
+  // servidor, en las funciones que ese módulo termina llamando.
+  const puedeVerModulo = (item: AdminNavItem) => !item.soloAdminSupremo || esSupremo;
+
   const itemsDock = DOCK_IDS
     .map(id => NAV_ITEMS.find(i => i.id === id))
-    .filter((i): i is AdminNavItem => !!i);
+    .filter((i): i is AdminNavItem => !!i)
+    .filter(puedeVerModulo);
 
   // En la hoja de "Más" va todo lo que no cabe en el dock. Se calcula a
   // partir del dock y no con una segunda lista escrita a mano: así
   // ningún módulo puede quedar sin acceso en la APK por un descuido.
-  const itemsHoja = NAV_ITEMS.filter(i => !DOCK_IDS.includes(i.id));
+  const itemsHoja = NAV_ITEMS.filter(i => !DOCK_IDS.includes(i.id)).filter(puedeVerModulo);
   const hojaTieneActivo = itemsHoja.some(i => i.id === moduloActivo.id);
 
   return (
@@ -221,7 +229,7 @@ export default function AdminShell({
                   `key` a los componentes propios y una lista de
                   componentes con `key` no compila. Con elementos nativos
                   no hay problema. */}
-              {grupo.items.map(item => {
+              {grupo.items.filter(puedeVerModulo).map(item => {
                 const activo = item.id === moduloActivo.id;
                 return (
                   <button
@@ -480,6 +488,7 @@ export default function AdminShell({
         <BuscadorDeModulos
           onElegir={ir}
           onCerrar={() => setBuscadorAbierto(false)}
+          esSupremo={esSupremo}
         />
       )}
 
@@ -504,15 +513,22 @@ export default function AdminShell({
 function BuscadorDeModulos({
   onElegir,
   onCerrar,
+  esSupremo,
 }: {
   onElegir: (tab: string) => void;
   onCerrar: () => void;
+  esSupremo: boolean;
 }) {
   const [consulta, setConsulta] = useState('');
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  const resultados = useMemo(() => buscarModulos(consulta), [consulta]);
+  // Mismo filtro que en el resto de superficies: un módulo
+  // `soloAdminSupremo` no debe aparecer en el buscador para nadie más.
+  const resultados = useMemo(
+    () => buscarModulos(consulta).filter(item => !item.soloAdminSupremo || esSupremo),
+    [consulta, esSupremo]
+  );
 
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => { setCursor(0); }, [consulta]);
