@@ -176,20 +176,41 @@ export default function AdminPanel({
   useEffect(() => {
     if (activeTab !== 'facturacion') return;
     let vigente = true;
-    supabase
-      .from('invoices')
-      .select('id, order_id, consecutivo, pdf_url, email_status')
-      .then(({ data, error }) => {
-        if (!vigente || error || !data) return;
-        const mapa: typeof facturasPorPedido = {};
-        for (const f of data as any[]) {
-          mapa[f.order_id] = {
-            id: f.id, consecutivo: f.consecutivo, pdfUrl: f.pdf_url, emailStatus: f.email_status,
-          };
-        }
-        setFacturasPorPedido(mapa);
-      });
-    return () => { vigente = false; };
+
+    const recargarFacturas = () => {
+      supabase
+        .from('invoices')
+        .select('id, order_id, consecutivo, pdf_url, email_status')
+        .then(({ data, error }) => {
+          if (!vigente || error || !data) return;
+          const mapa: typeof facturasPorPedido = {};
+          for (const f of data as any[]) {
+            mapa[f.order_id] = {
+              id: f.id, consecutivo: f.consecutivo, pdfUrl: f.pdf_url, emailStatus: f.email_status,
+            };
+          }
+          setFacturasPorPedido(mapa);
+        });
+    };
+
+    recargarFacturas();
+
+    // FALLO CORREGIDO: `invoices` no forma parte del espejo local con
+    // Realtime (TABLE_CONFIGS, en storage.ts) — es una consulta aparte,
+    // así que sin esto era la única pantalla del panel que necesitaba F5
+    // para enterarse de un `email_status` que cambió (por ejemplo, un
+    // reenvío de correo hecho desde OTRO dispositivo). Un canal propio,
+    // vivo solo mientras esta pestaña está abierta, cierra ese hueco sin
+    // tocar el espejo local genérico que usan las demás tablas.
+    const canal = supabase
+      .channel('facturacion-invoices-realtime')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'invoices' }, recargarFacturas)
+      .subscribe();
+
+    return () => {
+      vigente = false;
+      supabase.removeChannel(canal);
+    };
   }, [activeTab, orders]);
 
   /**

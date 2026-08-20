@@ -17,6 +17,33 @@ import {
 // cada producto con su código real de 13 dígitos del catálogo de Hacienda.
 export const DEFAULT_CAABYS = '8399000000000';
 
+// FALLO CORREGIDO (discrepancia de garantías): este desplegable ofrecía
+// '15 días' / '60 días' / '90 días' / '12 meses' — una escala en DÍAS que
+// no tenía ninguna correspondencia con los plazos en MESES (1/3/12) que
+// usa Facturación. Un producto creado con "60 días" no podía traducirse a
+// ningún plazo válido al venderlo, que es justo la discrepancia reportada.
+// Ahora son los mismos tres plazos, en el mismo formato, en los dos
+// lugares — y la restricción `products_warranty_valida` en Supabase los
+// exige igual del lado de la base.
+const GARANTIAS_PRODUCTO = ['1 mes', '3 meses', '12 meses'] as const;
+
+/**
+ * Traduce cualquier texto de garantía en días/meses/años (lo que venga
+ * escrito en la lista de precios de un proveedor) al plazo estándar más
+ * cercano — nunca al texto original tal cual, que es justo lo que dejaba
+ * colar valores fuera de 1/3/12 meses en el catálogo.
+ */
+function normalizarGarantiaTexto(texto: string): string {
+  const match = texto.match(/(\d+)\s*(mes|meses|año|años|d[ií]a|d[ií]as)/i);
+  if (!match) return GARANTIAS_PRODUCTO[1];
+  const cantidad = Number(match[1]);
+  const unidad = match[2].toLowerCase();
+  const meses = unidad.startsWith('año') ? cantidad * 12 : unidad.startsWith('d') ? cantidad / 30 : cantidad;
+  const opciones = [1, 3, 12];
+  const cercano = opciones.reduce((a, b) => (Math.abs(b - meses) < Math.abs(a - meses) ? b : a));
+  return cercano === 1 ? '1 mes' : `${cercano} meses`;
+}
+
 // Stock inicial que trae cada fila del importador de listas de precios. Una
 // lista de proveedor no dice cuántas unidades hay físicamente, así que 0
 // sería lo exacto — pero en la práctica el negocio siempre pide una cantidad
@@ -119,7 +146,7 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
   const [prodLinkedSparePartSku, setProdLinkedSparePartSku] = useState('');
   // Solo se usa con insumos: los deja aparecer en el catálogo público.
   const [prodVisibleEnTienda, setProdVisibleEnTienda] = useState(false);
-  const [prodWarranty, setProdWarranty] = useState('15 días');
+  const [prodWarranty, setProdWarranty] = useState<string>(GARANTIAS_PRODUCTO[1]);
   // CAABYS (Catálogo de Bienes y Servicios de Hacienda): código de 13 dígitos
   // requerido por línea en la Factura/Tiquete Electrónico v4.3. '8399000000000'
   // ("Otros servicios n.c.p.") es el respaldo genérico mientras se clasifica
@@ -350,11 +377,14 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
 
       // Garantía: "1 mes de garantía", "30 dias naturales de garantia", etc.
       // Se extrae a su propio campo — dejarla dentro del nombre duplicaría
-      // la información y ensuciaría el catálogo.
+      // la información y ensuciaría el catálogo. El texto libre del PDF
+      // NUNCA se guarda tal cual: se traduce al plazo estándar más cercano
+      // (ver `normalizarGarantiaTexto`), para que una lista de proveedor
+      // no pueda colar un valor fuera de 1/3/12 meses en el catálogo.
       const warrantyMatch = nameText.match(/(\d+\s*(?:meses|años|mes|año|días|dias)(?:\s+de\s+garant[ií]a)?)/i);
-      let warranty = '3 meses';
+      let warranty: string = GARANTIAS_PRODUCTO[1];
       if (warrantyMatch) {
-        warranty = warrantyMatch[1].replace(/\s+de\s+garant[ií]a/i, '').trim();
+        warranty = normalizarGarantiaTexto(warrantyMatch[1]);
         nameText = nameText.replace(warrantyMatch[0], '');
       }
 
@@ -1591,7 +1621,7 @@ if (!m) return null;
                                 ₡{(p.cost || 0).toLocaleString()}
                               </td>
                               <td className="p-4 text-center text-[var(--text-secondary)] text-[10px]">
-                                {p.warranty || '15 días'}
+                                {p.warranty || GARANTIAS_PRODUCTO[1]}
                               </td>
                               <td className="p-4">
                                 <div className="flex items-center justify-end gap-2">
@@ -1608,7 +1638,7 @@ if (!m) return null;
                                       setProdStock(p.stock);
                                       setProdLocation(p.physicalLocation || '');
                                       setProdImage(p.imageUrl);
-                                      setProdWarranty(p.warranty || '15 días');
+                                      setProdWarranty(p.warranty || GARANTIAS_PRODUCTO[1]);
                                       setProdCaabys(p.caabys || '');
                                       setProdApplyDiscount(p.discountPercent > 0);
                                       setProdDiscount(p.discountPercent || 0);
@@ -1702,7 +1732,7 @@ if (!m) return null;
                                         setProdStock(p.stock);
                                         setProdLocation(p.physicalLocation || '');
                                         setProdImage(p.imageUrl);
-                                        setProdWarranty(p.warranty || '15 días');
+                                        setProdWarranty(p.warranty || GARANTIAS_PRODUCTO[1]);
                                         setProdApplyDiscount(p.discountPercent > 0);
                                         setProdDiscount(p.discountPercent || 0);
                                         setProdDoubleStock(p.isDoubleStock || false);
@@ -1935,7 +1965,7 @@ if (!m) return null;
                         value={prodWarranty}
                         onChange={setProdWarranty}
                         className="text-xs py-2"
-                        options={['15 días', '60 días', '90 días', '12 meses'].map(w => ({ value: w, label: w }))}
+                        options={GARANTIAS_PRODUCTO.map(w => ({ value: w, label: w }))}
                       />
                     </div>
 
@@ -2875,13 +2905,15 @@ if (!m) return null;
                                 </td>
 
                                 <td className="p-3">
-                                  <input 
-                                    type="text" 
-                                    value={row.warranty} 
+                                  {/* FALLO CORREGIDO: era un <input type="text"> de texto libre —
+                                      exactamente la discrepancia de garantías que se prohibió. */}
+                                  <select
+                                    value={row.warranty}
                                     onChange={(e) => handleWarrantyChange(index, e.target.value)}
                                     className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-xs px-2 py-1 rounded text-[var(--text-primary)] focus:outline-none"
-                                    placeholder="Garantía"
-                                  />
+                                  >
+                                    {GARANTIAS_PRODUCTO.map(w => <option key={w} value={w}>{w}</option>)}
+                                  </select>
                                 </td>
 
                                 <td className="p-3 text-center">
