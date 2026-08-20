@@ -1324,7 +1324,7 @@ if (!m) return null;
       {/* Header and SubTabs */}
       <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
         <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-          <Package className="w-5 h-5 text-sky-500 dark:text-[var(--brand-gold-light)]" /> Centro de Control de Inventario
+          <Package className="w-5 h-5 text-sky-500 " /> Centro de Control de Inventario
         </h3>
         
         <div className="flex bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl p-1 overflow-x-auto w-full md:w-auto">
@@ -1339,7 +1339,7 @@ if (!m) return null;
               key={tab.id}
               onClick={() => { setActiveSubTab(tab.id as any); if (onTabChange) onTabChange(tab.id as any); }}
               className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition flex-shrink-0 ${
-                activeSubTab === tab.id ? 'bg-sky-500 dark:bg-[var(--brand-gold-mid)] text-white dark:text-slate-950 shadow-sm' : 'text-[var(--text-secondary)] hover:text-sky-500 dark:hover:text-[var(--brand-gold-light)]'
+                activeSubTab === tab.id ? 'bg-sky-500 text-white shadow-sm' : 'text-[var(--text-secondary)] hover:text-sky-500 '
               }`}
             >
               <tab.icon className="w-4 h-4" /> {tab.label}
@@ -1463,7 +1463,7 @@ if (!m) return null;
                     placeholder="Buscar por nombre o SKU..."
                     value={searchQuery}
                     onChange={e => setSearchQuery(e.target.value)}
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl pl-9 pr-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl pl-9 pr-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 "
                   />
                 </div>
                 {activeSubTab !== 'repuestos' && (
@@ -1526,7 +1526,7 @@ if (!m) return null;
                     setFormError(null);
                     setShowProductForm(true);
                   }}
-                  className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-2 dark:text-slate-950"
+                  className="bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-2 "
                 >
                   <Plus className="w-4 h-4" /> {
                     activeSubTab === 'repuestos' ? 'Añadir Repuesto'
@@ -1543,7 +1543,7 @@ if (!m) return null;
                     setGlobalCategory(activeSubTab === 'repuestos' ? 'LCD' : activeSubTab === 'insumos' ? 'Temperado' : 'Accesorios');
                     setShowPdfModal(true);
                   }}
-                  className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-slate-950 font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition"
+                  className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition"
                 >
                   <FileText className="w-4 h-4" /> Importar lista de precios
                 </button>
@@ -1613,7 +1613,7 @@ if (!m) return null;
                                 </span>
                               </td>
                               <td className="p-4 text-center">
-                                <span className={`font-mono font-bold ${p.stock === 1 ? 'text-amber-500' : 'text-emerald-500 dark:text-[var(--brand-gold-light)]'}`}>
+                                <span className={`font-mono font-bold ${p.stock === 1 ? 'text-amber-500' : 'text-emerald-500 '}`}>
                                   {p.stock} u.
                                 </span>
                               </td>
@@ -1652,7 +1652,7 @@ if (!m) return null;
                                       setFormError(null);
                                       setShowProductForm(true);
                                     }}
-                                    className="p-1.5 bg-[var(--border-color)] hover:bg-sky-100 dark:hover:bg-[var(--brand-gold-mid)]/10 dark:bg-[var(--brand-gold-mid)] text-sky-600 dark:text-[var(--brand-gold-light)] rounded-lg transition"
+                                    className="p-1.5 bg-[var(--border-color)] hover:bg-sky-100 text-sky-600 rounded-lg transition"
                                     title="Editar"
                                   >
                                     <Edit className="w-4 h-4" />
@@ -1679,7 +1679,7 @@ if (!m) return null;
                               <td className="p-4 text-[var(--text-secondary)] font-mono">{p.sku}</td>
                               <td className="p-4 text-[var(--text-secondary)]">{p.category}</td>
                               <td className="p-4">
-                                <div className="text-emerald-500 font-bold dark:text-[var(--brand-gold-light)]">₡{(p.price || 0).toLocaleString()}</div>
+                                <div className="text-emerald-500 font-bold ">₡{(p.price || 0).toLocaleString()}</div>
                                 <div className="text-[var(--text-secondary)] text-[10px]">Costo: ₡{(p.cost || 0).toLocaleString()}</div>
                               </td>
                               <td className="p-4">
@@ -1714,7 +1714,7 @@ if (!m) return null;
                                   <div className="flex items-center justify-end gap-2">
                                     <button
                                       onClick={() => setTraceProductModal(p)}
-                                      className="p-1.5 bg-purple-50 hover:bg-purple-100 dark:hover:bg-[var(--brand-gold-mid)]/10 text-purple-600 rounded-lg transition dark:bg-[var(--brand-gold-mid)] dark:text-[var(--brand-gold-light)]"
+                                      className="p-1.5 bg-purple-50 hover:bg-purple-100 text-purple-600 rounded-lg transition "
                                       title="Trazabilidad"
                                     >
                                       <History className="w-4 h-4" />
@@ -1745,7 +1745,7 @@ if (!m) return null;
                                         setFormError(null);
                                         setShowProductForm(true);
                                       }}
-                                      className="p-1.5 bg-sky-50 hover:bg-sky-100 dark:hover:bg-[var(--brand-gold-mid)]/10 dark:bg-[var(--brand-gold-mid)] text-sky-600 dark:text-[var(--brand-gold-light)] rounded-lg transition"
+                                      className="p-1.5 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded-lg transition"
                                       title="Editar"
                                     >
                                       <Edit className="w-4 h-4" />
@@ -1794,7 +1794,7 @@ if (!m) return null;
             /* Product Form */
             <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-6">
               <div className="flex justify-between items-center mb-6 pb-3 border-b border-[var(--border-color)]/50">
-                <h4 className="text-sm font-bold text-sky-400 dark:text-[var(--brand-gold-light)]">{editingProductId ? 'Editar Producto' : 'Nuevo Producto'}</h4>
+                <h4 className="text-sm font-bold text-sky-400 ">{editingProductId ? 'Editar Producto' : 'Nuevo Producto'}</h4>
                 <button onClick={() => setShowProductForm(false)} className="text-[var(--text-secondary)] hover:text-white">
                   <X className="w-5 h-5" />
                 </button>
@@ -1848,10 +1848,10 @@ if (!m) return null;
                                   autocompletarDesdeHistorico(h.sku);
                                   setShowSkuSuggestions(false);
                                 }}
-                                className="w-full text-left px-3 py-2 text-xs hover:bg-sky-500 dark:hover:bg-[var(--brand-gold-mid)] dark:bg-[var(--brand-gold-mid)]/10 transition flex flex-col gap-0.5 cursor-pointer"
+                                className="w-full text-left px-3 py-2 text-xs hover:bg-sky-500 transition flex flex-col gap-0.5 cursor-pointer"
                               >
                                 <div className="flex justify-between items-center w-full gap-2">
-                                  <span className="font-mono font-bold text-sky-400 dark:text-[var(--brand-gold-light)] truncate">
+                                  <span className="font-mono font-bold text-sky-400 truncate">
                                     {h.sku} - <span className="text-[var(--text-primary)] font-sans font-normal">{h.name}</span>
                                   </span>
                                   <span className="text-[8px] bg-[var(--border-color)] text-[var(--text-muted)] px-1 py-0.5 rounded-full flex-shrink-0">{h.category}</span>
@@ -1861,8 +1861,8 @@ if (!m) return null;
                           </div>
                         )}
                         {matchedHistoricalSku && (
-                          <div className="mt-1.5 bg-sky-500 dark:bg-[var(--brand-gold-mid)]/15 border border-sky-500 dark:border-[var(--brand-gold-mid)]/30 p-2 rounded-xl flex flex-col gap-1.5 animate-in slide-in-from-top-1">
-                            <div className="text-[10px] text-sky-300 dark:text-[var(--brand-gold-light)] leading-tight">
+                          <div className="mt-1.5 bg-sky-500 border border-sky-500 p-2 rounded-xl flex flex-col gap-1.5 animate-in slide-in-from-top-1">
+                            <div className="text-[10px] text-sky-300 leading-tight">
                               SKU en histórico. Categoría: <strong className="text-[var(--text-primary)]">{matchedHistoricalSku.category}</strong>
                             </div>
                             <button
@@ -1871,7 +1871,7 @@ if (!m) return null;
                                 e.preventDefault();
                                 autocompletarDesdeHistorico(matchedHistoricalSku.sku);
                               }}
-                              className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-slate-950 font-bold text-[10px] py-1 px-2 rounded-lg transition text-center cursor-pointer"
+                              className="bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold text-[10px] py-1 px-2 rounded-lg transition text-center cursor-pointer"
                             >
                               Recuperar datos del histórico
                             </button>
@@ -1952,7 +1952,7 @@ if (!m) return null;
                           />
                         </div>
                         {prodLinkedSparePartSku && (
-                          <p className="text-[10px] text-sky-400 dark:text-[var(--brand-gold-light)] flex items-center gap-1">
+                          <p className="text-[10px] text-sky-400 flex items-center gap-1">
                             <CheckCircle2 className="w-3 h-3" /> Vinculado. El stock se sincronizará automáticamente.
                           </p>
                         )}
@@ -1980,7 +1980,7 @@ if (!m) return null;
                         value={prodCaabys}
                         onChange={e => setProdCaabys(e.target.value.replace(/\D/g, '').slice(0, 13))}
                         placeholder={DEFAULT_CAABYS + ' (genérico si se deja vacío)'}
-                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-sky-500 "
                       />
                       <p className="text-[9px] text-[var(--text-muted)] mt-1">
                         Requerido por línea en comprobantes electrónicos v4.3. Sin clasificar aún, se usa el genérico "Otros servicios n.c.p.".
@@ -2052,7 +2052,7 @@ if (!m) return null;
                         {prodImage ? (
                           <ProductImage src={prodImage} alt="Previsualización" className="w-16 h-16" />
                         ) : (
-                          <div className="w-16 h-16 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-color)]/80 flex items-center justify-center text-sky-600 dark:text-[var(--brand-gold-light)] font-bold text-[9px] text-center p-1 font-mono">
+                          <div className="w-16 h-16 rounded-lg bg-[var(--bg-surface)] border border-[var(--border-color)]/80 flex items-center justify-center text-sky-600 font-bold text-[9px] text-center p-1 font-mono">
                             TECHNOVERSE
                           </div>
                         )}
@@ -2078,7 +2078,7 @@ if (!m) return null;
                                 reader.readAsDataURL(file);
                               }
                             }}
-                            className="w-full text-xs text-[var(--text-secondary)] file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-semibold file:bg-sky-500 file:text-sky-400 dark:text-[var(--brand-gold-light)] hover:file:bg-sky-500 dark:bg-[var(--brand-gold-mid)]/20 cursor-pointer"
+                            className="w-full text-xs text-[var(--text-secondary)] file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-semibold file:bg-sky-500 file:text-sky-400 hover:file:bg-sky-500 cursor-pointer"
                           />
 
                           {/* Diagnóstico de transparencia.
@@ -2287,7 +2287,7 @@ if (!m) return null;
                   <button
                     type="submit"
                     disabled={savingProduct}
-                    className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-slate-950 transition shadow-sm flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
+                    className="px-5 py-2.5 rounded-xl text-xs font-bold bg-emerald-500 hover:bg-emerald-600 text-slate-950 transition shadow-sm flex items-center gap-2 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     <Save className="w-4 h-4" /> {savingProduct ? 'Guardando…' : 'Guardar Producto'}
                   </button>
@@ -2304,7 +2304,7 @@ if (!m) return null;
             <h4 className="text-sm font-bold text-[var(--text-secondary)]">Bitácora de Movimientos de Stock</h4>
             <button
               onClick={handleExportCSV}
-              className="bg-sky-500 hover:bg-sky-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-2 transition"
+              className="bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-2 transition"
             >
               <Download className="w-3.5 h-3.5" /> Exportar CSV
             </button>
@@ -2333,7 +2333,7 @@ if (!m) return null;
                           {m.type}
                         </span>
                       </td>
-                      <td className={`p-3 text-right font-bold ${m.quantityChange > 0 ? 'text-emerald-400 dark:text-[var(--brand-gold-light)]' : 'text-rose-400'}`}>
+                      <td className={`p-3 text-right font-bold ${m.quantityChange > 0 ? 'text-emerald-400 ' : 'text-rose-400'}`}>
                         {m.quantityChange > 0 ? '+' : ''}{m.quantityChange}
                       </td>
                       <td className="p-3 text-right text-[var(--text-secondary)]">{m.resultingStock || '-'}</td>
@@ -2361,7 +2361,7 @@ if (!m) return null;
               <X className="w-5 h-5" />
             </button>
             <h4 className="text-sm font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <History className="w-5 h-5 text-purple-400 dark:text-[var(--brand-gold-light)]" /> Trazabilidad de Producto
+              <History className="w-5 h-5 text-purple-400 " /> Trazabilidad de Producto
             </h4>
             <div className="bg-[var(--bg-surface)] p-3 rounded-xl border border-[var(--border-color)]/50 flex items-center gap-3">
               <ProductImage src={traceProductModal.imageUrl} alt={traceProductModal.name} className="w-12 h-12" />
@@ -2386,8 +2386,8 @@ if (!m) return null;
                   {movements.filter(m => m && m.productId === traceProductModal.id).map((m, mIdx) => (
                     <tr key={m.id || `trace-${mIdx}`} className="hover:bg-[var(--bg-surface)] transition">
                       <td className="p-2 text-[var(--text-secondary)]">{new Date(m.timestamp).toLocaleString()}</td>
-                      <td className="p-2 text-sky-400 dark:text-[var(--brand-gold-light)]">{m.type}</td>
-                      <td className={`p-2 text-right font-bold ${m.quantityChange > 0 ? 'text-emerald-400 dark:text-[var(--brand-gold-light)]' : 'text-rose-400'}`}>
+                      <td className="p-2 text-sky-400 ">{m.type}</td>
+                      <td className={`p-2 text-right font-bold ${m.quantityChange > 0 ? 'text-emerald-400 ' : 'text-rose-400'}`}>
                         {m.quantityChange > 0 ? '+' : ''}{m.quantityChange}
                       </td>
                       <td className="p-2 text-right text-[var(--text-secondary)]">{m.resultingStock || '-'}</td>
@@ -2450,11 +2450,11 @@ if (!m) return null;
                 </div>
                 <div className="flex justify-between items-center pb-2 border-b border-[var(--border-color)]/50">
                   <span className="text-xs text-[var(--text-secondary)]">Valor a Costo</span>
-                  <span className="font-mono text-sky-400 dark:text-[var(--brand-gold-light)] font-bold">₡{products.reduce((a, b) => a + (b ? ((b.cost || 0) * (b.stock || 0)) : 0), 0).toLocaleString()}</span>
+                  <span className="font-mono text-sky-400 font-bold">₡{products.reduce((a, b) => a + (b ? ((b.cost || 0) * (b.stock || 0)) : 0), 0).toLocaleString()}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-[var(--text-secondary)]">Valor a Precio Venta</span>
-                  <span className="font-mono text-emerald-400 dark:text-[var(--brand-gold-light)] font-bold">₡{products.reduce((a, b) => a + (b ? ((b.price || 0) * (b.stock || 0)) : 0), 0).toLocaleString()}</span>
+                  <span className="font-mono text-emerald-400 font-bold">₡{products.reduce((a, b) => a + (b ? ((b.price || 0) * (b.stock || 0)) : 0), 0).toLocaleString()}</span>
                 </div>
               </div>
             </div>
@@ -2466,7 +2466,7 @@ if (!m) return null;
                 {products.filter(p => p && p.stock !== undefined && p.stock !== null && p.stock > 0).slice(0, 4).map(p => (
                   <div key={p.id} className="bg-[var(--bg-surface)] border border-[var(--border-color)]/50 p-2 rounded-lg flex justify-between items-center">
                     <span className="text-[10px] text-[var(--text-primary)] truncate max-w-[150px]">{p.name}</span>
-                    <span className="text-[9px] font-mono text-emerald-400 dark:text-[var(--brand-gold-light)]">{p.stock} en stock</span>
+                    <span className="text-[9px] font-mono text-emerald-400 ">{p.stock} en stock</span>
                   </div>
                 ))}
               </div>
@@ -2482,10 +2482,10 @@ if (!m) return null;
             <div 
               key={t.id} 
               className={`p-4 rounded-xl shadow-sm border flex items-start gap-3 animate-slide-in text-white ${
-                t.type === 'success' ? 'bg-emerald-950 dark:bg-[var(--brand-gold-mid)] border-emerald-500 dark:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50' :
+                t.type === 'success' ? 'bg-emerald-950 border-emerald-500 ' :
                 t.type === 'error' ? 'bg-rose-950 border-rose-500/50' :
                 t.type === 'warning' ? 'bg-amber-950 border-amber-500/50' :
-                'bg-[var(--bg-surface)]  border-sky-500 dark:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50'
+                'bg-[var(--bg-surface)]  border-sky-500 '
               }`}
             >
               <div className="flex-1 text-xs font-semibold">{t.message}</div>
@@ -2506,7 +2506,7 @@ if (!m) return null;
             <div className="p-6 border-b border-[var(--border-color)]/80 flex justify-between items-center bg-[var(--bg-surface)] ">
               <div className="space-y-1">
                 <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-                  <FileText className="w-5 h-5 text-emerald-400 dark:text-[var(--brand-gold-light)]" /> Importador de Listas de Precios
+                  <FileText className="w-5 h-5 text-emerald-400 " /> Importador de Listas de Precios
                 </h3>
                 <p className="text-xs text-[var(--text-secondary)]">Suba la lista de precios de un proveedor (PDF o texto plano) para registrar sus artículos en el inventario, sin escribirlos uno por uno.</p>
               </div>
@@ -2525,7 +2525,7 @@ if (!m) return null;
               {/* Step 1: File selection & upload */}
               {extractedProducts.length === 0 && !isAnalyzingPdf && (
                 <div className="space-y-6 max-w-2xl mx-auto py-8">
-                  <div className="border-2 border-dashed border-[var(--border-color)]/80 hover:border-emerald-500 dark:hover:border-[var(--brand-gold-dark)] dark:border-[var(--brand-gold-mid)]/50 rounded-2xl p-8 text-center bg-[var(--bg-surface)] cursor-pointer transition relative group">
+                  <div className="border-2 border-dashed border-[var(--border-color)]/80 hover:border-emerald-500 rounded-2xl p-8 text-center bg-[var(--bg-surface)] cursor-pointer transition relative group">
                     <input
                       type="file"
                       accept=".pdf,.txt"
@@ -2538,7 +2538,7 @@ if (!m) return null;
                       className="absolute inset-0 w-full h-full opacity-0 cursor-pointer"
                     />
                     <div className="space-y-4">
-                      <div className="w-12 h-12 bg-emerald-500 dark:bg-[var(--brand-gold-mid)]/10 text-emerald-400 dark:text-[var(--brand-gold-light)] rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition">
+                      <div className="w-12 h-12 bg-emerald-500 text-emerald-400 rounded-full flex items-center justify-center mx-auto group-hover:scale-110 transition">
                         <Upload className="w-6 h-6" />
                       </div>
                       <div className="space-y-1">
@@ -2562,7 +2562,7 @@ if (!m) return null;
               {/* Step 2: Lectura y análisis en curso */}
               {isAnalyzingPdf && (
                 <div className="space-y-4 max-w-md mx-auto py-16 text-center">
-                  <div className="w-16 h-16 rounded-full bg-emerald-500 dark:bg-[var(--brand-gold-mid)]/10 border border-emerald-500 dark:border-[var(--brand-gold-mid)]/30 flex items-center justify-center mx-auto text-emerald-400 dark:text-[var(--brand-gold-light)] animate-spin">
+                  <div className="w-16 h-16 rounded-full bg-emerald-500 border border-emerald-500 flex items-center justify-center mx-auto text-emerald-400 animate-spin">
                     <FileText className="w-8 h-8" />
                   </div>
                   <h4 className="text-sm font-bold text-[var(--text-primary)]">Leyendo el archivo…</h4>
@@ -2597,7 +2597,7 @@ if (!m) return null;
                             setExtractedProducts(prev => prev.map(row => ({ ...row, category: globalCategory })));
                             showToast(`Categoría "${globalCategory}" aplicada a todas las filas.`, 'success');
                           }}
-                          className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-slate-950 font-bold text-xs px-4 py-1.5 rounded-xl transition"
+                          className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-1.5 rounded-xl transition"
                         >
                           Aplicar
                         </button>
@@ -2625,7 +2625,7 @@ if (!m) return null;
                             setExtractedProducts(prev => prev.map(row => ({ ...row, brand: globalBrand })));
                             showToast(`Marca "${globalBrand}" aplicada a todas las filas.`, 'success');
                           }}
-                          className="bg-emerald-500 hover:bg-emerald-600 dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-slate-950 font-bold text-xs px-4 py-1.5 rounded-xl transition"
+                          className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-1.5 rounded-xl transition"
                         >
                           Aplicar
                         </button>
@@ -2664,7 +2664,7 @@ if (!m) return null;
 
                     {/* Explicación de conversión */}
                     <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/50 rounded-xl p-3 flex flex-col justify-center">
-                      <strong className="text-[11px] text-emerald-600 block font-bold dark:text-[var(--brand-gold-light)]">💱 Conversión Automática</strong>
+                      <strong className="text-[11px] text-emerald-600 block font-bold ">💱 Conversión Automática</strong>
                       <p className="text-[10px] text-[var(--text-secondary)] mt-1">Los costos expresados en dólares ($) se convierten de inmediato a colones (₡) según la tasa de <strong>1 USD = 540 CRC</strong>.</p>
                     </div>
 
@@ -2716,7 +2716,7 @@ if (!m) return null;
                                     type="checkbox" 
                                     checked={row.selected}
                                     onChange={(e) => handleSelectRow(index, e.target.checked)}
-                                    className="rounded border-[var(--border-color)]/80 text-emerald-500 focus:ring-emerald-500 dark:focus:ring-[var(--brand-gold-mid)] bg-[var(--bg-surface)] dark:text-[var(--brand-gold-light)]"
+                                    className="rounded border-[var(--border-color)]/80 text-emerald-500 focus:ring-emerald-500 bg-[var(--bg-surface)] "
                                   />
                                 </td>
                                 
@@ -2771,16 +2771,16 @@ if (!m) return null;
                                           onClick={() => {
                                             setActivePopoverIndex(activePopoverIndex === index ? null : index);
                                           }}
-                                          className="p-1 rounded bg-purple-500/20 hover:bg-purple-500 dark:hover:bg-[var(--brand-gold-mid)]/30 dark:bg-[var(--brand-gold-mid)] text-purple-400 hover:text-purple-300 dark:hover:text-[var(--brand-gold-light)] transition animate-pulse dark:text-[var(--brand-gold-light)]"
+                                          className="p-1 rounded bg-purple-500/20 hover:bg-purple-500 text-purple-400 hover:text-purple-300 transition animate-pulse "
                                           title="Ver datos históricos"
                                         >
                                           <History className="w-3.5 h-3.5" />
                                         </button>
                                         
                                         {activePopoverIndex === index && (
-                                          <div className="absolute right-0 mt-2 w-64 bg-[var(--bg-surface)] border border-purple-500 rounded-xl p-4 shadow-sm z-[100] text-left space-y-3 dark:border-[var(--brand-gold-dark)]">
-                                            <div className="flex justify-between items-center pb-2 border-b border-purple-500/30 dark:border-[var(--brand-gold-dark)]">
-                                              <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wide dark:text-[var(--brand-gold-light)]">Registro Histórico</span>
+                                          <div className="absolute right-0 mt-2 w-64 bg-[var(--bg-surface)] border border-purple-500 rounded-xl p-4 shadow-sm z-[100] text-left space-y-3 ">
+                                            <div className="flex justify-between items-center pb-2 border-b border-purple-500/30 ">
+                                              <span className="text-[10px] font-bold text-purple-400 uppercase tracking-wide ">Registro Histórico</span>
                                               <button 
                                                 type="button" 
                                                 onClick={() => setActivePopoverIndex(null)}
@@ -2799,11 +2799,11 @@ if (!m) return null;
                                             <div className="grid grid-cols-2 gap-2 text-[10px] font-mono bg-[var(--bg-surface)] p-2 rounded">
                                               <div>
                                                 <span className="text-[var(--text-secondary)] block text-[9px]">Costo Hist.</span>
-                                                <span className="text-sky-400 dark:text-[var(--brand-gold-light)] font-bold">₡{row.historicalData.cost?.toLocaleString()}</span>
+                                                <span className="text-sky-400 font-bold">₡{row.historicalData.cost?.toLocaleString()}</span>
                                               </div>
                                               <div>
                                                 <span className="text-[var(--text-secondary)] block text-[9px]">Precio Hist.</span>
-                                                <span className="text-emerald-400 dark:text-[var(--brand-gold-light)] font-bold">₡{row.historicalData.price?.toLocaleString()}</span>
+                                                <span className="text-emerald-400 font-bold">₡{row.historicalData.price?.toLocaleString()}</span>
                                               </div>
                                             </div>
                                             <button
@@ -2823,7 +2823,7 @@ if (!m) return null;
                                                 setActivePopoverIndex(null);
                                                 showToast(`Datos históricos cargados para SKU: ${row.sku}`, 'success');
                                               }}
-                                              className="w-full py-1.5 bg-purple-600 hover:bg-purple-500 dark:hover:bg-[var(--brand-gold-mid)] text-[var(--text-primary)] rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1.5 dark:bg-[var(--brand-gold-mid)]"
+                                              className="w-full py-1.5 bg-purple-600 hover:bg-purple-500 text-[var(--text-primary)] rounded-lg text-[10px] font-bold transition flex items-center justify-center gap-1.5 "
                                             >
                                               <Check className="w-3.5 h-3.5" /> Usar estos datos
                                             </button>
@@ -2840,7 +2840,7 @@ if (!m) return null;
                                       type="text"
                                       value={row.name}
                                       onChange={(e) => handleNameChange(index, e.target.value)}
-                                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-xs px-2 py-1 rounded text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)]"
+                                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-xs px-2 py-1 rounded text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 "
                                     />
                                     {row.agotado && (
                                       <span
@@ -2881,7 +2881,7 @@ if (!m) return null;
                                   />
                                 </td>
 
-                                <td className="p-3 text-right font-mono text-[11px] text-sky-400 dark:text-[var(--brand-gold-light)]">
+                                <td className="p-3 text-right font-mono text-[11px] text-sky-400 ">
                                   ₡{(row.cost || 0).toLocaleString()}
                                 </td>
 
@@ -2892,7 +2892,7 @@ if (!m) return null;
                                       value={row.stock || ''}
                                       onChange={(e) => handleStockChange(index, e.target.value === '' ? 0 : parseInt(e.target.value, 10))}
                                       className={`w-full bg-[var(--bg-surface)]  border text-xs px-2 py-1 rounded text-right focus:outline-none font-mono ${
-                                        row.selected && row.stock < 0 ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-[var(--border-color)]/80 text-[var(--text-primary)] focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)] dark:border-[var(--brand-gold-mid)]'
+                                        row.selected && row.stock < 0 ? 'border-rose-500 bg-rose-50 text-rose-700' : 'border-[var(--border-color)]/80 text-[var(--text-primary)] focus:border-emerald-500 '
                                       }`}
                                       placeholder="0"
                                     />
@@ -2943,7 +2943,7 @@ if (!m) return null;
                     <textarea 
                       value={pdfRawText}
                       onChange={(e) => setPdfRawText(e.target.value)}
-                      className="w-full h-24 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl p-3 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 dark:focus:border-[var(--brand-gold-mid)] resize-none"
+                      className="w-full h-24 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl p-3 text-xs font-mono text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 resize-none"
                       placeholder="CÓDIGO   DESCRIPCIÓN   PRECIO"
                     />
                     <div className="flex justify-end">
@@ -2971,7 +2971,7 @@ if (!m) return null;
               <div className="text-xs text-[var(--text-secondary)] space-y-0.5">
                 {extractedProducts.length > 0 && (
                   <>
-                    <p>Total detectados: <strong className="text-[var(--text-primary)]">{extractedProducts.length}</strong> | Seleccionados: <strong className="text-emerald-400 dark:text-[var(--brand-gold-light)]">{extractedProducts.filter(r => r.selected).length}</strong></p>
+                    <p>Total detectados: <strong className="text-[var(--text-primary)]">{extractedProducts.length}</strong> | Seleccionados: <strong className="text-emerald-400 ">{extractedProducts.filter(r => r.selected).length}</strong></p>
                     <p>SKUs Duplicados omitidos: <strong className="text-amber-400">{extractedProducts.filter(r => r.selected && r.skuDuplicate).length}</strong></p>
                   </>
                 )}
@@ -2993,7 +2993,7 @@ if (!m) return null;
                     className={`px-5 py-2.5 rounded-xl text-xs font-bold transition flex items-center gap-2 ${
                       isImportDisabled || isImportingProducts
                         ? 'bg-[var(--bg-surface)] text-[var(--text-muted)] cursor-not-allowed border border-[var(--border-color)]/50'
-                        : 'bg-emerald-500 dark:bg-[var(--brand-gold-mid)] hover:bg-emerald-600 dark:hover:bg-[var(--brand-gold-mid)] dark:bg-[var(--brand-gold-mid)] dark:hover:bg-[var(--brand-gold-dark)] text-[var(--text-primary)] shadow-sm shadow-emerald-500/10'
+                        : 'bg-emerald-500 hover:bg-emerald-600 text-[var(--text-primary)] shadow-sm shadow-emerald-500/10'
                     }`}
                   >
                     {isImportingProducts ? (

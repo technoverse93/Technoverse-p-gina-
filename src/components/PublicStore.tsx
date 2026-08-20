@@ -5,7 +5,7 @@ import {
   ShoppingBag, Search, ChevronDown, Trash2, ArrowRight,
   MapPin, CheckCircle, Smartphone, Wrench, Settings,
   MessageSquare, Sparkles, AlertCircle, FileDown, Heart, ShieldAlert,
-  User as UserIcon, X, LogOut, Sun, Moon, Home, LayoutGrid, Fingerprint
+  User as UserIcon, X, LogOut, Home, LayoutGrid, Fingerprint
 } from 'lucide-react';
 import { ProductCard } from './ProductCard';
 import { CustomSelect } from './CustomSelect';
@@ -38,8 +38,6 @@ interface PublicStoreProps {
   onLogout: () => void;
   autoOpenLogin?: boolean;
   onClearAutoOpenLogin?: () => void;
-  theme: 'light' | 'dark';
-  toggleTheme: () => void;
 }
 
 const COSTA_RICA_PROVINCES = [
@@ -65,8 +63,6 @@ export default function PublicStore({
   onLogout,
   autoOpenLogin,
   onClearAutoOpenLogin,
-  theme,
-  toggleTheme
 }: PublicStoreProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [dbInstance, setDbInstance] = useState<any>(null);
@@ -1178,7 +1174,7 @@ export default function PublicStore({
               onMouseLeave={scheduleCloseCatalogDropdown}
             >
               <button
-                className="group flex items-center gap-1.5 text-sm font-bold text-[var(--text-secondary)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] tracking-wide uppercase transition-colors"
+                className="group flex items-center gap-1.5 text-sm font-bold text-[var(--text-secondary)] hover:text-blue-600 tracking-wide uppercase transition-colors"
                 onClick={() => (isCatalogDropdownOpen ? setIsCatalogDropdownOpen(false) : openCatalogDropdown())}
                 aria-expanded={isCatalogDropdownOpen}
                 aria-controls="catalog-dropdown"
@@ -1208,7 +1204,7 @@ export default function PublicStore({
                             setActiveTab('store');
                             setIsCatalogDropdownOpen(false);
                           }}
-                          className="w-full text-left py-3 px-4 hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] text-sm rounded-xl transition-all font-semibold flex items-center justify-between group/item break-words whitespace-normal"
+                          className="w-full text-left py-3 px-4 hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-blue-600 text-sm rounded-xl transition-all font-semibold flex items-center justify-between group/item break-words whitespace-normal"
                         >
                           <span className="flex-1 mr-2 leading-tight">{cat}</span>
                           <ArrowRight className="w-3 h-3 opacity-0 group-hover/item:opacity-100 -translate-x-2 group-hover/item:translate-x-0 transition-all flex-shrink-0" />
@@ -1222,7 +1218,7 @@ export default function PublicStore({
 
             <button 
               onClick={() => setActiveTab('repairs')}
-              className={`text-sm font-bold tracking-wide uppercase transition-colors px-2 py-1 rounded-lg ${activeTab === 'repairs' ? 'text-blue-600 dark:text-[var(--brand-gold-light)] bg-blue-50 dark:bg-[var(--brand-gold-mid)]/10' : 'text-[var(--text-secondary)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)]'}`}
+              className={`text-sm font-bold tracking-wide uppercase transition-colors px-2 py-1 rounded-lg ${activeTab === 'repairs' ? 'text-blue-600 bg-blue-50 ' : 'text-[var(--text-secondary)] hover:text-blue-600 '}`}
             >
               Soporte Técnico
             </button>
@@ -1231,7 +1227,7 @@ export default function PublicStore({
 
         {/* Search input with autocomplete */}
         <div className="flex-1 max-w-lg mx-4 lg:mx-8 relative hidden sm:block">
-          <div className="relative flex items-center bg-[var(--bg-surface)] border border-[var(--border-color)] focus-within:border-blue-500 dark:focus-within:border-[var(--brand-gold-dark)] focus-within:ring-2 focus-within:ring-blue-500/20 dark:focus-within:ring-[var(--brand-gold-mid)] rounded-2xl px-4 py-2 transition-all duration-200">
+          <div className="relative flex items-center bg-[var(--bg-surface)] border border-[var(--border-color)] focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 rounded-2xl px-4 py-2 transition-all duration-200">
             <Search className="w-4 h-4 text-[var(--text-muted)] mr-3 flex-shrink-0" />
             <input
               type="text"
@@ -1279,7 +1275,7 @@ export default function PublicStore({
                         <div className="text-[10px] text-[var(--text-muted)] font-mono uppercase">SKU: {p.sku} • {p.category}</div>
                       </div>
                     </div>
-                    <div className="text-sm font-bold text-blue-600 dark:text-[var(--brand-gold-light)] font-mono">₡{p.price.toLocaleString()}</div>
+                    <div className="text-sm font-bold text-blue-600 font-mono">₡{p.price.toLocaleString()}</div>
                   </button>
                 ))}
               </motion.div>
@@ -1289,16 +1285,6 @@ export default function PublicStore({
 
         {/* User context selector and Cart trigger */}
         <div className="flex items-center gap-2 sm:gap-4">
-          
-          {/* Theme Toggle */}
-          <button
-            onClick={toggleTheme}
-            className="p-3 md:p-2.5 rounded-xl glass-pill text-[var(--text-secondary)] hover:border-[var(--brand-gold-mid)] hover:text-[var(--brand-gold-mid)] transition-all duration-200 flex items-center justify-center cursor-pointer"
-            title="Cambiar Tema"
-          >
-            {theme === 'dark' ? <Sun className="w-5 h-5" /> : <Moon className="w-5 h-5" />}
-          </button>
-
           {/* Account Dropdown — trigger button lives in the header on desktop only; on
               mobile this same state is triggered from the bottom navigation bar */}
           <div className="relative">
@@ -1328,7 +1314,7 @@ export default function PublicStore({
               >
                 <UserIcon className="w-5 h-5" />
                 {isAuthenticated && (
-                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-emerald-500 dark:bg-[var(--brand-gold-mid)] rounded-full border-2 border-white shadow-sm" />
+                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white shadow-sm" />
                 )}
               </button>
             </div>
@@ -1348,7 +1334,7 @@ export default function PublicStore({
                     <form onSubmit={handleClientLoginSubmit} className="p-5 space-y-4">
                       <div className="flex items-center justify-between border-b border-[var(--border-color)] pb-3 mb-1">
                         <span className="text-xs font-black text-[var(--text-muted)] uppercase tracking-widest">Portal de Clientes</span>
-                        <ShoppingBag className="w-4 h-4 text-blue-500 dark:text-[var(--brand-gold-light)] opacity-20" />
+                        <ShoppingBag className="w-4 h-4 text-blue-500 opacity-20" />
                       </div>
                       
                       <div className="space-y-4">
@@ -1362,7 +1348,7 @@ export default function PublicStore({
                             value={loginEmail}
                             onChange={(e) => setLoginEmail(e.target.value)}
                             placeholder="usuario@ejemplo.com"
-                            className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-4 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)]/10 rounded-xl px-4 py-3 text-sm text-[var(--text-secondary)] focus:outline-none transition-all font-medium"
+                            className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-4 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm text-[var(--text-secondary)] focus:outline-none transition-all font-medium"
                           />
                         </div>
                         <div>
@@ -1375,7 +1361,7 @@ export default function PublicStore({
                             value={loginPassword}
                             onChange={(e) => setLoginPassword(e.target.value)}
                             placeholder="••••••••••••"
-                            className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-4 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)]/10 rounded-xl px-4 py-3 text-sm text-[var(--text-secondary)] focus:outline-none transition-all"
+                            className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-4 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm text-[var(--text-secondary)] focus:outline-none transition-all"
                           />
                         </div>
                       </div>
@@ -1414,7 +1400,7 @@ export default function PublicStore({
                             setIsRegisterMode(true);
                             setIsAccountDropdownOpen(false);
                           }}
-                          className="text-xs text-blue-600 hover:text-blue-800 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] font-bold transition-colors hover:underline"
+                          className="text-xs text-blue-600 hover:text-blue-800 font-bold transition-colors hover:underline"
                         >
                           ¿No tienes cuenta? Regístrate aquí
                         </button>
@@ -1424,13 +1410,13 @@ export default function PublicStore({
                     <div className="flex flex-col">
                       <div className="p-5 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">
                         <div className="flex items-center gap-3">
-                          <div className="w-12 h-12 bg-blue-600 dark:bg-[var(--brand-gold-mid)] rounded-full flex items-center justify-center text-white font-black text-xl shadow-inner dark:text-slate-950">
+                          <div className="w-12 h-12 bg-blue-600 rounded-full flex items-center justify-center text-white font-black text-xl shadow-inner ">
                             {currentUser?.name?.charAt(0).toUpperCase()}
                           </div>
                           <div className="min-w-0 flex-1">
                             <div className="text-sm font-black text-[var(--text-secondary)] whitespace-normal break-words leading-tight">{currentUser?.name}</div>
                             <div className="text-[10px] text-[var(--text-muted)] whitespace-normal break-words mb-1">{currentUser?.email}</div>
-                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-blue-100 text-blue-600 dark:text-[var(--brand-gold-light)] tracking-tighter dark:bg-[var(--brand-gold-mid)]">
+                            <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[9px] font-black uppercase bg-blue-100 text-blue-600 tracking-tighter ">
                               {currentUser?.role}
                             </span>
                           </div>
@@ -1441,7 +1427,7 @@ export default function PublicStore({
                         {currentUser?.role !== 'Cliente' && (
                           <button
                             onClick={onNavigateToAdmin}
-                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-[var(--text-secondary)] hover:bg-blue-50 dark:hover:bg-[var(--brand-gold-mid)]/10 hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] rounded-xl transition-colors"
+                            className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-[var(--text-secondary)] hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors"
                           >
                             <Settings className="w-4 h-4" /> Panel de Control
                           </button>
@@ -1451,7 +1437,7 @@ export default function PublicStore({
                             setActiveTab('repairs');
                             setIsAccountDropdownOpen(false);
                           }}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-[var(--text-secondary)] hover:bg-blue-50 dark:hover:bg-[var(--brand-gold-mid)]/10 hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] rounded-xl transition-colors"
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-[var(--text-secondary)] hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors"
                         >
                           <Wrench className="w-4 h-4" /> Mis Reparaciones
                         </button>
@@ -1460,7 +1446,7 @@ export default function PublicStore({
                             // Link to orders or something
                             setIsAccountDropdownOpen(false);
                           }}
-                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-[var(--text-secondary)] hover:bg-blue-50 dark:hover:bg-[var(--brand-gold-mid)]/10 hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] rounded-xl transition-colors"
+                          className="w-full flex items-center gap-3 px-4 py-3 text-sm font-bold text-[var(--text-secondary)] hover:bg-blue-50 hover:text-blue-600 rounded-xl transition-colors"
                         >
                           <ShoppingBag className="w-4 h-4" /> Historial de Compras
                         </button>
@@ -1559,7 +1545,7 @@ export default function PublicStore({
                               <div className="text-[11px] font-bold text-[var(--text-muted)]">
                                 {it.quantity} x ₡{getProductDiscountedPrice(it.product).toLocaleString()}
                               </div>
-                              <div className="text-sm font-black text-blue-600 dark:text-[var(--brand-gold-light)] font-mono">
+                              <div className="text-sm font-black text-blue-600 font-mono">
                                 ₡{(getProductDiscountedPrice(it.product) * it.quantity).toLocaleString()}
                               </div>
                             </div>
@@ -1624,8 +1610,8 @@ export default function PublicStore({
                   }}
                   className={`w-full text-left py-3 px-4 text-sm rounded-xl transition-all font-semibold ${
                     (selectedCategory === cat || (cat === 'Todos' && selectedCategory === null))
-                      ? 'bg-[var(--brand-gold-mid)] text-[#1a1408] dark:text-[#14100a]'
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-base)] hover:text-blue-600 dark:hover:text-[var(--brand-gold-light)]'
+                      ? 'bg-[var(--brand-gold-mid)] text-[#1a1408] '
+                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-base)] hover:text-blue-600 '
                   }`}
                 >
                   {cat}
@@ -1786,7 +1772,7 @@ export default function PublicStore({
             {/* Left side: Technical Service Registration form */}
             <div className="glass-panel-strong rounded-3xl p-6 text-[var(--text-primary)] space-y-4 shadow-sm">
               <div className="flex items-center gap-2 mb-2">
-                <Smartphone className="w-6 h-6 text-blue-600 dark:text-[var(--brand-gold-light)]" />
+                <Smartphone className="w-6 h-6 text-blue-600 " />
                 <div>
                   <h3 className="font-bold text-base text-[var(--text-primary)]">Registrar Solicitud de Reparación en Línea</h3>
                   <p className="text-sm text-[var(--text-secondary)]">Envía tus datos y los detalles de tu dispositivo para abrir una orden de diagnóstico.</p>
@@ -1803,7 +1789,7 @@ export default function PublicStore({
                       value={repairCustomerName}
                       onChange={(e) => setRepairCustomerName(e.target.value)}
                       placeholder="Ej. Andrés Madrigal Quirós"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 transition"
                     />
                   </div>
                   <div>
@@ -1814,7 +1800,7 @@ export default function PublicStore({
                       value={repairCustomerEmail}
                       onChange={(e) => setRepairCustomerEmail(e.target.value)}
                       placeholder="andres@correo.cr"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 transition"
                     />
                   </div>
                 </div>
@@ -1827,7 +1813,7 @@ export default function PublicStore({
                     value={repairDevice}
                     onChange={(e) => setRepairDevice(e.target.value)}
                     placeholder="Ej. iPhone 13 Pro 128GB Azul Sierra"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] transition"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
 
@@ -1839,17 +1825,17 @@ export default function PublicStore({
                     value={repairDamage}
                     onChange={(e) => setRepairDamage(e.target.value)}
                     placeholder="Detalla detalladamente qué falla presenta tu equipo. El técnico utilizará esta información para el diagnóstico inicial."
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] resize-none transition"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-blue-500 resize-none transition"
                   />
                 </div>
 
-                <div className="bg-blue-50 border border-blue-100 dark:border-[var(--brand-gold-dark)] rounded-xl p-3 text-[10px] leading-relaxed text-blue-700 dark:text-[var(--brand-gold-light)]">
+                <div className="bg-blue-50 border border-blue-100 rounded-xl p-3 text-[10px] leading-relaxed text-blue-700 ">
                   ⚠️ <strong>Garantía Mínima Legal Protegida:</strong> De conformidad con la Ley 7472 (Defensa del Consumidor de Costa Rica), todo hardware reparado en Technoverse incluye una garantía real certificada de un mínimo de 3 meses naturales.
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] dark:text-[#14100a] font-extrabold text-sm py-3 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer"
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] font-extrabold text-sm py-3 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer"
                 >
                   Abrir Ticket de Reparación Oficial
                 </button>
@@ -1857,10 +1843,10 @@ export default function PublicStore({
 
               {generatedTicket && (
                 <div className="bg-[var(--bg-surface)] rounded-2xl p-4 border border-[var(--border-color)] space-y-2 text-center animate-in fade-in">
-                  <CheckCircle className="w-8 h-8 text-blue-600 dark:text-[var(--brand-gold-light)] mx-auto animate-bounce" />
+                  <CheckCircle className="w-8 h-8 text-blue-600 mx-auto animate-bounce" />
                   <h4 className="font-bold text-sm text-[var(--text-primary)]">¡Ticket de Soporte Generado!</h4>
                   <p className="text-[10px] text-[var(--text-secondary)]">Su dispositivo ha sido registrado con éxito. Puede consultar el estado en tiempo real ingresando su número de ticket en la sección derecha de esta página.</p>
-                  <div className="font-mono text-base font-bold text-blue-600 dark:text-[var(--brand-gold-light)] select-text">{generatedTicket}</div>
+                  <div className="font-mono text-base font-bold text-blue-600 select-text">{generatedTicket}</div>
                 </div>
               )}
             </div>
@@ -1868,7 +1854,7 @@ export default function PublicStore({
             {/* Right side: Public lookup section (rendered directly inside workshop component) */}
             <div className="space-y-6">
               <div className="glass-panel-strong rounded-3xl p-6 text-[var(--text-primary)] shadow-sm">
-                <h3 className="font-bold text-sm mb-2 text-blue-600 dark:text-[var(--brand-gold-light)] flex items-center gap-1.5">
+                <h3 className="font-bold text-sm mb-2 text-blue-600 flex items-center gap-1.5">
                   <Heart className="w-5 h-5 text-[var(--brand-gold-mid)]" /> ¿Por qué reparar con Technoverse?
                 </h3>
                 <p className="text-sm text-[var(--text-secondary)] leading-relaxed font-sans">
@@ -1918,10 +1904,10 @@ export default function PublicStore({
               
               {/* Stepper indicators */}
               <div className="grid grid-cols-4 gap-1 text-[9px] font-bold text-center uppercase tracking-wider border-b border-[var(--border-color)] pb-3">
-                <div className={checkoutStep >= 0 ? 'text-blue-600 dark:text-[var(--brand-gold-light)] font-extrabold' : 'text-[var(--text-primary)]'}>1. Resumen</div>
-                <div className={checkoutStep >= 1 ? 'text-blue-600 dark:text-[var(--brand-gold-light)] font-extrabold' : 'text-[var(--text-primary)]'}>2. Contacto</div>
-                <div className={checkoutStep >= 2 ? 'text-blue-600 dark:text-[var(--brand-gold-light)] font-extrabold' : 'text-[var(--text-primary)]'}>3. Pago</div>
-                <div className={checkoutStep >= 3 ? 'text-emerald-600 dark:text-[var(--brand-gold-light)] font-extrabold' : 'text-[var(--text-primary)]'}>4. Autorizado</div>
+                <div className={checkoutStep >= 0 ? 'text-blue-600 font-extrabold' : 'text-[var(--text-primary)]'}>1. Resumen</div>
+                <div className={checkoutStep >= 1 ? 'text-blue-600 font-extrabold' : 'text-[var(--text-primary)]'}>2. Contacto</div>
+                <div className={checkoutStep >= 2 ? 'text-blue-600 font-extrabold' : 'text-[var(--text-primary)]'}>3. Pago</div>
+                <div className={checkoutStep >= 3 ? 'text-emerald-600 font-extrabold' : 'text-[var(--text-primary)]'}>4. Autorizado</div>
               </div>
 
               {checkoutStep === 0 && (
@@ -1978,7 +1964,7 @@ export default function PublicStore({
               {checkoutStep === 1 && (
                 /* STEP 1: Datos de contacto (entrega manual, sin envío) */
                 <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-blue-600 dark:text-[var(--brand-gold-light)] uppercase tracking-wider">Datos de Contacto</h4>
+                  <h4 className="text-sm font-bold text-blue-600 uppercase tracking-wider">Datos de Contacto</h4>
                   <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed -mt-1">
                     Coordinamos la entrega de forma directa contactándote. Déjanos tu nombre, teléfono y una referencia de ubicación.
                   </p>
@@ -1991,7 +1977,7 @@ export default function PublicStore({
                       value={recipientName}
                       onChange={(e) => setRecipientName(e.target.value)}
                       placeholder="Ej. Juan Solís Quesada"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
                     />
                   </div>
 
@@ -2003,7 +1989,7 @@ export default function PublicStore({
                       value={recipientPhone}
                       onChange={(e) => setRecipientPhone(e.target.value)}
                       placeholder="Ej. +506 8800 1122"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
                     />
                   </div>
 
@@ -2015,7 +2001,7 @@ export default function PublicStore({
                       value={shippingAddress}
                       onChange={(e) => setShippingAddress(e.target.value)}
                       placeholder="Ej. Cartago centro, de la iglesia católica 200m oeste y 50m norte, portón verde."
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none resize-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none resize-none transition"
                     />
                   </div>
                 </div>
@@ -2033,7 +2019,7 @@ export default function PublicStore({
                    porque es el único que de verdad se verifica contra la cuenta
                    bancaria real de la empresa. */
                 <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-blue-600 dark:text-[var(--brand-gold-light)] uppercase tracking-wider">Pago por SINPE Móvil</h4>
+                  <h4 className="text-sm font-bold text-blue-600 uppercase tracking-wider">Pago por SINPE Móvil</h4>
 
                   <div className="bg-[var(--bg-surface)] rounded-2xl p-4 border border-[var(--border-color)]/60 space-y-3">
                     <div className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
@@ -2049,20 +2035,20 @@ export default function PublicStore({
                         value={sinpePhone}
                         onChange={(e) => setSinpePhone(e.target.value)}
                         placeholder="Ej. 88123456"
-                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
+                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
                       />
                     </div>
                   </div>
 
-                  <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100 dark:border-[var(--brand-gold-dark)] text-[10px] text-blue-700 dark:text-[var(--brand-gold-light)] leading-normal flex gap-2">
-                    <ShieldAlert className="w-4.5 h-4.5 flex-shrink-0 text-blue-500 dark:text-[var(--brand-gold-light)]" />
+                  <div className="bg-blue-50 p-3 rounded-2xl border border-blue-100 text-[10px] text-blue-700 leading-normal flex gap-2">
+                    <ShieldAlert className="w-4.5 h-4.5 flex-shrink-0 text-blue-500 " />
                     <span>
                       <strong>Protección PRODHAB (Ley 8968):</strong> El teléfono remitente se usa únicamente para verificar la transferencia contra la cuenta oficial de la empresa.
                     </span>
                   </div>
 
                   <div className="bg-[var(--bg-surface)] rounded-2xl p-4 border border-[var(--border-color)]/60 space-y-3">
-                    <h4 className="text-sm font-bold text-blue-600 dark:text-[var(--brand-gold-light)] uppercase tracking-wider">Datos Fiscales del Comprobante</h4>
+                    <h4 className="text-sm font-bold text-blue-600 uppercase tracking-wider">Datos Fiscales del Comprobante</h4>
 
                     <div className="grid grid-cols-2 gap-2">
                       <button
@@ -2070,7 +2056,7 @@ export default function PublicStore({
                         onClick={() => setFiscalTipoDoc('04')}
                         className={`py-2 text-center rounded-xl font-bold text-xs border transition cursor-pointer ${
                           fiscalTipoDoc === '04'
-                            ? 'bg-blue-50 dark:bg-[var(--brand-gold-mid)]/10 border-blue-500 dark:border-[var(--brand-gold-dark)] text-blue-600 dark:text-[var(--brand-gold-light)]'
+                            ? 'bg-blue-50 border-blue-500 text-blue-600 '
                             : 'bg-[var(--bg-base)] border-[var(--border-color)] text-[var(--text-secondary)]'
                         }`}
                       >
@@ -2081,7 +2067,7 @@ export default function PublicStore({
                         onClick={() => setFiscalTipoDoc('01')}
                         className={`py-2 text-center rounded-xl font-bold text-xs border transition cursor-pointer ${
                           fiscalTipoDoc === '01'
-                            ? 'bg-blue-50 dark:bg-[var(--brand-gold-mid)]/10 border-blue-500 dark:border-[var(--brand-gold-dark)] text-blue-600 dark:text-[var(--brand-gold-light)]'
+                            ? 'bg-blue-50 border-blue-500 text-blue-600 '
                             : 'bg-[var(--bg-base)] border-[var(--border-color)] text-[var(--text-secondary)]'
                         }`}
                       >
@@ -2112,7 +2098,7 @@ export default function PublicStore({
                           value={fiscalIdValue}
                           onChange={(e) => setFiscalIdValue(e.target.value.replace(/\D/g, ''))}
                           placeholder="Solo números"
-                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
+                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
                         />
                       </div>
                     </div>
@@ -2128,7 +2114,7 @@ export default function PublicStore({
                         value={fiscalEmail}
                         onChange={(e) => setFiscalEmail(e.target.value)}
                         placeholder="correo@ejemplo.com"
-                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
                       />
                     </div>
 
@@ -2141,9 +2127,9 @@ export default function PublicStore({
 
               {checkoutStep === 3 && confirmedOrder && (
                 /* STEP 3: Order Confirmation & Fiscal receipt */
-                <div className="bg-emerald-50 border border-emerald-200 dark:border-[var(--brand-gold-dark)] rounded-2xl p-4 space-y-4 animate-in fade-in">
+                <div className="bg-emerald-50 border border-emerald-200 rounded-2xl p-4 space-y-4 animate-in fade-in">
                   <div className="text-center space-y-1">
-                    <CheckCircle className="w-10 h-10 text-emerald-500 dark:text-[var(--brand-gold-light)] mx-auto animate-bounce" />
+                    <CheckCircle className="w-10 h-10 text-emerald-500 mx-auto animate-bounce" />
                     <h4 className="font-bold text-sm text-[var(--text-primary)]">¡Compra Confirmada!</h4>
                     <p className="text-[10px] text-[var(--text-secondary)]">
                       {invoiceInfo ? 'Comprobante fiscal (registro interno) generado correctamente.' : 'Su pedido quedó registrado. El comprobante fiscal está pendiente de generar.'}
@@ -2151,11 +2137,11 @@ export default function PublicStore({
                   </div>
 
                   <div className="bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-color)] space-y-1.5 text-sm text-[var(--text-primary)] shadow-sm">
-                    <div>Orden: <strong className="text-emerald-600 dark:text-[var(--brand-gold-light)] font-mono">{confirmedOrder.id}</strong></div>
+                    <div>Orden: <strong className="text-emerald-600 font-mono">{confirmedOrder.id}</strong></div>
                     <div>Fecha: <span className="font-mono text-[var(--text-secondary)]">{new Date(confirmedOrder.timestamp).toLocaleString()}</span></div>
                     <div>Receptor: <strong className="text-[var(--text-primary)]">{confirmedOrder.customerName}</strong></div>
                     <div>Impuesto IVA (13%): <strong className="font-mono text-[var(--text-primary)]">₡{confirmedOrder.taxAmount.toLocaleString()}</strong></div>
-                    <div className="text-sm font-bold border-t border-[var(--border-color)] pt-2 mt-2">Total Pagado: <span className="text-emerald-600 dark:text-[var(--brand-gold-light)] font-mono">₡{confirmedOrder.total.toLocaleString()}</span></div>
+                    <div className="text-sm font-bold border-t border-[var(--border-color)] pt-2 mt-2">Total Pagado: <span className="text-emerald-600 font-mono">₡{confirmedOrder.total.toLocaleString()}</span></div>
                   </div>
 
                   {invoiceInfo && (
@@ -2173,7 +2159,7 @@ export default function PublicStore({
                           href={invoiceInfo.pdfUrl}
                           target="_blank"
                           rel="noopener noreferrer"
-                          className="mt-1 inline-flex items-center gap-1.5 text-blue-600 dark:text-[var(--brand-gold-light)] font-bold"
+                          className="mt-1 inline-flex items-center gap-1.5 text-blue-600 font-bold"
                         >
                           <FileDown className="w-3.5 h-3.5" /> Descargar comprobante (PDF)
                         </a>
@@ -2206,20 +2192,20 @@ export default function PublicStore({
                           value={couponCode}
                           onChange={(e) => setCouponCode(e.target.value)}
                           placeholder="Cupón de descuento"
-                          className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] uppercase font-mono flex-1 focus:outline-none focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)]"
+                          className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] uppercase font-mono flex-1 focus:outline-none focus:border-blue-500 "
                           disabled={!!appliedCoupon}
                         />
                         <button
                           onClick={handleApplyCoupon}
                           disabled={!couponCode || !!appliedCoupon}
-                          className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] dark:text-[#14100a] font-bold px-3 py-1.5 rounded-lg transition text-sm cursor-pointer"
+                          className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] font-bold px-3 py-1.5 rounded-lg transition text-sm cursor-pointer"
                         >
                           {appliedCoupon ? 'Aplicado' : 'Aplicar'}
                         </button>
                       </div>
                     )}
                     {appliedCoupon && (
-                      <div className="flex justify-between text-blue-600 dark:text-[var(--brand-gold-light)] font-bold">
+                      <div className="flex justify-between text-blue-600 font-bold">
                         <span>Cupón ({appliedCoupon.code}):</span>
                         <span className="font-mono">-₡{
                           appliedCoupon.type === 'Porcentaje' 
@@ -2235,7 +2221,7 @@ export default function PublicStore({
                     </div>
                     <div className="flex justify-between text-[var(--text-primary)] font-extrabold text-sm border-t border-[var(--border-color)] pt-2">
                       <span>Total a Pagar:</span>
-                      <span className="font-mono text-blue-600 dark:text-[var(--brand-gold-light)]">₡{cartTotal.toLocaleString()}</span>
+                      <span className="font-mono text-blue-600 ">₡{cartTotal.toLocaleString()}</span>
                     </div>
                   </div>
 
@@ -2246,7 +2232,7 @@ export default function PublicStore({
                         setCheckoutStep(1);
                       }}
                       disabled={cart.length === 0}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] dark:text-[#14100a] font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
+                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
                     >
                       Continuar a Contacto <ArrowRight className="w-4 h-4" />
                     </button>
@@ -2269,7 +2255,7 @@ export default function PublicStore({
                         }
                         setCheckoutStep(2);
                       }}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] text-[#1a1408] dark:text-[#14100a] font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
+                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] text-[#1a1408] font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
                     >
                       Continuar al Pago <ArrowRight className="w-4 h-4" />
                     </button>
@@ -2279,7 +2265,7 @@ export default function PublicStore({
                     <button
                       onClick={handleConfirmOrder}
                       disabled={isSubmittingOrder}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] disabled:opacity-60 text-[#1a1408] dark:text-[#14100a] font-extrabold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition shadow-sm cursor-pointer"
+                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] disabled:opacity-60 text-[#1a1408] font-extrabold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition shadow-sm cursor-pointer"
                     >
                       {isSubmittingOrder ? 'Procesando...' : 'Confirmar Pago y Generar Comprobante'}
                     </button>
@@ -2318,8 +2304,8 @@ export default function PublicStore({
               cuando cabe, y el scroll interno lo salva cuando no. */}
           <div className="relative max-w-md w-full my-auto max-h-[92dvh] overflow-y-auto glass-panel-strong rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 text-[var(--text-primary)] animate-in zoom-in-95 duration-200" id="login-register-modal">
             <div className="text-center space-y-2">
-              <div className="w-12 h-12 bg-gradient-to-tr from-[#3B82F6] to-blue-600 dark:bg-[var(--brand-gold-mid)] dark:bg-none rounded-2xl flex items-center justify-center border border-white/40 shadow-sm mx-auto">
-                <span className="text-white dark:text-[#14100a] text-lg">🔑</span>
+              <div className="w-12 h-12 bg-gradient-to-tr from-[#3B82F6] to-blue-600 rounded-2xl flex items-center justify-center border border-white/40 shadow-sm mx-auto">
+                <span className="text-white text-lg">🔑</span>
               </div>
               <h2 className="text-lg font-extrabold tracking-tight font-display text-[var(--text-primary)]">
                 {isRegisterMode ? 'Crear Cuenta' : 'Iniciar Sesión'}
@@ -2339,7 +2325,7 @@ export default function PublicStore({
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
                     placeholder="Ej. María Solano Brenes"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -2351,7 +2337,7 @@ export default function PublicStore({
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
                       placeholder="maria@correo.cr"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition"
                     />
                   </div>
                   <div>
@@ -2362,7 +2348,7 @@ export default function PublicStore({
                       value={regPhone}
                       onChange={(e) => setRegPhone(e.target.value)}
                       placeholder="88884444"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition"
                     />
                   </div>
                 </div>
@@ -2382,7 +2368,7 @@ export default function PublicStore({
                     value={regAddress}
                     onChange={(e) => setRegAddress(e.target.value)}
                     placeholder="Calle, avenidas, señas particulares"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
                   />
                 </div>
                 <div>
@@ -2393,13 +2379,13 @@ export default function PublicStore({
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
                     placeholder="••••••••••••"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
                   />
                 </div>
 
                 <button
                   type="submit"
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] dark:text-[#14100a] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer"
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer"
                 >
                   Registrarse y Entrar
                 </button>
@@ -2414,7 +2400,7 @@ export default function PublicStore({
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="ejemplo@correo.com"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none transition font-mono"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none transition font-mono"
                   />
                 </div>
                 <div>
@@ -2425,14 +2411,14 @@ export default function PublicStore({
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     placeholder="••••••••••••"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 dark:focus:border-[var(--brand-gold-mid)] dark:focus:border-[var(--brand-gold-mid)] focus:ring-1 focus:ring-blue-500 dark:focus:ring-[var(--brand-gold-mid)] dark:focus:ring-[var(--brand-gold-mid)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none transition"
                   />
                 </div>
 
                 <button
                   type="submit"
                   disabled={entrandoSesion}
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] dark:text-[#14100a] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
                 >
                   {entrandoSesion ? 'Verificando acceso…' : 'Iniciar Sesión'}
                 </button>
@@ -2454,7 +2440,7 @@ export default function PublicStore({
             <div className="text-center pt-3 border-t border-[var(--border-color)]">
               <button
                 onClick={() => setIsRegisterMode(!isRegisterMode)}
-                className="text-sm text-blue-600 hover:text-blue-700 dark:hover:text-[var(--brand-gold-light)] dark:text-[var(--brand-gold-light)] font-bold cursor-pointer"
+                className="text-sm text-blue-600 hover:text-blue-700 font-bold cursor-pointer"
               >
                 {isRegisterMode ? '¿Ya tienes cuenta? Inicia Sesión' : '¿No tienes cuenta? Regístrate Aquí'}
               </button>
@@ -2497,9 +2483,20 @@ export default function PublicStore({
               </span>
             </div>
 
-            {/* Right side: Information */}
-            <div className="md:w-1/2 p-6 flex flex-col justify-between space-y-4 overflow-y-auto">
-              <div className="space-y-3">
+            {/* Right side: Information
+                min-h-0 es obligatorio aquí: sin él, un flex item con
+                overflow-y-auto igual crece más allá de su espacio (el
+                mínimo de altura por defecto de un item de flex es el de
+                su contenido, no 0) y el texto largo empuja el modal en
+                vez de generar scroll interno — exactamente el
+                desbordamiento reportado. La descripción y el resto del
+                contenido quedan en su propia zona con scroll; la
+                cantidad y los botones de acción van en un pie APARTE,
+                fuera del área que hace scroll, así "Cancelar"/"Añadir al
+                carrito" quedan siempre visibles sin importar cuánto texto
+                tenga la descripción. */}
+            <div className="md:w-1/2 flex flex-col min-h-0">
+              <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-3">
                 <div className="space-y-1">
                   <h3 className="font-extrabold text-base text-[var(--text-primary)] leading-tight">
                     {selectedProductDetail.name}
@@ -2517,7 +2514,7 @@ export default function PublicStore({
 
                 {/* Stock tracker */}
                 <div className="flex items-center gap-2">
-                  <div className={`w-2.5 h-2.5 rounded-full ${selectedProductDetail.stock === 0 ? 'bg-rose-500' : 'bg-emerald-500 dark:bg-[var(--brand-gold-mid)]'}`} />
+                  <div className={`w-2.5 h-2.5 rounded-full ${selectedProductDetail.stock === 0 ? 'bg-rose-500' : 'bg-emerald-500 '}`} />
                   <span className="text-sm font-bold text-[var(--text-primary)]">
                     {selectedProductDetail.stock === 0 
                       ? 'Agotado' 
@@ -2534,7 +2531,7 @@ export default function PublicStore({
                       const isDiscounted = discountedPrice < selectedProductDetail.price;
                       return isDiscounted ? (
                         <>
-                          <span className="text-xl font-black text-blue-600 dark:text-[var(--brand-gold-light)] font-mono">
+                          <span className="text-xl font-black text-blue-600 font-mono">
                             ₡{discountedPrice.toLocaleString()}
                           </span>
                           <span className="text-sm text-[var(--text-primary)] line-through font-mono">
@@ -2552,8 +2549,12 @@ export default function PublicStore({
                 </div>
               </div>
 
-              {/* Selector and Actions */}
-              <div className="space-y-4 pt-4 border-t border-[var(--border-color)]">
+              {/* Selector and Actions — pie FUERA del área con scroll (arriba),
+                  a propósito: flex-shrink-0 para que nunca se comprima, y
+                  fuera de overflow-y-auto para que "Cancelar"/"Añadir al
+                  carrito" queden siempre a la vista sin importar cuánto
+                  scroll haga falta arriba. */}
+              <div className="flex-shrink-0 p-6 pt-4 space-y-4 border-t border-[var(--border-color)]">
                 {selectedProductDetail.stock > 0 ? (
                   <div className="flex items-center justify-between gap-4">
                     <span className="text-sm font-bold text-[var(--text-primary)]">Cantidad:</span>
@@ -2594,7 +2595,7 @@ export default function PublicStore({
                     className={`w-full py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider text-center transition cursor-pointer shadow-sm ${
                       selectedProductDetail.stock === 0
                         ? 'bg-slate-200 text-[var(--text-primary)] cursor-not-allowed'
-                        : 'bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] text-[#1a1408] dark:text-[#14100a]'
+                        : 'bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] text-[#1a1408] '
                     }`}
                   >
                     Añadir al carrito

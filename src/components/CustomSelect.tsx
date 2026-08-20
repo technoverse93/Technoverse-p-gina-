@@ -92,7 +92,7 @@ export function CustomSelect({
                 onClick={e => e.stopPropagation()}
                 onKeyDown={e => e.stopPropagation()}
                 placeholder={searchPlaceholder}
-                className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-lg pl-8 pr-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-sky-500 dark:focus:border-[var(--brand-gold-mid)]"
+                className="w-full bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-lg pl-8 pr-3 py-2 text-sm text-[var(--text-primary)] focus:outline-none focus:border-sky-500 "
               />
             </div>
           )}
@@ -112,7 +112,7 @@ export function CustomSelect({
                 opt.disabled
                   ? 'text-[var(--text-muted)] opacity-50 cursor-not-allowed'
                   : opt.value === value
-                    ? 'bg-[var(--brand-gold-mid)]/15 text-[var(--brand-navy)] dark:text-[var(--brand-gold-light)] font-bold'
+                    ? 'bg-[var(--brand-gold-mid)]/15 text-[var(--brand-navy)] font-bold'
                     : 'text-[var(--text-primary)] hover:bg-[var(--bg-base)]'
               }`}
             >

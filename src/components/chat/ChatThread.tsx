@@ -81,7 +81,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           <button type="button" onClick={onBack} className="md:hidden p-1 -ml-1 text-[var(--text-secondary)]">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="w-9 h-9 rounded-full bg-[var(--accent)]/15 text-[var(--brand-gold-dark)] dark:text-[var(--brand-gold-light)] flex items-center justify-center font-display font-bold text-sm shrink-0">
+          <div className="w-9 h-9 rounded-full bg-[var(--accent)]/15 text-[var(--brand-gold-dark)] flex items-center justify-center font-display font-bold text-sm shrink-0">
             {conversation.customerName?.charAt(0).toUpperCase() || '?'}
           </div>
           <div className="min-w-0">
@@ -121,7 +121,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           if (msg.isInternalNote) {
             return (
               <div key={msg.id} className="flex justify-center">
-                <div className="max-w-[88%] rounded-xl px-3 py-2 text-[11px] bg-amber-400/12 border border-amber-500/35 text-amber-700 dark:text-amber-300 flex items-start gap-1.5">
+                <div className="max-w-[88%] rounded-xl px-3 py-2 text-[11px] bg-amber-400/12 border border-amber-500/35 text-amber-700 flex items-start gap-1.5">
                   <StickyNote className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                   <div>
                     {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}

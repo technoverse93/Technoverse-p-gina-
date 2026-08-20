@@ -209,7 +209,7 @@ export function Modal({
           className={`relative w-full ${MODAL_MAXW[size]} glass-panel-strong rounded-2xl outline-none flex flex-col max-h-[90vh] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200`}
         >
           {(title || !hideClose) && (
-            <div className="flex items-start justify-between gap-4 px-5 pt-4 pb-3 border-b border-[var(--border-color)]">
+            <div className="flex-shrink-0 flex items-start justify-between gap-4 px-5 pt-4 pb-3 border-b border-[var(--border-color)]">
               <h3 className="text-base font-bold text-[var(--text-primary)] leading-tight">
                 {title}
               </h3>
@@ -225,11 +225,20 @@ export function Modal({
               )}
             </div>
           )}
-          <div className="px-5 py-4 overflow-y-auto text-sm text-[var(--text-secondary)]">
+          {/* min-h-0 es obligatorio: sin él, un item de flex con
+              overflow-y-auto igual crece más allá del espacio disponible
+              (su altura mínima por defecto es la de su contenido, no 0),
+              así que un texto largo empujaba el panel entero más allá de
+              max-h-[90vh] en vez de generar scroll interno aquí adentro.
+              Con min-h-0 este bloque se achica hasta lo que sobre entre
+              encabezado y pie, y es AHÍ donde entra el scroll — el pie
+              (los botones "Guardar"/"Cancelar" que traiga `footer`) queda
+              siempre visible, nunca empujado fuera de la pantalla. */}
+          <div className="min-h-0 flex-1 px-5 py-4 overflow-y-auto text-sm text-[var(--text-secondary)]">
             {children}
           </div>
           {footer && (
-            <div className="flex flex-wrap justify-end gap-2 px-5 py-3 border-t border-[var(--border-color)]">
+            <div className="flex-shrink-0 flex flex-wrap justify-end gap-2 px-5 py-3 border-t border-[var(--border-color)]">
               {footer}
             </div>
           )}
@@ -458,7 +467,7 @@ export function OverlayProvider({ children }: { children: React.ReactNode }) {
                 className={`px-4 py-2 rounded-xl text-xs font-bold text-white transition ${
                   isDanger
                     ? 'bg-rose-600 hover:bg-rose-700'
-                    : 'bg-sky-600 hover:bg-sky-700 dark:bg-[var(--brand-gold-mid)] dark:text-slate-950 dark:hover:bg-[var(--brand-gold-light)]'
+                    : 'bg-sky-600 hover:bg-sky-700 '
                 }`}
               >
                 {confirmState.confirmText ?? 'Confirmar'}
@@ -690,7 +699,7 @@ export function Tooltip({ content, children, side = 'top' }: TooltipProps) {
           <div
             id={id}
             role="tooltip"
-            className="fixed max-w-[220px] px-2.5 py-1.5 rounded-lg text-[11px] font-medium leading-snug text-white bg-slate-900 dark:bg-slate-800 border border-white/10 shadow-lg pointer-events-none motion-safe:animate-in motion-safe:fade-in motion-safe:duration-100"
+            className="fixed max-w-[220px] px-2.5 py-1.5 rounded-lg text-[11px] font-medium leading-snug text-white bg-slate-900 border border-white/10 shadow-lg pointer-events-none motion-safe:animate-in motion-safe:fade-in motion-safe:duration-100"
             style={{
               zIndex: Z.floating,
               left: pos.left,

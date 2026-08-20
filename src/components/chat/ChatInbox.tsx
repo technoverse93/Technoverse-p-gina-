@@ -78,7 +78,7 @@ export default function ChatInbox({
                 onClick={() => onResolvedRangeChange(r.id)}
                 className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition ${
                   resolvedRange === r.id
-                    ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-600 dark:text-emerald-400'
+                    ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-600 '
                     : 'bg-transparent border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
                 }`}
               >
@@ -102,7 +102,7 @@ export default function ChatInbox({
               }`}
             >
               <div className="relative shrink-0">
-                <div className="w-10 h-10 rounded-full bg-[var(--accent)]/15 text-[var(--brand-gold-dark)] dark:text-[var(--brand-gold-light)] flex items-center justify-center font-display font-bold text-sm">
+                <div className="w-10 h-10 rounded-full bg-[var(--accent)]/15 text-[var(--brand-gold-dark)] flex items-center justify-center font-display font-bold text-sm">
                   {conv.customerName?.charAt(0).toUpperCase() || '?'}
                 </div>
                 {conv.assignedAdminEmail && (

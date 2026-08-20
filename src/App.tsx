@@ -157,27 +157,6 @@ function AppInner() {
     iniciarBloqueoPorInactividad();
   }, []);
 
-  // Theme Management
-  const [theme, setTheme] = useState<'light' | 'dark'>(() => {
-    const saved = localStorage.getItem('technoverse_theme');
-    if (saved === 'light' || saved === 'dark') return saved;
-    return window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
-  });
-
-  useEffect(() => {
-    const root = window.document.documentElement;
-    if (theme === 'dark') {
-      root.classList.add('dark');
-    } else {
-      root.classList.remove('dark');
-    }
-    localStorage.setItem('technoverse_theme', theme);
-  }, [theme]);
-
-  const toggleTheme = () => {
-    setTheme(prev => prev === 'light' ? 'dark' : 'light');
-  };
-
   // Global Session Management
   const [currentUser, setCurrentUser] = useState<User | null>(null);
 
@@ -385,7 +364,7 @@ function AppInner() {
   }
 
   return (
-    <div className="min-h-screen bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700 dark:selection:bg-[var(--brand-gold-mid)]/20 dark:selection:text-[var(--brand-gold-light)]" id="technoverse-application-container">
+    <div className="min-h-screen bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700" id="technoverse-application-container">
       {currentView === 'store' ? (
         <PublicStore
           onNavigateToAdmin={() => { window.history.pushState(null, "", "/admin"); setCurrentView("admin"); }}
@@ -396,8 +375,6 @@ function AppInner() {
           onLogout={handleLogout}
           autoOpenLogin={autoOpenLogin}
           onClearAutoOpenLogin={() => setAutoOpenLogin(false)}
-          theme={theme}
-          toggleTheme={toggleTheme}
         />
       ) : (
         <Suspense fallback={<AdminPanelFallback />}>
@@ -412,8 +389,6 @@ function AppInner() {
             isAuthenticated={isAuthenticated}
             onLogin={handleLogin}
             onLogout={handleLogout}
-            theme={theme}
-            toggleTheme={toggleTheme}
           />
         </Suspense>
       )}
