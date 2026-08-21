@@ -75,6 +75,7 @@ export default function CambiarPinModal({ open, onClose }: Props) {
         setActualizado(true);
       } else {
         setError(resultado.mensaje);
+        toast.error(resultado.mensaje);
       }
     } finally {
       setGuardando(false);

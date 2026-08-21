@@ -13,6 +13,7 @@ import { supabase } from './supabaseClient';
 import { tieneTokenSeguridad } from './utils/securityPin';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
+import ResetPasswordView from './components/ResetPasswordView';
 
 // AdminPanel carga recharts, motion y toda la lógica de taller/inventario/CRM:
 // era el bloque más pesado del bundle principal (>300 KB gzip) y se estaba
@@ -89,11 +90,22 @@ function PantallaBloqueada({ porCuenta }: { porCuenta: boolean }) {
   );
 }
 
+/**
+ * `/reset-password` tiene prioridad sobre `/admin`: es a donde apunta el
+ * enlace del correo de recuperación de contraseña, y debe mostrar esa
+ * pantalla sin importar la sesión actual (ver ResetPasswordView.tsx).
+ */
+function resolverVistaDesdeRuta(pathname: string): 'store' | 'admin' | 'reset-password' {
+  if (pathname.startsWith('/reset-password')) return 'reset-password';
+  if (pathname.startsWith('/admin')) return 'admin';
+  return 'store';
+}
+
 function AppInner() {
   const toast = useToast();
 
-  const [currentView, setCurrentView] = useState<'store' | 'admin'>(
-    window.location.pathname.startsWith('/admin') ? 'admin' : 'store'
+  const [currentView, setCurrentView] = useState<'store' | 'admin' | 'reset-password'>(
+    () => resolverVistaDesdeRuta(window.location.pathname)
   );
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
@@ -348,7 +360,7 @@ function AppInner() {
 
   useEffect(() => {
     const handlePopState = () => {
-      setCurrentView(window.location.pathname.startsWith('/admin') ? 'admin' : 'store');
+      setCurrentView(resolverVistaDesdeRuta(window.location.pathname));
     };
     window.addEventListener('popstate', handlePopState);
     return () => window.removeEventListener('popstate', handlePopState);
@@ -390,7 +402,15 @@ function AppInner() {
 
   return (
     <div className="min-h-screen bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700" id="technoverse-application-container">
-      {currentView === 'store' ? (
+      {currentView === 'reset-password' ? (
+        <ResetPasswordView
+          onListo={() => {
+            window.history.pushState(null, "", "/");
+            setCurrentView("store");
+            setAutoOpenLogin(true);
+          }}
+        />
+      ) : currentView === 'store' ? (
         <PublicStore
           onNavigateToAdmin={() => { window.history.pushState(null, "", "/admin"); setCurrentView("admin"); }}
           onRefreshTrigger={refreshTrigger}

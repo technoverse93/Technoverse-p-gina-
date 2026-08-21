@@ -127,7 +127,10 @@ export default function LiveChat() {
     // página ni el layout fijo.
     const container = messagesContainerRef.current;
     if (!container) return;
-    container.scrollTo({ top: container.scrollHeight, behavior: 'smooth' });
+    // Instantáneo (`auto`), no animado: con mensajes seguidos, un scroll
+    // "smooth" que no llega a terminar antes del siguiente mensaje se ve
+    // como si el chat se hubiera "trabado" a medio camino.
+    container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
   }, [conversations, activeConvId, isOpen]);
 
   const persistNewConversation = async (name: string, email: string): Promise<boolean> => {

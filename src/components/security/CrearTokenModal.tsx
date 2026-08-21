@@ -55,6 +55,7 @@ export default function CrearTokenModal({ open, onCreado }: Props) {
         setPaso('listo');
       } else {
         setError(resultado.mensaje);
+        toast.error(resultado.mensaje);
       }
     } finally {
       setGuardando(false);
