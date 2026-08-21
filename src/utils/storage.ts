@@ -1116,21 +1116,72 @@ async function refreshChatFromSupabase() {
   notifyUpdate();
 }
 
+/**
+ * Aplica UN mensaje nuevo directamente en memoria, sin releer la tabla
+ * entera.
+ *
+ * ---------------------------------------------------------------------
+ * FALLO QUE ESTO CORRIGE: 20-30 segundos de demora en el chat
+ * ---------------------------------------------------------------------
+ * Antes, CUALQUIER evento de `chat_messages` —así fuera un solo mensaje—
+ * disparaba `refreshChatFromSupabase()`: un `select('*')` de TODA la
+ * tabla de mensajes de TODAS las conversaciones, sin límite ni filtro.
+ * Con el historial que ya acumuló el negocio en producción, esa recarga
+ * completa dejó de ser instantánea — cuanto más creciera el chat, más
+ * lento se ponía CADA mensaje nuevo, para cualquiera que estuviera
+ * mirando (cliente o administrador), aunque el WebSocket avisara al
+ * instante.
+ *
+ * La corrección: el propio evento de Realtime ya trae la fila completa
+ * del mensaje insertado (`payload.new`), así que alcanza con agregar
+ * ESE mensaje a la conversación que ya está en memoria — sin ir a la
+ * base de datos por nada más. Si la conversación todavía no estuviera
+ * en caché (poco común: mensaje de una conversación recién creada que
+ * este cliente no había cargado), se recurre a la recarga completa como
+ * respaldo, nunca como camino normal.
+ */
+function aplicarMensajeEntrante(row: any): void {
+  if (!row?.id || !row?.conversation_id) return;
+  const conv = (localCache.chat_conversations || []).find(c => c.id === row.conversation_id);
+  if (!conv) {
+    // Conversación que este cliente todavía no tiene en memoria (recién
+    // creada, o su primer mensaje): no hay nada parcial que agregar, así
+    // que aquí sí hace falta la recarga completa, una sola vez.
+    coalesce('chat', () => refreshChatFromSupabase(), 30);
+    return;
+  }
+  if (conv.messages.some(m => m.id === row.id)) return; // ya lo teníamos (propio mensaje optimista ya confirmado)
+
+  conv.messages.push({
+    id: row.id, sender: row.sender, text: row.text, timestamp: row.created_at,
+    imageUrl: row.image_url || undefined, isInternalNote: !!row.is_internal_note,
+  });
+  lastSyncedDb.chat_conversations = JSON.parse(JSON.stringify(localCache.chat_conversations));
+  notifyUpdate();
+}
+
 function initChatRealtimeSync() {
   refreshChatFromSupabase().then(() => {
     chatReady = true;
     flushChatPending();
   });
 
-  // Respaldo por sondeo: el WebSocket de Realtime puede cortarse en
-  // silencio dentro del WebView de Android/Capacitor (visto en el APK) y no
-  // reconectar solo. El chat es la única tabla donde un mensaje nuevo debe
-  // verse casi al instante, así que además del canal en tiempo real se
-  // revisa cada pocos segundos mientras la pestaña esté visible.
+  // Respaldo por sondeo — necesario, no solo por si el WebSocket se corta
+  // en silencio (WebView de Android/Capacitor), sino porque un cliente
+  // ANÓNIMO del chat público nunca recibe `postgres_changes` de
+  // `chat_messages` por WebSocket: la política RLS que permite leer un
+  // mensaje exige `is_staff() O el correo de la conversación coincide con
+  // current_email()`, y un visitante anónimo no tiene sesión de Supabase
+  // (usa un token propio, no un correo autenticado) — así que
+  // `current_email()` da null y la fila nunca pasa el filtro. Eso es
+  // intencional (nadie sin sesión puede leer chats ajenos) y no algo que
+  // debiera aflojarse. El sondeo es, para el cliente, el ÚNICO canal real
+  // de recepción, por eso corre cada 2 segundos y no cada 6: es lo más
+  // cerca de "instantáneo" que se puede llegar sin exponer RLS.
   if (typeof window !== 'undefined') {
     setInterval(() => {
       if (document.visibilityState === 'visible') refreshChatFromSupabase();
-    }, 6000);
+    }, 2000);
   }
 }
 
@@ -1277,15 +1328,24 @@ function montarCanal() {
     });
   });
 
-  // El chat usa una ventana de coalescing mucho más corta que el resto de las
-  // tablas (30 ms en vez de los 200 ms por defecto): una conversación es lo
-  // único donde 200 ms de espera ya se siente como demora al escribir. 30 ms
-  // sigue agrupando el caso típico —un INSERT en chat_messages seguido del
-  // UPDATE de chat_conversations que toca el mismo guardado— en una sola
-  // recarga, sin que se note el retraso.
+  // chat_conversations sigue recargando completo: es una tabla chica (una
+  // fila por conversación, no por mensaje) y ahí viven unread_count,
+  // status y assigned_admin_email — datos que si no se agrupan bien
+  // pueden desincronizarse. 30 ms de coalescing porque un INSERT en
+  // chat_messages casi siempre llega junto con un UPDATE de
+  // chat_conversations (el mismo guardado los dispara a los dos).
+  //
+  // chat_messages, en cambio, YA NO recarga la tabla entera en el caso
+  // normal (INSERT): aplica la fila directo desde el propio evento, ver
+  // `aplicarMensajeEntrante` — es lo que corrige la demora de 20-30
+  // segundos que crecía junto con el historial del chat. UPDATE/DELETE
+  // sobre un mensaje son rarísimos en este chat (los mensajes no se
+  // editan) y sí recargan completo, sin que valga la pena optimizarlos.
   channel
     .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_conversations' }, () => coalesce('chat', () => refreshChatFromSupabase(), 30))
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'chat_messages' }, () => coalesce('chat', () => refreshChatFromSupabase(), 30))
+    .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'chat_messages' }, (payload) => aplicarMensajeEntrante(payload.new))
+    .on('postgres_changes', { event: 'UPDATE', schema: 'public', table: 'chat_messages' }, () => coalesce('chat', () => refreshChatFromSupabase(), 30))
+    .on('postgres_changes', { event: 'DELETE', schema: 'public', table: 'chat_messages' }, () => coalesce('chat', () => refreshChatFromSupabase(), 30))
     .on('postgres_changes', { event: '*', schema: 'public', table: 'app_settings' }, () => coalesce('settings', () => refreshSettingsFromSupabase()))
     .subscribe();
 

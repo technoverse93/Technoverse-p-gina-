@@ -29,8 +29,11 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   // se debe tocar el estado de un componente ya desmontado.
   const isMountedRef = useRef(true);
 
+  // Instantáneo (`auto`), no animado: con mensajes seguidos, un scroll
+  // "smooth" que no llega a terminar antes del siguiente mensaje se ve
+  // como si el chat se hubiera "trabado" a medio camino.
   useEffect(() => {
-    messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    messagesEndRef.current?.scrollIntoView({ behavior: 'auto' });
   }, [conversation.messages.length]);
 
   useEffect(() => {
