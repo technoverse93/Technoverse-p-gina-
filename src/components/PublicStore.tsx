@@ -2637,13 +2637,21 @@ export default function PublicStore({
             className="glass-panel-strong rounded-3xl shadow-sm overflow-hidden w-full max-w-xl max-h-[90dvh] flex flex-col md:flex-row animate-in zoom-in-95 duration-250"
             id="product-detail-modal"
           >
-            {/* Left side: Photo */}
-            <div className="product-media md:w-1/2 flex items-center justify-center p-6 relative min-h-[220px]">
+            {/* Left side: Photo.
+                En columna (celular) la foto competía en alto con el resto de
+                la ficha sin ningún tope propio — solo lo tenía la imagen
+                (`max-h-56`), no el contenedor, así que su padding + el alto
+                real de fotos apaisadas empujaban "Añadir al carrito" fuera
+                de la vista. Un tope más chico en celular (y de vuelta al
+                tamaño de escritorio en `md:`, donde la foto ya comparte la
+                mitad de un modal más ancho) resuelve el achique sin tocar
+                nada del layout de escritorio. */}
+            <div className="product-media md:w-1/2 flex items-center justify-center p-4 md:p-6 relative min-h-[140px] md:min-h-[220px]">
               {selectedProductDetail.imageUrl && !imagenesRotas.has(selectedProductDetail.id) ? (
                 <img
                   src={selectedProductDetail.imageUrl}
                   alt={selectedProductDetail.name}
-                  className="max-h-56 max-w-full object-contain rounded-xl"
+                  className="max-h-36 md:max-h-56 max-w-full object-contain rounded-xl"
                   referrerPolicy="no-referrer"
                   loading="lazy"
                   decoding="async"
@@ -2655,8 +2663,10 @@ export default function PublicStore({
                   <span className="text-sm font-mono">Sin Imagen</span>
                 </div>
               )}
-              {/* Category tag */}
-              <span className="absolute top-4 left-4 bg-[var(--gold-soft)] border border-[var(--gold-line)] text-[var(--brand-gold-dark)] px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider">
+              {/* Category tag: con tope de ancho y elipsis, nunca se sale del
+                  contenedor de la foto sin importar cuán largo sea el
+                  nombre de la categoría. */}
+              <span className="absolute top-4 left-4 max-w-[calc(100%-2rem)] bg-[var(--gold-soft)] border border-[var(--gold-line)] text-[var(--brand-gold-dark)] px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider tv-ellipsis">
                 {selectedProductDetail.category}
               </span>
             </div>
