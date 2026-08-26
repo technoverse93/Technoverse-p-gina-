@@ -1,5 +1,5 @@
 import React from 'react';
-import { ShoppingBag, Heart, Smartphone, ShieldCheck } from 'lucide-react';
+import { Smartphone } from 'lucide-react';
 import { Product } from '../types';
 
 interface ProductCardProps {
@@ -11,32 +11,52 @@ interface ProductCardProps {
 }
 
 /**
- * Tarjeta de producto — línea "retail limpio".
+ * Tarjeta de producto — diseño aprobado.
  *
- * Toda la piel (colores, sombras, radios) sale de las variables del tema, así
- * que la tarjeta se ve correcta en modo claro y oscuro sin lógica extra.
+ * ---------------------------------------------------------------------
+ * QUÉ CAMBIA RESPECTO A LA TARJETA ANTERIOR, Y POR QUÉ
+ * ---------------------------------------------------------------------
+ * 1. IMAGEN CUADRADA (`aspect-square`) en vez de alto fijo en píxeles.
+ *    Con alto fijo, en una rejilla de dos columnas en un teléfono de
+ *    360 px la foto quedaba achatada y desperdiciaba el ancho; el
+ *    cuadrado se adapta al ancho de la columna sea cual sea.
  *
- * No cambia ninguna prop ni ningún dato: mismas entradas y misma lógica de
- * carrito y de precios que antes.
+ * 2. LA GARANTÍA SUBE A LA FOTO, como insignia. Antes competía abajo
+ *    con "IVA incluido" y con el estado de stock en una fila de tres
+ *    píldoras que, en dos columnas, se partía en dos líneas y desalineaba
+ *    todas las tarjetas de la fila.
+ *
+ * 3. FUERA "IVA incluido" DE LA TARJETA. Es información de precio, no de
+ *    producto, y ya se dice en la ficha y en el carrito; en la tarjeta
+ *    solo robaba la línea que ahora usa el stock real.
+ *
+ * 4. FUERA EL BOTÓN DE FAVORITOS. No guardaba nada — abría un onClick
+ *    vacío con `stopPropagation`. Un corazón que no hace nada es peor
+ *    que no tenerlo.
+ *
+ * 5. UN SOLO BOTÓN, "Ver", de ancho completo. El "Agregar" de icono
+ *    pequeño competía con el clic de la tarjeta en un objetivo de 32 px:
+ *    en teléfono era muy fácil añadir al carrito sin querer al intentar
+ *    abrir el producto. Añadir al carrito vive ahora en la ficha, donde
+ *    además se elige la cantidad.
+ *
+ * Toda la piel sale de variables del tema, así que la tarjeta se ve
+ * correcta en claro y en oscuro sin lógica extra. No cambia ninguna prop:
+ * mismas entradas y misma lógica de precios que antes.
  */
-export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPrice }: ProductCardProps) {
-  // FALLO CORREGIDO: sin esto, una imageUrl rota (archivo borrado del
-  // Storage, dominio caído) dejaba el ícono de imagen partida del
-  // navegador en la tarjeta, en vez de caer al mismo estado "Sin
-  // imagen" que ya existía para cuando el producto no tiene ninguna.
+export function ProductCard({ prod, onClick, getProductDiscountedPrice }: ProductCardProps) {
+  // Sin esto, una imageUrl rota (archivo borrado del Storage, dominio
+  // caído) dejaba el ícono de imagen partida del navegador en la tarjeta,
+  // en vez de caer al estado "Sin imagen".
   const [imagenRota, setImagenRota] = React.useState(false);
   React.useEffect(() => { setImagenRota(false); }, [prod.imageUrl]);
+
   const discountedPrice = getProductDiscountedPrice(prod);
   const isDiscounted = discountedPrice < prod.price;
   const discountPct = isDiscounted
     ? Math.round(((prod.price - discountedPrice) / prod.price) * 100)
     : 0;
   const agotado = prod.stock <= 0;
-
-  const handleAdd = (e: React.MouseEvent) => {
-    e.stopPropagation();
-    if (!agotado) onAddToCart(prod);
-  };
 
   return (
     <article
@@ -50,108 +70,82 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
         }
       }}
       aria-label={prod.name}
-      className="glass-card overflow-hidden flex flex-col group relative cursor-pointer h-full"
+      className="group relative flex h-full cursor-pointer flex-col overflow-hidden rounded-[14px] border border-[var(--border-color)] bg-[var(--bg-surface)] transition-colors hover:border-[var(--accent)]"
     >
-      {/* ------------------------------ Imagen ------------------------------ */}
-      {/* `product-media` conserva la transparencia del PNG y, solo en modo
-          oscuro, agrega placa elevada + foco radial + halo de contorno para que
-          un producto negro no se pierda contra el fondo. Ver src/index.css. */}
-      <div className="product-media relative flex items-center justify-center h-32 sm:h-36 p-4">
+      {/* ----------------------------- Imagen ----------------------------- */}
+      <div className="product-media relative aspect-square w-full flex-shrink-0 overflow-hidden bg-[var(--bg-sunken)]">
         {prod.imageUrl && !imagenRota ? (
           <img
             src={prod.imageUrl}
             alt={prod.name}
             loading="lazy"
             decoding="async"
-            className="max-h-full max-w-full object-contain transition-transform duration-200 group-hover:scale-105"
+            className="absolute inset-0 h-full w-full object-contain p-3 transition-transform duration-200 group-hover:scale-105"
             referrerPolicy="no-referrer"
             onError={() => setImagenRota(true)}
           />
         ) : (
-          <div className="flex flex-col items-center justify-center text-[var(--text-muted)] text-center">
-            <Smartphone className="w-8 h-8 mb-1 opacity-60" />
+          <div className="absolute inset-0 flex flex-col items-center justify-center text-[var(--text-muted)]">
+            <Smartphone className="mb-1 h-7 w-7 opacity-50" />
             <span className="text-[10px]">Sin imagen</span>
           </div>
         )}
 
+        {/* Garantía: lo que más pesa al comparar un reacondicionado. */}
+        {prod.warranty && (
+          <span className="absolute left-2 top-2 max-w-[calc(100%-1rem)] rounded-md bg-[var(--ok-soft)] px-2 py-[3px] text-[9.5px] font-bold text-[var(--ok)] tv-ellipsis">
+            {prod.warranty}
+          </span>
+        )}
+
+        {/* El descuento va abajo para no chocar con la garantía. */}
         {isDiscounted && (
-          <span className="absolute top-2.5 left-2.5 px-2 py-1 rounded-md text-[10px] font-bold bg-[var(--accent)] text-[var(--accent-ink)]">
+          <span className="absolute bottom-2 left-2 rounded-md bg-[var(--accent)] px-2 py-[3px] text-[9.5px] font-bold text-[var(--accent-ink)]">
             −{discountPct}%
           </span>
         )}
 
-        <button
-          onClick={(e) => { e.stopPropagation(); }}
-          className="absolute top-2 right-2 w-8 h-8 rounded-full grid place-items-center bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-muted)] hover:text-rose-500 transition-colors"
-          title="Guardar en favoritos"
-          aria-label="Guardar en favoritos"
-        >
-          <Heart className="w-4 h-4" />
-        </button>
+        {agotado && (
+          <span className="absolute right-2 top-2 rounded-md bg-[var(--bg-surface)] px-2 py-[3px] text-[9.5px] font-bold text-[var(--text-muted)] border border-[var(--border-color)]">
+            Agotado
+          </span>
+        )}
       </div>
 
-      {/* ------------------------------ Detalle ----------------------------- */}
-      <div className="p-3 flex flex-col gap-2 flex-1 justify-between">
-        <div className="min-w-0">
-          <span className="block tv-ellipsis text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--text-muted)]">
-            {prod.category}
-          </span>
-          {/* Alto RESERVADO de dos líneas (`min-h`), no solo recorte: con
-              line-clamp a secas un nombre de una línea deja la tarjeta más
-              baja que su vecina y la fila de la rejilla queda desalineada.
-              Reservando el alto, todas las tarjetas miden igual. */}
-          <h4 className="mt-1 tv-clamp-2 min-h-[2.42rem] text-sm font-semibold leading-snug text-[var(--text-primary)]">
-            {prod.name}
-          </h4>
-        </div>
+      {/* ----------------------------- Detalle ---------------------------- */}
+      <div className="flex min-w-0 flex-1 flex-col gap-1.5 p-2.5 sm:p-3">
+        {/* Alto RESERVADO de dos líneas, no solo recorte: con line-clamp a
+            secas un nombre de una línea deja la tarjeta más baja que su
+            vecina y la fila de la rejilla queda desalineada. */}
+        <h4 className="tv-clamp-2 min-h-[2.42rem] text-[12.5px] font-semibold leading-snug text-[var(--text-primary)]">
+          {prod.name}
+        </h4>
 
-        <div className="flex flex-col gap-2">
-          {/* Insignias: garantía · IVA incluido · disponibilidad */}
-          <div className="flex flex-wrap gap-1.5">
-            {prod.warranty && (
-              <span className="inline-flex items-center gap-1 max-w-full px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--bg-sunken)] border border-[var(--border-soft)] text-[var(--text-secondary)]">
-                <ShieldCheck className="w-3 h-3 flex-shrink-0" />
-                <span className="tv-ellipsis">{prod.warranty}</span>
+        <span className="block tv-ellipsis text-[10.5px] text-[var(--text-muted)]">
+          {prod.category}
+        </span>
+
+        {/* `mt-auto` empuja precio y botón al fondo, así todas las tarjetas
+            de la fila alinean su botón aunque el nombre ocupe una línea. */}
+        <div className="mt-auto flex min-w-0 flex-col gap-1.5 pt-1">
+          <div className="flex min-w-0 flex-wrap items-baseline gap-x-2">
+            <span className="font-mono text-[15px] font-bold tracking-tight text-[var(--accent)]">
+              ₡{discountedPrice.toLocaleString()}
+            </span>
+            {isDiscounted && (
+              <span className="font-mono text-[11px] text-[var(--text-muted)] line-through">
+                ₡{prod.price.toLocaleString()}
               </span>
             )}
-            <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--gold-soft)] border border-[var(--gold-line)] text-[var(--brand-gold-dark)]">
-              IVA incluido
-            </span>
-            <span
-              className="px-2 py-0.5 rounded-full text-[10px] font-semibold border"
-              style={
-                agotado
-                  ? { background: 'var(--bg-sunken)', borderColor: 'var(--border-soft)', color: 'var(--text-muted)' }
-                  : { background: 'var(--ok-soft)', borderColor: 'transparent', color: 'var(--ok)' }
-              }
-            >
-              {agotado ? 'Bajo pedido' : 'En stock'}
-            </span>
           </div>
 
-          {/* Precio y acción */}
-          <div className="flex items-end justify-between gap-2">
-            <div className="flex flex-col leading-none min-w-0">
-              {isDiscounted && (
-                <span className="text-[11px] text-[var(--text-muted)] line-through font-mono mb-1">
-                  ₡{prod.price.toLocaleString()}
-                </span>
-              )}
-              <span className="text-lg font-bold font-mono tracking-tight text-[var(--text-primary)] truncate">
-                ₡{discountedPrice.toLocaleString()}
-              </span>
-            </div>
+          <span className="text-[10.5px] text-[var(--text-muted)]">
+            {agotado ? 'Bajo pedido' : `${prod.stock} ${prod.stock === 1 ? 'disponible' : 'disponibles'}`}
+          </span>
 
-            <button
-              onClick={handleAdd}
-              disabled={agotado}
-              className="btn-glass-primary shrink-0 px-3 py-2 text-[11px] inline-flex items-center gap-1.5"
-              aria-label={`Agregar ${prod.name} al carrito`}
-            >
-              <ShoppingBag className="w-3.5 h-3.5" />
-              <span className="hidden sm:inline">Agregar</span>
-            </button>
-          </div>
+          <span className="tv-ellipsis mt-0.5 rounded-lg bg-[var(--accent)] px-3 py-2 text-center text-[11.5px] font-bold text-[var(--accent-ink)] transition-colors group-hover:bg-[var(--accent-hover)]">
+            Ver
+          </span>
         </div>
       </div>
     </article>

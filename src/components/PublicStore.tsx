@@ -10,7 +10,6 @@ import {
 import { ProductCard } from './ProductCard';
 import { CustomSelect } from './CustomSelect';
 import { MarketingRow } from './MarketingRow';
-import { FeaturedCategoriesCarousel } from './FeaturedCategoriesCarousel';
 import { Product, Order, OrderItem, RepairOrder } from '../types';
 import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
@@ -1748,12 +1747,11 @@ export default function PublicStore({
         {activeTab === 'store' ? (
           /* PUBLIC STORE VIEW */
           <>
-            {/* Featured Categories Carousel */}
-            <FeaturedCategoriesCarousel 
-              categories={CATEGORIES} 
-              onSelectCategory={(cat) => setSelectedCategory(cat === 'Todos' ? null : cat)}
-              selectedCategory={selectedCategory || 'Todos'}
-            />
+            {/* El carrusel de categorías se retiró: hacía exactamente lo
+                mismo que la barra de chips de abajo, así que la pantalla
+                tenía DOS selectores de categoría, uno encima del otro, que
+                además podían mostrar estados distintos. Se conserva el de
+                chips porque muestra el conteo real de cada categoría. */}
 
             {/* Marketing Row - Tendencias */}
             {!selectedCategory && filteredProducts.length > 4 && (
