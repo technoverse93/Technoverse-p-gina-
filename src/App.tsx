@@ -24,7 +24,7 @@ const AdminPanel = lazy(() => import('./components/AdminPanel'));
 
 function AdminPanelFallback() {
   return (
-    <div className="min-h-screen flex items-center justify-center bg-[var(--bg-base,#0F1217)]">
+    <div className="min-h-dvh flex items-center justify-center bg-[var(--bg-base,#0F1217)]">
       <div className="w-8 h-8 rounded-full border-2 border-current border-t-transparent animate-spin opacity-60" />
     </div>
   );
@@ -51,7 +51,7 @@ export default function App() {
  */
 function PantallaBloqueada({ porCuenta }: { porCuenta: boolean }) {
   return (
-    <div className="min-h-screen flex items-center justify-center p-6 bg-[#0F1217] text-[#E9ECF1]">
+    <div className="min-h-dvh flex items-center justify-center p-6 bg-[#0F1217] text-[#E9ECF1]">
       <div className="max-w-lg w-full bg-[#171B22] border border-white/10 rounded-2xl p-8">
         <div className="text-[11px] uppercase tracking-[0.12em] font-bold text-[#FB923C] mb-3">
           Technoverse Costa Rica
@@ -401,7 +401,7 @@ function AppInner() {
   }
 
   return (
-    <div className="min-h-screen bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700" id="technoverse-application-container">
+    <div className="min-h-dvh bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700" id="technoverse-application-container">
       {currentView === 'reset-password' ? (
         <ResetPasswordView
           onListo={() => {

@@ -2337,9 +2337,14 @@ if (!m) return null;
                         {m.quantityChange > 0 ? '+' : ''}{m.quantityChange}
                       </td>
                       <td className="p-3 text-right text-[var(--text-secondary)]">{m.resultingStock || '-'}</td>
-                      <td className="p-3 text-[var(--text-secondary)] truncate max-w-[150px]">
-                        {m.notes} <br/>
-                        <span className="text-[9px] opacity-50">{m.userEmail}</span>
+                      {/* `truncate` imponía `white-space: nowrap`, que peleaba
+                          con el <br/> de abajo: la nota quedaba en una línea
+                          recortada y el correo saltaba igual, descuadrando la
+                          fila. Con recorte por líneas la nota ocupa dos como
+                          máximo y el correo se parte si hace falta. */}
+                      <td className="p-3 text-[var(--text-secondary)] max-w-[150px]">
+                        <span className="block tv-clamp-2">{m.notes}</span>
+                        <span className="block tv-break text-[9px] opacity-50">{m.userEmail}</span>
                       </td>
                     </tr>
                   ))}
@@ -2500,7 +2505,7 @@ if (!m) return null;
       {/* PDF Import Modal */}
       {showPdfModal && (
         <div className="fixed inset-0 bg-slate-950/90 z-50 flex items-center justify-center p-4">
-          <div className="bg-[var(--bg-surface)] border border-white/15 rounded-3xl w-full max-w-6xl max-h-[90vh] flex flex-col overflow-hidden shadow-sm relative">
+          <div className="bg-[var(--bg-surface)] border border-white/15 rounded-3xl w-full max-w-6xl max-h-[90dvh] flex flex-col overflow-hidden shadow-sm relative">
             
             {/* Modal Header */}
             <div className="p-6 border-b border-[var(--border-color)]/80 flex justify-between items-center bg-[var(--bg-surface)] ">
@@ -2967,8 +2972,11 @@ if (!m) return null;
             </div>
 
             {/* Modal Footer */}
-            <div className="p-6 border-t border-[var(--border-color)]/80 flex justify-between items-center bg-[var(--bg-surface)] ">
-              <div className="text-xs text-[var(--text-secondary)] space-y-0.5">
+            <div className="p-6 border-t border-[var(--border-color)]/80 flex justify-between items-center gap-3 bg-[var(--bg-surface)] ">
+              {/* El resumen de la izquierda crece con la cantidad de filas
+                  detectadas; sin `min-w-0` empujaba los botones de importar
+                  fuera del pie del modal. */}
+              <div className="min-w-0 text-xs text-[var(--text-secondary)] space-y-0.5">
                 {extractedProducts.length > 0 && (
                   <>
                     <p>Total detectados: <strong className="text-[var(--text-primary)]">{extractedProducts.length}</strong> | Seleccionados: <strong className="text-emerald-400 ">{extractedProducts.filter(r => r.selected).length}</strong></p>
@@ -2976,7 +2984,7 @@ if (!m) return null;
                   </>
                 )}
               </div>
-              <div className="flex gap-3">
+              <div className="flex gap-3 flex-shrink-0">
                 <button
                   type="button"
                   onClick={() => setShowPdfModal(false)}

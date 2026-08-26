@@ -135,9 +135,12 @@ type BtnProps = React.ButtonHTMLAttributes<HTMLButtonElement> & {
 
 export function Btn({ variant = 'default', icon: Icon, children, className = '', ...rest }: BtnProps) {
   return (
+    // El icono nunca se encoge; la etiqueta se recorta con puntos si no
+    // cabe. Así el botón conserva su alto y su forma con cualquier texto,
+    // en vez de estirarse hasta desbordar la fila que lo contiene.
     <button className={`tv-btn ${className}`} data-variant={variant} {...rest}>
-      {Icon && <Icon className="w-4 h-4" aria-hidden="true" />}
-      {children}
+      {Icon && <Icon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />}
+      <span className="tv-btn-label">{children}</span>
     </button>
   );
 }

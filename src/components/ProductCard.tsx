@@ -92,11 +92,15 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
 
       {/* ------------------------------ Detalle ----------------------------- */}
       <div className="p-3 flex flex-col gap-2 flex-1 justify-between">
-        <div>
-          <span className="text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--text-muted)]">
+        <div className="min-w-0">
+          <span className="block tv-ellipsis text-[10px] font-bold uppercase tracking-[0.13em] text-[var(--text-muted)]">
             {prod.category}
           </span>
-          <h4 className="mt-1 text-sm font-semibold leading-snug text-[var(--text-primary)] line-clamp-2">
+          {/* Alto RESERVADO de dos líneas (`min-h`), no solo recorte: con
+              line-clamp a secas un nombre de una línea deja la tarjeta más
+              baja que su vecina y la fila de la rejilla queda desalineada.
+              Reservando el alto, todas las tarjetas miden igual. */}
+          <h4 className="mt-1 tv-clamp-2 min-h-[2.42rem] text-sm font-semibold leading-snug text-[var(--text-primary)]">
             {prod.name}
           </h4>
         </div>
@@ -105,9 +109,9 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
           {/* Insignias: garantía · IVA incluido · disponibilidad */}
           <div className="flex flex-wrap gap-1.5">
             {prod.warranty && (
-              <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--bg-sunken)] border border-[var(--border-soft)] text-[var(--text-secondary)]">
-                <ShieldCheck className="w-3 h-3" />
-                {prod.warranty}
+              <span className="inline-flex items-center gap-1 max-w-full px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--bg-sunken)] border border-[var(--border-soft)] text-[var(--text-secondary)]">
+                <ShieldCheck className="w-3 h-3 flex-shrink-0" />
+                <span className="tv-ellipsis">{prod.warranty}</span>
               </span>
             )}
             <span className="px-2 py-0.5 rounded-full text-[10px] font-semibold bg-[var(--gold-soft)] border border-[var(--gold-line)] text-[var(--brand-gold-dark)]">

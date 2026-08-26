@@ -110,8 +110,11 @@ export default function GestionUsuariosPanel({ currentUser }: Props) {
               {admins.map(admin => (
                 <tr key={admin.id}>
                   <td>
-                    <div className="font-semibold text-[var(--text-primary)]">{admin.name || 'Sin nombre'}</div>
-                    <div className="text-[12px] text-[var(--text-muted)]">{admin.email}</div>
+                    {/* Nombre y correo son texto libre: sin recorte, un correo
+                        corporativo largo ensanchaba la columna y empujaba los
+                        botones de acción fuera de la tabla. */}
+                    <div className="font-semibold text-[var(--text-primary)] tv-break">{admin.name || 'Sin nombre'}</div>
+                    <div className="text-[12px] text-[var(--text-muted)] tv-break">{admin.email}</div>
                     {esAdminSupremo(admin.email) && <Chip tone="accent">Admin supremo</Chip>}
                   </td>
                   <td>

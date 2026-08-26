@@ -673,12 +673,15 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                     </span>
                     <div className="space-y-2 max-h-32 overflow-y-auto">
                       {publicSearchResult.bitacora.map((evt, i) => (
-                        <div key={i} className="flex gap-2 text-[10px] text-[var(--text-secondary)] border-l border-emerald-500 pl-3 ml-1 relative">
+                        <div key={i} className="flex gap-2 min-w-0 text-[10px] text-[var(--text-secondary)] border-l border-emerald-500 pl-3 ml-1 relative">
                           <span className="absolute -left-1 top-1.5 w-2 h-2 rounded-full bg-emerald-500 " />
-                          <div>
+                          <div className="min-w-0">
                             <span className="font-bold text-[var(--text-primary)]">{evt.status}</span>
                             <span className="text-[8px] ml-1.5 text-[var(--text-secondary)]">{new Date(evt.timestamp).toLocaleString()}</span>
-                            <p className="text-[var(--text-secondary)] italic">"{evt.notes}"</p>
+                            {/* Nota del técnico: texto libre sin límite de largo.
+                                Con scroll propio y tope de alto, un diagnóstico
+                                extenso no estira la tarjeta del historial. */}
+                            <p className="tv-text-scroll tv-text-scroll-sm text-[var(--text-secondary)] italic">"{evt.notes}"</p>
                           </div>
                         </div>
                       ))}
@@ -929,9 +932,9 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 className="flex-shrink-0 w-72 bg-[var(--bg-surface)] /60 rounded-xl border border-[var(--border-color)]/50 p-3 flex flex-col h-[400px] transition-colors duration-200"
               >
                 {/* Column Title Header */}
-                <div className="flex justify-between items-center mb-3 pb-1.5 border-b border-[var(--border-color)]/50">
-                  <span className="text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wide">{col}</span>
-                  <span className="text-[10px] bg-slate-800 border border-[var(--border-color)]/80 text-sky-400 px-2 py-0.5 rounded-full font-bold">
+                <div className="flex justify-between items-center gap-2 mb-3 pb-1.5 border-b border-[var(--border-color)]/50 min-w-0">
+                  <span className="truncate text-[11px] font-bold text-[var(--text-secondary)] uppercase tracking-wide">{col}</span>
+                  <span className="flex-shrink-0 text-[10px] bg-slate-800 border border-[var(--border-color)]/80 text-sky-400 px-2 py-0.5 rounded-full font-bold">
                     {colRepairs.length}
                   </span>
                 </div>
@@ -1014,12 +1017,15 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
           <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden shadow-sm w-full max-w-xl text-[var(--text-primary)] flex flex-col max-h-[92dvh]">
             
             {/* Header */}
-            <div className="p-4 bg-[var(--bg-surface)] border-b border-[var(--border-color)]/80 flex justify-between items-center">
-              <div>
-                <h3 className="font-bold text-sm text-sky-400 ">Administrar Orden de Reparación</h3>
-                <p className="text-[10px] text-[var(--text-secondary)]">Ticket: <strong className="font-mono">{selectedRepair.ticket}</strong> | Cliente: <strong>{selectedRepair.customerName}</strong></p>
+            <div className="p-4 bg-[var(--bg-surface)] border-b border-[var(--border-color)]/80 flex justify-between items-center gap-3">
+              {/* `min-w-0` a la izquierda y `flex-shrink-0` a la derecha: el
+                  nombre del cliente es texto libre y sin esto empujaba los
+                  botones de la cabecera fuera del modal. */}
+              <div className="min-w-0">
+                <h3 className="font-bold text-sm text-sky-400 truncate">Administrar Orden de Reparación</h3>
+                <p className="text-[10px] text-[var(--text-secondary)] truncate">Ticket: <strong className="font-mono">{selectedRepair.ticket}</strong> | Cliente: <strong>{selectedRepair.customerName}</strong></p>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 {selectedRepair.customerPhone && (
                   <button
                     type="button"
@@ -1207,7 +1213,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
           onClick={() => setVerCatalogo(false)}
         >
           <div
-            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[88vh] flex flex-col"
+            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-2xl max-h-[88dvh] flex flex-col"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[var(--border-color)]/50 p-4 flex-shrink-0">

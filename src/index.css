@@ -280,7 +280,7 @@ img, svg, video, canvas { max-width: 100%; }
   left: 12px; right: 12px;
   bottom: calc(72px + env(safe-area-inset-bottom, 0px));
   z-index: 70;
-  max-height: 68vh;
+  max-height: 68dvh;
   overflow-y: auto;
   -webkit-overflow-scrolling: touch;
   overscroll-behavior: contain;
@@ -540,3 +540,257 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   --tw-ring-color: rgba(var(--accent-rgb), 0.25) !important;
 }
 .to-blue-600 { --tw-gradient-to: var(--accent) !important; }
+
+/* ==========================================================================
+   SISTEMA DE CONTENCIÓN — límites de pantalla, forma de botón y scroll
+   --------------------------------------------------------------------------
+   Tres reglas que valen para TODA la plataforma (tienda, panel, chat,
+   taller, cobros…) en las tres superficies: APK, web móvil y escritorio.
+
+   1. NADA SE SALE DE LA PANTALLA.
+      Los overlays se miden en `dvh`, no en `vh`. En web móvil la barra del
+      navegador aparece y desaparece al hacer scroll: `vh` mide la ventana
+      SIN descontarla, así que un modal a `90vh` termina más alto que la
+      pantalla visible y su pie —donde viven "Guardar" o "Añadir al
+      carrito"— queda por debajo del borde. `dvh` mide el alto realmente
+      visible en cada momento. En la APK no hay barra de navegador y el
+      valor coincide, así que el cambio no altera nada ahí.
+
+   2. EL TEXTO NO DEFORMA LOS BOTONES.
+      Un botón conserva su altura y su forma sin importar la etiqueta. Si
+      el texto no cabe, se recorta con puntos suspensivos; nunca estira el
+      botón ni lo parte en dos líneas ni lo empuja fuera de su fila.
+
+   3. TODO TEXTO LARGO TIENE SU PROPIO SCROLL.
+      Una descripción, una nota o una dirección larga hace scroll dentro
+      de su caja en vez de empujar el contenedor. La regla técnica que lo
+      hace posible es `min-height: 0` en el hijo flexible: por defecto un
+      item de flex no se encoge por debajo de su contenido, así que sin
+      esto el texto empuja el panel entero en vez de generar scroll.
+   ========================================================================== */
+
+/* --- 1 · Límites de pantalla ------------------------------------------- */
+
+/* Ningún elemento puede provocar barrido horizontal. */
+#technoverse-application-container { max-width: 100%; overflow-x: clip; }
+
+/* Overlays a prueba de barra de navegador. Se aplica por atributo para
+   alcanzar también los modales que traen su `max-h` en utilidades. */
+.tv-overlay-panel,
+[data-overlay-panel] {
+  max-height: 90dvh;
+  max-width: 100%;
+}
+@supports not (height: 1dvh) {
+  /* Navegadores antiguos: se conserva el comportamiento anterior. */
+  .tv-overlay-panel, [data-overlay-panel] { max-height: 90vh; }
+}
+
+/* Respeto de las zonas del sistema (muesca, barra de gestos) en la APK. */
+.tv-safe-bottom { padding-bottom: max(0px, env(safe-area-inset-bottom)); }
+.tv-safe-top    { padding-top: max(0px, env(safe-area-inset-top)); }
+
+/* Pie de acción de cualquier overlay: siempre visible, nunca comprimido y
+   por encima de la barra de gestos. */
+.tv-sheet-actions {
+  flex-shrink: 0;
+  padding-bottom: max(12px, env(safe-area-inset-bottom));
+}
+
+/* --- 2 · Forma de botón a prueba de texto ------------------------------ */
+
+/* `.tv-btn` ya fijaba alto y `nowrap`, pero una etiqueta larga lo hacía
+   crecer a lo ancho hasta desbordar su fila. Con esto el botón nunca pasa
+   del ancho de su contenedor y el sobrante se recorta. */
+.tv-btn {
+  max-width: 100%;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+/* El icono no se encoge ni desaparece cuando el texto es largo. */
+.tv-btn > svg { flex-shrink: 0; }
+
+/* Cualquier botón, enlace de acción o pestaña de la plataforma: conserva su
+   caja aunque el contenido no quepa. Sin `!important` para que un caso
+   puntual pueda seguir mandando. */
+button, [role="tab"], [role="menuitem"] { min-width: 0; }
+
+/* Etiqueta de botón que debe recortarse en una línea. */
+.tv-btn-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Botón que ocupa el ancho disponible sin deformarse (pies de modal). */
+.tv-btn-fill { flex: 1 1 0; min-width: 0; }
+
+/* Grupo de botones que debe repartirse el ancho por igual y no desbordar. */
+.tv-btn-row { display: flex; gap: 8px; min-width: 0; }
+.tv-btn-row > * { flex: 1 1 0; min-width: 0; }
+
+/* --- 3 · Scroll para texto largo --------------------------------------- */
+
+/* Bloque de texto con scroll propio. Se usa en descripciones de producto,
+   notas de taller, observaciones de cobro y cualquier campo libre. */
+.tv-text-scroll {
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  overflow-wrap: anywhere;
+  white-space: pre-wrap;      /* respeta los saltos de línea guardados */
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Variantes con tope de altura, para textos dentro de tarjetas donde no
+   hay un contenedor flexible que reparta el espacio. */
+.tv-text-scroll-sm { max-height: 96px; }
+.tv-text-scroll-md { max-height: 160px; }
+.tv-text-scroll-lg { max-height: 240px; }
+
+/* Zona flexible con scroll dentro de un overlay de tres partes
+   (cabecera fija · contenido con scroll · pie fijo). El `min-height: 0`
+   es lo que hace que el scroll ocurra aquí y no empuje el panel. */
+.tv-scroll-area {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Recorte por número de líneas: el nombre de un producto o de un módulo
+   ocupa siempre el mismo alto, así una fila de tarjetas nunca se desalinea. */
+.tv-clamp-1, .tv-clamp-2, .tv-clamp-3 {
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  overflow-wrap: anywhere;
+}
+.tv-clamp-1 { -webkit-line-clamp: 1; }
+.tv-clamp-2 { -webkit-line-clamp: 2; }
+.tv-clamp-3 { -webkit-line-clamp: 3; }
+
+/* Texto de una sola línea que se recorta con puntos (SKU, correo, nombre
+   de cliente en una fila estrecha). Requiere que el padre tenga min-width:0. */
+.tv-ellipsis {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Una palabra sin espacios —un correo largo, un SKU, una URL— no puede
+   ensanchar su contenedor. */
+.tv-break { overflow-wrap: anywhere; word-break: break-word; }
+
+/* Tabla ancha: hace scroll dentro de su caja, nunca mueve la página. */
+.tv-table-scroll {
+  overflow-x: auto;
+  max-width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
+
+/* Fila de filtros o pestañas que no cabe: se desplaza en horizontal sin
+   barra visible y sin romper el ancho de la pantalla. */
+.tv-chip-row {
+  display: flex;
+  gap: 6px;
+  overflow-x: auto;
+  max-width: 100%;
+  scrollbar-width: none;
+  -webkit-overflow-scrolling: touch;
+}
+.tv-chip-row::-webkit-scrollbar { display: none; }
+.tv-chip-row > * { flex-shrink: 0; }
+
+/* Barras de scroll internas discretas, para que un área con scroll se note
+   sin ensuciar el diseño. */
+.tv-text-scroll::-webkit-scrollbar,
+.tv-scroll-area::-webkit-scrollbar { width: 6px; height: 6px; }
+.tv-text-scroll::-webkit-scrollbar-thumb,
+.tv-scroll-area::-webkit-scrollbar-thumb {
+  background: var(--border-color);
+  border-radius: 999px;
+}
+.tv-text-scroll::-webkit-scrollbar-thumb:hover,
+.tv-scroll-area::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ==========================================================================
+   CORRECCIÓN GLOBAL DE `truncate` Y `line-clamp` DENTRO DE FLEX/GRID
+   --------------------------------------------------------------------------
+   `truncate` (overflow-hidden + ellipsis + nowrap) NO recorta cuando el
+   elemento es hijo de un contenedor flex o grid: el ancho mínimo por
+   defecto de un item es `auto`, es decir el de su contenido, así que en
+   vez de recortarse ensancha al padre y empuja a sus hermanos fuera de la
+   caja. Es el motivo de que un correo largo desplazara la flecha de un
+   select, o de que el nombre de un cliente moviera su chip de estado.
+
+   Se corrige aquí, en un solo sitio, en vez de repetir `min-w-0` en las
+   más de cuarenta llamadas repartidas por la plataforma — y así cualquier
+   `truncate` que se escriba mañana ya nace bien.
+
+   Es una regla segura: fuera de un contenedor flex o grid, `min-width: 0`
+   ya es el valor calculado por defecto, de modo que no altera nada.
+   ========================================================================== */
+.truncate,
+[class*="line-clamp-"] { min-width: 0; }
+
+/* ==========================================================================
+   ICONOS Y ETIQUETAS DENTRO DE BOTONES
+   --------------------------------------------------------------------------
+   Un icono dentro de un botón flex se encoge cuando la etiqueta no cabe:
+   la flecha de "Continuar a Contacto" o la bolsa de "Agregar" quedaban
+   aplastadas u ovaladas en pantallas de 320 px. `flex-shrink: 0` lo impide
+   en toda la plataforma de una sola vez.
+   ========================================================================== */
+button > svg,
+a[role="button"] > svg,
+[role="tab"] > svg { flex-shrink: 0; }
+
+/* Llamada a la acción de ancho completo con etiqueta larga —"Confirmar Pago
+   y Generar Comprobante", "Continuar a Contacto"—. Conserva un alto estable
+   y admite como mucho dos líneas centradas, en vez de estirarse sin límite
+   o partir la palabra. */
+.tv-cta {
+  min-height: 46px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  text-align: center;
+  overflow: hidden;
+}
+.tv-cta > span,
+.tv-cta > .tv-cta-text {
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ==========================================================================
+   CAMPOS DE TEXTO LARGO
+   --------------------------------------------------------------------------
+   Un `textarea` es redimensionable por defecto y se puede arrastrar EN
+   HORIZONTAL, con lo que cualquiera puede sacarlo de su columna y romper
+   el formulario. Aquí se limita a crecer en vertical —que sí es útil para
+   escribir una descripción larga— con un techo, para que tampoco empuje
+   los botones del formulario fuera de la pantalla.
+
+   La utilidad `resize-none` sigue mandando donde ya se usa: tiene más
+   especificidad que este selector de elemento.
+   ========================================================================== */
+textarea {
+  resize: vertical;
+  max-width: 100%;
+  max-height: 40dvh;
+}
+
+/* Los campos de un formulario nunca se salen de su columna, aunque el
+   valor escrito sea más largo que el ancho disponible. */
+input, select, textarea { max-width: 100%; }
