@@ -1477,7 +1477,7 @@ export default function CyberSecurityPanel({
                         </span>
                       </td>
                       <td className="p-3 text-center text-[var(--text-primary)] font-bold text-[10px] uppercase">{log.action}</td>
-                      <td className="p-3 text-[var(--text-primary)] max-w-sm whitespace-pre-wrap">{log.detail}</td>
+                      <td className="p-3 text-[var(--text-primary)] max-w-sm"><div className="tv-text-scroll tv-text-scroll-sm">{log.detail}</div></td>
                     </tr>
                   )}
                 />
@@ -1985,7 +1985,7 @@ export default function CyberSecurityPanel({
           onClick={() => setVisitanteDetalle(null)}
         >
           <div
-            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto p-5 space-y-3"
+            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[85dvh] overflow-y-auto p-5 space-y-3"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[var(--border-color)]/50 pb-3">
@@ -2106,7 +2106,7 @@ export default function CyberSecurityPanel({
           onClick={() => setDetalle(null)}
         >
           <div
-            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[85vh] overflow-y-auto p-5 space-y-3"
+            className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-lg max-h-[85dvh] overflow-y-auto p-5 space-y-3"
             onClick={e => e.stopPropagation()}
           >
             <div className="flex items-center justify-between border-b border-[var(--border-color)]/50 pb-3">

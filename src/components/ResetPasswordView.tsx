@@ -92,7 +92,7 @@ export default function ResetPasswordView({ onListo }: Props) {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center p-4 bg-[var(--bg-base)]">
+    <div className="min-h-dvh flex items-center justify-center p-4 bg-[var(--bg-base)]">
       <div className="relative max-w-md w-full glass-panel-strong rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 text-[var(--text-primary)]">
         <div className="text-center space-y-2">
           <div className="w-12 h-12 bg-gradient-to-tr from-[#3B82F6] to-blue-600 rounded-2xl flex items-center justify-center border border-white/40 shadow-sm mx-auto">

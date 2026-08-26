@@ -127,7 +127,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                 <div className="max-w-[88%] rounded-xl px-3 py-2 text-[11px] bg-amber-400/12 border border-amber-500/35 text-amber-700 flex items-start gap-1.5">
                   <StickyNote className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                   <div>
-                    {msg.text && <p className="whitespace-pre-wrap">{msg.text}</p>}
+                    {msg.text && <p className="tv-break whitespace-pre-wrap">{msg.text}</p>}
                     <span className="block mt-1 text-[9px] opacity-70 font-mono">Nota interna &middot; {new Date(msg.timestamp).toLocaleString()}</span>
                   </div>
                 </div>
@@ -154,7 +154,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                   {msg.imageUrl && (
                     <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-lg max-w-full mb-1.5 max-h-64 object-cover" loading="lazy" />
                   )}
-                  {msg.text && <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>}
+                  {msg.text && <p className="tv-break whitespace-pre-wrap leading-relaxed">{msg.text}</p>}
                 </div>
                 <div className={`flex items-center gap-1 mt-1 text-[9.5px] font-mono text-[var(--text-muted)] ${isSupport ? 'justify-end' : ''}`}>
                   {isSupport && <Shield className="w-2.5 h-2.5" />}

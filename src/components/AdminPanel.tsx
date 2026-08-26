@@ -952,7 +952,7 @@ export default function AdminPanel({
 
   if (!isAuthenticated || !currentUser || currentUser.role === 'Cliente') {
     return (
-      <div className="min-h-screen bg-[var(--bg-base)] flex items-center justify-center">
+      <div className="min-h-dvh bg-[var(--bg-base)] flex items-center justify-center">
         <div className="animate-pulse text-[var(--text-secondary)] text-sm font-mono">Redireccionando al portal unificado...</div>
       </div>
     );

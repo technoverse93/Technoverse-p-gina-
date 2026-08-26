@@ -76,7 +76,11 @@ export function CustomSelect({
         aria-expanded={isOpen}
         className={`glass-input w-full flex items-center justify-between gap-2 rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] transition cursor-pointer ${className}`}
       >
-        <span className={`truncate ${selected ? '' : 'text-[var(--text-muted)]'}`}>{selected ? selected.label : placeholder}</span>
+        {/* `min-w-0` es imprescindible: `truncate` por sí solo NO recorta
+            dentro de un contenedor flex, porque el ancho mínimo por defecto
+            de un item de flex es el de su contenido. Sin esto, una opción
+            larga estiraba el select y desplazaba la flecha fuera de la caja. */}
+        <span className={`min-w-0 truncate ${selected ? '' : 'text-[var(--text-muted)]'}`}>{selected ? selected.label : placeholder}</span>
         <ChevronDown className={`w-4 h-4 text-[var(--text-muted)] flex-shrink-0 transition-transform duration-150 ${isOpen ? 'rotate-180' : ''}`} />
       </button>
       {isOpen && (
@@ -97,7 +101,7 @@ export function CustomSelect({
             </div>
           )}
           {searchable && opcionesFiltradas.length === 0 && (
-            <p className="px-3 py-2.5 text-sm text-[var(--text-muted)]">Ningún resultado para «{query}».</p>
+            <p className="px-3 py-2.5 text-sm text-[var(--text-muted)] tv-break">Ningún resultado para «{query}».</p>
           )}
           {opcionesFiltradas.map(opt => (
             <button

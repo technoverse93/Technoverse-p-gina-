@@ -1143,7 +1143,7 @@ export default function PublicStore({
   const { page: prodPage, setPage: setProdPage, totalPages: prodTotal, startIndex: prodStart, visibleItems: paginatedProducts } = usePagination(filteredProducts, 10);
 
   return (
-    <div className="min-h-screen bg-[var(--bg-base)] text-[var(--text-primary)] font-sans relative" id="store-page-root">
+    <div className="min-h-dvh bg-[var(--bg-base)] text-[var(--text-primary)] font-sans relative" id="store-page-root">
       
       {/* Compact 48px/56px Header */}
       <header className="h-14 sm:h-16 fixed top-0 left-0 right-0 z-40 glass-nav flex items-center justify-between px-4 md:px-6">
@@ -1326,7 +1326,7 @@ export default function PublicStore({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 12, scale: 0.95 }}
                   transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-80 max-w-none md:max-w-[calc(100vw-32px)] max-h-[70vh] md:max-h-[85vh] glass-panel rounded-2xl overflow-y-auto z-[70] dynamic-dropdown"
+                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-80 max-w-none md:max-w-[calc(100vw-32px)] max-h-[70dvh] md:max-h-[85dvh] glass-panel rounded-2xl overflow-y-auto z-[70] dynamic-dropdown"
                   id="account-dropdown"
                   style={{ willChange: 'transform, opacity' }}
                 >
@@ -1499,7 +1499,7 @@ export default function PublicStore({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 12, scale: 0.95 }}
                   transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-96 max-w-none md:max-w-[calc(100vw-32px)] glass-panel rounded-2xl overflow-hidden z-[70] flex flex-col max-h-[70vh] md:max-h-[600px] dynamic-dropdown"
+                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-96 max-w-none md:max-w-[calc(100vw-32px)] glass-panel rounded-2xl overflow-hidden z-[70] flex flex-col max-h-[70dvh] md:max-h-[600px] dynamic-dropdown"
                   id="cart-dropdown"
                   style={{ willChange: 'transform, opacity' }}
                 >
@@ -1882,7 +1882,7 @@ export default function PublicStore({
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4" id="shopping-cart-sidebar">
           <div className="absolute inset-0 bg-slate-900/50" onClick={() => { setIsCartOpen(false); setCheckoutStep(0); }} />
 
-          <div className="relative max-w-2xl w-full glass-panel-strong rounded-3xl shadow-sm flex flex-col justify-between text-[var(--text-primary)] overflow-hidden max-h-[90vh] animate-in zoom-in-95 duration-200" id="checkout-cart-modal-container">
+          <div className="relative max-w-2xl w-full glass-panel-strong rounded-3xl shadow-sm flex flex-col justify-between text-[var(--text-primary)] overflow-hidden max-h-[90dvh] animate-in zoom-in-95 duration-200" id="checkout-cart-modal-container">
             {/* Cart Header */}
             <div className="p-5 bg-[var(--bg-surface)] border-b border-[var(--border-color)] flex items-center justify-between">
               <h3 className="font-bold text-sm text-[var(--text-primary)] flex items-center gap-2">
@@ -2180,9 +2180,9 @@ export default function PublicStore({
               {checkoutStep < 3 ? (
                 <>
                   <div className="space-y-1.5 text-sm">
-                    <div className="flex justify-between text-[var(--text-secondary)]">
-                      <span>Subtotal:</span>
-                      <span className="font-mono">₡{cartSubtotal.toLocaleString()}</span>
+                    <div className="flex justify-between gap-2 text-[var(--text-secondary)] min-w-0">
+                      <span className="truncate">Subtotal:</span>
+                      <span className="font-mono flex-shrink-0">₡{cartSubtotal.toLocaleString()}</span>
                     </div>
                     {/* Coupon UI */}
                     {checkoutStep === 0 && (
@@ -2195,19 +2195,24 @@ export default function PublicStore({
                           className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] uppercase font-mono flex-1 focus:outline-none focus:border-blue-500 "
                           disabled={!!appliedCoupon}
                         />
+                        {/* `flex-shrink-0` + `whitespace-nowrap`: la etiqueta
+                            cambia de "Aplicar" a "Aplicado" y sin esto el
+                            botón se comprimía y partía la palabra en dos. */}
                         <button
                           onClick={handleApplyCoupon}
                           disabled={!couponCode || !!appliedCoupon}
-                          className="bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] font-bold px-3 py-1.5 rounded-lg transition text-sm cursor-pointer"
+                          className="flex-shrink-0 whitespace-nowrap bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] font-bold px-3 py-1.5 rounded-lg transition text-sm cursor-pointer"
                         >
                           {appliedCoupon ? 'Aplicado' : 'Aplicar'}
                         </button>
                       </div>
                     )}
+                    {/* El código del cupón lo escribe quien lo crea y puede
+                        ser largo: se recorta la etiqueta, nunca el monto. */}
                     {appliedCoupon && (
-                      <div className="flex justify-between text-blue-600 font-bold">
-                        <span>Cupón ({appliedCoupon.code}):</span>
-                        <span className="font-mono">-₡{
+                      <div className="flex justify-between gap-2 text-blue-600 font-bold min-w-0">
+                        <span className="truncate">Cupón ({appliedCoupon.code}):</span>
+                        <span className="font-mono flex-shrink-0">-₡{
                           appliedCoupon.type === 'Porcentaje' 
                             ? Math.round(discountedSubtotal * (appliedCoupon.value / 100)).toLocaleString() 
                             : appliedCoupon.value.toLocaleString()
@@ -2215,13 +2220,13 @@ export default function PublicStore({
                       </div>
                     )}
 
-                    <div className="flex justify-between text-[var(--text-secondary)] font-mono mt-2 border-t border-[var(--border-color)] pt-2">
-                      <span>IVA Desglosado (13%):</span>
-                      <span>₡{cartTax.toLocaleString()}</span>
+                    <div className="flex justify-between gap-2 text-[var(--text-secondary)] font-mono mt-2 border-t border-[var(--border-color)] pt-2 min-w-0">
+                      <span className="truncate">IVA Desglosado (13%):</span>
+                      <span className="flex-shrink-0">₡{cartTax.toLocaleString()}</span>
                     </div>
-                    <div className="flex justify-between text-[var(--text-primary)] font-extrabold text-sm border-t border-[var(--border-color)] pt-2">
-                      <span>Total a Pagar:</span>
-                      <span className="font-mono text-blue-600 ">₡{cartTotal.toLocaleString()}</span>
+                    <div className="flex justify-between gap-2 text-[var(--text-primary)] font-extrabold text-sm border-t border-[var(--border-color)] pt-2 min-w-0">
+                      <span className="truncate">Total a Pagar:</span>
+                      <span className="font-mono text-blue-600 flex-shrink-0">₡{cartTotal.toLocaleString()}</span>
                     </div>
                   </div>
 
@@ -2232,7 +2237,7 @@ export default function PublicStore({
                         setCheckoutStep(1);
                       }}
                       disabled={cart.length === 0}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
+                      className="tv-cta w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] font-bold text-sm py-3 rounded-xl uppercase transition cursor-pointer"
                     >
                       Continuar a Contacto <ArrowRight className="w-4 h-4" />
                     </button>
@@ -2456,7 +2461,8 @@ export default function PublicStore({
       {selectedProductDetail && (
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 animate-in fade-in duration-200">
           <div 
-            className="glass-panel-strong rounded-3xl shadow-sm overflow-hidden w-full max-w-xl max-h-[90vh] flex flex-col md:flex-row animate-in zoom-in-95 duration-250"
+            data-overlay-panel
+            className="glass-panel-strong rounded-3xl shadow-sm overflow-hidden w-full max-w-xl max-h-[90dvh] flex flex-col md:flex-row animate-in zoom-in-95 duration-250"
             id="product-detail-modal"
           >
             {/* Left side: Photo */}
@@ -2497,19 +2503,29 @@ export default function PublicStore({
                 tenga la descripción. */}
             <div className="md:w-1/2 flex flex-col min-h-0">
               <div className="flex-1 min-h-0 overflow-y-auto p-6 space-y-3">
-                <div className="space-y-1">
-                  <h3 className="font-extrabold text-base text-[var(--text-primary)] leading-tight">
+                <div className="space-y-1 min-w-0">
+                  {/* Dos líneas como máximo: un nombre largo se recorta en
+                      vez de empujar el resto de la ficha hacia abajo. */}
+                  <h3 className="tv-clamp-2 font-extrabold text-base text-[var(--text-primary)] leading-tight">
                     {selectedProductDetail.name}
                   </h3>
-                  <div className="flex items-center gap-3 text-[10px] text-[var(--text-primary)] font-mono">
-                    <span>SKU: {selectedProductDetail.sku}</span>
-                    <span>•</span>
+                  {/* `flex-wrap` + `tv-break`: un SKU largo baja de línea en
+                      vez de ensanchar la columna y provocar barrido lateral. */}
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[var(--text-primary)] font-mono min-w-0">
+                    <span className="tv-break">SKU: {selectedProductDetail.sku}</span>
+                    <span aria-hidden="true">•</span>
                     <span className="text-[var(--brand-gold-mid)]">Garantía: {selectedProductDetail.warranty || '90 días'}</span>
                   </div>
                 </div>
 
-                <p className="text-sm text-[var(--text-secondary)] leading-relaxed font-sans">
-                  {selectedProductDetail.description || 'Dispositivo de alta calidad de Technoverse, completamente verificado por nuestro equipo técnico para ofrecer el máximo rendimiento.'}
+                {/* La descripción tiene SU PROPIO scroll y un tope de altura.
+                    Con `white-space: pre-wrap` (dentro de tv-text-scroll) se
+                    respetan los saltos de línea tal como están guardados —hay
+                    descripciones escritas como lista de viñetas— y con el tope
+                    una descripción muy larga no se come toda la ficha ni
+                    desplaza el precio fuera de la vista. */}
+                <p className="tv-text-scroll tv-text-scroll-md text-sm text-[var(--text-secondary)] leading-relaxed font-sans">
+                  {selectedProductDetail.description?.trim() || 'Dispositivo de alta calidad de Technoverse, completamente verificado por nuestro equipo técnico para ofrecer el máximo rendimiento.'}
                 </p>
 
                 {/* Stock tracker */}
@@ -2554,11 +2570,13 @@ export default function PublicStore({
                   fuera de overflow-y-auto para que "Cancelar"/"Añadir al
                   carrito" queden siempre a la vista sin importar cuánto
                   scroll haga falta arriba. */}
-              <div className="flex-shrink-0 p-6 pt-4 space-y-4 border-t border-[var(--border-color)]">
+              <div className="tv-sheet-actions px-6 pt-4 space-y-4 border-t border-[var(--border-color)]">
                 {selectedProductDetail.stock > 0 ? (
-                  <div className="flex items-center justify-between gap-4">
-                    <span className="text-sm font-bold text-[var(--text-primary)]">Cantidad:</span>
-                    <div className="flex items-center border border-[var(--border-color)] rounded-xl overflow-hidden bg-[var(--bg-surface)] ">
+                  <div className="flex items-center justify-between gap-3 min-w-0">
+                    <span className="text-sm font-bold text-[var(--text-primary)] tv-ellipsis">Cantidad:</span>
+                    {/* `flex-shrink-0`: el selector conserva su forma aunque
+                        la etiqueta de al lado se recorte. */}
+                    <div className="flex-shrink-0 flex items-center border border-[var(--border-color)] rounded-xl overflow-hidden bg-[var(--bg-surface)]">
                       <button
                         onClick={() => setDetailQuantity(Math.max(1, detailQuantity - 1))}
                         className="px-3 py-1 text-[var(--text-primary)] hover:bg-[var(--bg-base)] font-extrabold cursor-pointer transition text-sm"
@@ -2582,17 +2600,21 @@ export default function PublicStore({
                   </div>
                 )}
 
-                <div className="grid grid-cols-2 gap-3">
+                {/* Dos columnas iguales con `min-w-0`: "Añadir al carrito" es
+                    más largo que "Cancelar", y sin esto la rejilla se
+                    desbalancea en pantallas de 320 px. El texto se recorta
+                    con puntos antes de deformar el botón. */}
+                <div className="grid grid-cols-2 gap-3 min-w-0">
                   <button
                     onClick={() => setSelectedProductDetail(null)}
-                    className="w-full bg-[var(--bg-base)] hover:bg-slate-200 text-[var(--text-primary)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider text-center transition cursor-pointer"
+                    className="tv-ellipsis w-full bg-[var(--bg-base)] hover:bg-slate-200 text-[var(--text-primary)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider text-center transition cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
                     onClick={() => handleAddToCartWithQty(selectedProductDetail, detailQuantity)}
                     disabled={selectedProductDetail.stock === 0}
-                    className={`w-full py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider text-center transition cursor-pointer shadow-sm ${
+                    className={`tv-ellipsis w-full py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider text-center transition cursor-pointer shadow-sm ${
                       selectedProductDetail.stock === 0
                         ? 'bg-slate-200 text-[var(--text-primary)] cursor-not-allowed'
                         : 'bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] text-[#1a1408] '

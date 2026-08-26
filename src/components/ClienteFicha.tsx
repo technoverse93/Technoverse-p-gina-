@@ -347,7 +347,7 @@ export default function ClienteFicha({ cliente, pedidos, adminEmail, onCerrar, o
       onClick={onCerrar}
     >
       <div
-        className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl max-h-[90vh] overflow-y-auto"
+        className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-t-2xl sm:rounded-2xl w-full sm:max-w-3xl max-h-[90dvh] overflow-y-auto"
         onClick={e => e.stopPropagation()}
       >
         {/* Encabezado */}

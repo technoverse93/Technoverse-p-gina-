@@ -206,11 +206,14 @@ export function Modal({
           ref={panelRef}
           id={id}
           tabIndex={-1}
-          className={`relative w-full ${MODAL_MAXW[size]} glass-panel-strong rounded-2xl outline-none flex flex-col max-h-[90vh] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200`}
+          data-overlay-panel
+          className={`relative w-full ${MODAL_MAXW[size]} glass-panel-strong rounded-2xl outline-none flex flex-col max-h-[90dvh] motion-safe:animate-in motion-safe:zoom-in-95 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200`}
         >
           {(title || !hideClose) && (
             <div className="flex-shrink-0 flex items-start justify-between gap-4 px-5 pt-4 pb-3 border-b border-[var(--border-color)]">
-              <h3 className="text-base font-bold text-[var(--text-primary)] leading-tight">
+              {/* Un título largo se recorta a dos líneas en vez de estirar
+                  la cabecera y comerle alto al contenido. */}
+              <h3 className="tv-clamp-2 min-w-0 text-base font-bold text-[var(--text-primary)] leading-tight">
                 {title}
               </h3>
               {!hideClose && (
@@ -229,16 +232,20 @@ export function Modal({
               overflow-y-auto igual crece más allá del espacio disponible
               (su altura mínima por defecto es la de su contenido, no 0),
               así que un texto largo empujaba el panel entero más allá de
-              max-h-[90vh] en vez de generar scroll interno aquí adentro.
+              max-h-[90dvh] en vez de generar scroll interno aquí adentro.
               Con min-h-0 este bloque se achica hasta lo que sobre entre
               encabezado y pie, y es AHÍ donde entra el scroll — el pie
               (los botones "Guardar"/"Cancelar" que traiga `footer`) queda
               siempre visible, nunca empujado fuera de la pantalla. */}
-          <div className="min-h-0 flex-1 px-5 py-4 overflow-y-auto text-sm text-[var(--text-secondary)]">
+          <div className="tv-scroll-area px-5 py-4 text-sm text-[var(--text-secondary)]">
             {children}
           </div>
+          {/* Pie de acción: `tv-sheet-actions` lo mantiene siempre visible
+              y por encima de la barra de gestos de la APK. `min-w-0` en los
+              hijos evita que un botón con etiqueta larga estire la fila y
+              empuje a los demás fuera del panel. */}
           {footer && (
-            <div className="flex-shrink-0 flex flex-wrap justify-end gap-2 px-5 py-3 border-t border-[var(--border-color)]">
+            <div className="tv-sheet-actions flex flex-wrap justify-end gap-2 px-5 py-3 border-t border-[var(--border-color)] [&>*]:min-w-0">
               {footer}
             </div>
           )}
@@ -309,7 +316,11 @@ function ToastViewport({
               className={`pointer-events-auto w-full max-w-sm flex items-start gap-3 px-4 py-3 rounded-xl glass-panel-strong border ${meta.ring} motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-top-2 motion-safe:duration-200`}
             >
               <Icon className={`w-5 h-5 shrink-0 mt-0.5 ${meta.iconColor}`} />
-              <p className="flex-1 text-sm text-[var(--text-primary)] leading-snug break-words">
+              {/* Los avisos de fallo de guardado incluyen el detalle que
+                  devuelve el servidor, que a veces son varias líneas. Con
+                  tope de alto y scroll, un error largo no convierte el toast
+                  en una pared que tape media pantalla. */}
+              <p className="flex-1 min-w-0 tv-text-scroll tv-text-scroll-sm text-sm text-[var(--text-primary)] leading-snug break-words">
                 {t.message}
               </p>
               <button

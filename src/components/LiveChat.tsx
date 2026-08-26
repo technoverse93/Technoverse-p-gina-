@@ -459,7 +459,7 @@ export default function LiveChat() {
                             {msg.imageUrl && (
                               <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-lg max-w-full mb-1.5 max-h-56 object-cover" loading="lazy" />
                             )}
-                            {msg.text && <p className="whitespace-pre-wrap leading-relaxed">{msg.text}</p>}
+                            {msg.text && <p className="tv-break whitespace-pre-wrap leading-relaxed">{msg.text}</p>}
                           </div>
                           <div className={`flex items-center gap-1 mt-1 text-[9.5px] font-mono text-[var(--text-muted)] ${isCustomer ? 'justify-end' : ''}`}>
                             <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
