@@ -1610,7 +1610,7 @@ export default function PublicStore({
                   }}
                   className={`w-full text-left py-3 px-4 text-sm rounded-xl transition-all font-semibold ${
                     (selectedCategory === cat || (cat === 'Todos' && selectedCategory === null))
-                      ? 'bg-[var(--brand-gold-mid)] text-[#1a1408] '
+                      ? 'bg-[var(--brand-gold-mid)] text-[var(--accent-ink)] '
                       : 'text-[var(--text-secondary)] hover:bg-[var(--bg-base)] hover:text-blue-600 '
                   }`}
                 >
@@ -1835,7 +1835,7 @@ export default function PublicStore({
 
                 <button
                   type="submit"
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] font-extrabold text-sm py-3 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer"
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[var(--accent-ink)] font-extrabold text-sm py-3 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer"
                 >
                   Abrir Ticket de Reparación Oficial
                 </button>
@@ -2201,7 +2201,7 @@ export default function PublicStore({
                         <button
                           onClick={handleApplyCoupon}
                           disabled={!couponCode || !!appliedCoupon}
-                          className="flex-shrink-0 whitespace-nowrap bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] font-bold px-3 py-1.5 rounded-lg transition text-sm cursor-pointer"
+                          className="flex-shrink-0 whitespace-nowrap bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[var(--accent-ink)] font-bold px-3 py-1.5 rounded-lg transition text-sm cursor-pointer"
                         >
                           {appliedCoupon ? 'Aplicado' : 'Aplicar'}
                         </button>
@@ -2237,7 +2237,7 @@ export default function PublicStore({
                         setCheckoutStep(1);
                       }}
                       disabled={cart.length === 0}
-                      className="tv-cta w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[#1a1408] font-bold text-sm py-3 rounded-xl uppercase transition cursor-pointer"
+                      className="tv-cta w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[var(--accent-ink)] font-bold text-sm py-3 rounded-xl uppercase transition cursor-pointer"
                     >
                       Continuar a Contacto <ArrowRight className="w-4 h-4" />
                     </button>
@@ -2260,7 +2260,7 @@ export default function PublicStore({
                         }
                         setCheckoutStep(2);
                       }}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] text-[#1a1408] font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
+                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] text-[var(--accent-ink)] font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
                     >
                       Continuar al Pago <ArrowRight className="w-4 h-4" />
                     </button>
@@ -2270,7 +2270,7 @@ export default function PublicStore({
                     <button
                       onClick={handleConfirmOrder}
                       disabled={isSubmittingOrder}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[#C5A028] disabled:opacity-60 text-[#1a1408] font-extrabold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition shadow-sm cursor-pointer"
+                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] disabled:opacity-60 text-[var(--accent-ink)] font-extrabold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition shadow-sm cursor-pointer"
                     >
                       {isSubmittingOrder ? 'Procesando...' : 'Confirmar Pago y Generar Comprobante'}
                     </button>
@@ -2390,7 +2390,7 @@ export default function PublicStore({
 
                 <button
                   type="submit"
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer"
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[var(--accent-ink)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer"
                 >
                   Registrarse y Entrar
                 </button>
@@ -2423,7 +2423,7 @@ export default function PublicStore({
                 <button
                   type="submit"
                   disabled={entrandoSesion}
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[var(--accent-ink)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
                 >
                   {entrandoSesion ? 'Verificando acceso…' : 'Iniciar Sesión'}
                 </button>
@@ -2617,7 +2617,7 @@ export default function PublicStore({
                     className={`tv-ellipsis w-full py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider text-center transition cursor-pointer shadow-sm ${
                       selectedProductDetail.stock === 0
                         ? 'bg-slate-200 text-[var(--text-primary)] cursor-not-allowed'
-                        : 'bg-[var(--brand-gold-mid)] hover:bg-[#c49f2c] text-[#1a1408] '
+                        : 'bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] text-[var(--accent-ink)] '
                     }`}
                   >
                     Añadir al carrito

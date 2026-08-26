@@ -124,7 +124,7 @@ export default function ResetPasswordView({ onListo }: Props) {
             <button
               type="button"
               onClick={onListo}
-              className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer"
+              className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[var(--accent-ink)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer"
             >
               Volver a la tienda
             </button>
@@ -160,7 +160,7 @@ export default function ResetPasswordView({ onListo }: Props) {
             <button
               type="submit"
               disabled={guardando}
-              className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-wait"
+              className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[var(--accent-ink)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer disabled:opacity-60 disabled:cursor-wait"
             >
               {guardando ? 'Guardando…' : 'Guardar nueva contraseña'}
             </button>
@@ -178,7 +178,7 @@ export default function ResetPasswordView({ onListo }: Props) {
             <button
               type="button"
               onClick={onListo}
-              className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[#1a1408] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer"
+              className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[var(--accent-ink)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer"
             >
               Ir a iniciar sesión
             </button>

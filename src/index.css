@@ -58,23 +58,35 @@
 
     --brand-navy: #14243F;
     --brand-navy-hover: #1D3357;
-    --brand-gold-dark: #C2410C;
-    --brand-gold-mid: #EA6A1E;
-    --brand-gold-light: #F59E5B;
-    --brand-gold-rgb: 194, 65, 12;
-    /* Estas variables conservan su nombre (los componentes ya las usan) pero
-       ahora apuntan al naranja, para que no queden detalles dorados sueltos. */
-    --gold-soft: #FFF1E8;
-    --gold-line: #F6D7C2;
+    /* Estas cuatro conservan el nombre "gold" porque decenas de componentes
+       ya las usan por ese nombre; renombrarlas obligaría a tocar archivos con
+       lógica sin ganar nada. Lo que cambia es a DÓNDE apuntan: antes dorado,
+       después naranja, y ahora el verde botella del diseño aprobado.
+       `-dark` tiene que ser más oscuro que `-mid` porque varios botones lo
+       usan como color de hover. */
+    --brand-gold-dark: #0A5540;
+    --brand-gold-mid: #0E6B4F;
+    --brand-gold-light: #3FA07C;
+    --brand-gold-rgb: 14, 107, 79;
+    --gold-soft: #E8F5EF;
+    --gold-line: #C4E3D5;
 
     /* Acento funcional: lo que pinta botones, focos y estados activos.
-       Naranja de marca. En claro se usa un tono profundo (orange-700) porque
-       sobre blanco un naranja claro no alcanza contraste de lectura. */
-    --accent: #C2410C;
-    --accent-hover: #9A330A;
+       Verde botella. Se escoge un tono profundo a propósito: sobre fondo
+       claro un verde vivo no alcanza contraste de lectura. Este da 6,5:1
+       contra blanco, así que sirve tanto de fondo de botón con tinta blanca
+       como de color de texto. */
+    --accent: #0E6B4F;
+    --accent-hover: #0A5540;
     --accent-ink: #FFFFFF;
-    --accent-rgb: 194, 65, 12;
+    --accent-rgb: 14, 107, 79;
 
+    /* Verde de ÉXITO. Se deja EXACTAMENTE como estaba: da 4,8:1 sobre
+       `--ok-soft` y aclararlo para separarlo del acento lo bajaba a 3,7:1,
+       por debajo del mínimo legible para las píldoras, que son de 10 px.
+       Lo que distingue estado de acción no es el tono sino la forma: el
+       éxito solo aparece como texto sobre fondo suave ("En stock",
+       "Pagado", "Resuelto") y el acento solo como relleno de botón. */
     --ok: #197A4B;
     --ok-soft: #E8F6EF;
 
@@ -88,7 +100,7 @@
     /* Chat: burbujas neutras. */
     --bubble-in: #F1F4F8;
     --bubble-in-ink: #0F172A;
-    --bubble-out: #C2410C;
+    --bubble-out: #0E6B4F;
     --bubble-out-ink: #FFFFFF;
   }
 }
@@ -432,11 +444,14 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 }
 
 /* ==========================================================================
-   CHAT DEL TALLER — corrección del verde
+   CHAT DEL TALLER — unificación del verde
    Los componentes de chat (LiveChat, ChatInbox, ChatThread) traen ~37
    utilidades `emerald-*` heredadas. En vez de reescribir esos archivos —con el
    riesgo de tocar su lógica de mensajes— se remapean aquí a la paleta de
-   marca. El verde queda reservado únicamente al punto de "en línea".
+   marca. Ahora que el acento ES verde, esto deja de ser una corrección de
+   color y pasa a ser lo que garantiza que las burbujas usen el MISMO verde
+   de marca y no el `emerald` genérico de Tailwind, que es más claro y no
+   alcanza contraste con tinta blanca.
    ========================================================================== */
 .bg-emerald-500.bg-emerald-500,
 .bg-emerald-600.bg-emerald-600,

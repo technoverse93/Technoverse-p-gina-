@@ -184,12 +184,12 @@ function pantallaDeBloqueo(ip: string | null): Response {
     border: 1px solid #E4E8EF; border-radius: 16px; padding: 32px;
   }
   h1 { margin: 0 0 4px; font-size: 20px; letter-spacing: -0.01em; }
-  .marca { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #C2410C; font-weight: 700; margin-bottom: 14px; }
+  .marca { font-size: 11px; text-transform: uppercase; letter-spacing: 0.12em; color: #0E6B4F; font-weight: 700; margin-bottom: 14px; }
   p { line-height: 1.65; color: #55617A; font-size: 14px; margin: 0 0 14px; }
   .dato { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12px; color: #0F172A;
           background: #F1F4F8; border: 1px solid #E4E8EF; border-radius: 10px;
           padding: 10px 12px; margin: 18px 0; word-break: break-all; }
-  a { color: #C2410C; }
+  a { color: #0E6B4F; }
   .pie { font-size: 11px; color: #8792A8; margin: 0; padding-top: 16px; border-top: 1px solid #EEF1F6; }
 </style>
 </head>
