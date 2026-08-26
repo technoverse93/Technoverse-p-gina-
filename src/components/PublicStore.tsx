@@ -1169,8 +1169,14 @@ export default function PublicStore({
   return (
     <div className="min-h-dvh bg-[var(--bg-base)] text-[var(--text-primary)] font-sans relative" id="store-page-root">
       
-      {/* Compact 48px/56px Header */}
-      <header className="h-14 sm:h-16 fixed top-0 left-0 right-0 z-40 glass-nav flex items-center justify-between px-4 md:px-6">
+      {/* Compact 48px/56px Header.
+          Se envuelve en dos filas: la de siempre (logo, nav, buscador de
+          escritorio, cuenta/carrito) y, SOLO en móvil, una segunda fila con
+          el buscador — antes el buscador existía nada más que en escritorio
+          (`hidden sm:block`) y en la APK no había forma de buscar un
+          producto salvo entrando categoría por categoría. */}
+      <header className="fixed top-0 left-0 right-0 z-40 glass-nav">
+        <div className="h-14 sm:h-16 flex items-center justify-between px-4 md:px-6">
         <div className="flex items-center gap-4 lg:gap-8">
           <button 
             onClick={() => { setActiveTab('store'); setSelectedCategory(null); }}
@@ -1185,7 +1191,11 @@ export default function PublicStore({
                 className="h-8 w-8 rounded-lg border border-[var(--border-color)] shadow-sm object-contain bg-[var(--bg-surface)] p-0.5" 
               />
             </div>
-            <span className="font-display font-bold text-lg tracking-tight text-[var(--brand-gold-mid)] hidden sm:block">
+            {/* Antes `hidden sm:block`: en la APK y el navegador móvil, el
+                nombre de la tienda no se veía en absoluto, solo el ícono del
+                logo. `text-sm sm:text-lg` para que quepa cómodo junto a los
+                íconos de cuenta/carrito en una pantalla de 360 px. */}
+            <span className="font-display font-bold text-sm sm:text-lg tracking-tight text-[var(--brand-gold-mid)]">
               Technoverse
             </span>
           </button>
@@ -1611,6 +1621,70 @@ export default function PublicStore({
           </div>
 
         </div>
+        </div>
+
+        {/* Fila de búsqueda SOLO en móvil/APK. Reutiliza exactamente el
+            mismo estado y las mismas funciones que el buscador de
+            escritorio (handleSearchChange, searchResults…): es el MISMO
+            buscador, solo con una fila propia porque en una pantalla
+            angosta no cabe dentro de la barra principal junto al logo y
+            los íconos de cuenta/carrito. */}
+        <div className="sm:hidden border-t border-[var(--border-color)] px-3 py-2 relative">
+          <div className="relative flex items-center bg-[var(--bg-surface)] border border-[var(--border-color)] focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--accent)]/20 rounded-xl px-3 h-9 transition-all">
+            <Search className="w-4 h-4 text-[var(--text-muted)] mr-2 flex-shrink-0" />
+            <input
+              type="text"
+              inputMode="search"
+              value={searchQuery}
+              onChange={(e) => handleSearchChange(e.target.value)}
+              placeholder="Buscar productos…"
+              className="w-full min-w-0 bg-transparent text-[13px] text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
+            />
+            {searchQuery && (
+              <button
+                type="button"
+                onClick={handleResetSearch}
+                className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors p-1 -mr-1"
+                aria-label="Borrar búsqueda"
+              >
+                <X className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+
+          <AnimatePresence>
+            {showSearchDropdown && searchResults.length > 0 && (
+              <motion.div
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: 8 }}
+                transition={{ duration: 0.14, ease: 'easeOut' }}
+                className="absolute left-3 right-3 top-full mt-1.5 glass-panel rounded-2xl overflow-hidden max-h-[60dvh] overflow-y-auto z-[70] py-1.5"
+              >
+                {searchResults.map(p => p && (
+                  <button
+                    key={p.id}
+                    onClick={() => handleSelectSearchProduct(p)}
+                    className="w-full text-left p-3 hover:bg-[var(--bg-sunken)] transition-colors flex items-center gap-3 border-b border-[var(--border-soft)] last:border-0"
+                  >
+                    <div className="w-9 h-9 flex-shrink-0 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-lg flex items-center justify-center overflow-hidden">
+                      {p.imageUrl && !imagenesRotas.has(p.id) ? (
+                        <img src={p.imageUrl} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" onError={() => marcarImagenRota(p.id)} />
+                      ) : (
+                        <Smartphone className="w-4 h-4 text-[var(--text-muted)]" />
+                      )}
+                    </div>
+                    <div className="min-w-0 flex-1">
+                      <div className="tv-ellipsis text-[12.5px] font-semibold text-[var(--text-primary)]">{p.name}</div>
+                      <div className="text-[10px] text-[var(--text-muted)] font-mono uppercase">{p.category}</div>
+                    </div>
+                    <div className="flex-shrink-0 text-[12.5px] font-bold text-[var(--accent)] font-mono">₡{p.price.toLocaleString()}</div>
+                  </button>
+                ))}
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
       </header>
 
       {/* Mobile catalog floating sheet — triggered from the bottom navigation bar.
@@ -1735,7 +1809,12 @@ export default function PublicStore({
         </button>
       </nav>
       {/* Main Body */}
-      <main className="pt-16 sm:pt-20 pb-28 md:pb-20 px-4 md:px-6 max-w-7xl mx-auto space-y-12">
+      {/* pt-[122px] en móvil: el header ahora mide dos filas (barra
+          principal + buscador). El valor se verificó visualmente para que
+          no quede ni un hueco ni una superposición contra la primera fila
+          de productos. Desde `sm:` el buscador móvil desaparece y el
+          padding vuelve al de siempre. */}
+      <main className="pt-[122px] sm:pt-20 pb-28 md:pb-20 px-4 md:px-6 max-w-7xl mx-auto space-y-12">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}

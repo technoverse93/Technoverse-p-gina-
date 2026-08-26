@@ -34,17 +34,18 @@ interface ProductCardProps {
  *    vacío con `stopPropagation`. Un corazón que no hace nada es peor
  *    que no tenerlo.
  *
- * 5. UN SOLO BOTÓN, "Ver", de ancho completo. El "Agregar" de icono
- *    pequeño competía con el clic de la tarjeta en un objetivo de 32 px:
- *    en teléfono era muy fácil añadir al carrito sin querer al intentar
- *    abrir el producto. Añadir al carrito vive ahora en la ficha, donde
- *    además se elige la cantidad.
+ * 5. UN SOLO BOTÓN, "Comprar", de ancho completo, con su propio gesto
+ *    (`stopPropagation`) en vez de un ícono pequeño que competía con el
+ *    clic de la tarjeta en un objetivo de 32 px. Agrega al carrito y abre
+ *    el checkout de inmediato — sin pasos intermedios. Tocar el resto de
+ *    la tarjeta (foto, nombre) sigue abriendo la ficha completa, para
+ *    quien quiera revisar descripción/garantía o elegir cantidad antes.
  *
  * Toda la piel sale de variables del tema, así que la tarjeta se ve
  * correcta en claro y en oscuro sin lógica extra. No cambia ninguna prop:
  * mismas entradas y misma lógica de precios que antes.
  */
-export function ProductCard({ prod, onClick, getProductDiscountedPrice }: ProductCardProps) {
+export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPrice }: ProductCardProps) {
   // Sin esto, una imageUrl rota (archivo borrado del Storage, dominio
   // caído) dejaba el ícono de imagen partida del navegador en la tarjeta,
   // en vez de caer al estado "Sin imagen".
@@ -143,9 +144,25 @@ export function ProductCard({ prod, onClick, getProductDiscountedPrice }: Produc
             {agotado ? 'Bajo pedido' : `${prod.stock} ${prod.stock === 1 ? 'disponible' : 'disponibles'}`}
           </span>
 
-          <span className="tv-ellipsis mt-0.5 rounded-lg bg-[var(--accent)] px-3 py-2 text-center text-[11.5px] font-bold text-[var(--accent-ink)] transition-colors group-hover:bg-[var(--accent-hover)]">
-            Ver
-          </span>
+          {/* "Comprar", no "Ver": agrega al carrito y abre el checkout de
+              una vez —handleAddToCart ya hace las dos cosas— en vez de
+              nada más abrir la ficha. `stopPropagation` para que sea un
+              gesto aparte del que abre la tarjeta: tocar la foto o el
+              nombre sigue llevando a la ficha completa (descripción,
+              garantía, elegir cantidad), para quien quiera revisar antes
+              de comprar; este botón es el atajo para quien ya decidió. */}
+          <button
+            type="button"
+            onClick={(e) => { e.stopPropagation(); onAddToCart(prod); }}
+            disabled={agotado}
+            className={`tv-ellipsis mt-0.5 rounded-lg px-3 py-2 text-center text-[11.5px] font-bold transition-colors ${
+              agotado
+                ? 'cursor-not-allowed bg-[var(--bg-sunken)] text-[var(--text-muted)]'
+                : 'bg-[var(--accent)] text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]'
+            }`}
+          >
+            {agotado ? 'Agotado' : 'Comprar'}
+          </button>
         </div>
       </div>
     </article>
