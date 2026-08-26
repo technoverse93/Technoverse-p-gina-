@@ -649,11 +649,19 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 #technoverse-application-container { max-width: 100%; overflow-x: clip; }
 
 /* Overlays a prueba de barra de navegador. Se aplica por atributo para
-   alcanzar también los modales que traen su `max-h` en utilidades. */
+   alcanzar también los modales que traen su `max-h` en utilidades.
+   ------------------------------------------------------------------------
+   OJO — NO añadir `max-width` aquí.
+   Este selector de atributo tiene la MISMA especificidad que una utilidad
+   de Tailwind (0,1,0) pero va después en la hoja, así que la gana. Una
+   versión anterior traía `max-width: 100%` y anulaba el `max-w-xl` de la
+   ficha de producto y el `max-w-*` de TODOS los modales del panel: se
+   estiraban a lo ancho de la pantalla, con la foto y el texto deformados.
+   El ancho ya lo limita cada modal con su propia utilidad, y no
+   desbordan porque el contenedor que los centra lleva `p-4`. */
 .tv-overlay-panel,
 [data-overlay-panel] {
   max-height: 90dvh;
-  max-width: 100%;
 }
 @supports not (height: 1dvh) {
   /* Navegadores antiguos: se conserva el comportamiento anterior. */
