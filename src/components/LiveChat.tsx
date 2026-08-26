@@ -315,6 +315,16 @@ export default function LiveChat() {
   const closedChats = conversations.filter(c => c.status === 'resuelto');
   const mostrarRespuestasRapidas = !yaEscribioElCliente(activeConv);
 
+  // Igual que del lado admin (ChatThread): dibuja solo los últimos N para
+  // que un historial largo no crezca el DOM del widget flotante sin límite.
+  const TANDA_MENSAJES_CLIENTE = 60;
+  const [cantidadVisibleCliente, setCantidadVisibleCliente] = useState(TANDA_MENSAJES_CLIENTE);
+  useEffect(() => { setCantidadVisibleCliente(TANDA_MENSAJES_CLIENTE); }, [activeConvId]);
+  const mensajesClienteFiltrados = (activeConv?.messages || []).filter(msg => !msg.isInternalNote);
+  const indiceInicioCliente = Math.max(0, mensajesClienteFiltrados.length - cantidadVisibleCliente);
+  const mensajesClienteVisibles = mensajesClienteFiltrados.slice(indiceInicioCliente);
+  const hayMensajesAnterioresCliente = indiceInicioCliente > 0;
+
   const convPreview = (c: ChatConversation): string => {
     const visible = (c.messages || []).filter(m => !m.isInternalNote);
     const last = visible[visible.length - 1];
@@ -435,7 +445,18 @@ export default function LiveChat() {
               /* Chatting Screen */
               <>
                 <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--bg-base)]">
-                  {activeConv.messages.filter(msg => !msg.isInternalNote).map(msg => {
+                  {hayMensajesAnterioresCliente && (
+                    <div className="flex justify-center pb-1">
+                      <button
+                        type="button"
+                        onClick={() => setCantidadVisibleCliente(v => v + TANDA_MENSAJES_CLIENTE)}
+                        className="text-[10.5px] font-bold px-3 py-1.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+                      >
+                        Ver mensajes anteriores
+                      </button>
+                    </div>
+                  )}
+                  {mensajesClienteVisibles.map(msg => {
                     const isCustomer = msg.sender === 'customer';
                     const isBot = msg.sender === 'bot';
                     const pending = pendingIds.has(msg.id);

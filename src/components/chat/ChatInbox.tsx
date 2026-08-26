@@ -63,8 +63,8 @@ export default function ChatInbox({
                   : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--border-color)]/40'
               }`}
             >
-              <span className={`w-1.5 h-1.5 rounded-full ${f.dot}`} />
-              {f.label}
+              <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${f.dot}`} />
+              <span className="tv-ellipsis">{f.label}</span>
             </button>
           ))}
         </div>

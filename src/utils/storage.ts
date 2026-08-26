@@ -126,7 +126,18 @@ export function ensureCustomerChatToken(): string {
   return t;
 }
 
+// Contador de versión: se incrementa en CADA punto del archivo donde
+// `localCache` cambia (todos pasan por aquí). Permite a quien sondea el
+// estado (ver los `setInterval` de respaldo en PublicStore/InventarioControl)
+// preguntar "¿cambió algo?" con una comparación de enteros en vez de tener
+// que pedir siempre una copia completa para descubrirlo.
+let dbVersion = 0;
+export function getDBVersion(): number {
+  return dbVersion;
+}
+
 function notifyUpdate() {
+  dbVersion++;
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
     if (broadcastChannel) {
@@ -151,7 +162,16 @@ export function isFirebaseQuotaExceeded() {
 }
 
 export function getDB(): Database {
-  return JSON.parse(JSON.stringify(localCache));
+  // `structuredClone` hace la misma copia profunda e independiente que antes
+  // (nadie puede mutar `localCache` a través del objeto devuelto: sigue
+  // siendo el mismo contrato que ya usan `saveDB`-tras-`getDB` en toda la
+  // app), pero sin pasar por texto: JSON.stringify + JSON.parse serializa
+  // cada valor a string y lo vuelve a parsear, el doble de trabajo que
+  // clonar directamente. Con 11 tablas y llamadas frecuentes (sondeos de
+  // respaldo, event handlers) esa vuelta por texto era costo puro de CPU
+  // en el hilo principal — justo lo que causa los tirones (jank) en gama
+  // baja / Android.
+  return structuredClone(localCache);
 }
 
 function diffArrays<T extends Record<string, any>>(oldArr: T[], newArr: T[], key = 'id') {
@@ -705,6 +725,13 @@ interface TableConfig<T extends Record<string, any>> {
   key: keyof Database;
   table: string;
   idKey: string;
+  // Lista explícita de columnas para el `select()` de lectura — exactamente
+  // las que `fromRow` de verdad usa (unión con las que escribe `toRow`,
+  // para no perder una columna que un `fromRow` lea pero `toRow` nunca
+  // escriba, como `expires_at` en campañas). Sin esto, cada sincronización
+  // bajaba la fila COMPLETA de Postgres, incluida cualquier columna que la
+  // app nunca lee — ancho de banda pagado por nada, sobre todo en móvil.
+  columns: string;
   toRow: (item: T) => any;
   fromRow: (row: any) => T;
 }
@@ -719,6 +746,7 @@ function configFor<T extends Record<string, any>>(cfg: TableConfig<T>) {
 const TABLE_CONFIGS: TableConfig<any>[] = [
   configFor<Product>({
     key: 'products', table: 'products', idKey: 'id',
+    columns: 'id,name,sku,category,price,cost,stock,image_url,discount_percent,discount_start_date,discount_end_date,active,description,min_stock,weight,dimensions,warehouse_row,shelf,physical_location,warranty,is_double_stock,internal_stock,client_stock,linked_spare_part_sku,visible_en_tienda,caabys,brand',
     toRow: (p) => ({
       id: p.id, name: p.name || '', sku: p.sku || '', category: p.category || '',
       price: p.price || 0, cost: p.cost || 0, stock: p.stock || 0, image_url: p.imageUrl || '',
@@ -750,6 +778,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<InventoryMovement>({
     key: 'inventory_movements', table: 'inventory_movements', idKey: 'id',
+    columns: 'id,product_id,product_name,quantity_change,type,notes,user_email,resulting_stock,reference,created_at',
     toRow: (m) => ({
       id: m.id, product_id: m.productId || null, product_name: m.productName || '',
       quantity_change: m.quantityChange || 0, type: m.type, notes: m.notes || '',
@@ -765,6 +794,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<RepairOrder>({
     key: 'repair_orders', table: 'repair_orders', idKey: 'id',
+    columns: 'id,ticket,customer_id,customer_name,customer_email,customer_phone,device,device_category,device_brand,device_model,damage_reported,damage_category,diagnosis_manual,repuestos,labor_cost,total_cost,status,warranty_months,blockchain_hash,bitacora,repair_location,needed_tools,created_at',
     toRow: (o) => ({
       id: o.id, ticket: o.ticket || '', customer_id: o.customerId || '', customer_name: o.customerName || '',
       customer_email: o.customerEmail || '', customer_phone: o.customerPhone || null,
@@ -789,6 +819,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<Order>({
     key: 'orders', table: 'orders', idKey: 'id',
+    columns: 'id,customer_id,customer_name,customer_email,items,subtotal,membership_discount,shipping_cost,tax_amount,total,payment_method,payment_details,status,xml_verified,hda_status,xml_content,pickup_in_person,created_at,costo_repuestos,costo_regalias,margen_neto',
     toRow: (o) => ({
       id: o.id, customer_id: o.customerId || '', customer_name: o.customerName || '',
       customer_email: o.customerEmail || '', items: o.items || [], subtotal: o.subtotal || 0,
@@ -814,6 +845,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<AuditLog>({
     key: 'audit_log', table: 'audit_logs', idKey: 'id',
+    columns: 'id,user_email,module,action,detail,created_at',
     toRow: (l) => ({
       id: l.id, user_email: l.userEmail || '', module: l.module, action: l.action, detail: l.detail || '',
       created_at: l.timestamp || new Date().toISOString()
@@ -825,6 +857,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<ClientProfile>({
     key: 'clients', table: 'client_profiles', idKey: 'id',
+    columns: 'id,name,email,phone,province,address_detail,cards_tokenized,balance,notes,pickup_in_person',
     toRow: (c) => ({
       id: c.id, profile_id: (c as any).profileId || null, name: c.name || '', email: c.email || '',
       // FALLO CORREGIDO: esto mandaba `c.province` tal cual, así que un
@@ -846,6 +879,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<LogisticsDelivery>({
     key: 'deliveries', table: 'logistics_deliveries', idKey: 'id',
+    columns: 'id,type,recipient_name,recipient_phone,province,address_detail,status,assigned_repartidor_id,assigned_repartidor_name,incidences,digital_signature',
     toRow: (d) => ({
       id: d.id, type: d.type, recipient_name: d.recipientName || '', recipient_phone: d.recipientPhone || '',
       province: d.province || '', address_detail: d.addressDetail || '', status: d.status,
@@ -861,6 +895,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<MarketingCampaign>({
     key: 'marketing_campaigns', table: 'marketing_campaigns', idKey: 'id',
+    columns: 'id,code,type,value,usage_limit,used,applicable_category,active,expires_at',
     toRow: (m) => ({
       id: m.id, code: m.code, type: m.type, value: m.value || 0, usage_limit: m.limit || 0,
       used: m.used || 0, applicable_category: m.applicableCategory || null, active: m.active !== false
@@ -873,6 +908,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<MarketingRequest>({
     key: 'marketing_requests', table: 'marketing_requests', idKey: 'id',
+    columns: 'id,product_id,product_name,product_sku,price,caption,image_url,status,scheduled_at,error_detail,created_by,created_at',
     toRow: (m) => ({
       id: m.id, product_id: m.productId || null, product_name: m.productName || '',
       product_sku: m.productSku || null, price: m.price || 0, caption: m.caption || null,
@@ -890,6 +926,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<Banner>({
     key: 'banners', table: 'banners', idKey: 'id',
+    columns: 'id,title,description,image_url,link,type,active,start_date,end_date',
     toRow: (b) => ({
       id: b.id, title: b.title || '', description: b.description || '', image_url: b.imageUrl || '',
       link: b.link || null, type: b.type, active: b.active !== false, start_date: b.startDate || null,
@@ -903,6 +940,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<HistoricalSku>({
     key: 'historical_skus', table: 'historical_skus', idKey: 'sku',
+    columns: 'sku,name,category,price,cost,image_url',
     toRow: (h) => ({
       sku: h.sku, name: h.name || '', category: h.category || '', price: h.price || 0,
       cost: h.cost || 0, image_url: h.imageUrl || ''
@@ -915,7 +953,7 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
 ];
 
 async function refreshTableFromSupabase(cfg: TableConfig<any>) {
-  const { data, error } = await supabase.from(cfg.table).select('*');
+  const { data, error } = await supabase.from(cfg.table).select(cfg.columns);
   if (error) {
     notifySyncError(`No se pudo leer "${cfg.table}": ${error.message}`);
     return;
@@ -928,7 +966,7 @@ async function refreshTableFromSupabase(cfg: TableConfig<any>) {
   // esa colección. Entonces, si UNA sola tabla fallaba al guardar (ej. un SKU
   // duplicado), saveDB() revertía TODO a ese estado de arranque casi vacío,
   // en vez de al último estado real sincronizado — eso vaciaba la interfaz.
-  (lastSyncedDb as any)[cfg.key] = JSON.parse(JSON.stringify(items));
+  (lastSyncedDb as any)[cfg.key] = structuredClone(items);
   notifyUpdate();
 }
 
@@ -1077,18 +1115,18 @@ async function refreshChatFromSupabase() {
       }))
     }));
     localCache.chat_conversations = conversations;
-    lastSyncedDb.chat_conversations = JSON.parse(JSON.stringify(conversations));
+    lastSyncedDb.chat_conversations = structuredClone(conversations);
     notifyUpdate();
     return;
   }
 
   // MODO STAFF / CLIENTE LOGUEADO: lectura directa (RLS filtra por rol/correo).
-  const { data: convRows, error: convError } = await supabase.from('chat_conversations').select('*');
+  const { data: convRows, error: convError } = await supabase.from('chat_conversations').select('id,customer_name,customer_email,status,unread_count,assigned_admin_email,customer_token,updated_at,created_at');
   if (convError) {
     notifySyncError(`No se pudo leer chat_conversations: ${convError.message}`);
     return;
   }
-  const { data: msgRows, error: msgError } = await supabase.from('chat_messages').select('*').order('created_at', { ascending: true });
+  const { data: msgRows, error: msgError } = await supabase.from('chat_messages').select('id,conversation_id,sender,text,created_at,image_url,is_internal_note').order('created_at', { ascending: true });
   if (msgError) {
     notifySyncError(`No se pudo leer chat_messages: ${msgError.message}`);
     return;
@@ -1112,7 +1150,7 @@ async function refreshChatFromSupabase() {
     updatedAt: r.updated_at || r.created_at || undefined
   }));
   localCache.chat_conversations = conversations;
-  lastSyncedDb.chat_conversations = JSON.parse(JSON.stringify(conversations));
+  lastSyncedDb.chat_conversations = structuredClone(conversations);
   notifyUpdate();
 }
 
@@ -1156,7 +1194,7 @@ function aplicarMensajeEntrante(row: any): void {
     id: row.id, sender: row.sender, text: row.text, timestamp: row.created_at,
     imageUrl: row.image_url || undefined, isInternalNote: !!row.is_internal_note,
   });
-  lastSyncedDb.chat_conversations = JSON.parse(JSON.stringify(localCache.chat_conversations));
+  lastSyncedDb.chat_conversations = structuredClone(localCache.chat_conversations);
   notifyUpdate();
 }
 
@@ -1285,7 +1323,7 @@ async function refreshSettingsFromSupabase() {
   if (data) {
     const settings = settingsFromRow(data);
     localCache.settings = settings;
-    lastSyncedDb.settings = JSON.parse(JSON.stringify(settings));
+    lastSyncedDb.settings = structuredClone(settings);
     notifyUpdate();
   }
 }
@@ -1501,7 +1539,7 @@ export async function saveDB(newDb: Database) {
 
   // La foto de referencia se toma DESPUÉS de subir, ya con las URLs puestas:
   // así el próximo guardado no vuelve a intentar subir lo mismo.
-  lastSyncedDb = JSON.parse(JSON.stringify(newDb));
+  lastSyncedDb = structuredClone(newDb);
   notifyUpdate();
 
   // Tablas que apuntan a "products" con clave foránea. Deben escribirse
@@ -1580,12 +1618,12 @@ export async function saveDB(newDb: Database) {
     //
     // Ahora la reversión es por tabla: solo vuelven atrás las que fallaron. Lo
     // que se guardó de verdad permanece visible y un reintento no duplica nada.
-    const reconciliado: any = JSON.parse(JSON.stringify(newDb));
+    const reconciliado: any = structuredClone(newDb);
     clavesFallidas.forEach((k) => {
-      reconciliado[k] = JSON.parse(JSON.stringify((oldDb as any)[k]));
+      reconciliado[k] = structuredClone((oldDb as any)[k]);
     });
     localCache = reconciliado;
-    lastSyncedDb = JSON.parse(JSON.stringify(reconciliado));
+    lastSyncedDb = structuredClone(reconciliado);
     notifyUpdate();
     throw new Error(fallos.join(' | '));
   }

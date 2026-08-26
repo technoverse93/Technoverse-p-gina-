@@ -12,7 +12,7 @@ import { CustomSelect } from './CustomSelect';
 import { MarketingRow } from './MarketingRow';
 import { Product, Order, OrderItem, RepairOrder } from '../types';
 import { supabase } from '../supabaseClient';
-import { getDB, saveDB, addAuditLog } from '../utils/storage';
+import { getDB, getDBVersion, saveDB, addAuditLog } from '../utils/storage';
 import { iniciarSesionVigilada } from '../utils/adminLogin';
 import { soportaBiometria, entrarConBiometria, biometriaYaActivada } from '../utils/biometria';
 import { CATEGORIAS_CON_TODOS, coincideCategoria, esRepuesto, esInsumo } from '../utils/categorias';
@@ -574,8 +574,20 @@ export default function PublicStore({
       // BroadcastChannel not supported or restricted
     }
 
-    // Dynamic 1-second interval checks to guarantee real-time updates inside nested frames
+    // Red de seguridad por sondeo (por si un evento se pierde dentro de un
+    // iframe anidado) — NO como camino normal de actualización, para eso
+    // están los listeners de arriba. `getDB()` clona toda la base: llamarlo
+    // sin condición cada segundo, aunque nada haya cambiado, es trabajo de
+    // CPU tirado a la basura y una causa directa de tirones en gama baja.
+    // Con `getDBVersion()` (un entero) se pregunta primero si algo cambió
+    // de verdad; solo entonces se paga el costo de `loadStoreProducts()`.
+    // También se detiene mientras la pestaña no está visible.
+    const ultimaVersionVista = { current: getDBVersion() };
     const interval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      const version = getDBVersion();
+      if (version === ultimaVersionVista.current) return;
+      ultimaVersionVista.current = version;
       loadStoreProducts();
     }, 1000);
 
