@@ -1425,10 +1425,44 @@ export function initFirebaseSync() {
   started = true;
   console.log('[Sistema] Conectando en tiempo real con Supabase...');
 
-  TABLE_CONFIGS.forEach(initTableRealtimeSync);
+  // FALLO CORREGIDO — catálogo y chat lentos al abrir la APK.
+  //
+  // Antes las 11 tablas de TABLE_CONFIGS se pedían TODAS en paralelo desde
+  // el primer instante (`TABLE_CONFIGS.forEach(...)`), al mismo tiempo que
+  // la primera lectura del chat. En una conexión móvil esas peticiones
+  // comparten el mismo ancho de banda que la de "products" (636 filas): un
+  // visitante que solo quiere ver el catálogo pagaba, sin saberlo, la
+  // descarga completa de "inventory_movements" (644 filas) y de otras ocho
+  // tablas de uso exclusivo del panel — ANTES de que su propio catálogo
+  // terminara de llegar. Lo mismo le pasaba a la primera carga del chat.
+  //
+  // AdminPanel.tsx ya evita este problema para el CÓDIGO (carga perezosa:
+  // "nadie fuera de /admin lo paga" — ver el comentario en App.tsx). Esto
+  // extiende el mismo principio a los DATOS: lo que la tienda pública
+  // necesita para el primer pintado —catálogo y chat— arranca YA; el resto
+  // (movimientos, reparaciones, ventas, auditoría, clientes, entregas,
+  // campañas, SKUs históricos) espera un respiro corto.
+  //
+  // Es seguro diferirlas: si alguna escritura llega antes de que su tabla
+  // esté lista (`genericReady`), `syncTableToSupabase` ya la encola en
+  // `genericPending` y la aplica sola en cuanto la tabla arranca — no se
+  // pierde nada, solo se pospone medio segundo.
+  const productsCfg = TABLE_CONFIGS.find(c => c.key === 'products');
+  const tablasAdmin = TABLE_CONFIGS.filter(c => c.key !== 'products');
+  if (productsCfg) initTableRealtimeSync(productsCfg);
   initChatRealtimeSync();
   initSettingsRealtimeSync();
   initRealtimeChannel();
+
+  const arrancarTablasDeAdmin = () => tablasAdmin.forEach(initTableRealtimeSync);
+  if (typeof window !== 'undefined' && 'requestIdleCallback' in window) {
+    // Tan pronto el hilo principal respire, pero sin pasar de 1.2s: para
+    // el panel (que se abre bastante después de que la app ya cargó) esa
+    // espera es imperceptible.
+    (window as any).requestIdleCallback(arrancarTablasDeAdmin, { timeout: 1200 });
+  } else {
+    setTimeout(arrancarTablasDeAdmin, 400);
+  }
 
   // Al iniciar/cerrar sesión cambian los permisos RLS (ej. el admin pasa a ver
   // client_profiles). Se relee todo en esos momentos para reflejar lo que el
