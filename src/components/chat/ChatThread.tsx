@@ -29,6 +29,17 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   // se debe tocar el estado de un componente ya desmontado.
   const isMountedRef = useRef(true);
 
+  // Cuántos mensajes (contando desde el más reciente) se dibujan de una vez.
+  // Un hilo con meses de historial no necesita renderizar TODO para mostrar
+  // los últimos: eso es DOM y trabajo de layout que crece sin límite con la
+  // antigüedad del chat, no con lo que la persona realmente está viendo.
+  const TANDA_MENSAJES = 60;
+  const [cantidadVisible, setCantidadVisible] = useState(TANDA_MENSAJES);
+  useEffect(() => { setCantidadVisible(TANDA_MENSAJES); }, [conversation.id]);
+  const indiceInicio = Math.max(0, conversation.messages.length - cantidadVisible);
+  const mensajesVisibles = conversation.messages.slice(indiceInicio);
+  const hayMensajesAnteriores = indiceInicio > 0;
+
   // Instantáneo (`auto`), no animado: con mensajes seguidos, un scroll
   // "smooth" que no llega a terminar antes del siguiente mensaje se ve
   // como si el chat se hubiera "trabado" a medio camino.
@@ -120,7 +131,18 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
       </div>
 
       <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--bg-base)]" id="chat-thread-messages">
-        {conversation.messages.map(msg => {
+        {hayMensajesAnteriores && (
+          <div className="flex justify-center pb-1">
+            <button
+              type="button"
+              onClick={() => setCantidadVisible(v => v + TANDA_MENSAJES)}
+              className="text-[10.5px] font-bold px-3 py-1.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+            >
+              Ver mensajes anteriores
+            </button>
+          </div>
+        )}
+        {mensajesVisibles.map(msg => {
           if (msg.isInternalNote) {
             return (
               <div key={msg.id} className="flex justify-center">

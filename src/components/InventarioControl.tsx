@@ -1,6 +1,6 @@
-import React, { useState, useEffect, useMemo } from 'react';
+import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Product, InventoryMovement, MarketingRequest } from '../types';
-import { getDB, saveDB, addAuditLog, compressImage } from '../utils/storage';
+import { getDB, getDBVersion, saveDB, addAuditLog, compressImage } from '../utils/storage';
 import { supabase } from '../supabaseClient';
 import VinculacionComponentes from './admin/VinculacionComponentes';
 import { CATEGORIAS_INSUMO, esInsumo, CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria, MARCAS_REPUESTO, adivinarMarca, nivelGamaRepuesto } from '../utils/categorias';
@@ -290,8 +290,20 @@ export default function InventarioControl({ currentUser, onDataChanged, defaultS
       // BroadcastChannel not supported or restricted
     }
 
-    // 1-second interval checks to guarantee real-time updates inside nested frames
+    // Red de seguridad por sondeo (por si un evento se pierde dentro de un
+    // iframe anidado) — NO como camino normal de actualización, para eso
+    // están los listeners de arriba. `getDB()` clona toda la base: llamarlo
+    // sin condición cada segundo, aunque nada haya cambiado, es trabajo de
+    // CPU tirado a la basura y una causa directa de tirones en gama baja.
+    // Con `getDBVersion()` (un entero) se pregunta primero si algo cambió
+    // de verdad; solo entonces se paga el costo de `loadData()`. También se
+    // detiene mientras la pestaña no está visible.
+    const ultimaVersionVista = { current: getDBVersion() };
     const interval = setInterval(() => {
+      if (document.visibilityState !== 'visible') return;
+      const version = getDBVersion();
+      if (version === ultimaVersionVista.current) return;
+      ultimaVersionVista.current = version;
       loadData();
     }, 1000);
 
