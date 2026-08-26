@@ -42,6 +42,7 @@ import { useOtaStatus, verificarActualizacionManual } from '../../mobile/otaUpda
 import { useToast } from '../ui/Overlays';
 import CambiarContrasenaModal from '../security/CambiarContrasenaModal';
 import CambiarPinModal from '../security/CambiarPinModal';
+import BotonTema from '../ui/BotonTema';
 import { esAdminSupremo } from '../../utils/securityPin';
 
 const LLAVE_RIEL = 'technoverse_admin_riel_abierto';
@@ -299,6 +300,11 @@ export default function AdminShell({
           >
             <Search className="w-[18px] h-[18px]" />
           </button>
+
+          {/* Mismo interruptor de tema que la tienda: comparten el estado a
+              través del módulo de tema, así que cambiarlo aquí también lo
+              cambia allá. */}
+          <BotonTema className="w-[34px] h-[34px]" />
 
           <button
             type="button"

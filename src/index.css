@@ -31,13 +31,14 @@
 }
 
 /* ==========================================================================
-   SISTEMA DE DISEÑO — "RETAIL LIMPIO" (Opción C)
+   SISTEMA DE DISEÑO — "RETAIL LIMPIO"
    --------------------------------------------------------------------------
-   Tema único (claro). Regla que corrige el bug original: los grises son
-   NEUTROS, sin tinte. El azul marino del logo se usa SOLO como acento
-   —nunca como color de fondo general ni de texto corrido—, que era
-   exactamente lo que teñía de dorado toda la interfaz. Acción principal =
-   azul marino (se lee sobre blanco).
+   DOS temas, claro y oscuro, definidos ambos en este archivo a nivel de
+   variables. Los grises son NEUTROS, sin tinte, y el acento verde botella
+   es lo único saturado de la interfaz.
+
+   Todo componente lee `var(--…)`, nunca un color literal, así que cambiar
+   de tema es cambiar una clase en <html> — ver `src/utils/tema.ts`.
 
    Toda la piel vive aquí: los componentes conservan sus nombres de clase, así
    que la lógica de Supabase, autenticación, carrito, IVA y facturación no se
@@ -102,6 +103,64 @@
     --bubble-in-ink: #0F172A;
     --bubble-out: #0E6B4F;
     --bubble-out-ink: #FFFFFF;
+  }
+
+  /* ======================================================================
+     TEMA OSCURO
+     ----------------------------------------------------------------------
+     Toda la plataforma consume variables (`--bg-base`, `--text-primary`,
+     `--accent`…), así que el tema oscuro se resuelve ENTERO aquí: no hay
+     que tocar ni un componente. Cambiar la clase `.dark` en <html> repinta
+     tienda, panel, chat, taller, cobros e inventario a la vez.
+
+     Los tonos son los del diseño aprobado: carbón verdoso, nunca negro
+     puro —que sobre pantalla OLED produce halos y cansa— y con el acento
+     subido a un verde más claro, porque el verde botella del tema claro
+     no alcanza contraste sobre fondo oscuro.
+     ====================================================================== */
+  .dark {
+    --bg-base: #0E1211;
+    --bg-surface: #161B19;
+    --bg-elevated: #1A211E;
+    --bg-sunken: #1D2421;
+    --text-primary: #E6EDE9;
+    --text-secondary: #93A29B;
+    --text-muted: #6F7D77;
+    --border-color: #272F2B;
+    --border-soft: #202724;
+
+    --brand-navy: #16283C;
+    --brand-navy-hover: #1E3550;
+    /* Mismo criterio que en claro: `-dark` es el hover, así que debe ser
+       MÁS claro que `-mid` en tema oscuro (el hover aclara, no oscurece). */
+    --brand-gold-dark: #5AD3A9;
+    --brand-gold-mid: #3FBF92;
+    --brand-gold-light: #7FE0BF;
+    --brand-gold-rgb: 63, 191, 146;
+    --gold-soft: #12271F;
+    --gold-line: #23453A;
+
+    --accent: #3FBF92;
+    --accent-hover: #5AD3A9;
+    --accent-ink: #04120C;
+    --accent-rgb: 63, 191, 146;
+
+    --ok: #3FCB93;
+    --ok-soft: #0F2A1E;
+
+    /* En oscuro una sombra no se ve: la elevación se marca subiendo el
+       tono de la superficie. Se conservan sombras muy tenues solo para
+       despegar los paneles flotantes del fondo. */
+    --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+    --float-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), 0 12px 28px -16px rgba(0, 0, 0, 0.7);
+    --float-shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.5), 0 22px 48px -22px rgba(0, 0, 0, 0.8);
+
+    --bubble-in: #1D2421;
+    --bubble-in-ink: #E6EDE9;
+    --bubble-out: #3FBF92;
+    --bubble-out-ink: #04120C;
+
+    color-scheme: dark;
   }
 }
 
@@ -809,3 +868,62 @@ textarea {
 /* Los campos de un formulario nunca se salen de su columna, aunque el
    valor escrito sea más largo que el ancho disponible. */
 input, select, textarea { max-width: 100%; }
+
+/* ==========================================================================
+   TEMA OSCURO — reconducción de utilidades claras escritas a mano
+   --------------------------------------------------------------------------
+   La mayor parte de la plataforma usa variables y por tanto ya cambia sola
+   con el tema. Pero quedan ~85 utilidades de color FIJAS escritas antes de
+   que existiera el tema oscuro (`bg-white`, `bg-slate-200`, `bg-rose-50`…)
+   repartidas por inventario, seguridad, taller y tienda. En tema oscuro
+   pintarían cajas blancas sobre fondo carbón.
+
+   Se reconducen aquí, acotadas a `.dark`, en vez de editar 85 sitios en
+   diez archivos con lógica: el riesgo de romper algo en esos archivos es
+   mucho mayor que el de esta hoja, y cualquier utilidad clara nueva que
+   alguien escriba mañana queda cubierta igual.
+
+   El tema CLARO no se toca: fuera de `.dark` estas reglas no existen.
+   ========================================================================== */
+
+/* --- superficies --- */
+.dark .bg-white { background-color: var(--bg-surface) !important; }
+.dark .bg-slate-50,
+.dark .bg-slate-100,
+.dark .bg-slate-200,
+.dark .hover\:bg-slate-100:hover,
+.dark .hover\:bg-slate-200:hover { background-color: var(--bg-sunken) !important; }
+
+/* --- bordes --- */
+.dark .border-white,
+.dark .border-slate-100,
+.dark .border-slate-200,
+.dark .border-slate-300 { border-color: var(--border-color) !important; }
+/* `border-white/40` y similares con opacidad: se apagan, si no dibujan un
+   filo blanco sobre el carbón. */
+.dark [class*="border-white/"] { border-color: rgba(255, 255, 255, 0.10) !important; }
+
+/* --- texto oscuro fijo, que en oscuro sería ilegible --- */
+.dark .text-slate-900,
+.dark .text-slate-800,
+.dark .text-slate-700 { color: var(--text-primary) !important; }
+.dark .text-slate-600,
+.dark .text-slate-500 { color: var(--text-secondary) !important; }
+.dark .text-slate-400 { color: var(--text-muted) !important; }
+
+/* --- estados semánticos: fondos suaves claros → versiones oscuras --- */
+.dark .bg-emerald-50 { background-color: var(--ok-soft) !important; }
+.dark .bg-rose-50    { background-color: #2A1416 !important; }
+.dark .border-rose-100 { border-color: #4A2226 !important; }
+.dark .text-rose-600 { color: #F2807E !important; }
+.dark .bg-amber-50   { background-color: #2A2113 !important; }
+.dark .text-amber-700, .dark .text-amber-800 { color: #E0B368 !important; }
+/* Las utilidades ámbar con opacidad (avisos del chat y del taller) ya se
+   ven bien sobre oscuro; solo se sube el texto para que contraste. */
+.dark .text-amber-500, .dark .text-amber-600 { color: #E0B368 !important; }
+
+/* --- el punto verde de "sesión activa" lleva un anillo blanco fijo --- */
+.dark .border-white.rounded-full { border-color: var(--bg-surface) !important; }
+
+/* --- gradientes de marca escritos a mano en las tarjetas de acceso --- */
+.dark .from-\[\#3B82F6\] { --tw-gradient-from: var(--accent) !important; }

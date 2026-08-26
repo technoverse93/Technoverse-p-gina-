@@ -7,6 +7,13 @@ import './index.css';
 // contiene está limitado a `#admin-panel-root` o a clases `tv-`: la
 // tienda pública no puede verse afectada por este archivo.
 import './styles/admin.css';
+import { iniciarTema } from './utils/tema';
+
+// ANTES de montar React, no dentro de un efecto: un efecto corre después
+// del primer pintado, así que abrir la app con el tema oscuro activo
+// producía un destello blanco de un cuadro. Aplicándolo aquí, el primer
+// pintado ya sale con el tema correcto.
+iniciarTema();
 
 // Auto-recuperación de "chunk viejo": cada deploy a Cloudflare genera assets
 // con hash nuevo (ej. jspdf.es.min-XXXXX.js) y solo sirve los del último

@@ -20,6 +20,7 @@ import { CATEGORIAS_CON_TODOS, coincideCategoria, esRepuesto, esInsumo } from '.
 import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
 import { useToast } from './ui/Overlays';
+import BotonTema from './ui/BotonTema';
 import {
   IdentificacionTipo, TipoDoc, MedioPago, validateCedula, computeInvoiceTotals,
   buildInvoicePdfBlob, generateQrDataUrl, InvoiceData
@@ -1142,6 +1143,30 @@ export default function PublicStore({
   }), [products, selectedCategory, selectedSearchProductId, searchQuery]);
   const { page: prodPage, setPage: setProdPage, totalPages: prodTotal, startIndex: prodStart, visibleItems: paginatedProducts } = usePagination(filteredProducts, 10);
 
+  /**
+   * Cuántos artículos vendibles hay en cada categoría, para mostrarlo junto
+   * al nombre en la barra de filtros.
+   *
+   * Se calcula sobre los MISMOS criterios de exclusión que `filteredProducts`
+   * (inactivos fuera, repuestos fuera, insumos solo si se publicaron a
+   * propósito) pero SIN aplicar la categoría ni la búsqueda: el conteo debe
+   * decir cuántos hay en esa categoría en total, no cuántos quedan tras el
+   * filtro que ya está puesto. Si no, al entrar en "Audio" todas las demás
+   * mostrarían cero.
+   */
+  const conteoPorCategoria = useMemo(() => {
+    const vendibles = products.filter(p =>
+      p && p.active !== false && !esRepuesto(p.category) &&
+      (!esInsumo(p.category) || p.visibleEnTienda === true)
+    );
+    const conteo: Record<string, number> = { Todos: vendibles.length };
+    for (const cat of CATEGORIES) {
+      if (!cat || cat === 'Todos') continue;
+      conteo[cat] = vendibles.filter(p => checkCategoryMatch(p.category, cat)).length;
+    }
+    return conteo;
+  }, [products]);
+
   return (
     <div className="min-h-dvh bg-[var(--bg-base)] text-[var(--text-primary)] font-sans relative" id="store-page-root">
       
@@ -1285,6 +1310,12 @@ export default function PublicStore({
 
         {/* User context selector and Cart trigger */}
         <div className="flex items-center gap-2 sm:gap-4">
+          {/* Interruptor de tema. Va aquí y no en un menú porque es una
+              preferencia que la gente cambia según la luz del momento, no
+              una vez y para siempre: escondida detrás de dos toques no se
+              usa. En móvil se mantiene visible por el mismo motivo. */}
+          <BotonTema className="w-10 h-10 md:w-9 md:h-9" />
+
           {/* Account Dropdown — trigger button lives in the header on desktop only; on
               mobile this same state is triggered from the bottom navigation bar */}
           <div className="relative">
@@ -1735,23 +1766,75 @@ export default function PublicStore({
               />
             )}
 
+            {/* Barra de filtros por categoría.
+                Va SIEMPRE visible sobre la rejilla, no dentro de un
+                desplegable: con cinco categorías caben todas de un vistazo,
+                y el conteo al lado evita el callejón sin salida de entrar
+                en una categoría vacía sin saberlo. En pantallas estrechas
+                la fila se desplaza en horizontal (`tv-chip-row`) en vez de
+                partirse en varias líneas. */}
+            <div className="tv-chip-row mb-6 pb-1" role="tablist" aria-label="Filtrar por categoría">
+              {CATEGORIES.map(cat => {
+                if (!cat) return null;
+                const activa = selectedCategory === cat || (cat === 'Todos' && selectedCategory === null);
+                const n = conteoPorCategoria[cat] ?? 0;
+                return (
+                  <button
+                    key={cat}
+                    type="button"
+                    role="tab"
+                    aria-selected={activa}
+                    onClick={() => setSelectedCategory(cat === 'Todos' ? null : cat)}
+                    className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold whitespace-nowrap transition cursor-pointer ${
+                      activa
+                        ? 'bg-[var(--accent)] border-[var(--accent)] text-[var(--accent-ink)]'
+                        : 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
+                    }`}
+                  >
+                    {cat}
+                    <span className={`text-[10.5px] font-mono ${activa ? 'opacity-70' : 'opacity-55'}`}>{n}</span>
+                  </button>
+                );
+              })}
+            </div>
+
             {/* Products grid */}
             <div>
               <h3 className="font-extrabold text-base text-[var(--text-primary)] mb-6">
                 {selectedCategory ? `Explorando: ${selectedCategory}` : 'Nuestros Productos Disponibles'}
               </h3>
-              
+
               {filteredProducts.length === 0 ? (
-                /* Empty state warning - clean and without admin login prompt */
-                <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-3xl p-12 text-center max-w-md mx-auto space-y-4 shadow-sm animate-in fade-in">
-                  <AlertCircle className="w-12 h-12 text-[var(--brand-gold-mid)] mx-auto opacity-70" />
-                  <h4 className="font-bold text-sm text-[var(--text-primary)]">Sin stock disponible</h4>
+                /* Estado vacío. Nombra la categoría concreta y ofrece salida:
+                   con cinco categorías y pocos artículos, entrar en una vacía
+                   es algo que va a pasar de verdad, y un mensaje genérico deja
+                   a la persona sin saber qué hacer. */
+                <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-3xl p-10 text-center max-w-md mx-auto space-y-4 shadow-sm animate-in fade-in">
+                  <AlertCircle className="w-12 h-12 text-[var(--accent)] mx-auto opacity-70" />
+                  <h4 className="font-bold text-sm text-[var(--text-primary)]">
+                    {selectedCategory ? `Todavía no hay nada en ${selectedCategory}` : 'Sin artículos disponibles'}
+                  </h4>
                   <p className="text-sm text-[var(--text-muted)] leading-relaxed font-sans">
-                    Actualmente no disponemos de artículos en esta categoría. Estamos trabajando para renovar nuestro inventario lo antes posible.
+                    {selectedCategory
+                      ? 'Estamos surtiendo esta categoría. Mientras tanto puede ver el resto del catálogo o escribirnos por el chat si busca algo puntual.'
+                      : 'Estamos renovando el inventario. Vuelva en un rato o escríbanos por el chat y le contamos qué va a entrar.'}
                   </p>
+                  {selectedCategory && (
+                    <button
+                      type="button"
+                      onClick={() => setSelectedCategory(null)}
+                      className="inline-flex items-center justify-center rounded-xl bg-[var(--accent)] px-4 py-2.5 text-[13px] font-bold text-[var(--accent-ink)] hover:bg-[var(--accent-hover)] transition cursor-pointer"
+                    >
+                      Ver todo el catálogo
+                    </button>
+                  )}
                 </div>
               ) : (
-                <div id="product-bento-grid" className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
+                /* Dos columnas desde el teléfono más pequeño, como en el
+                   diseño aprobado: a una sola columna la tarjeta queda
+                   enorme y obliga a un scroll larguísimo para ver tres
+                   artículos. */
+                <div id="product-bento-grid" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
                   {paginatedProducts.map(prod => prod && (
                     <ProductCard
                       key={prod.id}
