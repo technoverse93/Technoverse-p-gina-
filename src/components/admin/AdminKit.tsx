@@ -56,9 +56,6 @@ export function Card({
   children,
   padded = true,
   className = '',
-  featured = false,
-  tone,
-  span,
 }: {
   title?: string;
   actions?: React.ReactNode;
@@ -66,27 +63,9 @@ export function Card({
   /** `false` cuando el contenido es una tabla, que trae su propio aire. */
   padded?: boolean;
   className?: string;
-  /**
-   * La tarjeta protagonista de la pantalla: gana el velo del verde de
-   * marca. UNA por pantalla — si la llevan dos, deja de señalar cuál es
-   * el dato principal.
-   */
-  featured?: boolean;
-  /** Tiñe el borde. Se reserva para lo que pide que alguien actúe hoy. */
-  tone?: 'alert' | 'warn' | 'ok';
-  /**
-   * Cuánto ocupa dentro de un `.tv-bento`. `'hero'` son dos columnas y
-   * dos filas; `2` son dos columnas. Se ignora fuera del mosaico.
-   */
-  span?: 2 | 'hero';
 }) {
   return (
-    <section
-      className={`tv-card ${className}`}
-      data-featured={featured || undefined}
-      data-tone={tone}
-      data-span={span}
-    >
+    <section className={`tv-card ${className}`}>
       {(title || actions) && (
         <header className="tv-card-head">
           {title && <span className="tv-card-title">{title}</span>}
@@ -95,41 +74,6 @@ export function Card({
       )}
       {padded ? <div className="tv-card-body">{children}</div> : children}
     </section>
-  );
-}
-
-// ---------------------------------------------------------------------
-// ACCIÓN RÁPIDA
-// ---------------------------------------------------------------------
-
-/**
- * Botón grande de la fila de accesos directos del panel general.
- *
- * Existe como pieza propia y no como un `Btn` grande porque su trabajo es
- * distinto: un botón ejecuta algo dentro de la pantalla donde está; esto
- * SALTA a otro módulo para empezar una tarea. Lleva dos líneas —qué hace
- * y sobre qué— porque "Cobrar" a secas no distingue entre cobrar una
- * venta y cobrar una reparación.
- */
-export function QuickAction({
-  icon: Icon,
-  title,
-  sub,
-  onClick,
-}: {
-  icon?: LucideIcon;
-  title: string;
-  sub?: string;
-  onClick: () => void;
-}) {
-  return (
-    <button type="button" className="tv-quick-btn" onClick={onClick}>
-      <span className="tv-quick-title">
-        {Icon && <Icon className="w-4 h-4 flex-shrink-0 text-[var(--accent)]" aria-hidden="true" />}
-        <span>{title}</span>
-      </span>
-      {sub && <span className="tv-quick-sub">{sub}</span>}
-    </button>
   );
 }
 
@@ -143,10 +87,6 @@ export function Stat({
   foot,
   icon: Icon,
   alert = false,
-  span,
-  featured = false,
-  onClick,
-  children,
 }: {
   label: string;
   value: React.ReactNode;
@@ -157,55 +97,15 @@ export function Stat({
    * HAGA algo hoy; si todo se pinta de rojo, nada es urgente.
    */
   alert?: boolean;
-  /** Cuánto ocupa dentro de un `.tv-bento`. Ver `Card`. */
-  span?: 2 | 'hero';
-  /** El dato principal de la pantalla: velo de marca y número mayor. */
-  featured?: boolean;
-  /** Si se pasa, la métrica entera se vuelve pulsable y salta a su módulo. */
-  onClick?: () => void;
-  /** Detalle extra al pie (desgloses de la tarjeta protagonista). */
-  children?: React.ReactNode;
 }) {
-  const contenido = (
-    <>
+  return (
+    <div className="tv-card tv-stat" data-alert={alert || undefined}>
       <div className="tv-stat-label">
         {Icon && <Icon className="w-3.5 h-3.5" aria-hidden="true" />}
         {label}
       </div>
       <div className="tv-stat-value">{value}</div>
       {foot && <div className="tv-stat-foot">{foot}</div>}
-      {children}
-    </>
-  );
-
-  const clases = `tv-card tv-stat${featured ? ' tv-stat-hero' : ''}${onClick ? ' tv-stat-link' : ''}`;
-
-  // Cuando lleva `onClick` se renderiza como <button> de verdad y no como
-  // un <div> con manejador: así responde al teclado y lo anuncia el
-  // lector de pantalla sin tener que replicar a mano el rol y el tabindex.
-  if (onClick) {
-    return (
-      <button
-        type="button"
-        className={clases}
-        data-alert={alert || undefined}
-        data-featured={featured || undefined}
-        data-span={span}
-        onClick={onClick}
-      >
-        {contenido}
-      </button>
-    );
-  }
-
-  return (
-    <div
-      className={clases}
-      data-alert={alert || undefined}
-      data-featured={featured || undefined}
-      data-span={span}
-    >
-      {contenido}
     </div>
   );
 }
