@@ -7,6 +7,7 @@ import { processRepairAtomic } from '../utils/transactions';
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
 import { CATEGORIAS_REPUESTO } from '../utils/categorias';
+import { PageHead, Btn } from './admin/AdminKit';
 import {
   Catalogo, catalogoBase, cargarCatalogo, categoriasDe, marcasDe, modelosDe,
   agregarModelo, ocultarModelo, contarModelos, OPCION_OTRO,
@@ -86,6 +87,15 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
 
   // New repair form state
   const [showAddForm, setShowAddForm] = useState(false);
+  /**
+   * Cuál de las dos herramientas de cabecera está desplegada, si alguna.
+   *
+   * `null` es el estado normal: el tablero, que es lo que se mira todo el
+   * día, arranca pegado arriba. Las dos herramientas se abren desde la
+   * regleta y solo una a la vez — son tareas distintas y tenerlas juntas
+   * era lo que costaba 230 px permanentes.
+   */
+  const [panelAbierto, setPanelAbierto] = useState<'consulta' | 'ingreso' | null>(null);
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerEmail, setNewCustomerEmail] = useState('');
   const [newCustomerPhone, setNewCustomerPhone] = useState('');
@@ -575,11 +585,40 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
   };
 
   return (
-    <div className="space-y-6" id="taller-kanban-module">
-      
+    <div className="space-y-5" id="taller-kanban-module">
+
+      {/* Las dos herramientas de arriba —consultar un ticket y registrar
+          una orden— suben a la regleta como botones y su contenido se
+          despliega solo cuando se pide.
+
+          Antes estaban SIEMPRE desplegadas, ocupando 230 px con dos
+          formularios que se usan un puñado de veces al día, mientras el
+          tablero —lo que se mira todo el rato— empezaba a los 450 px y
+          salía cortado por la derecha. Ninguna función se pierde: son las
+          mismas dos, a un toque. */}
+      <PageHead
+        title="Taller"
+        actions={<>
+          <Btn
+            variant={panelAbierto === 'consulta' ? 'primary' : 'default'}
+            icon={Search}
+            onClick={() => setPanelAbierto(p => (p === 'consulta' ? null : 'consulta'))}
+          >
+            Consultar ticket
+          </Btn>
+          <Btn
+            variant={panelAbierto === 'ingreso' ? 'primary' : 'default'}
+            icon={Plus}
+            onClick={() => setPanelAbierto(p => (p === 'ingreso' ? null : 'ingreso'))}
+          >
+            Nueva orden
+          </Btn>
+        </>}
+      />
+
       {/* Upper bar with public search and open ticket option */}
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
+      <div className={`grid grid-cols-1 lg:grid-cols-3 gap-5 ${panelAbierto ? '' : 'hidden'}`}>
+
         {/* PUBLIC LOOKUP PORTAL */}
         <div className="lg:col-span-2 bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 text-[var(--text-primary)]">
           <div className="flex items-center gap-2 mb-3">
@@ -914,14 +953,14 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
         </form>
       )}
 
-      {/* ADMIN KANBAN COLUMNS BOARD */}
-      <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 text-[var(--text-primary)]">
-        <h3 className="font-bold text-sm mb-4 text-sky-400 flex items-center gap-1.5">
-          <Kanban className="w-5 h-5 text-sky-400 " /> Tablero Kanban de Órdenes de Servicio
-        </h3>
-
+      {/* ADMIN KANBAN COLUMNS BOARD
+          Sin título propio: la regleta ya dice "Taller", y este tablero es
+          lo único que hay en el módulo. El rótulo "Tablero Kanban de
+          Órdenes de Servicio" era la tercera vez que se nombraba lo mismo
+          en la misma pantalla. */}
+      <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-4 text-[var(--text-primary)]">
         {/* Scrollable Columns wrapper */}
-        <div className="flex gap-4 overflow-x-auto pb-4">
+        <div className="flex gap-3 overflow-x-auto pb-3 items-start">
           {KANBAN_COLUMNS.map(col => {
             const colRepairs = repairs.filter(r => r.status === col);
             return (
@@ -929,7 +968,15 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 key={col} 
                 onDragOver={handleDragOver}
                 onDrop={(e) => handleDrop(e, col)}
-                className="flex-shrink-0 w-72 bg-[var(--bg-surface)] /60 rounded-xl border border-[var(--border-color)]/50 p-3 flex flex-col h-[400px] transition-colors duration-200"
+                /* Alto según contenido, con tope: una columna vacía se
+                   queda en una línea en vez de reservar 400 px. Antes las
+                   siete medían lo mismo tuvieran cinco órdenes o ninguna,
+                   y el tablero ocupaba una pantalla entera para mostrar
+                   dos tarjetas. `max-h` conserva el scroll interno de las
+                   columnas llenas. */
+                className={`flex-shrink-0 w-72 bg-[var(--bg-surface)] /60 rounded-xl border border-[var(--border-color)]/50 p-3 flex flex-col transition-colors duration-200 ${
+                  colRepairs.length === 0 ? '' : 'max-h-[420px]'
+                }`}
               >
                 {/* Column Title Header */}
                 <div className="flex justify-between items-center gap-2 mb-3 pb-1.5 border-b border-[var(--border-color)]/50 min-w-0">
@@ -942,7 +989,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                 {/* Column cards container */}
                 <div className="flex-1 overflow-y-auto space-y-2">
                   {colRepairs.length === 0 ? (
-                    <div className="h-full flex items-center justify-center text-[var(--text-secondary)] text-[10px] italic border border-dashed border-[var(--border-color)]/50 rounded-lg py-12">
+                    <div className="flex items-center justify-center text-[var(--text-muted)] text-[10px] italic border border-dashed border-[var(--border-color)]/50 rounded-lg py-3">
                       Sin registros
                     </div>
                   ) : (

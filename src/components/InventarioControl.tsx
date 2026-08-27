@@ -1333,32 +1333,20 @@ if (!m) return null;
 
   return (
     <div className="space-y-6 animate-in fade-in">
-      {/* Header and SubTabs */}
-      <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
-        <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-          <Package className="w-5 h-5 text-sky-500 " /> Centro de Control de Inventario
-        </h3>
-        
-        <div className="flex bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl p-1 overflow-x-auto w-full md:w-auto">
-          {[
-            { id: 'productos', label: 'Productos', icon: Box },
-            { id: 'repuestos', label: 'Repuestos', icon: Package },
-            { id: 'insumos', label: 'Insumos', icon: Boxes },
-            { id: 'movimientos', label: 'Movimientos', icon: History },
-            { id: 'reportes', label: 'Reportes', icon: FileText }
-          ].map(tab => (
-            <button
-              key={tab.id}
-              onClick={() => { setActiveSubTab(tab.id as any); if (onTabChange) onTabChange(tab.id as any); }}
-              className={`flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-bold transition flex-shrink-0 ${
-                activeSubTab === tab.id ? 'bg-sky-500 text-white shadow-sm' : 'text-[var(--text-secondary)] hover:text-sky-500 '
-              }`}
-            >
-              <tab.icon className="w-4 h-4" /> {tab.label}
-            </button>
-          ))}
-        </div>
-      </div>
+      {/* AQUÍ IBAN EL TÍTULO Y LAS PESTAÑAS, y los dos se fueron a la
+          regleta y a la fila de carpetas del armazón.
+
+          El título ("Centro de Control de Inventario") repetía lo que la
+          miga de pan decía justo encima. Y las cinco pestañas —Productos,
+          Repuestos, Insumos, Movimientos, Reportes— estaban TAMBIÉN en el
+          menú principal del panel, porque en adminNav eran cinco entradas
+          sueltas: el mismo menú dibujado dos veces, una encima de la otra.
+          Medido sobre el panel real, entre las dos cosas se iban 118 px de
+          los 330 px que había antes del primer producto de la tabla.
+
+          Ahora `adminNav` declara Inventario como UN módulo con cinco
+          carpetas, el armazón las pinta una sola vez, y este componente
+          solo escucha `defaultSubTab` (ver el efecto de arriba). */}
 
       {(activeSubTab === 'productos' || activeSubTab === 'repuestos' || activeSubTab === 'insumos') && marketingRequests.length > 0 && (
         <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl p-4 space-y-3">
@@ -1561,7 +1549,13 @@ if (!m) return null;
                 </button>
                 <button
                   onClick={handleStartCount}
-                  className="bg-amber-500 hover:bg-amber-600 text-slate-950 font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-2"
+                  /* Neutro y no ámbar: iniciar un conteo es una ACCIÓN, no
+                     un aviso. En ámbar era el cuarto color de énfasis de
+                     la misma fila —dos verdes y un marrón— y ninguno
+                     significaba nada. El ámbar queda reservado para el
+                     cartel de "modo de conteo activo", que sí es un
+                     estado del que hay que salir. */
+                  className="tv-btn font-bold text-xs px-4 py-2 flex items-center justify-center gap-2"
                 >
                   <CheckCircle2 className="w-4 h-4" /> Iniciar Conteo
                 </button>
@@ -1664,7 +1658,7 @@ if (!m) return null;
                                       setFormError(null);
                                       setShowProductForm(true);
                                     }}
-                                    className="p-1.5 bg-[var(--border-color)] hover:bg-sky-100 text-sky-600 rounded-lg transition"
+                                    className="p-1.5 bg-[var(--bg-sunken)] hover:bg-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition"
                                     title="Editar"
                                   >
                                     <Edit className="w-4 h-4" />
@@ -1757,7 +1751,7 @@ if (!m) return null;
                                         setFormError(null);
                                         setShowProductForm(true);
                                       }}
-                                      className="p-1.5 bg-sky-50 hover:bg-sky-100 text-sky-600 rounded-lg transition"
+                                      className="p-1.5 bg-[var(--bg-sunken)] hover:bg-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] rounded-lg transition"
                                       title="Editar"
                                     >
                                       <Edit className="w-4 h-4" />

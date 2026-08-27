@@ -1,22 +1,28 @@
 // =====================================================================
-// MAPA DE NAVEGACIÓN DE LA CONSOLA
+// MAPA DE NAVEGACIÓN DE LA CONSOLA — "REGLETA Y CARPETAS"
 // =====================================================================
-// UNA sola definición de los módulos del panel, consumida por las tres
-// superficies que los muestran: el riel de escritorio, el dock de móvil
-// y el buscador de módulos.
+// UNA sola definición de los módulos del panel y de sus carpetas,
+// consumida por las superficies que los muestran: la regleta de
+// escritorio, el selector de módulos, el dock de móvil y el buscador.
 //
 // ---------------------------------------------------------------------
-// POR QUÉ ESTO EXISTE
+// QUÉ CAMBIÓ Y POR QUÉ
 // ---------------------------------------------------------------------
-// En la versión anterior la lista de módulos estaba escrita CUATRO
-// veces dentro de AdminPanel.tsx: en `getPermittedSubItems`, en
-// `sidebarSections`, en las hojas móviles y otra vez, a mano, en la
-// barra inferior. Agregar un módulo obligaba a acordarse de los cuatro
-// sitios, y bastaba olvidar uno para que el módulo existiera en
-// escritorio y no en la APK — que es exactamente lo que había pasado
-// con varias entradas.
+// Antes había QUINCE entradas planas, y cinco de ellas —Productos,
+// Repuestos, Insumos, Movimientos y Reportes— eran en realidad las cinco
+// vistas de un mismo módulo, InventarioControl, que además las volvía a
+// dibujar por dentro como pestañas. Resultado medido sobre el panel real:
+// el mismo menú, dos veces, uno encima del otro, y 330 px de alto gastados
+// antes de ver el primer producto.
 //
-// Con una sola fuente, agregar un módulo es agregar UN objeto aquí.
+// Ahora un módulo puede declarar CARPETAS. Inventario es UN módulo con
+// cinco carpetas; el menú de módulos lista once entradas en vez de
+// quince, y las cinco vistas se dibujan UNA sola vez, en la fila de
+// carpetas que pinta el armazón.
+//
+// Las carpetas conservan los mismos `activeTab` de siempre
+// (`inventario_productos`…), así que ningún enlace guardado ni ningún
+// `activeTab` existente deja de funcionar.
 // =====================================================================
 
 import {
@@ -27,15 +33,30 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
+/**
+ * Una carpeta: una vista dentro de un módulo.
+ *
+ * `tab` es el `activeTab` que la activa. Se conserva el identificador
+ * histórico de cada una para no romper enlaces ni marcadores.
+ */
+export interface AdminCarpeta {
+  id: string;
+  label: string;
+  tab: string;
+  icon?: LucideIcon;
+  /** Palabras por las que el buscador debe encontrar esta carpeta. */
+  buscar?: string[];
+}
+
 export interface AdminNavItem {
   /** Debe coincidir EXACTAMENTE con el valor de `activeTab` del panel. */
   id: string;
-  /** Nombre corto: el que se ve en el riel abierto y en el buscador. */
+  /** Nombre corto: el que se ve en la regleta y en el selector. */
   label: string;
   /** Nombre aún más corto para el dock móvil, donde caben ~9 caracteres. */
   short: string;
   icon: LucideIcon;
-  /** Frase que explica el módulo. Se usa como subtítulo de la pantalla. */
+  /** Frase que explica el módulo. Se usa como pista bajo las carpetas. */
   descripcion: string;
   /**
    * Palabras por las que se puede encontrar el módulo en el buscador.
@@ -45,8 +66,14 @@ export interface AdminNavItem {
    */
   buscar: string[];
   /**
-   * Si es `true`, el módulo solo aparece —en el riel, la hoja "Más" y el
-   * buscador— para la cuenta del administrador supremo (ver
+   * Vistas del módulo. Cuando existen, el armazón dibuja la fila de
+   * carpetas y el módulo NO debe dibujar ninguna pestaña propia: esa
+   * duplicación es justo lo que este modelo viene a eliminar.
+   */
+  carpetas?: AdminCarpeta[];
+  /**
+   * Si es `true`, el módulo solo aparece —en la regleta, el selector y
+   * el buscador— para la cuenta del administrador supremo (ver
    * `esAdminSupremo` en securityPin.ts). Es un filtro de UI únicamente:
    * la restricción real vive en el servidor, en las funciones que ese
    * módulo termina llamando.
@@ -77,47 +104,43 @@ export const NAV_GROUPS: AdminNavGroup[] = [
     titulo: 'Inventario',
     items: [
       {
+        // UN módulo, cinco carpetas. Antes eran cinco entradas de menú
+        // que el propio InventarioControl repetía como pestañas.
         id: 'inventario_productos',
-        label: 'Productos',
-        short: 'Productos',
+        label: 'Inventario',
+        short: 'Inventario',
         icon: Package,
-        descripcion: 'Catálogo, precios, existencias y ubicación física de cada artículo.',
-        buscar: ['productos', 'catalogo', 'articulos', 'stock', 'precios', 'celulares', 'laptops'],
-      },
-      {
-        id: 'inventario_repuestos',
-        label: 'Repuestos',
-        short: 'Repuestos',
-        // Icono distinto al de Taller a propósito: con el riel cerrado
-        // solo se ve el dibujo, y dos llaves inglesas idénticas obligan a
-        // abrir el menú para saber cuál es cuál.
-        icon: Cpu,
-        descripcion: 'Piezas para reparación: existencias, costos y reposición.',
-        buscar: ['repuestos', 'piezas', 'partes', 'pantallas', 'baterias', 'taller'],
-      },
-      {
-        id: 'inventario_insumos',
-        label: 'Insumos',
-        short: 'Insumos',
-        icon: Boxes,
-        descripcion: 'Temperados, micas, cables y demás material que se consume o se regala.',
-        buscar: ['insumos', 'temperados', 'micas', 'cables', 'estuches', 'regalia', 'consumibles'],
-      },
-      {
-        id: 'inventario_movimientos',
-        label: 'Movimientos',
-        short: 'Movim.',
-        icon: ArrowRightLeft,
-        descripcion: 'Entradas, salidas y ajustes de existencias con su trazabilidad.',
-        buscar: ['movimientos', 'entradas', 'salidas', 'ajustes', 'kardex', 'trazabilidad'],
-      },
-      {
-        id: 'inventario_reportes',
-        label: 'Reportes de stock',
-        short: 'Reportes',
-        icon: FileSpreadsheet,
-        descripcion: 'Existencias valorizadas, rotación y artículos por reponer.',
-        buscar: ['reportes', 'stock', 'existencias', 'valorizado', 'rotacion', 'inventario'],
+        descripcion: 'Catálogo, repuestos, insumos, movimientos de existencias y reportes de stock.',
+        buscar: [
+          'inventario', 'productos', 'catalogo', 'articulos', 'stock', 'precios',
+          'repuestos', 'piezas', 'partes', 'pantallas', 'baterias',
+          'insumos', 'temperados', 'micas', 'cables', 'regalia',
+          'movimientos', 'entradas', 'salidas', 'kardex', 'reportes', 'existencias',
+        ],
+        carpetas: [
+          {
+            id: 'productos', label: 'Productos', tab: 'inventario_productos', icon: Package,
+            buscar: ['productos', 'catalogo', 'articulos', 'celulares', 'accesorios'],
+          },
+          {
+            // Icono distinto al de Taller a propósito: dos llaves inglesas
+            // idénticas obligan a leer la etiqueta para saber cuál es cuál.
+            id: 'repuestos', label: 'Repuestos', tab: 'inventario_repuestos', icon: Cpu,
+            buscar: ['repuestos', 'piezas', 'partes', 'lcd', 'pantallas', 'baterias', 'flex'],
+          },
+          {
+            id: 'insumos', label: 'Insumos', tab: 'inventario_insumos', icon: Boxes,
+            buscar: ['insumos', 'temperados', 'micas', 'cables', 'estuches', 'regalia', 'consumibles'],
+          },
+          {
+            id: 'movimientos', label: 'Movimientos', tab: 'inventario_movimientos', icon: ArrowRightLeft,
+            buscar: ['movimientos', 'entradas', 'salidas', 'ajustes', 'kardex', 'trazabilidad'],
+          },
+          {
+            id: 'reportes', label: 'Reportes', tab: 'inventario_reportes', icon: FileSpreadsheet,
+            buscar: ['reportes', 'stock', 'existencias', 'valorizado', 'rotacion'],
+          },
+        ],
       },
     ],
   },
@@ -183,7 +206,7 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         short: 'Seguridad',
         icon: ShieldAlert,
         descripcion: 'Bloqueos por dispositivo, bitácora de auditoría y acceso biométrico.',
-        buscar: ['ciberseguridad', 'seguridad', 'bitacora', 'auditoria', 'baneos', 'bloqueos', 'huella', 'biometria'],
+        buscar: ['ciberseguridad', 'seguridad', 'bitacora', 'auditoria', 'baneos', 'bloqueos', 'huella', 'biometria', 'ip', 'visitantes', 'penalizados'],
       },
       {
         id: 'configuracion',
@@ -216,8 +239,7 @@ export const NAV_ITEMS: AdminNavItem[] = NAV_GROUPS.flatMap(g => g.items);
  * el botón "Más", y meter seis elementos en el ancho de un teléfono
  * deja etiquetas de cuatro letras cortadas. Se eligieron los que se
  * abren varias veces al día; el resto está a un toque de distancia en
- * la hoja de "Más", que además es una lista con nombres completos y no
- * abreviaturas.
+ * el selector de módulos, que además es buscable.
  */
 export const DOCK_IDS = ['dashboard', 'taller', 'cobros', 'inventario_productos'];
 
@@ -238,29 +260,75 @@ export function resolverModulo(tab: string): AdminNavItem {
     logistica: 'dashboard',
   };
   const id = alias[tab] || tab;
-  return NAV_ITEMS.find(i => i.id === id) || NAV_ITEMS[0];
+
+  // Coincidencia directa con un módulo.
+  const directo = NAV_ITEMS.find(i => i.id === id);
+  if (directo) return directo;
+
+  // ¿Es el `tab` de una carpeta? Entonces el módulo es su dueño.
+  const dueno = NAV_ITEMS.find(i => i.carpetas?.some(c => c.tab === id));
+  return dueno || NAV_ITEMS[0];
 }
 
-/** Grupo al que pertenece un módulo. Alimenta la miga de pan. */
+/** La carpeta activa dentro de su módulo, si el módulo tiene carpetas. */
+export function resolverCarpeta(tab: string): AdminCarpeta | undefined {
+  const modulo = resolverModulo(tab);
+  if (!modulo.carpetas) return undefined;
+  return modulo.carpetas.find(c => c.tab === tab) || modulo.carpetas[0];
+}
+
+/** Grupo al que pertenece un módulo. Alimenta el selector de módulos. */
 export function grupoDe(tab: string): string {
   const modulo = resolverModulo(tab);
   const grupo = NAV_GROUPS.find(g => g.items.some(i => i.id === modulo.id));
   return grupo?.titulo || 'General';
 }
 
+/** Resultado del buscador: un módulo, o una carpeta concreta de un módulo. */
+export interface ResultadoBusqueda {
+  tab: string;
+  label: string;
+  /** Nombre del módulo cuando el resultado es una carpeta suya. */
+  contexto?: string;
+  icon: LucideIcon;
+}
+
 /**
- * Busca módulos por nombre o por sinónimo.
+ * Busca módulos Y carpetas por nombre o por sinónimo.
+ *
+ * Incluye las carpetas a propósito: al fusionar las cinco vistas de
+ * Inventario en un solo módulo, quien escriba "repuestos" tiene que
+ * seguir llegando directo a esa vista, no solo a "Inventario".
  *
  * La comparación ignora tildes: quien escribe "bitacora" sin tilde —que
  * es como se escribe con prisa— tiene que encontrar "Bitácora" igual.
  */
-export function buscarModulos(consulta: string): AdminNavItem[] {
+export function buscarModulos(consulta: string, esSupremo = true): ResultadoBusqueda[] {
   const q = normalizar(consulta);
-  if (!q) return NAV_ITEMS;
-  return NAV_ITEMS.filter(item => {
-    const heno = normalizar([item.label, item.descripcion, ...item.buscar].join(' '));
-    return heno.includes(q);
+  const visibles = NAV_ITEMS.filter(i => !i.soloAdminSupremo || esSupremo);
+
+  const salida: ResultadoBusqueda[] = [];
+  visibles.forEach(item => {
+    const henoModulo = normalizar([item.label, item.descripcion, ...item.buscar].join(' '));
+    if (!q || henoModulo.includes(q)) {
+      salida.push({ tab: item.id, label: item.label, icon: item.icon });
+    }
+    // Las carpetas solo se listan cuando se está buscando algo: sin
+    // consulta, el selector debe enseñar los módulos, no veinte filas.
+    if (q && item.carpetas) {
+      item.carpetas.forEach(c => {
+        const henoCarpeta = normalizar([c.label, ...(c.buscar || [])].join(' '));
+        if (henoCarpeta.includes(q)) {
+          salida.push({ tab: c.tab, label: c.label, contexto: item.label, icon: c.icon || item.icon });
+        }
+      });
+    }
   });
+
+  // Un módulo con carpetas puede entrar dos veces (por su propio nombre y
+  // por el de una carpeta que comparte palabra). Se deja la primera.
+  const vistos = new Set<string>();
+  return salida.filter(r => (vistos.has(r.tab) ? false : (vistos.add(r.tab), true)));
 }
 
 // Los signos diacríticos que `normalize('NFD')` separa de su letra. Se

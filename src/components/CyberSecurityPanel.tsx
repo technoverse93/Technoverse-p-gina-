@@ -14,6 +14,7 @@ import {
 import { AuditLog } from '../types';
 import { PaginatedTbody } from './PaginationHelper';
 import { useToast, useConfirm } from './ui/Overlays';
+import { PageHead, Carpetas, Btn } from './admin/AdminKit';
 
 // =====================================================================
 // CENTRO DE CIBERSEGURIDAD
@@ -814,90 +815,55 @@ export default function CyberSecurityPanel({
       { id: 'aparatos',    label: 'Aparatos bloqueados', icono: Movil, contador: aparatos.filter(x => !x.levantado_en).length },
     ],
   };
-  const secciones = seccionesPorVertiente[vertiente];
+  /**
+   * Las DIEZ vistas del módulo, como carpetas de una sola fila.
+   *
+   * Antes esto eran cuatro capas apiladas: título del módulo, dos
+   * tarjetas grandes de "vertiente", y una fila de pestañas que solo
+   * mostraba las de la vertiente elegida. 358 px de navegación antes del
+   * primer número, y las tres vistas de tráfico invisibles hasta que
+   * alguien descubriera que la tarjeta de la derecha era un botón.
+   *
+   * Ahora las diez están siempre a la vista, en una sola fila, separadas
+   * por una línea entre los dos bloques. La vertiente deja de ser una
+   * pantalla aparte y pasa a ser lo que siempre fue: una agrupación.
+   */
+  const carpetas = useMemo(() => ([
+    ...seccionesPorVertiente.admin.map(s => ({
+      id: s.id as string, label: s.label, icon: s.icono, contador: s.contador, grupo: 'admin',
+    })),
+    ...seccionesPorVertiente.trafico.map(s => ({
+      id: s.id as string, label: s.label, icon: s.icono, contador: s.contador, grupo: 'trafico',
+    })),
+  ]), [seccionesPorVertiente]);
 
-  /** Cambiar de vertiente lleva siempre a su primera sección: si no, se
-   *  quedaría seleccionada una pestaña que ya no está en pantalla y el
-   *  contenido saldría en blanco. */
-  const cambiarVertiente = (v: Vertiente) => {
-    setVertiente(v);
-    setSeccion(seccionesPorVertiente[v][0].id);
+  /** Al elegir una carpeta se ajusta también su vertiente, que sigue
+   *  gobernando qué datos se cargan y se refrescan. */
+  const abrirCarpeta = (id: string) => {
+    const esDeTrafico = seccionesPorVertiente.trafico.some(s => s.id === id);
+    setVertiente(esDeTrafico ? 'trafico' : 'admin');
+    setSeccion(id as Seccion);
   };
 
   return (
-    <div className="space-y-6" id="view-ciberseguridad">
+    <div className="space-y-5" id="view-ciberseguridad">
 
-      {/* ---- Encabezado ---- */}
-      <div className="flex flex-wrap justify-between items-center gap-3 border-b border-[var(--border-color)]/50 pb-3">
-        <h3 className="text-lg font-bold text-[var(--text-primary)] flex items-center gap-2">
-          <ShieldAlert className="w-5 h-5 text-rose-500 " />
-          Centro de Ciberseguridad
-        </h3>
-        <button
-          onClick={cargar}
-          disabled={cargando}
-          className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 text-[var(--text-primary)] text-sm font-bold px-3 py-1.5 rounded-xl transition hover:bg-[var(--bg-base)] flex items-center gap-1.5 disabled:opacity-50"
-        >
-          <RefreshCw className={`w-3.5 h-3.5 ${cargando ? 'animate-spin' : ''}`} /> Actualizar
-        </button>
-      </div>
+      {/* El título "Centro de Ciberseguridad" y las dos tarjetas de
+          vertiente se eliminaron: el primero repetía el nombre que ya da
+          la regleta, y las segundas eran un filtro disfrazado de tarjeta
+          que costaba 80 px y escondía tres vistas.
 
-      {/* ---- Las dos vertientes ---- */}
-      <div className="grid grid-cols-2 gap-2">
-        {([
-          { id: 'admin'   as Vertiente, titulo: 'Seguridad administrativa', pie: 'Accesos al panel, fuerza bruta y bloqueo de IPs', icono: Lock },
-          { id: 'trafico' as Vertiente, titulo: 'Tráfico y usuarios',       pie: 'Visitantes de la tienda y cuentas penalizadas',   icono: Users },
-        ]).map(v => {
-          const Icono = v.icono;
-          const activa = vertiente === v.id;
-          return (
-            <button
-              key={v.id}
-              onClick={() => cambiarVertiente(v.id)}
-              className={`text-left p-3 rounded-2xl border transition ${
-                activa
-                  ? 'bg-[var(--bg-surface)] border-[var(--brand-gold-mid)]/50 shadow-sm'
-                  : 'bg-transparent border-[var(--border-color)]/60 hover:bg-[var(--bg-surface)]'
-              }`}
-            >
-              <div className={`flex items-center gap-2 font-bold text-sm ${
-                activa ? 'text-[var(--brand-gold-mid)]' : 'text-[var(--text-primary)]'
-              }`}>
-                <Icono className="w-4 h-4 flex-shrink-0" />
-                <span className="truncate">{v.titulo}</span>
-              </div>
-              <p className="text-[10px] text-[var(--text-secondary)] mt-1 leading-snug">{v.pie}</p>
-            </button>
-          );
-        })}
-      </div>
+          Lo único que sube a la regleta es el botón de recargar. */}
+      <PageHead
+        title="Ciberseguridad"
+        actions={
+          <Btn variant="default" icon={RefreshCw} onClick={cargar} disabled={cargando}>
+            {cargando ? 'Actualizando…' : 'Actualizar'}
+          </Btn>
+        }
+      />
 
-      {/* ---- Navegación interna ---- */}
-      <div className="flex gap-1.5 overflow-x-auto pb-1 -mx-1 px-1">
-        {secciones.map(s => {
-          const Icono = s.icono;
-          const activa = seccion === s.id;
-          return (
-            <button
-              key={s.id}
-              onClick={() => setSeccion(s.id)}
-              className={`flex-shrink-0 flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-bold uppercase tracking-wide transition border ${
-                activa
-                  ? 'bg-[var(--bg-surface)] border-[var(--brand-gold-mid)]/40 text-[var(--brand-gold-mid)]'
-                  : 'bg-transparent border-[var(--border-color)]/60 text-[var(--text-secondary)] hover:bg-[var(--bg-surface)]'
-              }`}
-            >
-              <Icono className="w-3.5 h-3.5" />
-              {s.label}
-              {typeof s.contador === 'number' && s.contador > 0 && (
-                <span className="ml-0.5 text-[9px] bg-[var(--bg-base)] border border-[var(--border-color)]/60 px-1.5 py-0.5 rounded-full font-mono">
-                  {s.contador}
-                </span>
-              )}
-            </button>
-          );
-        })}
-      </div>
+      <Carpetas items={carpetas} activa={seccion} onElegir={abrirCarpeta} />
 
       {/* =============== RESUMEN =============== */}
       {seccion === 'resumen' && (

@@ -30,13 +30,14 @@
   --tv-gap-sm: 12px;
   --tv-gap-lg: 28px;
 
-  /* Anchos del riel de navegación. */
-  --tv-rail-w: 72px;
-  --tv-rail-w-open: 252px;
-
   /* Alturas de las barras. Se usan también como padding del contenido,
-     así nada queda nunca debajo de una barra fija. */
-  --tv-topbar-h: 56px;
+     así nada queda nunca debajo de una barra fija.
+
+     La regleta mide 36 px por diseño: es la ÚNICA capa de navegación
+     global del panel, así que puede permitirse ser fina. La barra de
+     56 px de antes convivía con una miga de pan, un título de módulo y
+     una fila de sub-pestañas que decían lo mismo. */
+  --tv-regleta-h: 36px;
   --tv-dock-h: 62px;
 
   --tv-radius: 14px;
@@ -61,7 +62,27 @@
   --tv-ok: var(--ok);
   --tv-ok-soft: var(--ok-soft);
 
+  /* Aviso. Existe como token —y no como `amber-500` suelto— porque el
+     panel medido tenía cuatro colores de énfasis a la vez (ámbar en
+     "Iniciar conteo", azul en los iconos de acción, rosa en los
+     títulos) y ninguno significaba nada. Aquí hay tres estados y solo
+     tres: acento, correcto, aviso, peligro. */
+  --tv-warn: #9A5B14;
+  --tv-warn-soft: rgba(154, 91, 20, 0.12);
+
   background: var(--tv-canvas);
+}
+
+/* Los tres colores de estado, en tema oscuro.
+   `--tv-accent` y `--tv-ok` ya cambian solos porque apuntan a variables
+   de marca; estos dos estaban fijos a su valor de tema claro, así que
+   sobre el carbón del panel oscuro el rojo quedaba apagado y el ámbar
+   casi marrón. Se aclaran igual que hace index.css con el acento. */
+.dark #admin-panel-root {
+  --tv-danger: #F1746A;
+  --tv-danger-soft: rgba(241, 116, 106, 0.14);
+  --tv-warn: #E8A85C;
+  --tv-warn-soft: rgba(232, 168, 92, 0.14);
 }
 
 /* ---------------------------------------------------------------------
@@ -113,194 +134,299 @@
 }
 
 /* ---------------------------------------------------------------------
-   RIEL DE NAVEGACIÓN (escritorio)
+   REGLETA
+   ---------------------------------------------------------------------
+   La franja de arriba. Hace TRES cosas y ninguna más: decir en qué
+   módulo estás (y dejar cambiarlo), buscar, y sostener las acciones de
+   la pantalla activa.
+
+   36 px, no 56. Y es la ÚNICA capa de navegación global: se fueron la
+   miga de pan, el título de módulo dentro del contenido y su subtítulo
+   en bloque, que decían los tres lo mismo y sumaban entre 60 y 145 px
+   por pantalla.
    --------------------------------------------------------------------- */
 
-.tv-rail {
-  display: none;
-  flex-direction: column;
+.tv-regleta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: var(--tv-regleta-h);
   flex-shrink: 0;
-  width: var(--tv-rail-w);
+  padding: 0 8px;
   background: var(--tv-panel);
-  border-right: 1px solid var(--tv-hairline);
-  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  overflow: hidden;
+  border-bottom: 1px solid var(--tv-hairline);
+  /* En teléfono las acciones de la pantalla bajan a su propia línea (ver
+     más abajo): la regleta tiene que poder crecer para alojarlas. */
+  flex-wrap: wrap;
 }
 
 @media (min-width: 1024px) {
-  .tv-rail { display: flex; }
+  .tv-regleta { padding: 0 14px; gap: 10px; }
 }
 
-.tv-rail[data-open='true'] { width: var(--tv-rail-w-open); }
-
-.tv-rail-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: var(--tv-topbar-h);
-  padding: 0 16px;
-  border-bottom: 1px solid var(--tv-hairline);
-  flex-shrink: 0;
+/* EN TELÉFONO Y APK: dos líneas, no una apretada.
+   Con las acciones en la misma fila que el nombre del módulo y los
+   botones fijos, en 375 px el nombre se recortaba a "Pan…" y la etiqueta
+   de estado se encaramaba encima del interruptor de tema. Aquí el nombre
+   se queda con toda la primera línea y las acciones ocupan la segunda,
+   completa, con su propio desplazamiento lateral. */
+@media (max-width: 899px) {
+  .tv-regleta { padding-top: 4px; padding-bottom: 4px; row-gap: 4px; }
+  .tv-modulo { flex: 1 1 auto; max-width: none; }
+  /* La especificidad extra es a propósito: la regla base de
+     `.tv-regleta-acciones` está declarada más abajo en este archivo y,
+     a igualdad de peso, ganaría por orden de aparición. */
+  .tv-regleta .tv-regleta-acciones {
+    order: 10;
+    flex: 1 0 100%;
+    justify-content: flex-start;
+    padding-bottom: 2px;
+  }
+  /* Vacío no debe dejar una segunda línea en blanco. */
+  .tv-regleta .tv-regleta-acciones:empty { display: none; }
 }
 
-.tv-rail-body {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 12px 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
-}
-
-/* La barra del riel no necesita scrollbar visible: se ve sucia y roba
-   ancho al único elemento que ya es estrecho a propósito. */
-.tv-rail-body::-webkit-scrollbar { width: 0; }
-
-.tv-rail-foot {
-  border-top: 1px solid var(--tv-hairline);
-  padding: 10px 12px;
-  flex-shrink: 0;
-}
-
-.tv-group-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  padding: 14px 10px 6px;
-  white-space: nowrap;
-}
-
-/* Separador para el riel cerrado: cuando no hay texto, el grupo se
-   comunica con una línea. Sin esto los doce iconos se leen como una
-   lista plana sin jerarquía. */
-.tv-group-rule {
-  height: 1px;
-  background: var(--tv-hairline);
-  margin: 10px 8px 6px;
-}
-
-.tv-nav-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 9px 10px;
-  border-radius: var(--tv-radius-sm);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 600;
-  text-align: left;
-  white-space: nowrap;
-  cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
-}
-
-.tv-nav-item:hover { background: var(--bg-sunken); color: var(--text-primary); }
-
-.tv-nav-item[data-active='true'] {
-  background: var(--tv-accent-soft);
-  color: var(--tv-accent);
-}
-
-/* La marca de "estás aquí" es una barra al borde del riel, no un borde
-   completo alrededor del botón: se lee de un vistazo incluso con el
-   riel cerrado y no engorda el elemento. */
-.tv-nav-item[data-active='true']::before {
-  content: '';
-  position: absolute;
-  left: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
-  border-radius: 0 3px 3px 0;
-  background: var(--tv-accent);
-}
-
-.tv-nav-icon {
-  display: flex;
+/* Lanzador del selector de módulos. Lleva el logo dentro cuando hay: en
+   móvil sustituye a la cabecera de marca que antes ocupaba una fila. */
+.tv-lanzador {
+  display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 26px;
-  height: 26px;
+  width: 28px;
+  height: 28px;
   flex-shrink: 0;
+  border-radius: var(--tv-radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
-.tv-rail[data-open='false'] .tv-nav-item { justify-content: center; padding: 9px 0; }
-.tv-rail[data-open='false'] .tv-nav-label { display: none; }
-.tv-rail[data-open='false'] .tv-group-label { display: none; }
-.tv-rail[data-open='true'] .tv-group-rule { display: none; }
+.tv-lanzador:hover { background: var(--bg-sunken); color: var(--text-primary); }
 
-/* Etiqueta flotante del riel cerrado. Es un tooltip propio y no el
-   atributo `title` del navegador porque ese tarda un segundo largo en
-   aparecer: con doce iconos sin texto, esa espera vuelve inservible la
-   navegación. */
-.tv-nav-item .tv-tip {
-  position: absolute;
-  left: calc(100% + 10px);
-  top: 50%;
-  transform: translateY(-50%) translateX(-4px);
-  padding: 5px 10px;
-  border-radius: 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--tv-hairline);
-  box-shadow: var(--float-shadow);
-  color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 60;
-  transition: opacity 0.14s ease, transform 0.14s ease;
-}
-
-.tv-rail[data-open='false'] .tv-nav-item:hover .tv-tip {
-  opacity: 1;
-  transform: translateY(-50%) translateX(0);
-}
-
-.tv-rail[data-open='true'] .tv-nav-item .tv-tip { display: none; }
-
-/* ---------------------------------------------------------------------
-   BARRA SUPERIOR
-   --------------------------------------------------------------------- */
-
-.tv-topbar {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  height: var(--tv-topbar-h);
-  flex-shrink: 0;
-  padding: 0 12px;
-  background: var(--tv-panel);
-  border-bottom: 1px solid var(--tv-hairline);
-}
-
-@media (min-width: 1024px) {
-  .tv-topbar { padding: 0 20px; }
-}
-
-.tv-crumb {
-  display: flex;
+/* Nombre del módulo activo. Único sitio del panel donde se escribe. */
+.tv-modulo {
+  display: inline-flex;
   align-items: center;
   gap: 7px;
   min-width: 0;
-  font-size: 13px;
-  color: var(--text-muted);
+  max-width: 46vw;
+  height: 28px;
+  padding: 0 9px;
+  border-radius: var(--tv-radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-primary);
+  font-family: var(--font-display);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  cursor: pointer;
+  transition: background 0.15s ease;
 }
 
-.tv-crumb strong {
-  color: var(--text-primary);
-  font-weight: 700;
+.tv-modulo:hover { background: var(--bg-sunken); }
+
+.tv-modulo-nombre {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.tv-regleta-sep {
+  width: 1px;
+  height: 18px;
+  flex-shrink: 0;
+  background: var(--tv-hairline);
+  display: none;
+}
+
+@media (min-width: 900px) { .tv-regleta-sep { display: block; } }
+
+/* Hueco de las acciones de la pantalla activa. `min-width: 0` + scroll
+   propio: un módulo con cuatro botones no puede empujar el avatar fuera
+   de la regleta en una pantalla angosta. */
+.tv-regleta-acciones {
+  flex: 1 1 auto;
+  min-width: 0;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 7px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tv-regleta-acciones::-webkit-scrollbar { height: 0; }
+
+/* Los controles que están SIEMPRE, pase lo que pase en la pantalla. */
+.tv-regleta-fijos {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+
+/* ---------------------------------------------------------------------
+   CARPETAS
+   ---------------------------------------------------------------------
+   Las vistas del módulo, con forma de pestaña de archivo: se superponen
+   ligeramente y se apoyan en el borde del contenido, no en la regleta.
+   Esa es la señal de que pertenecen al módulo y no a la navegación
+   global — y por eso no pueden confundirse con ella ni repetirla.
+
+   La barra se colapsa a cero cuando no hay carpetas: no se reserva alto
+   "por si acaso".
+   --------------------------------------------------------------------- */
+
+.tv-carpetas-bar {
+  flex-shrink: 0;
+  background: var(--tv-canvas);
+  padding: 0;
+}
+
+.tv-carpetas-bar:has(.tv-folders) {
+  padding: 7px 8px 0;
+  border-bottom: 1px solid var(--tv-hairline);
+}
+
+@media (min-width: 1024px) {
+  .tv-carpetas-bar:has(.tv-folders) { padding: 8px 14px 0; }
+}
+
+/* Respaldo para navegadores sin `:has()`. Se resuelve con un atributo en
+   el marcado en vez de con `@supports selector(...)`, que el compilador
+   de CSS del proyecto no sabe analizar: el armazón marca la barra cuando
+   de verdad hay carpetas dentro, así que el hueco no depende de que el
+   navegador soporte `:has()`. */
+.tv-carpetas-bar[data-con-carpetas='true'] {
+  padding: 7px 8px 0;
+  border-bottom: 1px solid var(--tv-hairline);
+}
+
+@media (min-width: 1024px) {
+  .tv-carpetas-bar[data-con-carpetas='true'] { padding: 8px 14px 0; }
+}
+
+.tv-folders {
+  display: flex;
+  align-items: flex-end;
+  gap: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  padding-bottom: 1px;
+}
+
+.tv-folders::-webkit-scrollbar { height: 0; }
+
+.tv-folder {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+  min-width: 0;
+  padding: 7px 15px 8px;
+  margin-right: -7px;
+  border: 1px solid var(--tv-hairline);
+  border-bottom: none;
+  border-radius: 10px 10px 0 0;
+  background: var(--bg-sunken);
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease;
+  /* El corte en diagonal es lo que da la silueta de carpeta de manila.
+     Se aplica solo a las inactivas: la activa va recta para leerse como
+     la que está "abierta" encima del resto. */
+  clip-path: polygon(9px 0, 100% 0, calc(100% - 9px) 100%, 0 100%);
+}
+
+.tv-folder:hover { color: var(--text-primary); background: var(--bg-elevated); }
+
+.tv-folder[data-active='true'] {
+  z-index: 2;
+  background: var(--tv-panel);
+  color: var(--text-primary);
+  clip-path: none;
+  box-shadow: 0 -3px 8px -5px rgba(0, 0, 0, 0.18);
+}
+
+/* La lengüeta de color que remata la carpeta abierta por arriba. Es la
+   única marca de acento de esta fila: sin ella, con `clip-path: none`,
+   la activa se distingue poco de sus vecinas en tema oscuro. */
+.tv-folder[data-active='true']::before {
+  content: '';
+  position: absolute;
+  left: 0;
+  right: 0;
+  top: 0;
+  height: 2px;
+  border-radius: 2px 2px 0 0;
+  background: var(--tv-accent);
+}
+
+.tv-folder-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.tv-folder-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 2.5px 5px;
+  border-radius: 999px;
+  background: var(--bg-base);
+  border: 1px solid var(--tv-hairline);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-folder[data-active='true'] .tv-folder-count {
+  background: var(--tv-accent-soft);
+  border-color: transparent;
+  color: var(--tv-accent);
+}
+
+/* Separador entre bloques de carpetas (Ciberseguridad tiene dos: las de
+   seguridad administrativa y las de tráfico de la tienda). */
+.tv-folder-sep {
+  flex-shrink: 0;
+  width: 1px;
+  height: 16px;
+  margin: 0 9px 8px 16px;
+  background: var(--tv-hairline);
+}
+
+/* ---------------------------------------------------------------------
+   PISTA
+   ---------------------------------------------------------------------
+   Lo que antes era el subtítulo del bloque de título. Se conserva porque
+   explica qué se hace en la pantalla, pero cuesta UNA línea en vez de un
+   bloque. Vacía, no ocupa nada.
+   --------------------------------------------------------------------- */
+
+.tv-pista {
+  flex-shrink: 0;
+  font-size: 12px;
+  color: var(--text-muted);
+  line-height: 1.4;
+}
+
+.tv-pista:not(:empty) { padding: 8px 12px 0; }
+
+@media (min-width: 1024px) {
+  .tv-pista:not(:empty) { padding: 10px 28px 0; }
 }
 
 .tv-icon-btn {
@@ -519,6 +645,59 @@
   color: var(--text-muted);
 }
 
+/* El nombre, que se recorta antes de deformar la fila. */
+.tv-palette-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+/* Contexto a la derecha: "en Inventario" cuando el resultado es una
+   carpeta, o "5 vistas" cuando el módulo tiene carpetas. Es lo que hace
+   que fusionar las cinco entradas de Inventario en una no esconda nada:
+   quien busca "repuestos" ve que existe y de quién es. */
+.tv-palette-ctx {
+  margin-left: auto;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: var(--text-muted);
+  white-space: nowrap;
+}
+
+/* Título de sección de la lista sin consulta. */
+.tv-palette-grupo {
+  padding: 12px 14px 5px;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--text-muted);
+}
+
+/* El módulo en el que ya estás, marcado sin robarle el resalte al
+   cursor del teclado. */
+.tv-palette-row[data-actual='true'] {
+  color: var(--tv-accent);
+  font-weight: 700;
+}
+
+/* En teléfono el selector se ancla ABAJO, al alcance del pulgar, en vez
+   de flotar centrado: es la superficie que sustituye a la vieja hoja de
+   "Más" del dock, y se abre con el pulgar desde el dock o desde la
+   regleta. */
+@media (max-width: 640px) {
+  .tv-palette-backdrop { align-items: flex-end; padding: 0; }
+  .tv-palette {
+    width: 100%;
+    max-width: none;
+    max-height: 78dvh;
+    border-radius: 18px 18px 0 0;
+    padding-bottom: env(safe-area-inset-bottom, 0px);
+  }
+}
+
 /* ---------------------------------------------------------------------
    DOCK INFERIOR (móvil / APK)
    ---------------------------------------------------------------------
@@ -648,39 +827,18 @@
    PIEZAS DE CONTENIDO
    --------------------------------------------------------------------- */
 
-.tv-page-head {
-  display: flex;
-  align-items: flex-start;
-  justify-content: space-between;
-  gap: var(--tv-gap-sm);
-  flex-wrap: wrap;
-  margin-bottom: var(--tv-gap);
-}
+/* AQUÍ VIVÍA EL BLOQUE DE TÍTULO DE PANTALLA (.tv-page-head /
+   .tv-page-title / .tv-page-sub) y se eliminó a propósito.
 
-/* Dentro de una pila, el hueco lo pone la pila. Sin esto se sumaban el
-   margen del encabezado y el `gap` del contenedor, y en el teléfono
-   —donde la etiqueta de estado baja a su propia línea— quedaba un vacío
-   de casi 60px entre el título y la primera tarjeta. */
-.tv-stack > .tv-page-head { margin-bottom: 0; }
+   Dibujaba, dentro del contenido de cada módulo, un título de 20-23px y
+   un subtítulo — es decir, repetía el nombre que la miga de pan ya decía
+   justo encima, y que ahora dice la regleta. Medido sobre el panel real
+   eran entre 60 y 85 px por pantalla, una de las cinco capas que dejaban
+   el contenido de Inventario empezando a los 330 px.
 
-.tv-page-title {
-  font-family: var(--font-display);
-  font-size: 20px;
-  font-weight: 700;
-  letter-spacing: -0.015em;
-  color: var(--text-primary);
-  line-height: 1.2;
-}
-
-@media (min-width: 1024px) { .tv-page-title { font-size: 23px; } }
-
-.tv-page-sub {
-  margin-top: 3px;
-  font-size: 12.5px;
-  color: var(--text-muted);
-  max-width: 68ch;
-  line-height: 1.5;
-}
+   `PageHead` sigue existiendo con la misma firma —para no tocar ningún
+   sitio de llamada— pero ya no pinta nada aquí: manda sus acciones a la
+   regleta y su subtítulo a `.tv-pista`, ambos por portal. Ver AdminKit. */
 
 .tv-card {
   background: var(--tv-panel);
@@ -979,3 +1137,74 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
   text-overflow: ellipsis;
   white-space: nowrap;
 }
+
+/* ---------------------------------------------------------------------
+   UN SOLO LENGUAJE DE COLOR EN LA CONSOLA
+   ---------------------------------------------------------------------
+   Medido sobre el panel real: convivían CUATRO colores de énfasis sin que
+   ninguno significara nada — ámbar en "Iniciar conteo", azul en los
+   iconos de acción de la tabla, rosa en los títulos de sección, verde en
+   los precios. Con cuatro acentos, ninguno avisa de nada.
+
+   index.css ya reconduce `emerald-*` y `sky-*`/`blue-*` a los tokens de
+   marca para toda la plataforma. Aquí se completa el trabajo con los dos
+   que faltaban, `amber-*` y `rose-*`, y SOLO dentro del panel: la tienda
+   no los usa así.
+
+   Se reconduce en vez de reescribir las decenas de sitios de llamada por
+   el mismo motivo de siempre — son componentes con lógica de inventario,
+   cobros y seguridad, y tocarlos línea por línea para cambiar un color es
+   arriesgar un fallo funcional a cambio de nada.
+   --------------------------------------------------------------------- */
+
+/* AVISO — lo que pide atención pero no es un error. */
+#admin-panel-root .text-amber-400,
+#admin-panel-root .text-amber-500,
+#admin-panel-root .text-amber-600 { color: var(--tv-warn) !important; }
+
+#admin-panel-root .bg-amber-500,
+#admin-panel-root .hover\:bg-amber-600:hover {
+  background-color: var(--tv-warn) !important;
+  color: #FFFFFF !important;
+}
+
+#admin-panel-root .bg-amber-500 * { color: inherit !important; }
+
+#admin-panel-root .bg-amber-500\/10,
+#admin-panel-root .bg-amber-500\/15 { background-color: var(--tv-warn-soft) !important; }
+
+#admin-panel-root .border-amber-500\/30,
+#admin-panel-root .border-amber-500\/50,
+#admin-panel-root .focus\:border-amber-400:focus { border-color: var(--tv-warn) !important; }
+
+#admin-panel-root .bg-amber-500 { border-color: transparent !important; }
+
+/* PELIGRO — lo que destruye o bloquea algo. */
+#admin-panel-root .text-rose-400,
+#admin-panel-root .text-rose-500,
+#admin-panel-root .text-rose-600,
+#admin-panel-root .hover\:text-rose-500:hover { color: var(--tv-danger) !important; }
+
+#admin-panel-root .bg-rose-500,
+#admin-panel-root .hover\:bg-rose-600:hover {
+  background-color: var(--tv-danger) !important;
+  color: #FFFFFF !important;
+}
+
+#admin-panel-root .bg-rose-500 * { color: inherit !important; }
+
+#admin-panel-root .bg-rose-500\/10,
+#admin-panel-root .bg-rose-500\/15,
+#admin-panel-root .bg-rose-500\/20 { background-color: var(--tv-danger-soft) !important; }
+
+#admin-panel-root .border-rose-500\/20,
+#admin-panel-root .border-rose-500\/30 { border-color: var(--tv-danger) !important; }
+
+/* Tinta sobre relleno de acento. Varios botones traen `text-slate-950`
+   escrito a mano —negro casi puro— que en tema oscuro, sobre el verde
+   menta, es correcto, pero en claro sobre el verde botella es ilegible.
+   `--accent-ink` ya resuelve los dos casos. */
+#admin-panel-root .bg-emerald-500.text-slate-950,
+#admin-panel-root .bg-sky-500.text-slate-950,
+#admin-panel-root .bg-amber-500.text-slate-950,
+#admin-panel-root .bg-rose-500.text-white { color: var(--accent-ink) !important; }

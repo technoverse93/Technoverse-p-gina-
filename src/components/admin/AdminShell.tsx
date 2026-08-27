@@ -1,42 +1,52 @@
 // =====================================================================
-// TECHNOVERSE CONSOLE — armazón del panel de administración
+// TECHNOVERSE CONSOLE — armazón del panel: "REGLETA Y CARPETAS"
 // =====================================================================
-// Todo lo que rodea al contenido: riel de navegación en escritorio,
-// barra superior, dock inferior en móvil/APK, hoja de "Más" y buscador
-// de módulos.
+// Todo lo que rodea al contenido: la regleta de arriba, la fila de
+// carpetas, el selector de módulos, el dock de móvil/APK y los modales
+// de seguridad.
 //
 // ---------------------------------------------------------------------
-// QUÉ CAMBIA RESPECTO AL PANEL ANTERIOR, Y POR QUÉ
+// EL PROBLEMA QUE ESTE MODELO RESUELVE
 // ---------------------------------------------------------------------
-// 1. UNA sola barra de navegación por tamaño de pantalla. Antes había
-//    enlaces arriba, en la barra lateral y en la barra inferior a la
-//    vez; en tableta llegaban a verse los mismos módulos tres veces.
+// Medido sobre el panel real, con datos dentro, a 1440×900:
 //
-// 2. El riel de escritorio es de ICONOS por defecto (72px) y se abre a
-//    252px cuando hace falta. La barra fija de 256px se comía una
-//    cuarta parte del ancho útil de un portátil para mostrar doce
-//    palabras que quien usa el panel a diario ya se sabe de memoria.
+//   · Inventario     330 px de menús y títulos antes del primer producto
+//   · Ciberseguridad 358 px y CUATRO niveles de navegación apilados
+//   · Taller         450 px antes del tablero, que además salía cortado
+//   · Cobros         308 px antes del primer campo del formulario
 //
-// 3. Buscador de módulos con Ctrl/⌘+K. Es lo que permite quitar peso
-//    del menú sin esconder nada: cualquier módulo está a tres teclas,
-//    y encuentra por sinónimos ("factura" lleva a Contabilidad).
+// Y sobre todo: el menú de arriba repetía «Productos · Repuestos ·
+// Insumos · Movimientos · Reportes», que el propio módulo volvía a
+// dibujar como pestañas. Dos menús idénticos, uno encima del otro.
 //
-// 4. En móvil, dock flotante de cinco ranuras con área táctil real y
-//    respeto por la barra de gestos. La barra vieja iba pegada al
-//    borde inferior y en teléfonos con gestos la última fila quedaba
-//    debajo del indicador del sistema.
+// ---------------------------------------------------------------------
+// CÓMO SE RESUELVE
+// ---------------------------------------------------------------------
+// 1. REGLETA (36 px). Hace tres cosas y nada más: decir en qué módulo
+//    estás —y dejar cambiarlo—, buscar, y sostener las acciones de la
+//    pantalla actual. No hay miga de pan, ni título de módulo dentro del
+//    contenido, ni subtítulo en bloque: los tres decían lo mismo.
 //
-// NADA de esto cambia la lógica del panel: el armazón solo recibe qué
-// módulo está activo y avisa cuando se pide otro.
+// 2. CARPETAS. Las vistas del módulo se dibujan UNA sola vez, pegadas al
+//    borde superior del contenido, con forma de carpeta de archivo. La
+//    fila la pinta este armazón —a partir de `adminNav` o de lo que
+//    registre la pantalla— así que es imposible que un módulo la
+//    duplique por su cuenta.
+//
+// 3. MÓVIL Y APK. La regleta se reduce a una fila con el nombre del
+//    módulo al centro; tocarlo abre el selector como hoja inferior. Las
+//    carpetas se recorren con el dedo. El dock de cuatro módulos se
+//    conserva: en un teléfono el pulgar necesita un ancla fija.
 // =====================================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Search, PanelLeftClose, PanelLeftOpen, Store, LogOut,
-  MoreHorizontal, X, CornerDownLeft, RefreshCw, KeyRound, Hash,
+  Search, Store, LogOut, LayoutGrid,
+  X, CornerDownLeft, RefreshCw, KeyRound, Hash, ChevronDown,
 } from 'lucide-react';
-import { NAV_GROUPS, NAV_ITEMS, DOCK_IDS, resolverModulo, grupoDe, buscarModulos } from './adminNav';
+import { NAV_GROUPS, NAV_ITEMS, DOCK_IDS, resolverModulo, resolverCarpeta, buscarModulos } from './adminNav';
 import type { AdminNavItem } from './adminNav';
+import { Carpetas } from './AdminKit';
 import type { User } from '../../types';
 import { useOtaStatus, verificarActualizacionManual } from '../../mobile/otaUpdater';
 import { useToast } from '../ui/Overlays';
@@ -44,8 +54,6 @@ import CambiarContrasenaModal from '../security/CambiarContrasenaModal';
 import CambiarPinModal from '../security/CambiarPinModal';
 import BotonTema from '../ui/BotonTema';
 import { esAdminSupremo } from '../../utils/securityPin';
-
-const LLAVE_RIEL = 'technoverse_admin_riel_abierto';
 
 interface AdminShellProps {
   activeTab: string;
@@ -66,52 +74,46 @@ export default function AdminShell({
   logoUrl,
   children,
 }: AdminShellProps) {
-  // El estado del riel se recuerda entre sesiones: quien prefiere ver
-  // los nombres no tiene que volver a abrirlo cada mañana.
-  const [rielAbierto, setRielAbierto] = useState<boolean>(() => {
-    try { return localStorage.getItem(LLAVE_RIEL) === '1'; } catch { return false; }
-  });
   const [menuPerfil, setMenuPerfil] = useState(false);
-  const [hojaAbierta, setHojaAbierta] = useState(false);
-  const [buscadorAbierto, setBuscadorAbierto] = useState(false);
+  const [selectorAbierto, setSelectorAbierto] = useState(false);
 
   const perfilRef = useRef<HTMLDivElement | null>(null);
 
   const moduloActivo = useMemo(() => resolverModulo(activeTab), [activeTab]);
-  const grupoActivo = useMemo(() => grupoDe(activeTab), [activeTab]);
+  const carpetaActiva = useMemo(() => resolverCarpeta(activeTab), [activeTab]);
 
-  useEffect(() => {
-    try { localStorage.setItem(LLAVE_RIEL, rielAbierto ? '1' : '0'); } catch { /* sin almacenamiento, no pasa nada */ }
-  }, [rielAbierto]);
+  const toast = useToast();
+  const otaStatus = useOtaStatus();
+  const [buscandoActualizacion, setBuscandoActualizacion] = useState(false);
+  const [modalContrasenaAbierto, setModalContrasenaAbierto] = useState(false);
+  const [modalPinAbierto, setModalPinAbierto] = useState(false);
 
-  /** Navegar cierra TODO lo que estuviera abierto encima. */
+  const esSupremo = esAdminSupremo(currentUser?.email);
+
+  /** Navegar cierra todo lo que estuviera abierto encima. */
   const ir = useCallback((tab: string) => {
     onNavigate(tab);
-    setHojaAbierta(false);
     setMenuPerfil(false);
-    setBuscadorAbierto(false);
+    setSelectorAbierto(false);
   }, [onNavigate]);
 
-  // Ctrl/⌘+K abre el buscador desde cualquier parte del panel.
+  // Ctrl/⌘+K abre el selector desde cualquier parte del panel.
   useEffect(() => {
     const alTeclear = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setBuscadorAbierto(v => !v);
+        setSelectorAbierto(v => !v);
       }
       if (e.key === 'Escape') {
-        setBuscadorAbierto(false);
+        setSelectorAbierto(false);
         setMenuPerfil(false);
-        setHojaAbierta(false);
       }
     };
     window.addEventListener('keydown', alTeclear);
     return () => window.removeEventListener('keydown', alTeclear);
   }, []);
 
-  // Cerrar el menú de perfil al tocar fuera. Sin esto queda abierto
-  // tapando contenido hasta que alguien acierta a pulsar el avatar otra
-  // vez, que es un comportamiento que la gente reporta como "se trabó".
+  // Cerrar el menú de cuenta al tocar fuera.
   useEffect(() => {
     if (!menuPerfil) return;
     const alTocarFuera = (e: MouseEvent) => {
@@ -121,27 +123,6 @@ export default function AdminShell({
     return () => document.removeEventListener('mousedown', alTocarFuera);
   }, [menuPerfil]);
 
-  const otaStatus = useOtaStatus();
-  const toast = useToast();
-  const [buscandoActualizacion, setBuscandoActualizacion] = useState(false);
-  // Cambio de contraseña: ÚNICA vía en todo el sistema, y vive a propósito
-  // en esta misma sección del menú plegable — junto a "Buscar
-  // actualización" — y no en ningún otro lugar. Ver CambiarContrasenaModal.
-  const [modalContrasenaAbierto, setModalContrasenaAbierto] = useState(false);
-  // Cambiar PIN: solo el administrador supremo (correo exacto) ve este
-  // botón. El filtro real vive también en el servidor (set_security_pin),
-  // esto solo evita mostrarlo a quien nunca podría usarlo.
-  const [modalPinAbierto, setModalPinAbierto] = useState(false);
-  const esSupremo = esAdminSupremo(currentUser?.email);
-
-  /**
-   * Botón de "Buscar actualización": para cuando el chequeo silencioso
-   * de arranque falló, se pospuso, o la persona simplemente quiere
-   * confirmar YA que tiene lo último sin cerrar y reabrir la app. A
-   * diferencia de ese chequeo de fondo, este SÍ recarga de inmediato si
-   * encuentra algo nuevo — es lo que se espera de un botón que la
-   * persona pulsó a propósito.
-   */
   const buscarActualizacion = async () => {
     setBuscandoActualizacion(true);
     try {
@@ -173,10 +154,8 @@ export default function AdminShell({
   }, [currentUser]);
 
   // Los módulos marcados `soloAdminSupremo` (ver adminNav.ts) se quitan
-  // aquí de TODAS las superficies que listan módulos — riel, dock, hoja
-  // "Más" y buscador — para cualquier cuenta que no sea la del correo
-  // supremo. Es solo la UI: la restricción de verdad vive en el
-  // servidor, en las funciones que ese módulo termina llamando.
+  // de TODAS las superficies que listan módulos. Es solo la UI: la
+  // restricción de verdad vive en el servidor.
   const puedeVerModulo = (item: AdminNavItem) => !item.soloAdminSupremo || esSupremo;
 
   const itemsDock = DOCK_IDS
@@ -184,304 +163,262 @@ export default function AdminShell({
     .filter((i): i is AdminNavItem => !!i)
     .filter(puedeVerModulo);
 
-  // En la hoja de "Más" va todo lo que no cabe en el dock. Se calcula a
-  // partir del dock y no con una segunda lista escrita a mano: así
-  // ningún módulo puede quedar sin acceso en la APK por un descuido.
-  const itemsHoja = NAV_ITEMS.filter(i => !DOCK_IDS.includes(i.id)).filter(puedeVerModulo);
-  const hojaTieneActivo = itemsHoja.some(i => i.id === moduloActivo.id);
+  /**
+   * Las carpetas que declara el propio mapa de navegación (hoy,
+   * Inventario). Se dibujan desde aquí para que el módulo no tenga que
+   * saber nada de ellas — y, sobre todo, para que no pueda dibujarlas
+   * otra vez por su cuenta.
+   *
+   * Los módulos con sub-vistas que viven en su propio estado interno
+   * (Ciberseguridad, Cobros, Taller) llaman al mismo componente
+   * `<Carpetas>` desde dentro: sale renderizado en este mismo hueco por
+   * portal, así que la fila es siempre una y está siempre en el mismo
+   * sitio.
+   */
+  const carpetasDeNav = moduloActivo.carpetas;
 
   return (
     /* El id se conserva: `#admin-panel-root` es donde admin.css declara
-       todas las variables de la consola y donde index.css aísla el
-       apilamiento del panel respecto de la tienda. */
+       las variables de la consola y donde index.css aísla el apilamiento
+       del panel respecto de la tienda. */
     <div className="tv-shell" id="admin-panel-root">
-      {/* ---------------- RIEL (escritorio) ---------------- */}
-      <nav
-        className="tv-rail"
-        data-open={rielAbierto}
-        aria-label="Navegación principal"
-      >
-        <div className="tv-rail-head">
-          <img
-            src={logoUrl || '/logo.png'}
-            alt=""
-            className="w-8 h-8 rounded-lg object-contain flex-shrink-0"
-          />
-          {rielAbierto && (
-            <span className="font-display font-bold text-[15px] tracking-tight text-[var(--text-primary)] whitespace-nowrap">
-              Technoverse
-            </span>
-          )}
-        </div>
+      <div className="tv-main">
 
-        <div className="tv-rail-body">
-          {NAV_GROUPS.map((grupo, idx) => (
-            <div key={grupo.titulo}>
-              {rielAbierto
-                ? <div className="tv-group-label">{grupo.titulo}</div>
-                : idx > 0 && <div className="tv-group-rule" />}
-              {/* El botón va escrito aquí y no extraído a un componente
-                  a propósito: el proyecto no tiene `@types/react`
-                  instalado, así que TypeScript no aplica la excepción de
-                  `key` a los componentes propios y una lista de
-                  componentes con `key` no compila. Con elementos nativos
-                  no hay problema. */}
-              {grupo.items.filter(puedeVerModulo).map(item => {
-                const activo = item.id === moduloActivo.id;
-                return (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="tv-nav-item"
-                    data-active={activo || undefined}
-                    onClick={() => ir(item.id)}
-                    aria-current={activo ? 'page' : undefined}
-                  >
-                    <span className="tv-nav-icon"><item.icon className="w-[18px] h-[18px]" aria-hidden="true" /></span>
-                    <span className="tv-nav-label">{item.label}</span>
-                    <span className="tv-tip">{item.label}</span>
-                  </button>
-                );
-              })}
-            </div>
-          ))}
-        </div>
-
-        <div className="tv-rail-foot">
+        {/* ---------------- REGLETA ---------------- */}
+        <header className="tv-regleta">
+          {/* Lanzador del selector. En móvil es el único botón a la
+              izquierda, y por eso lleva el logo dentro: sustituye a la
+              cabecera de marca que ocupaba una fila entera. */}
           <button
             type="button"
-            className="tv-nav-item"
-            onClick={() => setRielAbierto(v => !v)}
-            aria-label={rielAbierto ? 'Contraer el menú' : 'Expandir el menú'}
+            className="tv-lanzador"
+            onClick={() => setSelectorAbierto(true)}
+            aria-label="Todos los módulos"
+            title="Todos los módulos  ·  Ctrl K"
           >
-            <span className="tv-nav-icon">
-              {rielAbierto ? <PanelLeftClose className="w-[18px] h-[18px]" /> : <PanelLeftOpen className="w-[18px] h-[18px]" />}
-            </span>
-            <span className="tv-nav-label">Contraer</span>
-            <span className="tv-tip">Expandir el menú</span>
+            {logoUrl
+              ? <img src={logoUrl} alt="" className="w-[19px] h-[19px] rounded object-contain" />
+              : <LayoutGrid className="w-[17px] h-[17px]" aria-hidden="true" />}
           </button>
-        </div>
-      </nav>
 
-      {/* ---------------- COLUMNA PRINCIPAL ---------------- */}
-      <div className="tv-main">
-        <header className="tv-topbar">
-          {/* En móvil el logo va aquí, porque el riel no existe. */}
-          <img
-            src={logoUrl || '/logo.png'}
-            alt=""
-            className="w-8 h-8 rounded-lg object-contain flex-shrink-0 lg:hidden"
-          />
+          {/* Nombre del módulo. Es el ÚNICO sitio del panel donde se
+              escribe: ni la miga de pan ni el título dentro del contenido
+              existen ya. Tocarlo abre el selector. */}
+          <button
+            type="button"
+            className="tv-modulo"
+            onClick={() => setSelectorAbierto(true)}
+            aria-haspopup="dialog"
+          >
+            <moduloActivo.icon className="w-[15px] h-[15px] flex-shrink-0" aria-hidden="true" />
+            <span className="tv-modulo-nombre">{moduloActivo.label}</span>
+            <ChevronDown className="w-3 h-3 flex-shrink-0 opacity-60" aria-hidden="true" />
+          </button>
 
-          <div className="tv-crumb">
-            <span className="hidden sm:inline">{grupoActivo}</span>
-            <span className="hidden sm:inline" aria-hidden="true">/</span>
-            <strong>{moduloActivo.label}</strong>
-          </div>
-
-          <div className="flex-1" />
+          <span className="tv-regleta-sep" aria-hidden="true" />
 
           <button
             type="button"
             className="tv-omni"
-            onClick={() => setBuscadorAbierto(true)}
+            onClick={() => setSelectorAbierto(true)}
             aria-label="Buscar un módulo"
           >
-            <Search className="w-4 h-4" aria-hidden="true" />
-            Buscar módulo
+            <Search className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
+            <span>Buscar…</span>
             <kbd className="tv-kbd">Ctrl K</kbd>
           </button>
 
-          <button
-            type="button"
-            className="tv-icon-btn min-[900px]:hidden"
-            onClick={() => setBuscadorAbierto(true)}
-            aria-label="Buscar un módulo"
-          >
-            <Search className="w-[18px] h-[18px]" />
-          </button>
+          {/* Hueco de las acciones de la pantalla activa. Lo llena cada
+              módulo por portal (ver `PageHead` en AdminKit). Va antes de
+              los botones fijos para que lo propio de la pantalla quede
+              más cerca del contenido que lo global. */}
+          <div className="tv-regleta-acciones" id="tv-regleta-acciones" />
 
-          {/* Mismo interruptor de tema que la tienda: comparten el estado a
-              través del módulo de tema, así que cambiarlo aquí también lo
-              cambia allá. */}
-          <BotonTema className="w-[34px] h-[34px]" />
+          <div className="tv-regleta-fijos">
+            <BotonTema className="tv-icon-btn" />
 
-          <button
-            type="button"
-            className="tv-icon-btn hidden sm:inline-flex"
-            onClick={onNavigateToStore}
-            aria-label="Ver la tienda"
-            title="Ver la tienda"
-          >
-            <Store className="w-[18px] h-[18px]" />
-          </button>
-
-          <div className="relative" ref={perfilRef}>
             <button
               type="button"
-              className="tv-avatar"
-              onClick={() => setMenuPerfil(v => !v)}
-              aria-haspopup="menu"
-              aria-expanded={menuPerfil}
-              aria-label="Cuenta"
+              className="tv-icon-btn hidden sm:inline-flex"
+              onClick={onNavigateToStore}
+              aria-label="Ver la tienda"
+              title="Ver la tienda"
             >
-              {iniciales}
+              <Store className="w-[17px] h-[17px]" />
             </button>
 
-            {menuPerfil && (
-              <div className="tv-menu" role="menu">
-                <div className="px-3 py-2.5">
-                  <div className="text-[13px] font-bold text-[var(--text-primary)] truncate">
-                    {currentUser?.name || 'Administrador'}
-                  </div>
-                  <div className="text-[11.5px] text-[var(--text-muted)] truncate">
-                    {currentUser?.email}
-                  </div>
-                  <div className="mt-2">
-                    <span className="tv-chip" data-tone="accent">{currentUser?.role || 'Administrador'}</span>
-                  </div>
-                  {/* Identifica qué versión del panel está corriendo AHORA en
-                      este dispositivo. Existe porque `next()` deja la
-                      actualización descargada pero solo la aplica en el
-                      próximo reinicio de la app — sin esto no había forma de
-                      confirmar si "ya cargó lo nuevo" o si todavía falta
-                      cerrar y volver a abrir. */}
-                  {otaStatus.isNative && (
-                    <div className="mt-2 pt-2 border-t border-[var(--border-color)]/50 text-[11px] text-[var(--text-muted)]">
-                      {otaStatus.updatePending ? (
-                        <span className="text-amber-500 font-bold">
-                          Hay una actualización descargada — cierre la app por completo y vuelva a abrirla para verla.
-                        </span>
-                      ) : otaStatus.currentVersion ? (
-                        <span>
-                          Versión: <span className="font-mono">{otaStatus.currentVersion}</span>
-                          {otaStatus.latestVersion && otaStatus.latestVersion === otaStatus.currentVersion && (
-                            <span className="text-emerald-500 font-bold"> · al día</span>
-                          )}
-                        </span>
-                      ) : (
-                        <span>Comprobando versión…</span>
-                      )}
+            <div className="relative" ref={perfilRef}>
+              <button
+                type="button"
+                className="tv-avatar"
+                onClick={() => setMenuPerfil(v => !v)}
+                aria-haspopup="menu"
+                aria-expanded={menuPerfil}
+                aria-label="Cuenta"
+              >
+                {iniciales}
+              </button>
+
+              {menuPerfil && (
+                <div className="tv-menu" role="menu">
+                  <div className="px-3 py-2.5">
+                    <div className="text-[13px] font-bold text-[var(--text-primary)] truncate">
+                      {currentUser?.name || 'Administrador'}
                     </div>
+                    <div className="text-[11.5px] text-[var(--text-muted)] truncate">
+                      {currentUser?.email}
+                    </div>
+                    <div className="mt-2">
+                      <span className="tv-chip" data-tone="accent">{currentUser?.role || 'Administrador'}</span>
+                    </div>
+                    {/* Identifica qué versión del panel está corriendo AHORA en
+                        este dispositivo. Existe porque `next()` deja la
+                        actualización descargada pero solo la aplica en el
+                        próximo reinicio de la app. */}
+                    {otaStatus.isNative && (
+                      <div className="mt-2 pt-2 border-t border-[var(--border-color)]/50 text-[11px] text-[var(--text-muted)]">
+                        {otaStatus.updatePending ? (
+                          <span className="text-[var(--tv-warn)] font-bold">
+                            Hay una actualización descargada — cierre la app por completo y vuelva a abrirla para verla.
+                          </span>
+                        ) : otaStatus.currentVersion ? (
+                          <span>
+                            Versión: <span className="font-mono">{otaStatus.currentVersion}</span>
+                            {otaStatus.latestVersion && otaStatus.latestVersion === otaStatus.currentVersion && (
+                              <span className="text-[var(--tv-ok)] font-bold"> · al día</span>
+                            )}
+                          </span>
+                        ) : (
+                          <span>Comprobando versión…</span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  {otaStatus.isNative && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="tv-menu-item"
+                      disabled={buscandoActualizacion}
+                      onClick={buscarActualizacion}
+                    >
+                      <RefreshCw className={`w-4 h-4 ${buscandoActualizacion ? 'animate-spin' : ''}`} />
+                      {buscandoActualizacion ? 'Buscando…' : 'Buscar actualización'}
+                    </button>
                   )}
+                  {/* Única vía de cambio de contraseña de todo el sistema —
+                      exige el token de seguridad de 4 dígitos como seguro
+                      maestro. No debe existir en ningún otro lugar. */}
+                  <button
+                    type="button"
+                    role="menuitem"
+                    className="tv-menu-item"
+                    onClick={() => { setMenuPerfil(false); setModalContrasenaAbierto(true); }}
+                  >
+                    <KeyRound className="w-4 h-4" /> Cambiar contraseña
+                  </button>
+                  {/* Cambiar PIN: control de acceso supremo. Nadie más ve este
+                      botón, y aunque lo viera, el servidor rechaza el cambio
+                      si el correo no calza. */}
+                  {esSupremo && (
+                    <button
+                      type="button"
+                      role="menuitem"
+                      className="tv-menu-item"
+                      onClick={() => { setMenuPerfil(false); setModalPinAbierto(true); }}
+                    >
+                      <Hash className="w-4 h-4" /> Cambiar PIN
+                    </button>
+                  )}
+                  <div className="tv-menu-sep" />
+                  <button type="button" role="menuitem" className="tv-menu-item" onClick={() => { setMenuPerfil(false); onNavigateToStore(); }}>
+                    <Store className="w-4 h-4" /> Ver la tienda
+                  </button>
+                  <button type="button" role="menuitem" className="tv-menu-item" onClick={() => ir('ciberseguridad')}>
+                    <Search className="w-4 h-4" /> Seguridad y acceso
+                  </button>
+                  <div className="tv-menu-sep" />
+                  <button type="button" role="menuitem" className="tv-menu-item" data-danger="true" onClick={() => { setMenuPerfil(false); onLogout(); }}>
+                    <LogOut className="w-4 h-4" /> Cerrar sesión
+                  </button>
                 </div>
-                {otaStatus.isNative && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="tv-menu-item"
-                    disabled={buscandoActualizacion}
-                    onClick={buscarActualizacion}
-                  >
-                    <RefreshCw className={`w-4 h-4 ${buscandoActualizacion ? 'animate-spin' : ''}`} />
-                    {buscandoActualizacion ? 'Buscando…' : 'Buscar actualización'}
-                  </button>
-                )}
-                {/* Única vía de cambio de contraseña de todo el sistema —
-                    exige el token de seguridad de 4 dígitos como seguro
-                    maestro. No debe existir en ningún otro lugar. */}
-                <button
-                  type="button"
-                  role="menuitem"
-                  className="tv-menu-item"
-                  onClick={() => { setMenuPerfil(false); setModalContrasenaAbierto(true); }}
-                >
-                  <KeyRound className="w-4 h-4" /> Cambiar contraseña
-                </button>
-                {/* Cambiar PIN: control de acceso supremo — ver esAdminSupremo
-                    arriba. Nadie más ve este botón, y aunque lo vieran, el
-                    servidor rechaza igual el cambio si el correo no calza. */}
-                {esSupremo && (
-                  <button
-                    type="button"
-                    role="menuitem"
-                    className="tv-menu-item"
-                    onClick={() => { setMenuPerfil(false); setModalPinAbierto(true); }}
-                  >
-                    <Hash className="w-4 h-4" /> Cambiar PIN
-                  </button>
-                )}
-                <div className="tv-menu-sep" />
-                <button type="button" role="menuitem" className="tv-menu-item" onClick={() => { setMenuPerfil(false); onNavigateToStore(); }}>
-                  <Store className="w-4 h-4" /> Ver la tienda
-                </button>
-                <button type="button" role="menuitem" className="tv-menu-item" onClick={() => ir('ciberseguridad')}>
-                  <Search className="w-4 h-4" /> Seguridad y acceso
-                </button>
-                <div className="tv-menu-sep" />
-                <button type="button" role="menuitem" className="tv-menu-item" data-danger="true" onClick={() => { setMenuPerfil(false); onLogout(); }}>
-                  <LogOut className="w-4 h-4" /> Cerrar sesión
-                </button>
-              </div>
-            )}
+              )}
+            </div>
           </div>
         </header>
+
+        {/* ---------------- CARPETAS ----------------
+            Hueco único para la fila de carpetas. Si el módulo activo no
+            tiene vistas, queda vacío y el CSS lo colapsa a cero: no se
+            reserva alto "por si acaso". */}
+        <div
+          className="tv-carpetas-bar"
+          id="tv-carpetas-slot"
+          /* Marca explícita para los navegadores sin `:has()`. No se puede
+             deducir del contenido porque los módulos con vistas propias
+             (Ciberseguridad, Cobros) las meten aquí por portal, después
+             de que este nodo se haya renderizado. */
+          data-con-carpetas={carpetasDeNav ? 'true' : undefined}
+        >
+          {carpetasDeNav && (
+            <Carpetas
+              items={carpetasDeNav.map(c => ({ id: c.tab, label: c.label, icon: c.icon }))}
+              activa={carpetaActiva?.tab || carpetasDeNav[0].tab}
+              onElegir={ir}
+            />
+          )}
+        </div>
+
+        {/* Pista de una línea: lo que antes era el subtítulo del bloque de
+            título. Se conserva porque explica qué se hace en la pantalla,
+            pero cuesta una línea y no un bloque de 85 px. */}
+        <div className="tv-pista" id="tv-pista-slot" />
 
         <main className="tv-scroll">
           <div className="tv-container">{children}</div>
         </main>
       </div>
 
-      {/* ---------------- DOCK (móvil / APK) ---------------- */}
-      <nav className="tv-dock flex lg:hidden" aria-label="Navegación">
-        {itemsDock.map(item => (
-          <button
-            key={item.id}
-            type="button"
-            className="tv-dock-item"
-            data-active={item.id === moduloActivo.id || undefined}
-            onClick={() => ir(item.id)}
-            aria-current={item.id === moduloActivo.id ? 'page' : undefined}
-          >
-            <item.icon className="w-[19px] h-[19px]" aria-hidden="true" />
-            <span>{item.short}</span>
-          </button>
-        ))}
+      {/* ---------------- DOCK (móvil / APK) ----------------
+          Se conserva tal cual: en un teléfono el pulgar necesita un ancla
+          fija abajo, y estos cuatro son los módulos que se abren varias
+          veces al día. El resto está en el selector, a un toque del
+          lanzador de la regleta. */}
+      <nav className="tv-dock flex lg:hidden" aria-label="Navegación rápida">
+        {itemsDock.map(item => {
+          const activo = resolverModulo(activeTab).id === item.id;
+          return (
+            <button
+              key={item.id}
+              type="button"
+              className="tv-dock-item"
+              data-active={activo || undefined}
+              onClick={() => ir(item.id)}
+              aria-current={activo ? 'page' : undefined}
+            >
+              <item.icon className="w-[19px] h-[19px]" aria-hidden="true" />
+              <span>{item.short}</span>
+            </button>
+          );
+        })}
         <button
           type="button"
           className="tv-dock-item"
-          data-active={hojaAbierta || hojaTieneActivo || undefined}
-          onClick={() => setHojaAbierta(v => !v)}
-          aria-expanded={hojaAbierta}
+          data-active={selectorAbierto || undefined}
+          onClick={() => setSelectorAbierto(true)}
+          aria-label="Todos los módulos"
         >
-          <MoreHorizontal className="w-[19px] h-[19px]" aria-hidden="true" />
-          <span>Más</span>
+          <LayoutGrid className="w-[19px] h-[19px]" aria-hidden="true" />
+          <span>Módulos</span>
         </button>
       </nav>
 
-      {hojaAbierta && (
-        <>
-          <div className="tv-sheet-backdrop lg:hidden" onClick={() => setHojaAbierta(false)} />
-          <div className="tv-sheet lg:hidden" role="dialog" aria-label="Más módulos">
-            <div className="tv-sheet-title">Todos los módulos</div>
-            {itemsHoja.map(item => (
-              <button
-                key={item.id}
-                type="button"
-                className="tv-sheet-item"
-                data-active={item.id === moduloActivo.id || undefined}
-                onClick={() => ir(item.id)}
-              >
-                <item.icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
-                {item.label}
-              </button>
-            ))}
-            <div className="tv-menu-sep" />
-            <button type="button" className="tv-sheet-item" onClick={() => { setHojaAbierta(false); onNavigateToStore(); }}>
-              <Store className="w-[18px] h-[18px] flex-shrink-0" /> Ver la tienda
-            </button>
-            <button type="button" className="tv-sheet-item" data-danger="true" onClick={() => { setHojaAbierta(false); onLogout(); }}>
-              <LogOut className="w-[18px] h-[18px] flex-shrink-0" /> Cerrar sesión
-            </button>
-          </div>
-        </>
-      )}
-
-      {buscadorAbierto && (
-        <BuscadorDeModulos
+      {selectorAbierto && (
+        <SelectorDeModulos
           onElegir={ir}
-          onCerrar={() => setBuscadorAbierto(false)}
+          onCerrar={() => setSelectorAbierto(false)}
           esSupremo={esSupremo}
+          tabActivo={activeTab}
         />
       )}
 
@@ -494,34 +431,42 @@ export default function AdminShell({
 }
 
 // ---------------------------------------------------------------------
-// BUSCADOR DE MÓDULOS
+// SELECTOR DE MÓDULOS
 // ---------------------------------------------------------------------
 
 /**
- * Va con teclado completo —flechas, Enter, Escape— porque es la forma
- * en que lo usa quien pasa el día dentro del panel: se abre con Ctrl+K,
- * se escriben tres letras y se entra sin soltar el teclado. Si hubiera
- * que terminar el gesto con el ratón, no ahorraría nada.
+ * La lista completa, buscable, de todo lo que hay en el panel.
+ *
+ * Sin consulta enseña los once módulos agrupados; al escribir busca
+ * TAMBIÉN dentro de las carpetas, así que "repuestos" sigue llevando
+ * directo a esa vista de Inventario aunque ya no sea un módulo suelto.
+ *
+ * Va con teclado completo —flechas, Enter, Escape— porque es la forma en
+ * que lo usa quien pasa el día dentro del panel: se abre con Ctrl+K, se
+ * escriben tres letras y se entra sin soltar el teclado. En móvil aparece
+ * anclado abajo, al alcance del pulgar.
  */
-function BuscadorDeModulos({
+function SelectorDeModulos({
   onElegir,
   onCerrar,
   esSupremo,
+  tabActivo,
 }: {
   onElegir: (tab: string) => void;
   onCerrar: () => void;
   esSupremo: boolean;
+  tabActivo: string;
 }) {
   const [consulta, setConsulta] = useState('');
   const [cursor, setCursor] = useState(0);
   const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Mismo filtro que en el resto de superficies: un módulo
-  // `soloAdminSupremo` no debe aparecer en el buscador para nadie más.
   const resultados = useMemo(
-    () => buscarModulos(consulta).filter(item => !item.soloAdminSupremo || esSupremo),
+    () => buscarModulos(consulta, esSupremo),
     [consulta, esSupremo]
   );
+
+  const moduloActual = useMemo(() => resolverModulo(tabActivo), [tabActivo]);
 
   useEffect(() => { inputRef.current?.focus(); }, []);
   useEffect(() => { setCursor(0); }, [consulta]);
@@ -536,9 +481,14 @@ function BuscadorDeModulos({
     } else if (e.key === 'Enter') {
       e.preventDefault();
       const elegido = resultados[cursor];
-      if (elegido) onElegir(elegido.id);
+      if (elegido) onElegir(elegido.tab);
     }
   };
+
+  // Sin consulta se agrupa por sección, que es como está organizado el
+  // negocio; con consulta se muestra el ranking plano, porque agrupar
+  // resultados de búsqueda esconde la mejor coincidencia entre títulos.
+  const hayConsulta = consulta.trim().length > 0;
 
   return (
     <div className="tv-palette-backdrop" onClick={onCerrar} role="presentation">
@@ -546,13 +496,14 @@ function BuscadorDeModulos({
         className="tv-palette"
         onClick={e => e.stopPropagation()}
         role="dialog"
-        aria-label="Buscar un módulo"
+        aria-label="Todos los módulos"
       >
         <div className="relative">
+          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" aria-hidden="true" />
           <input
             ref={inputRef}
             className="tv-palette-input"
-            placeholder="Buscar un módulo…  (taller, facturas, cupones…)"
+            placeholder="Buscar módulo o vista…  (repuestos, facturas, cupones…)"
             value={consulta}
             onChange={e => setConsulta(e.target.value)}
             onKeyDown={alTeclear}
@@ -570,23 +521,49 @@ function BuscadorDeModulos({
         <div className="tv-palette-list">
           {resultados.length === 0 ? (
             <div className="px-4 py-8 text-center text-[13px] text-[var(--text-muted)]">
-              Ningún módulo coincide con «{consulta}».
+              Nada coincide con «{consulta}».
             </div>
-          ) : (
-            resultados.map((item, i) => (
+          ) : hayConsulta ? (
+            resultados.map((r, i) => (
               <button
-                key={item.id}
+                key={r.tab}
                 type="button"
                 className="tv-palette-row"
                 data-cursor={i === cursor || undefined}
                 onMouseEnter={() => setCursor(i)}
-                onClick={() => onElegir(item.id)}
+                onClick={() => onElegir(r.tab)}
               >
-                <item.icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
-                {item.label}
-                {i === cursor && <CornerDownLeft className="w-3.5 h-3.5 ml-auto opacity-60" aria-hidden="true" />}
+                <r.icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
+                <span className="tv-palette-label">{r.label}</span>
+                {r.contexto && <span className="tv-palette-ctx">en {r.contexto}</span>}
+                {i === cursor && <CornerDownLeft className="w-3.5 h-3.5 ml-auto opacity-60 flex-shrink-0" aria-hidden="true" />}
               </button>
             ))
+          ) : (
+            NAV_GROUPS.map(grupo => {
+              const items = grupo.items.filter(i => !i.soloAdminSupremo || esSupremo);
+              if (items.length === 0) return null;
+              return (
+                <div key={grupo.titulo}>
+                  <div className="tv-palette-grupo">{grupo.titulo}</div>
+                  {items.map(item => (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className="tv-palette-row"
+                      data-actual={item.id === moduloActual.id || undefined}
+                      onClick={() => onElegir(item.id)}
+                    >
+                      <item.icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
+                      <span className="tv-palette-label">{item.label}</span>
+                      {item.carpetas && (
+                        <span className="tv-palette-ctx">{item.carpetas.length} vistas</span>
+                      )}
+                    </button>
+                  ))}
+                </div>
+              );
+            })
           )}
         </div>
       </div>
