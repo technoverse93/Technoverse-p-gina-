@@ -22,30 +22,40 @@
 // ---------------------------------------------------------------------
 // CÓMO SE RESUELVE
 // ---------------------------------------------------------------------
-// 1. REGLETA (36 px). Hace tres cosas y nada más: decir en qué módulo
-//    estás —y dejar cambiarlo—, buscar, y sostener las acciones de la
-//    pantalla actual. No hay miga de pan, ni título de módulo dentro del
-//    contenido, ni subtítulo en bloque: los tres decían lo mismo.
+// 1. REGLETA. Hace tres cosas y nada más: sostener las PESTAÑAS
+//    abiertas, sostener las acciones de la pantalla activa, y los cuatro
+//    botones fijos de cuenta. No hay miga de pan, ni título de módulo
+//    dentro del contenido, ni subtítulo en bloque: los tres decían lo
+//    mismo.
 //
-// 2. CARPETAS. Las vistas del módulo se dibujan UNA sola vez, pegadas al
-//    borde superior del contenido, con forma de carpeta de archivo. La
-//    fila la pinta este armazón —a partir de `adminNav` o de lo que
-//    registre la pantalla— así que es imposible que un módulo la
+// 2. PESTAÑAS. El panel se comporta como un navegador: arranca con una
+//    sola pestaña —el panel general— y se van abriendo las que hagan
+//    falta desde el «+». Cada una se cierra con su «×». Cambiar de
+//    pestaña NO desmonta el módulo, así que un cobro a medio llenar
+//    sigue ahí al volver. El estado vive en `usePestanas`.
+//
+// 3. CARPETAS. Las vistas DENTRO de un módulo se dibujan UNA sola vez,
+//    pegadas al borde superior del contenido, con forma de carpeta de
+//    archivo. La fila la pinta este armazón —a partir de `adminNav` o de
+//    lo que registre la pantalla— así que es imposible que un módulo la
 //    duplique por su cuenta.
 //
-// 3. MÓVIL Y APK. La regleta se reduce a una fila con el nombre del
-//    módulo al centro; tocarlo abre el selector como hoja inferior. Las
-//    carpetas se recorren con el dedo. El dock de cuatro módulos se
-//    conserva: en un teléfono el pulgar necesita un ancla fija.
+// 4. MÓVIL Y APK. La tira de pestañas se desliza con el dedo y el «+»
+//    queda fijo al borde derecho, siempre alcanzable. El selector se
+//    abre anclado abajo y NO lleva campo de búsqueda: enfocar un input
+//    levanta el teclado de Android y tapa la lista que se venía a leer.
+//    El dock de cuatro módulos se conserva: en un teléfono el pulgar
+//    necesita un ancla fija.
 // =====================================================================
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import {
   Search, Store, LogOut, LayoutGrid,
-  X, CornerDownLeft, RefreshCw, KeyRound, Hash, ChevronDown,
+  X, Plus, RefreshCw, KeyRound, Hash,
 } from 'lucide-react';
-import { NAV_GROUPS, NAV_ITEMS, DOCK_IDS, resolverModulo, resolverCarpeta, buscarModulos } from './adminNav';
+import { NAV_GROUPS, NAV_ITEMS, DOCK_IDS, resolverModulo, resolverCarpeta } from './adminNav';
 import type { AdminNavItem } from './adminNav';
+import { PESTANA_INICIAL } from './usePestanas';
 import { Carpetas } from './AdminKit';
 import type { User } from '../../types';
 import { useOtaStatus, verificarActualizacionManual } from '../../mobile/otaUpdater';
@@ -63,6 +73,14 @@ interface AdminShellProps {
   onNavigateToStore: () => void;
   logoUrl?: string;
   children: React.ReactNode;
+  /** Módulos abiertos, en orden. Los pinta la barra de pestañas. */
+  pestanasAbiertas: string[];
+  /** El módulo que se está viendo. */
+  pestanaActiva: string;
+  /** Cerrar una pestaña con su «×». */
+  onCerrarPestana: (modulo: string) => void;
+  /** Ref del contenedor con scroll, para recordar la posición por pestaña. */
+  scrollRef?: React.RefObject<HTMLElement | null>;
 }
 
 export default function AdminShell({
@@ -73,6 +91,10 @@ export default function AdminShell({
   onNavigateToStore,
   logoUrl,
   children,
+  pestanasAbiertas,
+  pestanaActiva,
+  onCerrarPestana,
+  scrollRef,
 }: AdminShellProps) {
   const [menuPerfil, setMenuPerfil] = useState(false);
   const [selectorAbierto, setSelectorAbierto] = useState(false);
@@ -201,32 +223,16 @@ export default function AdminShell({
               : <LayoutGrid className="w-[17px] h-[17px]" aria-hidden="true" />}
           </button>
 
-          {/* Nombre del módulo. Es el ÚNICO sitio del panel donde se
-              escribe: ni la miga de pan ni el título dentro del contenido
-              existen ya. Tocarlo abre el selector. */}
-          <button
-            type="button"
-            className="tv-modulo"
-            onClick={() => setSelectorAbierto(true)}
-            aria-haspopup="dialog"
-          >
-            <moduloActivo.icon className="w-[15px] h-[15px] flex-shrink-0" aria-hidden="true" />
-            <span className="tv-modulo-nombre">{moduloActivo.label}</span>
-            <ChevronDown className="w-3 h-3 flex-shrink-0 opacity-60" aria-hidden="true" />
-          </button>
-
-          <span className="tv-regleta-sep" aria-hidden="true" />
-
-          <button
-            type="button"
-            className="tv-omni"
-            onClick={() => setSelectorAbierto(true)}
-            aria-label="Buscar un módulo"
-          >
-            <Search className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />
-            <span>Buscar…</span>
-            <kbd className="tv-kbd">Ctrl K</kbd>
-          </button>
+          {/* Las pestañas abiertas. Sustituyen al nombre único de módulo:
+              ahora puede haber varios abiertos a la vez y hay que poder
+              ver cuáles y saltar entre ellos de un toque. */}
+          <BarraDePestanas
+            abiertas={pestanasAbiertas}
+            activa={pestanaActiva}
+            onActivar={ir}
+            onCerrar={onCerrarPestana}
+            onNueva={() => setSelectorAbierto(true)}
+          />
 
           {/* Hueco de las acciones de la pantalla activa. Lo llena cada
               módulo por portal (ver `PageHead` en AdminKit). Va antes de
@@ -374,7 +380,12 @@ export default function AdminShell({
             pero cuesta una línea y no un bloque de 85 px. */}
         <div className="tv-pista" id="tv-pista-slot" />
 
-        <main className="tv-scroll">
+        {/* El scroll vive aquí y es UNO solo, compartido por todas las
+            pestañas. Por eso la posición se guarda y se restaura por
+            pestaña (ver `useScrollPorPestana`): sin eso, volver a una
+            pestaña donde se había bajado veinte filas devolvía siempre al
+            principio de la lista. */}
+        <main className="tv-scroll" ref={scrollRef as React.RefObject<HTMLElement>}>
           <div className="tv-container">{children}</div>
         </main>
       </div>
@@ -419,6 +430,7 @@ export default function AdminShell({
           onCerrar={() => setSelectorAbierto(false)}
           esSupremo={esSupremo}
           tabActivo={activeTab}
+          abiertas={pestanasAbiertas}
         />
       )}
 
@@ -431,64 +443,145 @@ export default function AdminShell({
 }
 
 // ---------------------------------------------------------------------
+// BARRA DE PESTAÑAS
+// ---------------------------------------------------------------------
+
+/**
+ * Las pestañas abiertas, más el botón de abrir una nueva.
+ *
+ * Se comporta como la barra de un navegador: cada pestaña lleva su
+ * icono, su nombre y una «×» para cerrarla; el «+» de la derecha abre el
+ * selector de módulos.
+ *
+ * En un teléfono la tira se desliza con el dedo y el «+» queda FIJO
+ * pegado al borde derecho, encima de la tira. Si el «+» viajara dentro
+ * del desplazamiento, con cinco pestañas abiertas habría que arrastrar
+ * hasta el final para poder abrir la sexta.
+ */
+function BarraDePestanas({
+  abiertas,
+  activa,
+  onActivar,
+  onCerrar,
+  onNueva,
+}: {
+  abiertas: string[];
+  activa: string;
+  onActivar: (modulo: string) => void;
+  onCerrar: (modulo: string) => void;
+  onNueva: () => void;
+}) {
+  const tiraRef = useRef<HTMLDivElement | null>(null);
+
+  // Al activar una pestaña que está fuera de vista —porque se abrió desde
+  // el selector con la tira desplazada— se la trae al centro. Va en
+  // `useLayoutEffect` para que el ajuste ocurra antes de pintar y no se
+  // vea el salto.
+  useLayoutEffect(() => {
+    const tira = tiraRef.current;
+    if (!tira) return;
+    const nodo = tira.querySelector<HTMLElement>(`[data-modulo="${CSS.escape(activa)}"]`);
+    nodo?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [activa, abiertas.length]);
+
+  return (
+    <div className="tv-tabs-zona">
+      <div className="tv-tabs" ref={tiraRef} role="tablist" aria-label="Pestañas abiertas">
+        {abiertas.map(modulo => {
+          const item = resolverModulo(modulo);
+          const esActiva = modulo === activa;
+          // El panel general no se cierra: es el suelo del panel, la
+          // pestaña a la que se cae al cerrar cualquier otra.
+          const cerrable = modulo !== PESTANA_INICIAL;
+          return (
+            <div
+              key={modulo}
+              className="tv-tab"
+              data-modulo={modulo}
+              data-activa={esActiva || undefined}
+            >
+              <button
+                type="button"
+                className="tv-tab-btn"
+                role="tab"
+                aria-selected={esActiva}
+                onClick={() => onActivar(modulo)}
+                title={item.label}
+              >
+                <item.icon className="w-[14px] h-[14px] flex-shrink-0" aria-hidden="true" />
+                <span className="tv-tab-label">{item.label}</span>
+              </button>
+              {cerrable && (
+                <button
+                  type="button"
+                  className="tv-tab-x"
+                  onClick={() => onCerrar(modulo)}
+                  aria-label={`Cerrar ${item.label}`}
+                  title={`Cerrar ${item.label}`}
+                >
+                  <X className="w-3 h-3" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+          );
+        })}
+      </div>
+
+      <button
+        type="button"
+        className="tv-tab-nueva"
+        onClick={onNueva}
+        aria-label="Abrir otro módulo"
+        title="Abrir otro módulo  ·  Ctrl K"
+      >
+        <Plus className="w-4 h-4" aria-hidden="true" />
+      </button>
+    </div>
+  );
+}
+
+// ---------------------------------------------------------------------
 // SELECTOR DE MÓDULOS
 // ---------------------------------------------------------------------
 
 /**
- * La lista completa, buscable, de todo lo que hay en el panel.
+ * La lista de todo lo que se puede abrir en una pestaña.
  *
- * Sin consulta enseña los once módulos agrupados; al escribir busca
- * TAMBIÉN dentro de las carpetas, así que "repuestos" sigue llevando
- * directo a esa vista de Inventario aunque ya no sea un módulo suelto.
+ * ---------------------------------------------------------------------
+ * SIN CAMPO DE BÚSQUEDA — Y ES A PROPÓSITO
+ * ---------------------------------------------------------------------
+ * Antes esta lista abría con un input enfocado. En un teléfono Android
+ * —comprobado en Samsung— enfocar un input levanta el teclado al
+ * instante, y el teclado se come más de media pantalla: quien solo
+ * quería tocar "Inventario" se encontraba con la lista tapada y tenía
+ * que cerrar el teclado antes de poder elegir.
  *
- * Va con teclado completo —flechas, Enter, Escape— porque es la forma en
- * que lo usa quien pasa el día dentro del panel: se abre con Ctrl+K, se
- * escriben tres letras y se entra sin soltar el teclado. En móvil aparece
- * anclado abajo, al alcance del pulgar.
+ * Los módulos son once. Once filas se leen de un vistazo; no hay nada
+ * que buscar. El campo costaba más de lo que resolvía, así que no está.
+ *
+ * ---------------------------------------------------------------------
+ * SIN CONTADORES NI AVISOS JUNTO AL NOMBRE
+ * ---------------------------------------------------------------------
+ * Tampoco hay «Inventario · 5 vistas» ni «Alertas (3)». Un número al
+ * lado del nombre en el menú obliga a leer la fila entera para saber a
+ * dónde lleva, y encima el número hay que calcularlo antes de dibujar el
+ * menú. Los datos son del módulo: se ven al entrar, que es donde
+ * significan algo.
  */
 function SelectorDeModulos({
   onElegir,
   onCerrar,
   esSupremo,
   tabActivo,
+  abiertas,
 }: {
   onElegir: (tab: string) => void;
   onCerrar: () => void;
   esSupremo: boolean;
   tabActivo: string;
+  abiertas: string[];
 }) {
-  const [consulta, setConsulta] = useState('');
-  const [cursor, setCursor] = useState(0);
-  const inputRef = useRef<HTMLInputElement | null>(null);
-
-  const resultados = useMemo(
-    () => buscarModulos(consulta, esSupremo),
-    [consulta, esSupremo]
-  );
-
   const moduloActual = useMemo(() => resolverModulo(tabActivo), [tabActivo]);
-
-  useEffect(() => { inputRef.current?.focus(); }, []);
-  useEffect(() => { setCursor(0); }, [consulta]);
-
-  const alTeclear = (e: React.KeyboardEvent) => {
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      setCursor(c => Math.min(c + 1, resultados.length - 1));
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      setCursor(c => Math.max(c - 1, 0));
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      const elegido = resultados[cursor];
-      if (elegido) onElegir(elegido.tab);
-    }
-  };
-
-  // Sin consulta se agrupa por sección, que es como está organizado el
-  // negocio; con consulta se muestra el ranking plano, porque agrupar
-  // resultados de búsqueda esconde la mejor coincidencia entre títulos.
-  const hayConsulta = consulta.trim().length > 0;
 
   return (
     <div className="tv-palette-backdrop" onClick={onCerrar} role="presentation">
@@ -496,21 +589,13 @@ function SelectorDeModulos({
         className="tv-palette"
         onClick={e => e.stopPropagation()}
         role="dialog"
-        aria-label="Todos los módulos"
+        aria-label="Abrir un módulo"
       >
-        <div className="relative">
-          <Search className="w-4 h-4 absolute left-4 top-1/2 -translate-y-1/2 text-[var(--text-muted)] pointer-events-none" aria-hidden="true" />
-          <input
-            ref={inputRef}
-            className="tv-palette-input"
-            placeholder="Buscar módulo o vista…  (repuestos, facturas, cupones…)"
-            value={consulta}
-            onChange={e => setConsulta(e.target.value)}
-            onKeyDown={alTeclear}
-          />
+        <div className="tv-palette-head">
+          <span>Abrir en una pestaña</span>
           <button
             type="button"
-            className="tv-icon-btn absolute right-2 top-1/2 -translate-y-1/2"
+            className="tv-icon-btn"
             onClick={onCerrar}
             aria-label="Cerrar"
           >
@@ -519,52 +604,34 @@ function SelectorDeModulos({
         </div>
 
         <div className="tv-palette-list">
-          {resultados.length === 0 ? (
-            <div className="px-4 py-8 text-center text-[13px] text-[var(--text-muted)]">
-              Nada coincide con «{consulta}».
-            </div>
-          ) : hayConsulta ? (
-            resultados.map((r, i) => (
-              <button
-                key={r.tab}
-                type="button"
-                className="tv-palette-row"
-                data-cursor={i === cursor || undefined}
-                onMouseEnter={() => setCursor(i)}
-                onClick={() => onElegir(r.tab)}
-              >
-                <r.icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
-                <span className="tv-palette-label">{r.label}</span>
-                {r.contexto && <span className="tv-palette-ctx">en {r.contexto}</span>}
-                {i === cursor && <CornerDownLeft className="w-3.5 h-3.5 ml-auto opacity-60 flex-shrink-0" aria-hidden="true" />}
-              </button>
-            ))
-          ) : (
-            NAV_GROUPS.map(grupo => {
-              const items = grupo.items.filter(i => !i.soloAdminSupremo || esSupremo);
-              if (items.length === 0) return null;
-              return (
-                <div key={grupo.titulo}>
-                  <div className="tv-palette-grupo">{grupo.titulo}</div>
-                  {items.map(item => (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="tv-palette-row"
-                      data-actual={item.id === moduloActual.id || undefined}
-                      onClick={() => onElegir(item.id)}
-                    >
-                      <item.icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
-                      <span className="tv-palette-label">{item.label}</span>
-                      {item.carpetas && (
-                        <span className="tv-palette-ctx">{item.carpetas.length} vistas</span>
-                      )}
-                    </button>
-                  ))}
-                </div>
-              );
-            })
-          )}
+          {NAV_GROUPS.map(grupo => {
+            const items = grupo.items.filter(i => !i.soloAdminSupremo || esSupremo);
+            if (items.length === 0) return null;
+            return (
+              <div key={grupo.titulo}>
+                <div className="tv-palette-grupo">{grupo.titulo}</div>
+                {items.map(item => (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="tv-palette-row"
+                    data-actual={item.id === moduloActual.id || undefined}
+                    onClick={() => onElegir(item.id)}
+                  >
+                    <item.icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
+                    <span className="tv-palette-label">{item.label}</span>
+                    {/* Lo único que se marca es si YA está abierto, para
+                        que quede claro que tocarlo salta a esa pestaña en
+                        vez de abrir otra igual. No es un contador ni un
+                        aviso: es el estado de la propia pestaña. */}
+                    {abiertas.includes(item.id) && (
+                      <span className="tv-palette-abierta" aria-label="Ya abierto">abierto</span>
+                    )}
+                  </button>
+                ))}
+              </div>
+            );
+          })}
         </div>
       </div>
     </div>

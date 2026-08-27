@@ -46,13 +46,33 @@ import type { LucideIcon } from 'lucide-react';
  * `setNodo` compara antes de escribir, así que un render extra no
  * dispara otro render.
  */
+/**
+ * Si la pestaña que contiene a este componente es la que se está viendo.
+ *
+ * ---------------------------------------------------------------------
+ * POR QUÉ HACE FALTA
+ * ---------------------------------------------------------------------
+ * Con pestañas, los módulos de las pestañas de fondo siguen MONTADOS —de
+ * eso se trata: es lo que conserva un cobro a medio llenar—. Pero seguir
+ * montado significa que sus portales seguían escribiendo: la regleta
+ * acababa con las acciones de Cobros y las de Inventario juntas, y la
+ * línea de pista mostraba los dos subtítulos pegados uno detrás de otro.
+ *
+ * El armazón envuelve cada pestaña con este contexto, y los portales de
+ * las pestañas de fondo no se abren. Por defecto es `true` para que
+ * cualquier pantalla usada fuera de una pestaña siga funcionando igual.
+ */
+export const ContextoPestanaActiva = React.createContext(true);
+
 function usePortalEn(id: string): HTMLElement | null {
+  const activa = React.useContext(ContextoPestanaActiva);
   const [nodo, setNodo] = React.useState<HTMLElement | null>(null);
   React.useEffect(() => {
-    const encontrado = typeof document !== 'undefined' ? document.getElementById(id) : null;
+    const encontrado =
+      activa && typeof document !== 'undefined' ? document.getElementById(id) : null;
     setNodo(prev => (prev === encontrado ? prev : encontrado));
   });
-  return nodo;
+  return activa ? nodo : null;
 }
 
 // ---------------------------------------------------------------------
