@@ -48,7 +48,7 @@ interface Props {
   onNavigate: (tab: string) => void;
 }
 
-export default function AdminDashboard({
+function AdminDashboard({
   products, orders, repairs, clients, isMounted, onNavigate,
 }: Props) {
   // Va ARRIBA del todo, antes del `return` del esqueleto: es un hook, y
@@ -355,6 +355,13 @@ export default function AdminDashboard({
     </div>
   );
 }
+
+// El panel general es la ÚNICA pestaña que nunca se cierra: siempre está
+// montado. Sin `memo`, cada tecla en un formulario de cualquier OTRA
+// pestaña volvía a ejecutar sus gráficas de Recharts y sus cálculos de
+// agregados, aunque `products`/`orders`/`repairs`/`clients` no hubieran
+// cambiado.
+export default React.memo(AdminDashboard);
 
 function estadoATono(estado: string): 'ok' | 'alert' | 'accent' | undefined {
   if (estado === 'Completado') return 'ok';

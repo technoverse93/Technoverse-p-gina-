@@ -102,7 +102,7 @@ function usePagination(items, itemsPerPage = 10) {
   return { page, setPage, totalPages, startIndex, visibleItems, itemsPerPage };
 }
 
-export default function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'productos', onTabChange }: InventarioControlProps) {
+function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'productos', onTabChange }: InventarioControlProps) {
   const toast = useToast();
   const [activeSubTab, setActiveSubTab] = useState<'productos' | 'movimientos' | 'reportes' | 'repuestos' | 'insumos'>(defaultSubTab);
 
@@ -1331,6 +1331,17 @@ if (!m) return null;
   ), [products, activeSubTab, categoryFilter, brandFilter, searchQuery]);
   const { page: prodPage, setPage: setProdPage, totalPages: prodTotal, startIndex: prodStart, visibleItems: paginatedProducts } = usePagination(filteredProducts, 10);
 
+  // La bitácora completa se cargaba de golpe en una sola tabla —cientos
+  // de filas con un negocio de un año de operación—, así que el montaje
+  // de esta pestaña, y con pestañas cualquier vuelta a ella desde otro
+  // módulo, pintaba todas esas filas a la vez. Más reciente primero:
+  // es lo que se consulta después de un ajuste, no la entrada más vieja.
+  const movementsOrdenados = useMemo(
+    () => [...movements].filter(Boolean).sort((a, b) => new Date(b.timestamp).getTime() - new Date(a.timestamp).getTime()),
+    [movements]
+  );
+  const { page: movPage, setPage: setMovPage, totalPages: movTotal, startIndex: movStart, visibleItems: paginatedMovements } = usePagination(movementsOrdenados, 20);
+
   return (
     <div className="space-y-6 animate-in fade-in">
       {/* AQUÍ IBAN EL TÍTULO Y LAS PESTAÑAS, y los dos se fueron a la
@@ -2330,7 +2341,7 @@ if (!m) return null;
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-white/5">
-                  {movements.filter(Boolean).map((m, mIdx) => (
+                  {paginatedMovements.map((m, mIdx) => (
                     <tr key={m.id || `mov-${mIdx}`} className="hover:bg-[var(--bg-surface)] transition font-mono text-[11px]">
                       <td className="p-3 text-[var(--text-secondary)]">{new Date(m.timestamp).toLocaleString()}</td>
                       <td className="p-3 text-[var(--text-primary)] truncate max-w-[200px]" title={m.productName}>{m.productName}</td>
@@ -2354,12 +2365,24 @@ if (!m) return null;
                       </td>
                     </tr>
                   ))}
-                  {movements.length === 0 && (
+                  {movementsOrdenados.length === 0 && (
                     <tr key="empty-movements-row"><td colSpan={6} className="p-8 text-center text-[var(--text-secondary)] italic">No hay movimientos registrados.</td></tr>
                   )}
                 </tbody>
               </table>
             </div>
+            {movTotal > 1 && (
+              <div className="flex items-center justify-between p-4 border-t border-[var(--border-color)]/80">
+                <span className="text-xs text-[var(--text-muted)]">
+                  Mostrando {movStart + 1} a {Math.min(movStart + 20, movementsOrdenados.length)} de {movementsOrdenados.length}
+                </span>
+                <div className="flex gap-2">
+                  <button onClick={() => setMovPage(p => Math.max(1, p - 1))} disabled={movPage === 1} className="px-3 py-1 bg-[var(--border-color)] text-[var(--text-secondary)] rounded-lg text-xs font-bold disabled:opacity-40">Anterior</button>
+                  <span className="px-3 py-1 text-xs font-bold text-[var(--text-primary)]">{movPage} / {movTotal}</span>
+                  <button onClick={() => setMovPage(p => Math.min(movTotal, p + 1))} disabled={movPage === movTotal} className="px-3 py-1 bg-[var(--border-color)] text-[var(--text-secondary)] rounded-lg text-xs font-bold disabled:opacity-40">Siguiente</button>
+                </div>
+              </div>
+            )}
           </div>
         </div>
       )}
@@ -2691,20 +2714,25 @@ if (!m) return null;
 
                   {/* Preview Table */}
                   <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
-                    <div className="overflow-x-auto max-h-[400px]">
+                    {/* `max-h` sin `overflow-y` no recorta nada: el
+                        contenido simplemente sigue creciendo por debajo
+                        de los 400px. Con una importación de cientos de
+                        filas la caja se estiraba fuera de la pantalla en
+                        vez de quedarse quieta con scroll propio. */}
+                    <div className="overflow-x-auto overflow-y-auto max-h-[400px]">
                       <table className="w-full text-left text-xs border-collapse">
                         <thead>
-                          <tr className="bg-[var(--bg-surface)] border-b border-[var(--border-color)] text-[var(--text-muted)] font-black uppercase tracking-wider text-[10px]">
-                            <th className="p-4 w-10 text-center">Sel.</th>
-                            <th className="p-4 w-16">Imagen</th>
-                            <th className="p-4 w-36">SKU</th>
-                            <th className="p-4">Nombre del Producto</th>
-                            <th className="p-4 w-32">Categoría</th>
-                            <th className="p-4 w-28">Marca</th>
-                            <th className="p-4 w-28 text-right">Costo (Dist.)</th>
-                            <th className="p-4 w-24 text-right">Stock</th>
-                            <th className="p-4 w-28 text-center">Garantía</th>
-                            <th className="p-4 w-12 text-center">Acción</th>
+                          <tr className="text-[var(--text-muted)] font-black uppercase tracking-wider text-[10px]">
+                            <th className="p-4 w-10 text-center sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">Sel.</th>
+                            <th className="p-4 w-16 sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">Imagen</th>
+                            <th className="p-4 w-36 sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">SKU</th>
+                            <th className="p-4 sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">Nombre del Producto</th>
+                            <th className="p-4 w-32 sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">Categoría</th>
+                            <th className="p-4 w-28 sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">Marca</th>
+                            <th className="p-4 w-28 text-right sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">Costo (Dist.)</th>
+                            <th className="p-4 w-24 text-right sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">Stock</th>
+                            <th className="p-4 w-28 text-center sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">Garantía</th>
+                            <th className="p-4 w-12 text-center sticky top-0 z-10 bg-[var(--bg-surface)] border-b border-[var(--border-color)]">Acción</th>
                           </tr>
                         </thead>
                         <tbody className="divide-y divide-white/5">
@@ -3032,3 +3060,12 @@ if (!m) return null;
     </div>
   );
 }
+
+// Envuelto en `memo`: cada tecla en un formulario de OTRA pestaña
+// (Cobros, Configuración…) volvía a ejecutar este componente entero —
+// 3000 líneas, con la tabla de productos paginada y las listas de
+// movimientos e importación dentro— aunque ninguno de sus datos hubiera
+// cambiado. Con `currentUser`/`onDataChanged`/`onTabChange` ya
+// estabilizados en `AdminPanel`, el memo por fin tiene algo contra qué
+// comparar.
+export default React.memo(InventarioControl);

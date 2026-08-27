@@ -174,7 +174,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                     : 'rounded-bl-[5px] bg-[var(--bubble-in)] text-[var(--bubble-in-ink)]'
                 }`}>
                   {msg.imageUrl && (
-                    <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-lg max-w-full mb-1.5 max-h-64 object-cover" loading="lazy" />
+                    <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-lg max-w-full mb-1.5 max-h-64 object-cover" loading="lazy" decoding="async" />
                   )}
                   {msg.text && <p className="tv-break whitespace-pre-wrap leading-relaxed">{msg.text}</p>}
                 </div>

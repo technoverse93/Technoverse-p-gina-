@@ -69,7 +69,7 @@ function buildWhatsAppUrl(phone: string, message: string): string {
   return `https://wa.me/${withCountry}?text=${encodeURIComponent(message)}`;
 }
 
-export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.com', onRepairUpdated }: TallerKanbanProps) {
+function TallerKanban({ activeUserEmail = 'tecnico@technoverse.com', onRepairUpdated }: TallerKanbanProps) {
   const toast = useToast();
   const [repairs, setRepairs] = useState<RepairOrder[]>([]);
   const [products, setProducts] = useState<Product[]>([]);
@@ -96,6 +96,12 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
    * era lo que costaba 230 px permanentes.
    */
   const [panelAbierto, setPanelAbierto] = useState<'consulta' | 'ingreso' | null>(null);
+  // Columnas que el técnico expandió a propósito para ver todas sus
+  // tarjetas. Sin este tope, una columna con muchas reparaciones activas
+  // montaba cada tarjeta —con su selector de estado y su botón de
+  // WhatsApp— de golpe, aunque el scroll interno solo dejara ver seis.
+  const [columnasExpandidas, setColumnasExpandidas] = useState<Set<string>>(new Set());
+  const TARJETAS_POR_COLUMNA = 25;
   const [newCustomerName, setNewCustomerName] = useState('');
   const [newCustomerEmail, setNewCustomerEmail] = useState('');
   const [newCustomerPhone, setNewCustomerPhone] = useState('');
@@ -963,6 +969,9 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
         <div className="flex gap-3 overflow-x-auto pb-3 items-start">
           {KANBAN_COLUMNS.map(col => {
             const colRepairs = repairs.filter(r => r.status === col);
+            const expandida = columnasExpandidas.has(col);
+            const colRepairsVisibles = expandida ? colRepairs : colRepairs.slice(0, TARJETAS_POR_COLUMNA);
+            const ocultas = colRepairs.length - colRepairsVisibles.length;
             return (
               <div 
                 key={col} 
@@ -993,7 +1002,7 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                       Sin registros
                     </div>
                   ) : (
-                    colRepairs.map(rep => (
+                    colRepairsVisibles.map(rep => (
                       <div
                         key={rep.id}
                         onClick={() => handleSelectRepairForEdit(rep)}
@@ -1050,6 +1059,15 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
                         </div>
                       </div>
                     ))
+                  )}
+                  {ocultas > 0 && (
+                    <button
+                      type="button"
+                      onClick={() => setColumnasExpandidas(prev => new Set(prev).add(col))}
+                      className="w-full text-center text-[10px] font-bold text-sky-400 hover:text-sky-300 py-2 border border-dashed border-[var(--border-color)]/50 rounded-lg transition"
+                    >
+                      Ver {ocultas} más
+                    </button>
                   )}
                 </div>
               </div>
@@ -1414,3 +1432,8 @@ export default function TallerKanban({ activeUserEmail = 'tecnico@technoverse.co
     </div>
   );
 }
+
+// Mismo motivo que en `InventarioControl`: sin `memo`, el tablero
+// Kanban completo —todas las reparaciones de todas las columnas—
+// volvía a ejecutarse por cada tecla ajena en otra pestaña.
+export default React.memo(TallerKanban);

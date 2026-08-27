@@ -227,7 +227,7 @@ function minutosRestantes(hasta?: string | null): number {
   return ms > 0 ? Math.ceil(ms / 60000) : 0;
 }
 
-export default function CyberSecurityPanel({
+function CyberSecurityPanel({
   auditLog,
   currentUserEmail,
   onAuditLogChanged,
@@ -2153,3 +2153,8 @@ export default function CyberSecurityPanel({
     </div>
   );
 }
+
+// Mismo motivo que en los otros módulos pesados: sin `memo`, las diez
+// carpetas de Ciberseguridad y sus listas (dispositivos, bloqueos,
+// bitácora) se volvían a ejecutar por cada tecla ajena en otra pestaña.
+export default React.memo(CyberSecurityPanel);
