@@ -26,8 +26,13 @@ export function MarketingRow({ title, products, onProductClick, onAddToCart, get
         </button>
       </div>
       
-      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-6">
-        {products.slice(0, 4).map(prod => (
+      {/* Misma retícula que el catálogo de abajo, para que la tarjeta mida
+          igual en las dos zonas. Antes esta fila iba de 1 a 4 columnas con
+          `gap-6`: en escritorio sus tarjetas quedaban del doble de ancho que
+          las del catálogo justo debajo, y en teléfono ocupaban el ancho
+          completo de la pantalla cada una. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+        {products.slice(0, 6).map(prod => (
           <ProductCard 
             key={prod.id} 
             prod={prod} 

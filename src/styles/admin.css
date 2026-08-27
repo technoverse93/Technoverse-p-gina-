@@ -30,9 +30,9 @@
   --tv-gap-sm: 12px;
   --tv-gap-lg: 28px;
 
-  /* Anchos del riel de navegación. */
-  --tv-rail-w: 72px;
-  --tv-rail-w-open: 252px;
+  /* Alto de la barra de píldoras (navegación). Se usa también para
+     calcular el hueco superior del contenido, así nada queda debajo. */
+  --tv-pills-h: 54px;
 
   /* Alturas de las barras. Se usan también como padding del contenido,
      así nada queda nunca debajo de una barra fija. */
@@ -113,159 +113,129 @@
 }
 
 /* ---------------------------------------------------------------------
-   RIEL DE NAVEGACIÓN (escritorio)
+   TARJETERO — BARRA DE PÍLDORAS
+   ---------------------------------------------------------------------
+   Sustituye al riel lateral del diseño anterior.
+
+   POR QUÉ SE FUE EL RIEL: ocupaba 72px fijos (252px abierto) de ancho a
+   cambio de una lista plana de quince nombres, y no decía NADA sobre el
+   estado de cada módulo — había que entrar a Taller para saber si había
+   algo en taller. La barra de píldoras cuesta 54px de alto una sola vez,
+   devuelve todo el ancho a la mesa de trabajo y, sobre todo, cada
+   píldora lleva su contador en vivo: se ve desde cualquier pantalla que
+   hay 2 chats sin leer y 3 artículos en última unidad.
+
+   Funciona igual en las tres plataformas: en escritorio las píldoras se
+   reparten en las líneas que hagan falta; en tableta y teléfono la fila
+   se desplaza de lado con el dedo. En teléfono se conserva ADEMÁS el
+   dock inferior, porque son dos trabajos distintos — el dock da acceso
+   con el pulgar a los cuatro módulos del día a día, y las píldoras dan
+   la lista completa con su estado.
    --------------------------------------------------------------------- */
 
-.tv-rail {
-  display: none;
-  flex-direction: column;
+.tv-pills {
+  display: flex;
   flex-shrink: 0;
-  width: var(--tv-rail-w);
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px;
   background: var(--tv-panel);
-  border-right: 1px solid var(--tv-hairline);
-  transition: width 0.22s cubic-bezier(0.16, 1, 0.3, 1);
-  overflow: hidden;
-}
-
-@media (min-width: 1024px) {
-  .tv-rail { display: flex; }
-}
-
-.tv-rail[data-open='true'] { width: var(--tv-rail-w-open); }
-
-.tv-rail-head {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: var(--tv-topbar-h);
-  padding: 0 16px;
   border-bottom: 1px solid var(--tv-hairline);
-  flex-shrink: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
 }
 
-.tv-rail-body {
-  flex: 1;
-  overflow-y: auto;
-  overflow-x: hidden;
-  padding: 12px 12px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 4px;
+/* La barra de navegación no lleva scrollbar visible: roba alto al único
+   elemento que ya se mide en píxeles contados. */
+.tv-pills::-webkit-scrollbar { height: 0; }
+
+/* En escritorio hay ancho de sobra: las píldoras se acomodan en varias
+   líneas en vez de esconderse detrás de un desplazamiento lateral que
+   nadie descubre con el ratón. */
+@media (min-width: 1024px) {
+  .tv-pills {
+    flex-wrap: wrap;
+    overflow-x: visible;
+    padding: 10px 20px;
+  }
 }
 
-/* La barra del riel no necesita scrollbar visible: se ve sucia y roba
-   ancho al único elemento que ya es estrecho a propósito. */
-.tv-rail-body::-webkit-scrollbar { width: 0; }
-
-.tv-rail-foot {
-  border-top: 1px solid var(--tv-hairline);
-  padding: 10px 12px;
-  flex-shrink: 0;
-}
-
-.tv-group-label {
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.09em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  padding: 14px 10px 6px;
-  white-space: nowrap;
-}
-
-/* Separador para el riel cerrado: cuando no hay texto, el grupo se
-   comunica con una línea. Sin esto los doce iconos se leen como una
-   lista plana sin jerarquía. */
-.tv-group-rule {
-  height: 1px;
-  background: var(--tv-hairline);
-  margin: 10px 8px 6px;
-}
-
-.tv-nav-item {
-  position: relative;
-  display: flex;
+.tv-pill {
+  display: inline-flex;
   align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 9px 10px;
-  border-radius: var(--tv-radius-sm);
+  gap: 7px;
+  flex-shrink: 0;
+  min-width: 0;
+  height: 34px;
+  padding: 0 13px;
+  border-radius: 999px;
+  border: 1px solid var(--tv-hairline);
+  background: var(--tv-panel);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
-  text-align: left;
   white-space: nowrap;
   cursor: pointer;
-  transition: background 0.15s ease, color 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
 }
 
-.tv-nav-item:hover { background: var(--bg-sunken); color: var(--text-primary); }
-
-.tv-nav-item[data-active='true'] {
-  background: var(--tv-accent-soft);
-  color: var(--tv-accent);
-}
-
-/* La marca de "estás aquí" es una barra al borde del riel, no un borde
-   completo alrededor del botón: se lee de un vistazo incluso con el
-   riel cerrado y no engorda el elemento. */
-.tv-nav-item[data-active='true']::before {
-  content: '';
-  position: absolute;
-  left: -12px;
-  top: 50%;
-  transform: translateY(-50%);
-  width: 3px;
-  height: 20px;
-  border-radius: 0 3px 3px 0;
-  background: var(--tv-accent);
-}
-
-.tv-nav-icon {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  width: 26px;
-  height: 26px;
-  flex-shrink: 0;
-}
-
-.tv-rail[data-open='false'] .tv-nav-item { justify-content: center; padding: 9px 0; }
-.tv-rail[data-open='false'] .tv-nav-label { display: none; }
-.tv-rail[data-open='false'] .tv-group-label { display: none; }
-.tv-rail[data-open='true'] .tv-group-rule { display: none; }
-
-/* Etiqueta flotante del riel cerrado. Es un tooltip propio y no el
-   atributo `title` del navegador porque ese tarda un segundo largo en
-   aparecer: con doce iconos sin texto, esa espera vuelve inservible la
-   navegación. */
-.tv-nav-item .tv-tip {
-  position: absolute;
-  left: calc(100% + 10px);
-  top: 50%;
-  transform: translateY(-50%) translateX(-4px);
-  padding: 5px 10px;
-  border-radius: 8px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--tv-hairline);
-  box-shadow: var(--float-shadow);
+.tv-pill:hover {
   color: var(--text-primary);
-  font-size: 12px;
-  font-weight: 600;
-  opacity: 0;
-  pointer-events: none;
-  white-space: nowrap;
-  z-index: 60;
-  transition: opacity 0.14s ease, transform 0.14s ease;
+  border-color: var(--tv-accent-line);
 }
 
-.tv-rail[data-open='false'] .tv-nav-item:hover .tv-tip {
-  opacity: 1;
-  transform: translateY(-50%) translateX(0);
+.tv-pill[data-active='true'] {
+  background: var(--tv-accent);
+  border-color: transparent;
+  color: var(--accent-ink);
 }
 
-.tv-rail[data-open='true'] .tv-nav-item .tv-tip { display: none; }
+.tv-pill-label {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Contador en vivo. Es la razón de ser de esta barra, así que tiene que
+   leerse sin esfuerzo a 10px: de ahí la tipografía monoespaciada y el
+   fondo propio en vez de ir suelto al lado del nombre. */
+.tv-pill-count {
+  flex-shrink: 0;
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  padding: 3px 6px;
+  border-radius: 999px;
+  background: var(--bg-sunken);
+  color: var(--text-secondary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-pill-count[data-tone='alert'] {
+  background: var(--tv-danger-soft);
+  color: var(--tv-danger);
+}
+
+/* Sobre la píldora activa el contador va tintado con la propia tinta del
+   acento. `color-mix` y no un blanco fijo: en tema oscuro el acento es
+   verde claro y su tinta es casi negra, así que un velo blanco lo dejaba
+   ilegible. Mezclando contra `--accent-ink` funciona en los dos temas. */
+.tv-pill[data-active='true'] .tv-pill-count,
+.tv-pill[data-active='true'] .tv-pill-count[data-tone='alert'] {
+  background: color-mix(in srgb, var(--accent-ink) 18%, transparent);
+  color: var(--accent-ink);
+}
+
+.tv-pill-sep {
+  flex-shrink: 0;
+  width: 1px;
+  height: 20px;
+  margin: 0 3px;
+  background: var(--tv-hairline);
+}
 
 /* ---------------------------------------------------------------------
    BARRA SUPERIOR
@@ -682,14 +652,38 @@
   line-height: 1.5;
 }
 
+/* ---------------------------------------------------------------------
+   TARJETA — TARJETERO
+   ---------------------------------------------------------------------
+   La tarjeta es la unidad de todo el panel en este diseño, así que
+   define tres cosas: superficie ELEVADA (un punto por encima del lienzo,
+   no al ras), sombra mínima —la justa para despegarla— y esquinas de
+   14px. La jerarquía no la da el color sino el TAMAÑO y el tono del
+   borde: `data-tone` marca lo que pide acción, `data-featured` marca lo
+   que es el dato principal de la pantalla.
+   --------------------------------------------------------------------- */
+
 .tv-card {
-  background: var(--tv-panel);
+  background: var(--bg-elevated);
   border: 1px solid var(--tv-hairline);
   border-radius: var(--tv-radius);
-  /* Sin sombra por defecto. Doce tarjetas con sombra en una pantalla es
-     lo que producía la sensación de "saturado": la jerarquía la da la
-     línea de 1px, no un halo debajo de cada caja. */
+  box-shadow: var(--shadow-sm);
+  min-width: 0;
 }
+
+/* La tarjeta protagonista: un velo del verde de marca que se disuelve en
+   diagonal. Es el único degradado del panel, a propósito — si lo llevara
+   más de una tarjeta por pantalla dejaría de señalar nada. */
+.tv-card[data-featured='true'] {
+  border-color: var(--gold-line);
+  background-image: linear-gradient(to bottom right, var(--gold-soft), transparent 62%);
+}
+
+/* Tonos de urgencia. Solo el borde: teñir el fondo entero de rojo hace
+   ilegible el número, que es justamente lo que hay que leer. */
+.tv-card[data-tone='alert'] { border-color: var(--tv-danger); }
+.tv-card[data-tone='warn'] { border-color: var(--tv-accent-line); }
+.tv-card[data-tone='ok'] { border-color: var(--tv-ok); }
 
 .tv-card-head {
   display: flex;
@@ -747,6 +741,90 @@
 
 .tv-stat[data-alert='true'] { border-color: var(--tv-danger); }
 .tv-stat[data-alert='true'] .tv-stat-value { color: var(--tv-danger); }
+
+/* La métrica protagonista del mosaico: mismo componente, número mayor y
+   el velo de marca. Ocupa dos columnas por dos filas, así que el número
+   puede crecer sin desbordar. */
+.tv-stat-hero {
+  display: flex;
+  flex-direction: column;
+  padding: 18px 20px;
+}
+
+.tv-stat-hero .tv-stat-value {
+  font-size: 34px;
+  color: var(--tv-accent);
+}
+
+@media (min-width: 1024px) { .tv-stat-hero .tv-stat-value { font-size: 40px; } }
+
+.tv-stat-hero[data-alert='true'] .tv-stat-value { color: var(--tv-danger); }
+
+/* Métrica pulsable: se comporta como tarjeta, no como botón del sistema.
+   `text-align` y `font` se fijan porque un <button> hereda los del
+   navegador y descuadraba la alineación respecto de sus vecinas. */
+.tv-stat-link {
+  text-align: left;
+  font: inherit;
+  color: inherit;
+  cursor: pointer;
+  transition: border-color 0.15s ease;
+}
+
+.tv-stat-link:hover { border-color: var(--tv-accent-line); }
+.tv-stat-link:active { transform: scale(0.99); }
+
+/* Desglose al pie de la tarjeta protagonista (costo de repuestos,
+   regalías, margen). `margin-top: auto` lo empuja al fondo para que
+   quede pegado al borde inferior aunque la tarjeta mida dos filas. */
+.tv-stat-breakdown {
+  margin-top: auto;
+  padding-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.tv-stat-breakdown > div {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+  font-size: 12px;
+}
+
+.tv-stat-breakdown > div > span {
+  color: var(--text-muted);
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-stat-breakdown > div > b {
+  flex-shrink: 0;
+  font-weight: 700;
+  color: var(--text-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+.tv-stat-breakdown > div > b > em {
+  font-style: normal;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+
+/* El renglón del margen se separa con una línea: es el resultado, no un
+   costo más de la lista. */
+.tv-stat-breakdown > div[data-total='true'] {
+  border-top: 1px solid var(--gold-line);
+  padding-top: 8px;
+  margin-top: 2px;
+}
+
+.tv-stat-breakdown > div[data-total='true'] > b { color: var(--tv-accent); }
+.tv-stat-breakdown > div[data-total='true'] > b[data-negative='true'] { color: var(--tv-danger); }
 
 .tv-chip {
   display: inline-flex;
@@ -923,6 +1001,109 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
 .tv-stack { display: flex; flex-direction: column; gap: var(--tv-gap); }
 .tv-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
+/* ---------------------------------------------------------------------
+   TARJETERO — MOSAICO POR URGENCIA
+   ---------------------------------------------------------------------
+   La idea central del diseño: el TAMAÑO de la tarjeta es su urgencia.
+   Una rejilla plana de seis métricas iguales obliga a leer las seis para
+   descubrir cuál importa hoy; aquí lo que pide acción ocupa el doble de
+   sitio y se ve antes de leer nada.
+
+   Las medidas van en columnas y no en píxeles para que el mismo mosaico
+   sirva en las tres plataformas: 2 columnas en teléfono, 3 en tableta,
+   4 en escritorio. Una tarjeta `data-span="2"` ocupa dos columnas en
+   cualquiera de los tres tamaños, así que su proporción se mantiene.
+   --------------------------------------------------------------------- */
+
+.tv-bento {
+  display: grid;
+  gap: var(--tv-gap-sm);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  grid-auto-flow: dense;
+}
+
+/* Mismo motivo que en `.tv-grid > *`: sin esto un monto largo en colones
+   empuja su tarjeta más allá de la columna y descuadra el mosaico. */
+.tv-bento > * { min-width: 0; }
+
+@media (min-width: 640px) { .tv-bento { grid-template-columns: repeat(3, minmax(0, 1fr)); } }
+@media (min-width: 1024px) { .tv-bento { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: var(--tv-gap); } }
+
+.tv-bento > [data-span='2'] { grid-column: span 2; }
+
+/* La tarjeta protagonista ocupa dos columnas siempre, y además dos filas
+   a partir de tableta — en teléfono estirarla a dos filas la dejaría
+   medio vacía, porque solo hay dos columnas en total. */
+.tv-bento > [data-span='hero'] { grid-column: span 2; }
+@media (min-width: 640px) { .tv-bento > [data-span='hero'] { grid-row: span 2; } }
+
+/* ---------------------------------------------------------------------
+   TARJETERO — ACCIONES RÁPIDAS
+   ---------------------------------------------------------------------
+   La fila de abajo del panel general: lo que se hace varias veces al día,
+   a un toque, sin pasar por el menú. Objetivo táctil de 60px de alto
+   real, pensado para usarse de pie con el teléfono en una mano.
+   --------------------------------------------------------------------- */
+
+.tv-quick {
+  display: grid;
+  gap: var(--tv-gap-sm);
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.tv-quick > * { min-width: 0; }
+
+@media (min-width: 768px) { .tv-quick { grid-template-columns: repeat(4, minmax(0, 1fr)); } }
+
+.tv-quick-btn {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  gap: 3px;
+  min-height: 60px;
+  padding: 11px 13px;
+  border-radius: var(--tv-radius);
+  border: 1px solid var(--tv-hairline);
+  background: var(--bg-elevated);
+  box-shadow: var(--shadow-sm);
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.tv-quick-btn:hover { border-color: var(--tv-accent-line); }
+.tv-quick-btn:active { transform: scale(0.985); }
+
+.tv-quick-title {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  width: 100%;
+  min-width: 0;
+  font-size: 13px;
+  font-weight: 700;
+  color: var(--text-primary);
+}
+
+/* El nombre se recorta; el icono nunca se encoge. Sin esto, "Entrada de
+   stock" en una columna de teléfono deformaba el botón. */
+.tv-quick-title span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.tv-quick-sub {
+  font-size: 11px;
+  color: var(--text-muted);
+  max-width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* Respeta a quien pidió menos movimiento en el sistema operativo. */
 @media (prefers-reduced-motion: reduce) {
   #admin-panel-root *,
@@ -963,9 +1144,10 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
   white-space: nowrap;
 }
 
-/* El nombre del módulo en el riel: una línea, recortada. Con el riel
-   abierto a 252 px un nombre largo rompía la alineación de los iconos. */
-.tv-nav-label {
+/* El nombre del módulo en su píldora: una línea, recortada. Sin esto un
+   nombre largo ("Reportes de stock") estira la píldora y descuadra la
+   fila entera de la barra de navegación. */
+.tv-pill-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
