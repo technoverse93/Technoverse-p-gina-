@@ -172,7 +172,7 @@
    completa, con su propio desplazamiento lateral. */
 @media (max-width: 899px) {
   .tv-regleta { padding-top: 4px; padding-bottom: 4px; row-gap: 4px; }
-  .tv-modulo { flex: 1 1 auto; max-width: none; }
+  .tv-tabs-zona { flex: 1 1 auto; min-width: 0; }
   /* La especificidad extra es a propósito: la regla base de
      `.tv-regleta-acciones` está declarada más abajo en este archivo y,
      a igualdad de peso, ganaría por orden de aparición. */
@@ -205,45 +205,189 @@
 
 .tv-lanzador:hover { background: var(--bg-sunken); color: var(--text-primary); }
 
-/* Nombre del módulo activo. Único sitio del panel donde se escribe. */
-.tv-modulo {
+/* ---------------------------------------------------------------------
+   PESTAÑAS
+   ---------------------------------------------------------------------
+   El panel se comporta como un navegador: arranca con UNA pestaña —el
+   panel general— y se abren las que hagan falta desde el «+». Sustituyen
+   al nombre único de módulo que había aquí antes.
+
+   Por qué pestañas y no un menú: el trabajo real salta constantemente
+   entre pantallas —se está cobrando y hay que mirar una existencia, o se
+   está en el taller y entra un chat— y con una sola pantalla a la vez,
+   cada salto perdía lo que se llevara escrito. Ahora no se pierde: el
+   módulo sigue montado detrás.
+   --------------------------------------------------------------------- */
+
+.tv-tabs-zona {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+  /* Base CERO, no `auto`. Con base `auto` la zona reclama el ancho de sus
+     pestañas antes de repartir, así que en 375 px dos pestañas abiertas
+     ya empujaban los botones fijos —tema, tienda, avatar— a una segunda
+     línea, y la regleta pasaba de 41 a 89 px. Con base cero la zona toma
+     lo que sobra y la tira se desplaza por dentro, que es justo para lo
+     que tiene su propio scroll. */
+  flex: 1 1 0;
+}
+
+.tv-tabs {
+  display: flex;
+  align-items: center;
+  gap: 3px;
+  min-width: 0;
+  overflow-x: auto;
+  overscroll-behavior-x: contain;
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none;
+  /* El desplazamiento de la tira se aísla del resto: sin esto, arrastrar
+     las pestañas en un teléfono arrastraba también la página entera. */
+  scroll-snap-type: x proximity;
+}
+
+.tv-tabs::-webkit-scrollbar { height: 0; }
+
+.tv-tab {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  min-width: 0;
-  max-width: 46vw;
+  flex-shrink: 0;
   height: 28px;
-  padding: 0 9px;
+  max-width: 190px;
+  padding-left: 9px;
+  padding-right: 4px;
   border-radius: var(--tv-radius-sm);
   border: 1px solid transparent;
   background: transparent;
-  color: var(--text-primary);
+  color: var(--text-secondary);
+  scroll-snap-align: start;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.tv-tab:hover { background: var(--bg-sunken); color: var(--text-primary); }
+
+.tv-tab[data-activa] {
+  background: var(--tv-accent-soft);
+  border-color: var(--tv-accent-line);
+  color: var(--tv-accent);
+}
+
+.tv-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  height: 100%;
+  border: 0;
+  background: none;
+  padding: 0;
+  color: inherit;
   font-family: var(--font-display);
-  font-size: 13.5px;
+  font-size: 12.5px;
   font-weight: 700;
   letter-spacing: -0.01em;
   cursor: pointer;
-  transition: background 0.15s ease;
 }
 
-.tv-modulo:hover { background: var(--bg-sunken); }
-
-.tv-modulo-nombre {
+.tv-tab-label {
   min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tv-regleta-sep {
-  width: 1px;
-  height: 18px;
+/* La «×». Solo aparece al pasar el ratón o en la pestaña activa: con una
+   × visible en todas, la tira se lee como una fila de botones de cerrar
+   en vez de como pestañas. En pantalla táctil no hay «pasar el ratón»,
+   así que ahí se ven todas (ver el bloque de `hover: none` más abajo). */
+.tv-tab-x {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 19px;
+  height: 19px;
+  margin-left: 3px;
   flex-shrink: 0;
-  background: var(--tv-hairline);
-  display: none;
+  border: 0;
+  border-radius: 5px;
+  background: transparent;
+  color: inherit;
+  cursor: pointer;
+  opacity: 0;
+  transition: opacity 0.12s ease, background 0.12s ease;
 }
 
-@media (min-width: 900px) { .tv-regleta-sep { display: block; } }
+.tv-tab:hover .tv-tab-x,
+.tv-tab[data-activa] .tv-tab-x { opacity: 0.65; }
+
+.tv-tab-x:hover {
+  opacity: 1;
+  background: var(--tv-danger-soft);
+  color: var(--tv-danger);
+}
+
+/* En pantalla táctil no existe el estado intermedio de "pasar por
+   encima": o se toca o no. Una × que solo aparece al pasar el ratón es
+   una × que en un teléfono no aparece nunca. */
+@media (hover: none) {
+  .tv-tab-x { opacity: 0.55; }
+}
+
+/* El «+». Va FUERA de la tira que se desplaza, pegado a su derecha: si
+   viajara dentro, con cinco pestañas abiertas habría que arrastrar hasta
+   el final para poder abrir la sexta. */
+.tv-tab-nueva {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex-shrink: 0;
+  border-radius: var(--tv-radius-sm);
+  border: 1px dashed var(--tv-hairline);
+  background: transparent;
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+}
+
+.tv-tab-nueva:hover {
+  background: var(--tv-accent-soft);
+  border-color: var(--tv-accent-line);
+  border-style: solid;
+  color: var(--tv-accent);
+}
+
+/* ---------------------------------------------------------------------
+   EL CONTENIDO DE CADA PESTAÑA
+   ---------------------------------------------------------------------
+   Las pestañas que no se están viendo siguen montadas —con su estado
+   intacto— pero salen del flujo con `hidden`. `display: none` es lo más
+   barato que existe: el navegador no les calcula posición, no las pinta
+   y no las compone. Lleva `!important` porque cualquier utilidad de
+   `display` que traiga el módulo por dentro ganaría por especificidad y
+   dejaría dos pestañas dibujadas una encima de otra.
+   --------------------------------------------------------------------- */
+
+.tv-tab-panel[hidden] { display: none !important; }
+
+/* La entrada de la pestaña que se activa. Solo `opacity`: es de las
+   pocas propiedades que el navegador anima en el compositor, sin volver
+   a calcular posiciones ni repintar. Sustituye a la animación de
+   framer-motion que había, que además desmontaba el módulo entero. */
+.tv-tab-panel:not([hidden]) {
+  animation: tv-entra-pestana 0.13s ease-out;
+}
+
+@keyframes tv-entra-pestana {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .tv-tab-panel:not([hidden]) { animation: none; }
+}
 
 /* Hueco de las acciones de la pantalla activa. `min-width: 0` + scroll
    propio: un módulo con cuatro botones no puede empujar el avatar fuera
@@ -445,52 +589,85 @@
 
 .tv-icon-btn:hover { background: var(--bg-sunken); color: var(--text-primary); }
 
-/* Disparador del buscador de módulos. En escritorio es una caja con
-   pista de teclado; en móvil se reduce a un icono, porque ahí no hay
-   atajo de teclado que anunciar y el ancho hace falta para el título. */
-.tv-omni {
-  display: none;
-  align-items: center;
-  gap: 8px;
-  height: 34px;
-  padding: 0 10px;
-  min-width: 220px;
-  border-radius: var(--tv-radius-sm);
-  background: var(--bg-sunken);
-  border: 1px solid var(--tv-hairline);
-  color: var(--text-muted);
-  font-size: 12.5px;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.tv-omni:hover { border-color: var(--tv-accent-line); }
-
-@media (min-width: 900px) {
-  .tv-omni { display: flex; }
-}
-
 /* ---------------------------------------------------------------------
    CONVIVENCIA CON LA REGLA TÁCTIL GLOBAL
    ---------------------------------------------------------------------
-   index.css impone `display: inline-flex !important` y un mínimo de
-   40/44px a TODO `button:has(> svg.lucide)`, para garantizar objetivos
-   táctiles cómodos en la tienda. Es una regla correcta y no se toca.
+   index.css impone `min-width: 40px !important`, `min-height: 40px
+   !important` y `display: inline-flex !important` a TODO
+   `button:has(> svg.lucide)`, para garantizar objetivos táctiles cómodos
+   en la tienda. Es una regla correcta y no se toca.
 
-   El efecto colateral es que ese `!important` también gana sobre el
-   `display: none` de aquí abajo, y el buscador de módulos —que no es un
-   botón de icono, sino un campo con etiqueta y atajo de teclado—
-   aparecía en el teléfono, donde no cabe: se comía la miga de pan y
-   dejaba el nombre del módulo en "P…".
+   El efecto colateral cae de lleno sobre las pestañas: los tres botones
+   de una pestaña —el título, la «×» y el «+»— llevan un icono lucide
+   como hijo directo, así que la regla los estira a 40 px de ancho
+   MÍNIMO. Una «×» de 40 px de ancho dentro de una pestaña de 190 px se
+   come un quinto de la pestaña, y con cuatro pestañas abiertas la tira
+   ya no cabe en un teléfono.
 
    No basta con repetir `!important`: entre dos declaraciones marcadas,
    primero decide la ESPECIFICIDAD, y `button:has(> svg.lucide)` puntúa
    (0,1,2) —`:has()` hereda la especificidad de su argumento más
    específico— contra el (0,1,0) de una clase suelta. Por eso se ancla al
-   id del panel, que sube a (1,1,0) y gana sin ambigüedad. */
-#admin-panel-root .tv-omni { display: none !important; }
-@media (min-width: 900px) {
-  #admin-panel-root .tv-omni { display: flex !important; min-width: 220px !important; }
+   id del panel, que sube a (1,1,0) y gana sin ambigüedad.
+
+   Lo que sí se respeta es el ESPÍRITU de la regla: en pantalla táctil la
+   pestaña entera mide 40 px de alto y la «×» 32 px de ancho, que son
+   objetivos cómodos de verdad. Lo que se rechaza es el mínimo de ANCHO,
+   que en una barra de pestañas no significa nada. */
+
+#admin-panel-root .tv-tab-btn,
+#admin-panel-root .tv-tab-x,
+#admin-panel-root .tv-tab-nueva {
+  min-width: 0 !important;
+}
+
+#admin-panel-root .tv-tab-btn { min-height: 0 !important; }
+
+#admin-panel-root .tv-tab-x {
+  min-height: 0 !important;
+  width: 20px !important;
+  height: 20px !important;
+}
+
+#admin-panel-root .tv-tab-nueva {
+  min-height: 0 !important;
+  width: 28px !important;
+  height: 28px !important;
+}
+
+/* En pantalla táctil la pestaña crece para que el dedo acierte. */
+@media (pointer: coarse) {
+  #admin-panel-root .tv-tab { height: 40px; }
+  #admin-panel-root .tv-tab-x { width: 30px !important; height: 30px !important; }
+  #admin-panel-root .tv-tab-nueva { width: 38px !important; height: 38px !important; }
+}
+
+/* ---------------------------------------------------------------------
+   PESTAÑAS COMPACTAS EN TELÉFONO
+   ---------------------------------------------------------------------
+   En 375 px, tres pestañas con su nombre completo no caben, y la tira se
+   quedaba desplazada a medio nombre: se leía "eneral" donde decía "Panel
+   general". Un fragmento de palabra se lee como una avería, no como una
+   pestaña que sigue más allá.
+
+   Así que en teléfono solo la pestaña ABIERTA lleva nombre; las demás se
+   reducen a su icono, que es lo que hace Chrome en móvil. Con eso caben
+   cinco o seis sin desplazar nada, y el nombre completo está siempre
+   donde importa: en la que se está viendo.
+
+   La «×» sigue el mismo criterio. Para cerrar otra pestaña primero se
+   toca —lo que además evita el cierre por error, que en un dedo sobre
+   una × de 30 px pegada a otra pestaña pasa constantemente. */
+@media (max-width: 640px) {
+  #admin-panel-root .tv-tab:not([data-activa]) .tv-tab-label,
+  #admin-panel-root .tv-tab:not([data-activa]) .tv-tab-x {
+    display: none;
+  }
+  #admin-panel-root .tv-tab:not([data-activa]) {
+    padding-left: 8px;
+    padding-right: 8px;
+  }
+  #admin-panel-root .tv-tab[data-activa] { max-width: 60vw; }
 }
 
 /* Misma causa, otro efecto: la regla táctil sube a 40px (44px en
@@ -500,17 +677,6 @@
    de pelearse con ella. */
 .tv-btn { height: 40px; }
 @media (pointer: coarse) { .tv-btn { height: 44px; } }
-
-.tv-kbd {
-  margin-left: auto;
-  padding: 2px 6px;
-  border-radius: 6px;
-  border: 1px solid var(--tv-hairline);
-  background: var(--tv-panel);
-  font-family: var(--font-mono);
-  font-size: 10px;
-  color: var(--text-muted);
-}
 
 .tv-avatar {
   display: inline-flex;
@@ -601,20 +767,43 @@
   max-height: min(70dvh, 520px);
 }
 
-.tv-palette-input {
-  width: 100%;
-  height: 50px;
-  padding: 0 16px;
-  background: transparent;
-  border: none;
+/* Cabecera del selector. Ocupa el sitio del campo de búsqueda que había
+   aquí, y que se retiró a propósito: enfocar un input en Android levanta
+   el teclado al instante y se come más de media pantalla, así que quien
+   solo quería tocar "Inventario" se encontraba tapada justo la lista que
+   venía a leer. Los módulos son once; no hay nada que buscar. */
+.tv-palette-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  height: 46px;
+  padding: 0 8px 0 16px;
   border-bottom: 1px solid var(--tv-hairline);
+  font-family: var(--font-display);
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
-  font-size: 15px;
-  font-weight: 500;
+  flex-shrink: 0;
 }
 
-.tv-palette-input:focus { outline: none; }
-.tv-palette-input::placeholder { color: var(--text-muted); }
+/* Marca de "ya está abierto en una pestaña". No es un contador ni un
+   aviso: es el estado de la pestaña, y es lo que explica que tocar la
+   fila salte a ella en vez de abrir otra igual. */
+.tv-palette-abierta {
+  margin-left: auto;
+  flex-shrink: 0;
+  padding: 2px 7px;
+  border-radius: 999px;
+  background: var(--tv-accent-soft);
+  color: var(--tv-accent);
+  font-family: var(--font-mono);
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
 
 .tv-palette-list {
   overflow-y: auto;

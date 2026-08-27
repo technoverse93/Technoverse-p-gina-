@@ -1,5 +1,9 @@
-import { motion, AnimatePresence } from "motion/react";
-import React, { useState, useEffect, useLayoutEffect, useRef, Suspense, lazy } from 'react';
+// La animación de entrada por módulo se retiró junto con el
+// `<motion.div key={activeTab}>`: con pestañas, el módulo ya no se
+// desmonta al salir, así que no hay entrada ni salida que animar. El
+// cambio de pestaña se resuelve con una transición de opacidad en CSS,
+// que corre en el compositor y no cuesta trabajo en el hilo principal.
+import React, { Activity, useState, useEffect, useLayoutEffect, useMemo, useRef, Suspense, lazy } from 'react';
 import { PaginatedTbody } from './PaginationHelper';
 import { CustomSelect } from './CustomSelect';
 import {
@@ -27,6 +31,8 @@ import AdminShell from './admin/AdminShell';
 import AdminDashboard from './admin/AdminDashboard';
 import { PageHead, Card, Btn, Field, Chip, TableShell, Empty } from './admin/AdminKit';
 import { resolverModulo } from './admin/adminNav';
+import { usePestanas, useScrollPorPestana } from './admin/usePestanas';
+import { ContextoPestanaActiva } from './admin/AdminKit';
 import { esAdminSupremo } from '../utils/securityPin';
 
 // Cargados solo cuando se visita su pestaña: reduce el JS que el A12 tiene
@@ -86,8 +92,15 @@ export default function AdminPanel({
   const [isProfileDropdownOpen, setIsProfileDropdownOpen] = useState(false);
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
 
-  // Navigation sidebar
-  const [activeTab, setActiveTab] = useState<string>(() => {
+  /**
+   * El módulo con el que arranca la sesión.
+   *
+   * Se lee UNA vez, de la dirección, para que un enlace compartido o un
+   * marcador abra lo que promete. Si no hay ruta, se entra por el panel
+   * general: el panel NO abre módulos por su cuenta, igual que un
+   * navegador no abre pestañas solo.
+   */
+  const tabInicial = useMemo(() => {
     const path = window.location.pathname;
     if (path.startsWith('/admin/')) {
       const tab = path.replace('/admin/', '');
@@ -102,7 +115,15 @@ export default function AdminPanel({
       return tab || 'dashboard';
     }
     return 'dashboard';
-  });
+  }, []);
+
+  // Navegación por pestañas. `activeTab` se conserva como nombre porque
+  // es lo que consume medio archivo; ahora sale del motor de pestañas y
+  // ya no es un estado suelto.
+  const pestanas = usePestanas(tabInicial);
+  const activeTab = pestanas.tabActivo;
+  const scrollRef = useRef<HTMLElement | null>(null);
+  useScrollPorPestana(pestanas.activa, scrollRef);
 
 
   
@@ -961,48 +982,37 @@ export default function AdminPanel({
   const isOwner = currentUser?.role === 'Dueño';
 
   /**
-   * Cambia de módulo y deja la URL apuntando a él.
+  /**
+   * Abre un módulo en una pestaña —o salta a la suya si ya estaba
+   * abierta— y deja la dirección apuntando a él.
    *
-   * Lo segundo importa: `activeTab` se inicializa leyendo /admin/<tab>,
-   * así que sin actualizar la dirección, recargar la página siempre
-   * devolvía al panel general y un enlace compartido no abría nunca el
-   * módulo que se quería enseñar. Se usa `replaceState` y no `pushState`
-   * para no llenar el historial: quien pulsa "atrás" espera salir del
-   * panel, no recorrer los doce módulos que visitó.
+   * Lo segundo importa: la pestaña inicial se decide leyendo
+   * /admin/<tab>, así que sin actualizar la dirección, recargar la
+   * página siempre devolvía al panel general y un enlace compartido no
+   * abría nunca el módulo que se quería enseñar. Se usa `replaceState` y
+   * no `pushState` para no llenar el historial: quien pulsa "atrás"
+   * espera salir del panel, no recorrer los doce módulos que visitó.
    */
   const irAModulo = (tab: string) => {
-    const destino = resolverModulo(tab).id;
-    setActiveTab(destino);
+    pestanas.abrir(tab);
     setActiveDropdown(null);
-    try { window.history.replaceState(null, '', `/admin/${destino}`); } catch { /* la navegación funciona igual */ }
+    try { window.history.replaceState(null, '', `/admin/${tab}`); } catch { /* la navegación funciona igual */ }
   };
 
-
-  return (
-    <AdminShell
-      activeTab={activeTab}
-      onNavigate={irAModulo}
-      currentUser={currentUser}
-      onLogout={handleLogout}
-      onNavigateToStore={onNavigateToStore}
-      logoUrl={storeLogoPreview || storeLogo || undefined}
-    >
-      {showLoginToast && (
-        <div className="fixed bottom-6 right-6 z-[998] tv-card px-4 py-3 flex items-center gap-3 shadow-lg">
-          <CheckCircle className="w-4 h-4 text-[var(--accent)] flex-shrink-0" />
-          <span className="text-sm text-[var(--text-primary)]">{loginToastMessage}</span>
-        </div>
-      )}
-
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={activeTab}
-          initial={{ opacity: 0, y: 4 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -4 }}
-          transition={{ duration: 0.14, ease: 'easeOut' }}
-        >
-          {activeTab === 'dashboard' && (
+  /**
+   * El contenido de UNA pestaña.
+   *
+   * Se llama una vez por módulo abierto, no una vez por render del
+   * panel: cada pestaña se monta cuando se abre y se queda montada
+   * mientras siga abierta. Por eso un cobro a medio llenar sigue ahí
+   * después de ir a consultar una existencia y volver — antes el
+   * contenido vivía dentro de un `<motion.div key={activeTab}>`, y
+   * cambiar la `key` en React destruye el árbol entero y lo reconstruye
+   * desde cero.
+   */
+  const renderModulo = (tab: string) => (
+    <>
+          {tab === 'dashboard' && (
             <AdminDashboard
               products={products}
               orders={orders}
@@ -1012,18 +1022,18 @@ export default function AdminPanel({
               onNavigate={irAModulo}
             />
           )}
-        {(activeTab === 'productos' || activeTab.startsWith('inventario_')) && (
+        {(tab === 'productos' || tab.startsWith('inventario_')) && (
           <Suspense fallback={<TabLoadingFallback />}>
             <InventarioControl
               currentUser={currentUser}
               onDataChanged={loadAllAdminData}
-              defaultSubTab={activeTab.startsWith('inventario_') ? (activeTab.replace('inventario_', '') as any) : 'productos'}
+              defaultSubTab={tab.startsWith('inventario_') ? (tab.replace('inventario_', '') as any) : 'productos'}
               onTabChange={(tab) => irAModulo(`inventario_${tab}`)}
             />
           </Suspense>
         )}
 
-        {activeTab === 'taller' && (
+        {tab === 'taller' && (
           <Suspense fallback={<TabLoadingFallback />}>
             <TallerKanban activeUserEmail={currentUser?.email} onRepairUpdated={loadAllAdminData} />
           </Suspense>
@@ -1034,13 +1044,13 @@ export default function AdminPanel({
             Panel de facturación, separado del taller a propósito: el taller
             registra el trabajo y aquí se cobra. Son dos actos distintos.
             ------------------------------------------------------------------ */}
-        {activeTab === 'cobros' && (
+        {tab === 'cobros' && (
           <Suspense fallback={<TabLoadingFallback />}>
             <FacturacionPanel currentUser={currentUser} onDataChanged={loadAllAdminData} />
           </Suspense>
         )}
 
-        {activeTab === 'chat' && (
+        {tab === 'chat' && (
           <Suspense fallback={<TabLoadingFallback />}>
             <ChatCRM currentUser={currentUser} onDataChanged={loadAllAdminData} />
           </Suspense>
@@ -1049,7 +1059,7 @@ export default function AdminPanel({
         {/* ------------------------------------------------------------------
             CLIENTES
             ------------------------------------------------------------------ */}
-        {activeTab === 'clientes' && (
+        {tab === 'clientes' && (
           <div className="tv-stack" id="view-clientes">
             <PageHead
               title="Clientes"
@@ -1181,7 +1191,7 @@ export default function AdminPanel({
         {/* ------------------------------------------------------------------
             CONTABILIDAD
             ------------------------------------------------------------------ */}
-        {activeTab === 'facturacion' && (
+        {tab === 'facturacion' && (
           <div className="tv-stack" id="view-facturacion">
             <PageHead
               title="Contabilidad"
@@ -1276,7 +1286,7 @@ export default function AdminPanel({
         {/* ------------------------------------------------------------------
             MARKETING
             ------------------------------------------------------------------ */}
-        {activeTab === 'marketing' && (
+        {tab === 'marketing' && (
           <div className="tv-stack" id="view-marketing">
             <PageHead
               title="Marketing"
@@ -1386,7 +1396,7 @@ export default function AdminPanel({
             vive ahora como una sección de este panel, con los mismos
             datos y el mismo botón de limpiar.
             ------------------------------------------------------------------ */}
-        {activeTab === 'ciberseguridad' && (
+        {tab === 'ciberseguridad' && (
           <Suspense fallback={<TabLoadingFallback />}>
             <CyberSecurityPanel
               auditLog={auditLog}
@@ -1399,7 +1409,7 @@ export default function AdminPanel({
         {/* ------------------------------------------------------------------
             CONFIGURACIÓN
             ------------------------------------------------------------------ */}
-        {activeTab === 'configuracion' && (
+        {tab === 'configuracion' && (
           <div className="tv-stack" id="view-configuracion">
             <PageHead
               title="Configuración"
@@ -1579,19 +1589,77 @@ export default function AdminPanel({
             GESTIÓN DE USUARIOS — solo administrador supremo
             ------------------------------------------------------------------
             Doble gateo, a propósito: AdminShell.tsx ya oculta la entrada de
-            menú para llegar a `activeTab === 'gestion_usuarios'` si la cuenta
+            menú para llegar a `tab === 'gestion_usuarios'` si la cuenta
             no es la supremo, pero eso no impide que alguien fuerce el tab a
             mano. Este `esAdminSupremo(...)` de aquí es la comprobación de
             frontend que de verdad bloquea el RENDERIZADO del panel — y aun
             así, cada función que el panel llama vuelve a comprobarlo en el
             servidor (ver GestionUsuariosPanel.tsx). */}
-        {activeTab === 'gestion_usuarios' && esAdminSupremo(currentUser?.email) && (
+        {tab === 'gestion_usuarios' && esAdminSupremo(currentUser?.email) && (
           <Suspense fallback={<TabLoadingFallback />}>
             <GestionUsuariosPanel currentUser={currentUser} />
           </Suspense>
         )}
-        </motion.div>
-      </AnimatePresence>
+    </>
+  );
+
+  return (
+    <AdminShell
+      activeTab={activeTab}
+      onNavigate={irAModulo}
+      currentUser={currentUser}
+      onLogout={handleLogout}
+      onNavigateToStore={onNavigateToStore}
+      logoUrl={storeLogoPreview || storeLogo || undefined}
+      pestanasAbiertas={pestanas.abiertas}
+      pestanaActiva={pestanas.activa}
+      onCerrarPestana={pestanas.cerrar}
+      scrollRef={scrollRef}
+    >
+      {showLoginToast && (
+        <div className="fixed bottom-6 right-6 z-[998] tv-card px-4 py-3 flex items-center gap-3 shadow-lg">
+          <CheckCircle className="w-4 h-4 text-[var(--accent)] flex-shrink-0" />
+          <span className="text-sm text-[var(--text-primary)]">{loginToastMessage}</span>
+        </div>
+      )}
+
+      {/* -------------------------------------------------------------
+          UN PANEL POR PESTAÑA ABIERTA
+          -------------------------------------------------------------
+          `<Activity mode="hidden">` es la pieza que hace que esto salga
+          gratis. Hace tres cosas que a mano no se pueden hacer bien:
+
+          1. CONSERVA EL ESTADO del módulo oculto —que es todo el punto de
+             las pestañas: el cobro a medio llenar sigue ahí.
+          2. DESMONTA SUS EFECTOS. Los intervalos, las suscripciones de
+             Realtime y los listeners de una pestaña de fondo se apagan
+             solos y se vuelven a montar al volver. Sin esto, cinco
+             pestañas abiertas serían cinco módulos consultando a Supabase
+             en segundo plano para nada.
+          3. RENDERIZA EN BAJA PRIORIDAD. React deja el trabajo de lo
+             oculto por detrás de todo lo visible, así que escribir en un
+             formulario no compite con el repintado de cuatro módulos que
+             nadie está mirando.
+
+          El `<div>` con `hidden` sigue estando porque Activity oculta su
+          contenido pero no nos da dónde colgar la clase ni el rol. */}
+      {pestanas.abiertas.map(modulo => {
+        const esActiva = modulo === pestanas.activa;
+        return (
+          <Activity key={modulo} mode={esActiva ? 'visible' : 'hidden'}>
+            <div className="tv-tab-panel" hidden={!esActiva} role="tabpanel">
+              {/* Aunque estén ocultas, las pestañas de fondo se renderizan
+                  al menos una vez. Sin esta marca sus `PageHead` mandaban
+                  acciones y subtítulo a la regleta igual que la activa: se
+                  veían las acciones de Cobros y las de Inventario a la vez,
+                  y los dos subtítulos pegados en la misma línea. */}
+              <ContextoPestanaActiva.Provider value={esActiva}>
+                {renderModulo(pestanas.tabDe(modulo))}
+              </ContextoPestanaActiva.Provider>
+            </div>
+          </Activity>
+        );
+      })}
     </AdminShell>
   );
 }
