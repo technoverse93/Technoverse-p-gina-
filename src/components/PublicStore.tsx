@@ -1152,7 +1152,11 @@ export default function PublicStore({
     }
     return true;
   }), [products, selectedCategory, selectedSearchProductId, searchQuery]);
-  const { page: prodPage, setPage: setProdPage, totalPages: prodTotal, startIndex: prodStart, visibleItems: paginatedProducts } = usePagination(filteredProducts, 10);
+  // 12 y no 10: la rejilla llega a 6 columnas en pantalla ancha, y 12 es
+  // divisible entre 2, 3, 4 y 6 — o sea, la última fila siempre queda
+  // completa en todos los tamaños. Con 10 quedaba una fila coja de 4
+  // huecos vacíos en escritorio.
+  const { page: prodPage, setPage: setProdPage, totalPages: prodTotal, startIndex: prodStart, visibleItems: paginatedProducts } = usePagination(filteredProducts, 12);
 
   /**
    * Cuántos artículos vendibles hay en cada categoría, para mostrarlo junto
@@ -1919,11 +1923,15 @@ export default function PublicStore({
                   )}
                 </div>
               ) : (
-                /* Dos columnas desde el teléfono más pequeño, como en el
-                   diseño aprobado: a una sola columna la tarjeta queda
-                   enorme y obliga a un scroll larguísimo para ver tres
-                   artículos. */
-                <div id="product-bento-grid" className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4 sm:gap-6">
+                /* Más columnas = tarjeta más chica. La rejilla anterior
+                   (2 / 3 / 4) dejaba en un monitor de escritorio tarjetas de
+                   más de 300 px de ancho para un cargador: la foto quedaba
+                   desproporcionada y entraban solo cuatro artículos por fila.
+                   Subiendo a 6 columnas en pantallas anchas la tarjeta baja a
+                   un tamaño de vitrina y se ve el triple de catálogo sin
+                   hacer scroll. En teléfono se mantienen las dos columnas,
+                   que ahí sí son el mínimo legible. */
+                <div id="product-bento-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
                   {paginatedProducts.map(prod => prod && (
                     <ProductCard
                       key={prod.id}
@@ -2646,29 +2654,41 @@ export default function PublicStore({
                 tamaño de escritorio en `md:`, donde la foto ya comparte la
                 mitad de un modal más ancho) resuelve el achique sin tocar
                 nada del layout de escritorio. */}
-            <div className="product-media md:w-1/2 flex items-center justify-center p-4 md:p-6 relative min-h-[140px] md:min-h-[220px]">
-              {selectedProductDetail.imageUrl && !imagenesRotas.has(selectedProductDetail.id) ? (
-                <img
-                  src={selectedProductDetail.imageUrl}
-                  alt={selectedProductDetail.name}
-                  className="max-h-36 md:max-h-56 max-w-full object-contain rounded-xl"
-                  referrerPolicy="no-referrer"
-                  loading="lazy"
-                  decoding="async"
-                  onError={() => marcarImagenRota(selectedProductDetail.id)}
-                />
-              ) : (
-                <div className="flex flex-col items-center justify-center text-[var(--text-primary)]">
-                  <Smartphone className="w-16 h-16 text-[var(--text-secondary)] mb-2" />
-                  <span className="text-sm font-mono">Sin Imagen</span>
-                </div>
-              )}
-              {/* Category tag: con tope de ancho y elipsis, nunca se sale del
-                  contenedor de la foto sin importar cuán largo sea el
-                  nombre de la categoría. */}
-              <span className="absolute top-4 left-4 max-w-[calc(100%-2rem)] bg-[var(--gold-soft)] border border-[var(--gold-line)] text-[var(--brand-gold-dark)] px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider tv-ellipsis">
+            <div className="product-media md:w-1/2 flex flex-col p-4 md:p-6 min-h-[140px] md:min-h-[220px]">
+              {/* CATEGORÍA — ARRIBA A LA IZQUIERDA DE LA COLUMNA DE LA FOTO,
+                  EN FLUJO NORMAL. No lleva `absolute`: aquí no funcionaría.
+                  `index.css` declara `.product-media > * { position: relative }`
+                  para todos los hijos de esta caja, así que un `absolute`
+                  queda anulado y la etiqueta terminaba colocándose como un
+                  elemento más dentro del `flex ... justify-center` — o sea,
+                  al lado de la foto, invadiendo la columna de datos del
+                  producto y recortándose en navegador de escritorio. Como
+                  hijo de flujo de una columna, ocupa su propia línea y no
+                  puede solaparse con nada.
+                  `self-start` la mantiene pegada a la izquierda sin estirarse,
+                  y `max-w-full` + elipsis cubren el caso de una categoría de
+                  nombre muy largo. */}
+              <span className="self-start max-w-full mb-2 flex-shrink-0 bg-[var(--gold-soft)] border border-[var(--gold-line)] text-[var(--brand-gold-dark)] px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider tv-ellipsis">
                 {selectedProductDetail.category}
               </span>
+              <div className="flex-1 min-h-0 flex items-center justify-center">
+                {selectedProductDetail.imageUrl && !imagenesRotas.has(selectedProductDetail.id) ? (
+                  <img
+                    src={selectedProductDetail.imageUrl}
+                    alt={selectedProductDetail.name}
+                    className="max-h-36 md:max-h-56 max-w-full object-contain rounded-xl"
+                    referrerPolicy="no-referrer"
+                    loading="lazy"
+                    decoding="async"
+                    onError={() => marcarImagenRota(selectedProductDetail.id)}
+                  />
+                ) : (
+                  <div className="flex flex-col items-center justify-center text-[var(--text-primary)]">
+                    <Smartphone className="w-16 h-16 text-[var(--text-secondary)] mb-2" />
+                    <span className="text-sm font-mono">Sin Imagen</span>
+                  </div>
+                )}
+              </div>
             </div>
 
             {/* Right side: Information
@@ -2782,27 +2802,31 @@ export default function PublicStore({
                   </div>
                 )}
 
-                {/* Dos columnas iguales con `min-w-0`: "Añadir al carrito" es
-                    más largo que "Cancelar", y sin esto la rejilla se
-                    desbalancea en pantallas de 320 px. El texto se recorta
-                    con puntos antes de deformar el botón. */}
-                <div className="grid grid-cols-2 gap-3 min-w-0">
-                  <button
-                    onClick={() => setSelectedProductDetail(null)}
-                    className="tv-ellipsis w-full bg-[var(--bg-base)] hover:bg-slate-200 text-[var(--text-primary)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider text-center transition cursor-pointer"
-                  >
-                    Cancelar
-                  </button>
+                {/* APILADOS, NO EN FILA. En escritorio esta ficha es de dos
+                    columnas (`md:flex-row` con `max-w-xl`), así que estos
+                    botones viven SIEMPRE en una columna de unos 288 px —
+                    da igual lo ancha que sea la pantalla. Repartir ese
+                    ancho entre dos botones dejaba la acción principal en
+                    "AÑADIR AL …", que es justo la que tiene que leerse
+                    entera. En columna, cada uno tiene los 288 px completos
+                    y ninguno se recorta en ningún tamaño de pantalla. */}
+                <div className="flex flex-col gap-2 min-w-0">
                   <button
                     onClick={() => handleAddToCartWithQty(selectedProductDetail, detailQuantity)}
                     disabled={selectedProductDetail.stock === 0}
-                    className={`tv-ellipsis w-full py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider text-center transition cursor-pointer shadow-sm ${
+                    className={`tv-ellipsis w-full px-3 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider text-center transition cursor-pointer shadow-sm ${
                       selectedProductDetail.stock === 0
                         ? 'bg-slate-200 text-[var(--text-primary)] cursor-not-allowed'
                         : 'bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] text-[var(--accent-ink)] '
                     }`}
                   >
                     Añadir al carrito
+                  </button>
+                  <button
+                    onClick={() => setSelectedProductDetail(null)}
+                    className="tv-ellipsis w-full bg-[var(--bg-base)] hover:bg-slate-200 text-[var(--text-primary)] font-bold text-sm px-3 py-2.5 rounded-xl uppercase tracking-wider text-center transition cursor-pointer"
+                  >
+                    Cancelar
                   </button>
                 </div>
               </div>

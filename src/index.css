@@ -566,21 +566,23 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 
 
 /* ==========================================================================
-   Grilla de productos — retail ordenada
-   2 columnas en teléfono, 3 en tablet (Redmi Pad SE ≈ 800 px de ancho útil),
-   4 en escritorio. Sin bloques asimétricos: catálogo parejo y escaneable.
+   Grilla de productos
+   --------------------------------------------------------------------------
+   OJO — AQUÍ NO VA LA RETÍCULA. Vive en las clases del propio elemento, en
+   PublicStore.tsx (`grid-cols-2 sm:grid-cols-3 md:grid-cols-4
+   lg:grid-cols-5 xl:grid-cols-6`).
+
+   Aquí hubo un bloque `#product-bento-grid { grid-template-columns: … }` con
+   sus tres consultas de medio. Un selector de ID pesa (1,0,0) y cualquier
+   utilidad de Tailwind pesa (0,1,0): ganaba SIEMPRE, así que cambiar las
+   clases del componente no producía ningún efecto visible y el catálogo se
+   quedaba clavado en 4 columnas en escritorio por más que las clases
+   dijeran 6. Se elimina para que la retícula tenga una sola fuente de
+   verdad — la que se lee en el componente.
+
+   Si alguna vez hace falta una regla de grilla que no se pueda expresar
+   con utilidades, va con selector de CLASE, nunca de ID.
    ========================================================================== */
-#product-bento-grid {
-  display: grid;
-  gap: 12px;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-@media (min-width: 640px) {
-  #product-bento-grid { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 14px; }
-}
-@media (min-width: 1024px) {
-  #product-bento-grid { grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 16px; }
-}
 
 /* ==========================================================================
    Remapeo de azules heredados (sky-* / blue-*) al acento del tema
