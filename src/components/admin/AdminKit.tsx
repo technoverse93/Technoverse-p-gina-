@@ -20,14 +20,63 @@
 // =====================================================================
 
 import React from 'react';
+import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
+
+// =====================================================================
+// PUENTES HACIA LA REGLETA
+// =====================================================================
+// En el modelo "Regleta y Carpetas" el nombre del módulo, sus acciones y
+// sus carpetas viven en la regleta —la franja fina de arriba— y no
+// dentro de cada pantalla. Pero quien SABE qué acciones y qué carpetas
+// tiene una pantalla es la pantalla misma, no el armazón.
+//
+// El puente son portales y no un contexto con estado, a propósito: unas
+// acciones son `ReactNode` que cambian de identidad en cada render, así
+// que guardarlas en el estado del armazón provocaría un `setState` por
+// render y un bucle infinito. Un portal vuelve a renderizar sus hijos
+// sin tocar ningún estado.
+// ---------------------------------------------------------------------
+
+/**
+ * Resuelve el nodo destino de un portal DESPUÉS del montaje.
+ *
+ * El efecto corre en cada render y no una sola vez porque el destino
+ * cambia al cambiar de módulo (el armazón lo vuelve a montar). El
+ * `setNodo` compara antes de escribir, así que un render extra no
+ * dispara otro render.
+ */
+function usePortalEn(id: string): HTMLElement | null {
+  const [nodo, setNodo] = React.useState<HTMLElement | null>(null);
+  React.useEffect(() => {
+    const encontrado = typeof document !== 'undefined' ? document.getElementById(id) : null;
+    setNodo(prev => (prev === encontrado ? prev : encontrado));
+  });
+  return nodo;
+}
 
 // ---------------------------------------------------------------------
 // ENCABEZADO DE PANTALLA
 // ---------------------------------------------------------------------
 
+/**
+ * Ya NO dibuja un bloque de título.
+ *
+ * Antes pintaba un título de 23px, un subtítulo y una fila de acciones:
+ * entre 60 y 85 px de alto en cada módulo para repetir el nombre que la
+ * miga de pan ya decía justo encima. Medido sobre el panel real, esa
+ * repetición era una de las cinco capas que dejaban el contenido de
+ * Inventario empezando a los 330 px.
+ *
+ * Ahora reparte lo suyo donde corresponde: el nombre lo pone la regleta
+ * a partir del módulo activo, las acciones viajan a la regleta y el
+ * subtítulo —que sí aporta, porque explica qué se hace en la pantalla—
+ * queda como una línea fina de pista bajo las carpetas.
+ *
+ * Se conserva la misma firma para no tener que tocar ni un solo sitio
+ * de llamada.
+ */
 export function PageHead({
-  title,
   subtitle,
   actions,
 }: {
@@ -35,15 +84,81 @@ export function PageHead({
   subtitle?: string;
   actions?: React.ReactNode;
 }) {
+  const destinoAcciones = usePortalEn('tv-regleta-acciones');
+  const destinoPista = usePortalEn('tv-pista-slot');
+
   return (
-    <div className="tv-page-head">
-      <div className="min-w-0">
-        <h1 className="tv-page-title">{title}</h1>
-        {subtitle && <p className="tv-page-sub">{subtitle}</p>}
-      </div>
-      {actions && <div className="tv-row">{actions}</div>}
+    <>
+      {actions && destinoAcciones ? createPortal(<div className="tv-row">{actions}</div>, destinoAcciones) : null}
+      {subtitle && destinoPista ? createPortal(<>{subtitle}</>, destinoPista) : null}
+    </>
+  );
+}
+
+// ---------------------------------------------------------------------
+// CARPETAS
+// ---------------------------------------------------------------------
+
+export interface CarpetaUI {
+  id: string;
+  label: string;
+  icon?: LucideIcon;
+  /** Se dibuja como número al lado del nombre. Un 0 no se dibuja. */
+  contador?: number;
+  /** Carpetas con distinto `grupo` quedan separadas por una línea. */
+  grupo?: string;
+}
+
+/**
+ * La fila de carpetas del módulo activo.
+ *
+ * Se renderiza SIEMPRE en la regleta, aunque la llame una pantalla que
+ * está dentro del contenido: así hay una única fila de sub-navegación en
+ * todo el panel y en un único sitio. Ese es el fallo que este modelo
+ * corrige — en el panel medido, Inventario dibujaba sus cinco vistas en
+ * el menú de arriba Y otra vez como pestañas propias.
+ */
+export function Carpetas({
+  items,
+  activa,
+  onElegir,
+}: {
+  items: CarpetaUI[];
+  activa: string;
+  onElegir: (id: string) => void;
+}) {
+  const destino = usePortalEn('tv-carpetas-slot');
+  if (!destino || items.length === 0) return null;
+
+  const fila = (
+    <div className="tv-folders" role="tablist" aria-label="Vistas del módulo">
+      {items.map((c, i) => {
+        const Icono = c.icon;
+        const nuevoGrupo = i > 0 && c.grupo && c.grupo !== items[i - 1].grupo;
+        return (
+          <React.Fragment key={c.id}>
+            {nuevoGrupo && <span className="tv-folder-sep" aria-hidden="true" />}
+            <button
+              type="button"
+              role="tab"
+              aria-selected={c.id === activa}
+              className="tv-folder"
+              data-active={c.id === activa || undefined}
+              onClick={() => onElegir(c.id)}
+            >
+              {Icono && <Icono className="w-[13px] h-[13px] flex-shrink-0" aria-hidden="true" />}
+              <span className="tv-folder-label">{c.label}</span>
+              {typeof c.contador === 'number' && c.contador > 0 && (
+                <span className="tv-folder-count">{c.contador}</span>
+              )}
+            </button>
+          </React.Fragment>
+        );
+      })}
     </div>
   );
+
+  return createPortal(fila, destino);
 }
 
 // ---------------------------------------------------------------------

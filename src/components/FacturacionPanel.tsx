@@ -27,7 +27,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import {
   Receipt, Gift, Wrench, Plus, Trash2, CheckCircle, Download, AlertTriangle, Link2, Mail, ShoppingBag,
 } from 'lucide-react';
-import { PageHead, Card, Btn, Field, Chip, Stat, Empty, colones } from './admin/AdminKit';
+import { PageHead, Card, Btn, Field, Chip, Stat, Empty, Carpetas, colones } from './admin/AdminKit';
 import { CustomSelect } from './CustomSelect';
 import { useToast, useConfirm } from './ui/Overlays';
 import { getDB, refreshProductsFromSupabase } from '../utils/storage';
@@ -490,34 +490,23 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
         </>}
       />
 
-      {/* Selector principal del motor de cobro bifurcado. La elección
-          decide qué pide el resto del formulario: en Venta, el producto
-          elegido rellena nombre/precio/garantía solo; en Reparación, se
-          escribe el trabajo a mano — es el formulario que ya existía. */}
-      <div className="tv-row" role="tablist" aria-label="Tipo de cobro">
-        <button
-          type="button"
-          role="tab"
-          aria-selected={modoCobro === 'venta'}
-          className="tv-btn flex-1"
-          data-variant={modoCobro === 'venta' ? 'primary' : 'default'}
-          onClick={() => setModoCobro('venta')}
-        >
-          <ShoppingBag className="w-4 h-4" />
-          Modo Venta de Inventario
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={modoCobro === 'reparacion'}
-          className="tv-btn flex-1"
-          data-variant={modoCobro === 'reparacion' ? 'primary' : 'default'}
-          onClick={() => setModoCobro('reparacion')}
-        >
-          <Wrench className="w-4 h-4" />
-          Modo Reparación
-        </button>
-      </div>
+      {/* Los dos modos del motor de cobro bifurcado, como carpetas.
+          La elección decide qué pide el resto del formulario: en Venta, el
+          producto elegido rellena nombre/precio/garantía solo; en
+          Reparación, se escribe el trabajo a mano — es el mismo formulario
+          de siempre, con la misma lógica.
+
+          Antes eran dos botones de ancho completo, uno al lado del otro,
+          de 60 px de alto: una elección binaria ocupando lo mismo que
+          cuatro campos del formulario que venía justo debajo. */}
+      <Carpetas
+        items={[
+          { id: 'venta', label: 'Venta de inventario', icon: ShoppingBag },
+          { id: 'reparacion', label: 'Reparación', icon: Wrench },
+        ]}
+        activa={modoCobro}
+        onElegir={(id) => setModoCobro(id as 'venta' | 'reparacion')}
+      />
 
       {modoPrueba && (
         <Card className="!border-amber-500/50 !bg-amber-400/10">
