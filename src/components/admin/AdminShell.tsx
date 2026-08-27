@@ -12,12 +12,10 @@
 //    enlaces arriba, en la barra lateral y en la barra inferior a la
 //    vez; en tableta llegaban a verse los mismos módulos tres veces.
 //
-// 2. DISEÑO TARJETERO: la navegación es una barra de PÍLDORAS con
-//    contador en vivo, no un riel lateral. El riel costaba 72px de ancho
-//    permanentes (252px abierto) y no decía nada del estado de cada
-//    módulo; la barra cuesta 54px de alto una sola vez, devuelve todo el
-//    ancho a la mesa de trabajo y muestra desde cualquier pantalla que
-//    hay 2 chats sin leer o 3 artículos en última unidad.
+// 2. El riel de escritorio es de ICONOS por defecto (72px) y se abre a
+//    252px cuando hace falta. La barra fija de 256px se comía una
+//    cuarta parte del ancho útil de un portátil para mostrar doce
+//    palabras que quien usa el panel a diario ya se sabe de memoria.
 //
 // 3. Buscador de módulos con Ctrl/⌘+K. Es lo que permite quitar peso
 //    del menú sin esconder nada: cualquier módulo está a tres teclas,
@@ -34,8 +32,8 @@
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Search, Store, LogOut,
-  X, CornerDownLeft, RefreshCw, KeyRound, Hash,
+  Search, PanelLeftClose, PanelLeftOpen, Store, LogOut,
+  MoreHorizontal, X, CornerDownLeft, RefreshCw, KeyRound, Hash,
 } from 'lucide-react';
 import { NAV_GROUPS, NAV_ITEMS, DOCK_IDS, resolverModulo, grupoDe, buscarModulos } from './adminNav';
 import type { AdminNavItem } from './adminNav';
@@ -46,87 +44,8 @@ import CambiarContrasenaModal from '../security/CambiarContrasenaModal';
 import CambiarPinModal from '../security/CambiarPinModal';
 import BotonTema from '../ui/BotonTema';
 import { esAdminSupremo } from '../../utils/securityPin';
-import { getDB, getDBVersion } from '../../utils/storage';
 
-/**
- * Contadores en vivo de la barra de píldoras.
- *
- * Se calculan AQUÍ, en el armazón, y no se reciben por props desde
- * AdminPanel a propósito: son el estado del negocio, no de una pantalla,
- * y el armazón es lo único que está montado siempre. Pasarlos por props
- * obligaría a que cada módulo los recalculara y los propagara hacia
- * arriba.
- *
- * `tono: 'alert'` es lo que hace que el contador se pinte en rojo: se
- * reserva para lo que exige que alguien HAGA algo hoy (un artículo en su
- * última unidad, una reparación detenida). Un chat sin leer se cuenta,
- * pero en tono neutro — es trabajo normal, no una alarma.
- */
-type Contador = { valor: number; tono?: 'alert' };
-
-function calcularContadores(): Record<string, Contador> {
-  try {
-    const db = getDB();
-    const productos = db.products || [];
-    const reparaciones = db.repair_orders || [];
-    const conversaciones = db.chat_conversations || [];
-
-    // Misma regla que el panel general: "última unidad" y nada más.
-    const ultimaUnidad = productos.filter(p => p && p.stock === 1).length;
-    const enTaller = reparaciones.filter(
-      r => r && r.status !== 'Entregada' && r.status !== 'Cancelada'
-    ).length;
-    const sinLeer = conversaciones.filter(
-      c => c && c.status !== 'resuelto' && (c.unreadCount || 0) > 0
-    ).length;
-
-    return {
-      inventario_productos: { valor: ultimaUnidad, tono: ultimaUnidad > 0 ? 'alert' : undefined },
-      taller: { valor: enTaller },
-      chat: { valor: sinLeer },
-    };
-  } catch {
-    // Un fallo leyendo la caché no puede dejar sin navegación al panel:
-    // sin contadores las píldoras siguen funcionando igual.
-    return {};
-  }
-}
-
-/**
- * Mantiene los contadores al día sin sondear la base entera cada segundo.
- *
- * `getDBVersion()` es un entero que sube en cada cambio real de la caché
- * (ver storage.ts): comparar enteros es gratis, y solo cuando cambia se
- * paga el recorrido de las tres tablas. El evento cubre el caso normal;
- * el intervalo es la red de seguridad por si un evento se pierde dentro
- * de un iframe anidado.
- */
-function useContadores(): Record<string, Contador> {
-  const [contadores, setContadores] = useState<Record<string, Contador>>(() => calcularContadores());
-
-  useEffect(() => {
-    let ultimaVersion = getDBVersion();
-    const recalcular = () => setContadores(calcularContadores());
-
-    const alCambiar = () => { ultimaVersion = getDBVersion(); recalcular(); };
-    window.addEventListener('technoverse_db_updated', alCambiar);
-
-    const intervalo = window.setInterval(() => {
-      if (document.visibilityState !== 'visible') return;
-      const version = getDBVersion();
-      if (version === ultimaVersion) return;
-      ultimaVersion = version;
-      recalcular();
-    }, 2000);
-
-    return () => {
-      window.removeEventListener('technoverse_db_updated', alCambiar);
-      window.clearInterval(intervalo);
-    };
-  }, []);
-
-  return contadores;
-}
+const LLAVE_RIEL = 'technoverse_admin_riel_abierto';
 
 interface AdminShellProps {
   activeTab: string;
@@ -147,18 +66,28 @@ export default function AdminShell({
   logoUrl,
   children,
 }: AdminShellProps) {
+  // El estado del riel se recuerda entre sesiones: quien prefiere ver
+  // los nombres no tiene que volver a abrirlo cada mañana.
+  const [rielAbierto, setRielAbierto] = useState<boolean>(() => {
+    try { return localStorage.getItem(LLAVE_RIEL) === '1'; } catch { return false; }
+  });
   const [menuPerfil, setMenuPerfil] = useState(false);
+  const [hojaAbierta, setHojaAbierta] = useState(false);
   const [buscadorAbierto, setBuscadorAbierto] = useState(false);
 
   const perfilRef = useRef<HTMLDivElement | null>(null);
 
   const moduloActivo = useMemo(() => resolverModulo(activeTab), [activeTab]);
   const grupoActivo = useMemo(() => grupoDe(activeTab), [activeTab]);
-  const contadores = useContadores();
+
+  useEffect(() => {
+    try { localStorage.setItem(LLAVE_RIEL, rielAbierto ? '1' : '0'); } catch { /* sin almacenamiento, no pasa nada */ }
+  }, [rielAbierto]);
 
   /** Navegar cierra TODO lo que estuviera abierto encima. */
   const ir = useCallback((tab: string) => {
     onNavigate(tab);
+    setHojaAbierta(false);
     setMenuPerfil(false);
     setBuscadorAbierto(false);
   }, [onNavigate]);
@@ -173,6 +102,7 @@ export default function AdminShell({
       if (e.key === 'Escape') {
         setBuscadorAbierto(false);
         setMenuPerfil(false);
+        setHojaAbierta(false);
       }
     };
     window.addEventListener('keydown', alTeclear);
@@ -249,32 +179,98 @@ export default function AdminShell({
   // servidor, en las funciones que ese módulo termina llamando.
   const puedeVerModulo = (item: AdminNavItem) => !item.soloAdminSupremo || esSupremo;
 
-  // El dock de móvil conserva SOLO los cuatro módulos del día a día, al
-  // alcance del pulgar. Ya no lleva el botón "Más" ni su hoja: la barra
-  // de píldoras de arriba lista los quince módulos completos, así que la
-  // hoja no daba acceso a nada que no estuviera ya a un toque — y sí
-  // añadía una segunda forma de navegar que había que mantener al día.
   const itemsDock = DOCK_IDS
     .map(id => NAV_ITEMS.find(i => i.id === id))
     .filter((i): i is AdminNavItem => !!i)
     .filter(puedeVerModulo);
+
+  // En la hoja de "Más" va todo lo que no cabe en el dock. Se calcula a
+  // partir del dock y no con una segunda lista escrita a mano: así
+  // ningún módulo puede quedar sin acceso en la APK por un descuido.
+  const itemsHoja = NAV_ITEMS.filter(i => !DOCK_IDS.includes(i.id)).filter(puedeVerModulo);
+  const hojaTieneActivo = itemsHoja.some(i => i.id === moduloActivo.id);
 
   return (
     /* El id se conserva: `#admin-panel-root` es donde admin.css declara
        todas las variables de la consola y donde index.css aísla el
        apilamiento del panel respecto de la tienda. */
     <div className="tv-shell" id="admin-panel-root">
-      {/* ---------------- COLUMNA PRINCIPAL ---------------- */}
-      <div className="tv-main">
-        <header className="tv-topbar">
-          {/* El logo va aquí en TODOS los tamaños: al desaparecer el riel
-              lateral, esta barra pasó a ser el único sitio donde vive la
-              identidad de la tienda. Antes llevaba `lg:hidden` porque en
-              escritorio lo mostraba la cabecera del riel. */}
+      {/* ---------------- RIEL (escritorio) ---------------- */}
+      <nav
+        className="tv-rail"
+        data-open={rielAbierto}
+        aria-label="Navegación principal"
+      >
+        <div className="tv-rail-head">
           <img
             src={logoUrl || '/logo.png'}
             alt=""
             className="w-8 h-8 rounded-lg object-contain flex-shrink-0"
+          />
+          {rielAbierto && (
+            <span className="font-display font-bold text-[15px] tracking-tight text-[var(--text-primary)] whitespace-nowrap">
+              Technoverse
+            </span>
+          )}
+        </div>
+
+        <div className="tv-rail-body">
+          {NAV_GROUPS.map((grupo, idx) => (
+            <div key={grupo.titulo}>
+              {rielAbierto
+                ? <div className="tv-group-label">{grupo.titulo}</div>
+                : idx > 0 && <div className="tv-group-rule" />}
+              {/* El botón va escrito aquí y no extraído a un componente
+                  a propósito: el proyecto no tiene `@types/react`
+                  instalado, así que TypeScript no aplica la excepción de
+                  `key` a los componentes propios y una lista de
+                  componentes con `key` no compila. Con elementos nativos
+                  no hay problema. */}
+              {grupo.items.filter(puedeVerModulo).map(item => {
+                const activo = item.id === moduloActivo.id;
+                return (
+                  <button
+                    key={item.id}
+                    type="button"
+                    className="tv-nav-item"
+                    data-active={activo || undefined}
+                    onClick={() => ir(item.id)}
+                    aria-current={activo ? 'page' : undefined}
+                  >
+                    <span className="tv-nav-icon"><item.icon className="w-[18px] h-[18px]" aria-hidden="true" /></span>
+                    <span className="tv-nav-label">{item.label}</span>
+                    <span className="tv-tip">{item.label}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ))}
+        </div>
+
+        <div className="tv-rail-foot">
+          <button
+            type="button"
+            className="tv-nav-item"
+            onClick={() => setRielAbierto(v => !v)}
+            aria-label={rielAbierto ? 'Contraer el menú' : 'Expandir el menú'}
+          >
+            <span className="tv-nav-icon">
+              {rielAbierto ? <PanelLeftClose className="w-[18px] h-[18px]" /> : <PanelLeftOpen className="w-[18px] h-[18px]" />}
+            </span>
+            <span className="tv-nav-label">Contraer</span>
+            <span className="tv-tip">Expandir el menú</span>
+          </button>
+        </div>
+      </nav>
+
+      {/* ---------------- COLUMNA PRINCIPAL ---------------- */}
+      <div className="tv-main">
+        <header className="tv-topbar">
+          {/* En móvil el logo va aquí, porque el riel no existe. */}
+          <img
+            src={logoUrl || '/logo.png'}
+            alt=""
+            className="w-8 h-8 rounded-lg object-contain flex-shrink-0 lg:hidden"
           />
 
           <div className="tv-crumb">
@@ -421,54 +417,6 @@ export default function AdminShell({
           </div>
         </header>
 
-        {/* ---------------- BARRA DE PÍLDORAS (Tarjetero) ----------------
-            La navegación completa del panel, con contador en vivo por
-            módulo. Reemplaza al riel lateral y a la hoja de "Más": aquí
-            están LOS QUINCE módulos, así que ninguno queda escondido
-            detrás de un botón secundario.
-
-            Los grupos de `NAV_GROUPS` se conservan como separadores
-            verticales finos entre bloques de píldoras — se mantiene la
-            agrupación (General / Inventario / Operación / Administración)
-            sin gastar una línea de título por cada una. */}
-        <nav className="tv-pills" aria-label="Navegación principal">
-          {NAV_GROUPS.map((grupo, idx) => {
-            const items = grupo.items.filter(puedeVerModulo);
-            if (items.length === 0) return null;
-            return (
-              <React.Fragment key={grupo.titulo}>
-                {idx > 0 && <span className="tv-pill-sep" aria-hidden="true" />}
-                {items.map(item => {
-                  const activo = item.id === moduloActivo.id;
-                  const contador = contadores[item.id];
-                  return (
-                    <button
-                      key={item.id}
-                      type="button"
-                      className="tv-pill"
-                      data-active={activo || undefined}
-                      onClick={() => ir(item.id)}
-                      aria-current={activo ? 'page' : undefined}
-                      title={item.descripcion}
-                    >
-                      <item.icon className="w-[15px] h-[15px] flex-shrink-0" aria-hidden="true" />
-                      <span className="tv-pill-label">{item.label}</span>
-                      {/* El contador solo aparece si hay algo que contar.
-                          Un "0" permanente al lado de cada módulo es ruido
-                          que enseña a no mirar la barra. */}
-                      {contador && contador.valor > 0 && (
-                        <span className="tv-pill-count" data-tone={contador.tono}>
-                          {contador.valor}
-                        </span>
-                      )}
-                    </button>
-                  );
-                })}
-              </React.Fragment>
-            );
-          })}
-        </nav>
-
         <main className="tv-scroll">
           <div className="tv-container">{children}</div>
         </main>
@@ -489,7 +437,45 @@ export default function AdminShell({
             <span>{item.short}</span>
           </button>
         ))}
+        <button
+          type="button"
+          className="tv-dock-item"
+          data-active={hojaAbierta || hojaTieneActivo || undefined}
+          onClick={() => setHojaAbierta(v => !v)}
+          aria-expanded={hojaAbierta}
+        >
+          <MoreHorizontal className="w-[19px] h-[19px]" aria-hidden="true" />
+          <span>Más</span>
+        </button>
       </nav>
+
+      {hojaAbierta && (
+        <>
+          <div className="tv-sheet-backdrop lg:hidden" onClick={() => setHojaAbierta(false)} />
+          <div className="tv-sheet lg:hidden" role="dialog" aria-label="Más módulos">
+            <div className="tv-sheet-title">Todos los módulos</div>
+            {itemsHoja.map(item => (
+              <button
+                key={item.id}
+                type="button"
+                className="tv-sheet-item"
+                data-active={item.id === moduloActivo.id || undefined}
+                onClick={() => ir(item.id)}
+              >
+                <item.icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
+                {item.label}
+              </button>
+            ))}
+            <div className="tv-menu-sep" />
+            <button type="button" className="tv-sheet-item" onClick={() => { setHojaAbierta(false); onNavigateToStore(); }}>
+              <Store className="w-[18px] h-[18px] flex-shrink-0" /> Ver la tienda
+            </button>
+            <button type="button" className="tv-sheet-item" data-danger="true" onClick={() => { setHojaAbierta(false); onLogout(); }}>
+              <LogOut className="w-[18px] h-[18px] flex-shrink-0" /> Cerrar sesión
+            </button>
+          </div>
+        </>
+      )}
 
       {buscadorAbierto && (
         <BuscadorDeModulos

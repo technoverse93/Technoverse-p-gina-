@@ -31,9 +31,9 @@ import {
 } from 'recharts';
 import {
   TrendingUp, Users, Wrench, Package, ShieldAlert, ShoppingBag,
-  ArrowRight, CircleAlert, Receipt, ArrowRightLeft, Store,
+  ArrowRight, CircleAlert,
 } from 'lucide-react';
-import { PageHead, Card, Stat, Chip, Btn, Empty, TableShell, QuickAction, colones } from './AdminKit';
+import { PageHead, Card, Stat, Chip, Btn, Empty, TableShell, colones } from './AdminKit';
 import { useTema } from '../ui/BotonTema';
 import { CATEGORIAS_TIENDA } from '../../utils/categorias';
 import type { Product, Order, RepairOrder, ClientProfile } from '../../types';
@@ -51,9 +51,8 @@ interface Props {
 export default function AdminDashboard({
   products, orders, repairs, clients, isMounted, onNavigate,
 }: Props) {
-  // Va ARRIBA del todo, antes de cualquier `return` condicional: es un
-  // hook, y saltárselo en el render del esqueleto rompería el orden de
-  // hooks de React.
+  // Va ARRIBA del todo, antes del `return` del esqueleto: es un hook, y
+  // saltárselo en ese render rompería el orden de hooks de React.
   const esOscuro = useTema() === 'oscuro';
 
   const ventasCompletadas = orders.filter(o => o && o.status === 'Completado');
@@ -138,9 +137,8 @@ export default function AdminDashboard({
   // FALLO CORREGIDO: esto estaba fijo a los valores del tema CLARO, con
   // un comentario que decía "único tema, sin rama que mantener" — cierto
   // cuando se escribió, pero el tema oscuro volvió después y nadie
-  // regresó aquí. El resultado era que en oscuro las dos gráficas
-  // dibujaban su rejilla en gris casi blanco y el globo de datos salía
-  // con fondo blanco y letra negra encima del panel oscuro.
+  // regresó aquí. En oscuro la rejilla salía en gris casi blanco y el
+  // globo de datos con fondo blanco y letra negra sobre el panel oscuro.
   const ejes = esOscuro ? '#6F7D77' : '#8792A8';
   const rejilla = esOscuro ? '#202724' : '#EEF1F6';
   const globo = {
@@ -182,133 +180,68 @@ export default function AdminDashboard({
         </Card>
       )}
 
-      {/* ---------------------------------------------------------------
-          MOSAICO POR URGENCIA (diseño Tarjetero)
-          ---------------------------------------------------------------
-          La rejilla anterior daba a las seis métricas exactamente el
-          mismo tamaño, así que había que leerlas todas para descubrir
-          cuál importaba hoy. Aquí el TAMAÑO es la urgencia:
-
-          · Ingresos ocupa dos columnas por dos filas SIEMPRE — es la
-            pregunta que se hace cualquiera al abrir el panel — y lleva
-            dentro el desglose de ganancias que antes vivía en una
-            tarjeta aparte más abajo.
-          · Lo que pide acción (última unidad, reparaciones detenidas)
-            crece a dos columnas y tiñe su borde SOLO cuando de verdad
-            hay algo; si está en cero se queda en tamaño normal y en
-            tono neutro.
-          · Cada métrica salta a su módulo al tocarla, así que el panel
-            general funciona además como índice.
-          --------------------------------------------------------------- */}
-      <div className="tv-bento">
+      <div className="tv-grid tv-grid-6">
         <Stat
           label="Ingresos"
           value={colones(ingresos)}
-          foot={`${ventasCompletadas.length} ${ventasCompletadas.length === 1 ? 'venta completada' : 'ventas completadas'} · IVA incluido`}
+          foot={`${ventasCompletadas.length} ${ventasCompletadas.length === 1 ? 'venta completada' : 'ventas completadas'}`}
           icon={TrendingUp}
-          span="hero"
-          featured
-          onClick={() => onNavigate('facturacion')}
-        >
-          {/* El control de ganancias, dentro de la tarjeta protagonista:
-              es el desglose del mismo número, no un tema aparte. */}
-          <div className="tv-stat-breakdown">
-            <div>
-              <span>Costo de repuestos e insumos</span>
-              <b>{colones(costoRepuestosTotal)}</b>
-            </div>
-            {costoRegaliasTotal > 0 && (
-              <div>
-                <span>Regalías entregadas</span>
-                <b>{colones(costoRegaliasTotal)}</b>
-              </div>
-            )}
-            <div data-total="true">
-              <span>Margen neto</span>
-              <b data-negative={margenTotal < 0 || undefined}>
-                {colones(margenTotal)}
-                {ingresos > 0 && (
-                  <em> · {((margenTotal / ingresos) * 100).toFixed(1)}%</em>
-                )}
-              </b>
-            </div>
-          </div>
-        </Stat>
-
-        <Stat
-          label="Última unidad"
-          value={stockCritico}
-          foot={stockCritico > 0 ? 'Con 1 unidad en existencia' : 'Ninguno en última unidad'}
-          icon={Package}
-          alert={stockCritico > 0}
-          span={stockCritico > 0 ? 2 : undefined}
-          onClick={() => onNavigate('inventario_productos')}
         />
-
+        <Stat
+          label="Clientes"
+          value={clients.length}
+          foot="Registrados en el CRM"
+          icon={Users}
+        />
+        <Stat
+          label="En taller"
+          value={reparacionesActivas}
+          foot="Reparaciones en curso"
+          icon={Wrench}
+        />
         <Stat
           label="Sin repuesto"
           value={esperandoRepuestos}
           foot={esperandoRepuestos > 0 ? 'Detenidas, requieren compra' : 'Ninguna detenida'}
           icon={ShieldAlert}
           alert={esperandoRepuestos > 0}
-          span={esperandoRepuestos > 0 ? 2 : undefined}
-          onClick={() => onNavigate('taller')}
         />
-
         <Stat
-          label="En taller"
-          value={reparacionesActivas}
-          foot="Reparaciones en curso"
-          icon={Wrench}
-          onClick={() => onNavigate('taller')}
+          label="Última unidad"
+          value={stockCritico}
+          foot={stockCritico > 0 ? 'Con 1 unidad en existencia' : 'Ninguno en última unidad'}
+          icon={Package}
+          alert={stockCritico > 0}
         />
-
-        <Stat
-          label="Clientes"
-          value={clients.length}
-          foot="Registrados en el CRM"
-          icon={Users}
-          onClick={() => onNavigate('clientes')}
-        />
-
         <Stat
           label="Bodega libre"
           value={`${espacioLibre}%`}
           foot={`${unidadesTotales.toLocaleString('es-CR')} unidades guardadas`}
           icon={ShoppingBag}
-          onClick={() => onNavigate('inventario_reportes')}
         />
       </div>
 
-      {/* Accesos directos a lo que se hace varias veces al día. Van
-          después del mosaico y no antes porque primero se mira cómo va
-          el negocio y después se actúa. */}
-      <div className="tv-quick">
-        <QuickAction
-          icon={Receipt}
-          title="Cobrar un trabajo"
-          sub="Venta o reparación"
-          onClick={() => onNavigate('cobros')}
-        />
-        <QuickAction
-          icon={Wrench}
-          title="Nueva orden"
-          sub="Ingreso al taller"
-          onClick={() => onNavigate('taller')}
-        />
-        <QuickAction
-          icon={ArrowRightLeft}
-          title="Entrada de stock"
-          sub="Repuestos e insumos"
-          onClick={() => onNavigate('inventario_movimientos')}
-        />
-        <QuickAction
-          icon={Store}
-          title="Facturas del día"
-          sub="Comprobantes y Hacienda"
-          onClick={() => onNavigate('facturacion')}
-        />
-      </div>
+      <Card title="Control de ganancias">
+        <p className="tv-hint !mt-0 mb-3">
+          Suma el costo real de los repuestos e insumos facturados en cada cobro — no solo el ingreso bruto.
+        </p>
+        <div className="tv-grid tv-grid-3">
+          <Stat label="Ingresos" value={colones(ingresos)} foot="Bruto, IVA incluido" icon={TrendingUp} />
+          <Stat
+            label="Costo de repuestos e insumos"
+            value={colones(costoRepuestosTotal)}
+            foot={costoRegaliasTotal > 0 ? `+ ${colones(costoRegaliasTotal)} en regalías` : 'Sin regalías entregadas'}
+            icon={Wrench}
+          />
+          <Stat
+            label="Margen neto"
+            value={colones(margenTotal)}
+            foot={ingresos > 0 ? `${((margenTotal / ingresos) * 100).toFixed(1)}% sobre ingresos` : 'Sin ventas todavía'}
+            icon={ShieldAlert}
+            alert={margenTotal < 0}
+          />
+        </div>
+      </Card>
 
       <div className="tv-grid tv-grid-2">
         <Card title="Ventas de los últimos 7 días">
@@ -446,15 +379,8 @@ function Esqueleto() {
           <div className={`${bloque} h-3.5 w-72`} />
         </div>
       </div>
-      {/* Reproduce el mosaico real: la tarjeta protagonista ocupa dos por
-          dos y las demás una casilla, así que al llegar los datos nada
-          cambia de sitio. */}
-      <div className="tv-bento">
-        <div className={`${bloque} h-[104px] sm:h-full min-h-[104px]`} data-span="hero" />
-        {Array.from({ length: 5 }).map((_, i) => <div key={i} className={`${bloque} h-[104px]`} />)}
-      </div>
-      <div className="tv-quick">
-        {Array.from({ length: 4 }).map((_, i) => <div key={i} className={`${bloque} h-[60px]`} />)}
+      <div className="tv-grid tv-grid-6">
+        {Array.from({ length: 6 }).map((_, i) => <div key={i} className={`${bloque} h-[104px]`} />)}
       </div>
       <div className="tv-grid tv-grid-2">
         <div className={`${bloque} h-[330px]`} />
