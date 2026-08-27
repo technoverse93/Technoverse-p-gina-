@@ -119,6 +119,13 @@ export default function AdminShell({
     setSelectorAbierto(false);
   }, [onNavigate]);
 
+  // Sin estos dos, cada botón que abre o cierra el selector pasaba un
+  // `() => setSelectorAbierto(…)` nuevo en cada render de AdminShell, lo
+  // que le rompía la memoización a `BarraDePestanas` y a
+  // `SelectorDeModulos` aunque el resto de sus props no hubiera cambiado.
+  const abrirSelector = useCallback(() => setSelectorAbierto(true), []);
+  const cerrarSelector = useCallback(() => setSelectorAbierto(false), []);
+
   // Ctrl/⌘+K abre el selector desde cualquier parte del panel.
   useEffect(() => {
     const alTeclear = (e: KeyboardEvent) => {
@@ -214,7 +221,7 @@ export default function AdminShell({
           <button
             type="button"
             className="tv-lanzador"
-            onClick={() => setSelectorAbierto(true)}
+            onClick={abrirSelector}
             aria-label="Todos los módulos"
             title="Todos los módulos  ·  Ctrl K"
           >
@@ -231,7 +238,7 @@ export default function AdminShell({
             activa={pestanaActiva}
             onActivar={ir}
             onCerrar={onCerrarPestana}
-            onNueva={() => setSelectorAbierto(true)}
+            onNueva={abrirSelector}
           />
 
           {/* Hueco de las acciones de la pantalla activa. Lo llena cada
@@ -416,7 +423,7 @@ export default function AdminShell({
           type="button"
           className="tv-dock-item"
           data-active={selectorAbierto || undefined}
-          onClick={() => setSelectorAbierto(true)}
+          onClick={abrirSelector}
           aria-label="Todos los módulos"
         >
           <LayoutGrid className="w-[19px] h-[19px]" aria-hidden="true" />
@@ -427,7 +434,7 @@ export default function AdminShell({
       {selectorAbierto && (
         <SelectorDeModulos
           onElegir={ir}
-          onCerrar={() => setSelectorAbierto(false)}
+          onCerrar={cerrarSelector}
           esSupremo={esSupremo}
           tabActivo={activeTab}
           abiertas={pestanasAbiertas}
@@ -457,8 +464,15 @@ export default function AdminShell({
  * pegado al borde derecho, encima de la tira. Si el «+» viajara dentro
  * del desplazamiento, con cinco pestañas abiertas habría que arrastrar
  * hasta el final para poder abrir la sexta.
+ *
+ * Envuelta en `React.memo`: sin esto, cada tecla en un formulario de
+ * CUALQUIER pestaña —incluidas las de fondo— volvía a ejecutar el cuerpo
+ * de esta función, que recorre `abiertas` y resuelve el módulo de cada
+ * una. Con las props ya estabilizadas en el componente padre
+ * (`AdminShell`), `abiertas`/`activa` no cambian entre teclas y el
+ * `memo` evita ese trabajo entero.
  */
-function BarraDePestanas({
+const BarraDePestanas = React.memo(function BarraDePestanas({
   abiertas,
   activa,
   onActivar,
@@ -538,7 +552,7 @@ function BarraDePestanas({
       </button>
     </div>
   );
-}
+});
 
 // ---------------------------------------------------------------------
 // SELECTOR DE MÓDULOS
@@ -567,8 +581,12 @@ function BarraDePestanas({
  * dónde lleva, y encima el número hay que calcularlo antes de dibujar el
  * menú. Los datos son del módulo: se ven al entrar, que es donde
  * significan algo.
+ *
+ * Envuelto en `React.memo` por la misma razón que `BarraDePestanas`: se
+ * queda montado mientras el selector está abierto y no debe repintarse
+ * por cambios ajenos a él (el reloj de la barra, el menú de cuenta…).
  */
-function SelectorDeModulos({
+const SelectorDeModulos = React.memo(function SelectorDeModulos({
   onElegir,
   onCerrar,
   esSupremo,
@@ -636,4 +654,4 @@ function SelectorDeModulos({
       </div>
     </div>
   );
-}
+});

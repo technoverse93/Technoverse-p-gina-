@@ -3,7 +3,7 @@
 // desmonta al salir, así que no hay entrada ni salida que animar. El
 // cambio de pestaña se resuelve con una transición de opacidad en CSS,
 // que corre en el compositor y no cuesta trabajo en el hilo principal.
-import React, { Activity, useState, useEffect, useLayoutEffect, useMemo, useRef, Suspense, lazy } from 'react';
+import React, { Activity, useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
 import { PaginatedTbody } from './PaginationHelper';
 import { CustomSelect } from './CustomSelect';
 import {
@@ -461,7 +461,13 @@ export default function AdminPanel({
     };
   }, []);
 
-  const loadAllAdminData = () => {
+  // `useCallback` con dependencias vacías: no lee nada del closure que
+  // cambie entre renders (los `set...` son estables, `onRefreshTrigger`
+  // es una prop que en la práctica no cambia de identidad). Sin esto,
+  // cada tecla en CUALQUIER formulario del panel recreaba esta función y
+  // rompía la memoización de los cinco módulos lazy a los que se les pasa
+  // como `onDataChanged`/`onRepairUpdated`.
+  const loadAllAdminData = useCallback(() => {
     const db = getDB();
     setProducts(db.products || []);
     setOrders(db.orders || []);
@@ -482,7 +488,7 @@ export default function AdminPanel({
     if (onRefreshTrigger) {
       onRefreshTrigger();
     }
-  };
+  }, [onRefreshTrigger]);
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -598,7 +604,7 @@ export default function AdminPanel({
     toast.success('Parámetros de facturación fiscal y de operación residencial guardados con éxito.');
   };
 
-  const handleLogout = async () => {
+  const handleLogout = useCallback(async () => {
     if (currentUser) {
       addAuditLog(currentUser.email, 'Seguridad', 'Logout', 'Sesión cerrada por el usuario.');
     }
@@ -607,7 +613,7 @@ export default function AdminPanel({
     // huella, y por eso cerrar sesión mataba la biometría.
     await cerrarSesionConservandoBiometria();
     onLogout();
-  };
+  }, [currentUser, onLogout]);
 
   // Check RBAC permission for modules
   // Ya no existen roles secundarios: cualquier usuario autenticado en el
@@ -993,11 +999,20 @@ export default function AdminPanel({
    * no `pushState` para no llenar el historial: quien pulsa "atrás"
    * espera salir del panel, no recorrer los doce módulos que visitó.
    */
-  const irAModulo = (tab: string) => {
+  const irAModulo = useCallback((tab: string) => {
     pestanas.abrir(tab);
     setActiveDropdown(null);
     try { window.history.replaceState(null, '', `/admin/${tab}`); } catch { /* la navegación funciona igual */ }
-  };
+  }, [pestanas.abrir]);
+
+  // Antes era un arrow function inline en el JSX de Inventario: nuevo en
+  // cada render, así que `InventarioControl` no podía memoizarse aunque
+  // se envolviera en `React.memo` — su prop `onTabChange` cambiaba de
+  // identidad de todas formas.
+  const alCambiarSubTabInventario = useCallback(
+    (sub: string) => irAModulo(`inventario_${sub}`),
+    [irAModulo]
+  );
 
   /**
    * El contenido de UNA pestaña.
@@ -1028,7 +1043,7 @@ export default function AdminPanel({
               currentUser={currentUser}
               onDataChanged={loadAllAdminData}
               defaultSubTab={tab.startsWith('inventario_') ? (tab.replace('inventario_', '') as any) : 'productos'}
-              onTabChange={(tab) => irAModulo(`inventario_${tab}`)}
+              onTabChange={alCambiarSubTabInventario}
             />
           </Suspense>
         )}

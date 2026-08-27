@@ -74,7 +74,7 @@ function garantiaDesdeProducto(warranty?: string): string {
   return '3';
 }
 
-export default function FacturacionPanel({ currentUser, onDataChanged }: Props) {
+function FacturacionPanel({ currentUser, onDataChanged }: Props) {
   const toast = useToast();
   const confirm = useConfirm();
 
@@ -783,6 +783,10 @@ export default function FacturacionPanel({ currentUser, onDataChanged }: Props) 
     </div>
   );
 }
+
+// Mismo motivo que en los otros módulos pesados: el formulario de cobro
+// entero se volvía a ejecutar por cada tecla ajena en otra pestaña.
+export default React.memo(FacturacionPanel);
 
 // ---------------------------------------------------------------------
 // LISTA DE INSUMOS

@@ -23,7 +23,7 @@ export const RESOLVED_RANGE_MS: Record<ResolvedRange, number> = {
   '30d': 30 * 24 * 60 * 60 * 1000
 };
 
-export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
+function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   const toast = useToast();
   const confirm = useConfirm();
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
@@ -204,3 +204,6 @@ export default function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
     </div>
   );
 }
+
+// Mismo motivo que en los otros módulos pesados.
+export default React.memo(ChatCRM);
