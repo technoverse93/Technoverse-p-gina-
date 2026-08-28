@@ -49,7 +49,7 @@ interface Props {
   abiertas: string[];
 }
 
-export default function NuevaPestana({ onElegir, esSupremo, abiertas }: Props) {
+function NuevaPestana({ onElegir, esSupremo, abiertas }: Props) {
   // Se calcula una sola vez al montar: si el uso cambia mientras esta
   // pestaña sigue abierta de fondo, la fila de frecuentes se pone al día
   // la próxima vez que se abra una «Nueva pestaña», no en caliente. Es
@@ -120,3 +120,11 @@ export default function NuevaPestana({ onElegir, esSupremo, abiertas }: Props) {
     </div>
   );
 }
+
+// Igual que el resto de contenidos de pestaña (`InventarioControl`,
+// `TallerKanban`…): con `<Activity mode="hidden">` de por medio, sin
+// `memo` este componente se volvía a ejecutar entero cada vez que el
+// panel se repintaba por algo ajeno — un dato de otra pestaña llegando
+// por Realtime, por ejemplo — aunque estuviera de fondo y sus props no
+// hubieran cambiado.
+export default React.memo(NuevaPestana);
