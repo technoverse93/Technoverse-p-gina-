@@ -431,21 +431,52 @@ export default function AdminPanel({
       }
     };
     
+    // -------------------------------------------------------------------
+    // RECARGA AGRUPADA — el tirón más caro del panel
+    // -------------------------------------------------------------------
+    // `loadAllAdminData()` no es barato: llama a `getDB()`, que clona en
+    // profundidad la base ENTERA (once tablas, síncrono, en el hilo
+    // principal), y después reemplaza ocho arreglos de estado, con lo que
+    // se vuelve a pintar TODA pestaña montada.
+    //
+    // Y se disparaba una vez por evento. Una sincronización de Realtime
+    // que trae productos, pedidos y reparaciones en la misma ráfaga son
+    // tres eventos seguidos: tres clonaciones completas y tres pasadas de
+    // repintado para llegar exactamente al mismo estado final. Eso es el
+    // bloqueo del hilo principal y la caída de fotogramas que se siente al
+    // trabajar mientras entran datos.
+    //
+    // Con `requestAnimationFrame` todos los eventos de una misma ráfaga
+    // colapsan en UNA sola recarga, justo antes del siguiente pintado. No
+    // se pierde ninguna actualización: la que se ejecuta lee el estado más
+    // reciente, que ya incluye lo que trajeron las demás. Y como solo hay
+    // una devolución de llamada encolada a la vez, con la aplicación en
+    // segundo plano —donde el navegador congela `rAF`— no se acumula
+    // trabajo: al volver se ejecuta una vez y con los datos al día.
+    let recargaPendiente = 0;
+    const pedirRecarga = () => {
+      if (recargaPendiente) return;
+      recargaPendiente = requestAnimationFrame(() => {
+        recargaPendiente = 0;
+        loadAllAdminData();
+      });
+    };
+
     const handleDbUpdate = () => {
-      loadAllAdminData();
+      pedirRecarga();
     };
 
     window.addEventListener('resize', handleResize);
     window.addEventListener('storage', handleDbUpdate);
     window.addEventListener('technoverse_db_updated', handleDbUpdate);
-    
+
     // Also set up BroadcastChannel to receive updates in real-time across tabs/contexts
     let channel: BroadcastChannel | null = null;
     try {
       channel = new BroadcastChannel('technoverse_db_channel');
       channel.onmessage = (event) => {
         if (event.data && event.data.type === 'UPDATE_DB') {
-          loadAllAdminData();
+          pedirRecarga();
         }
       };
     } catch (e) {
@@ -453,6 +484,7 @@ export default function AdminPanel({
     }
 
     return () => {
+      if (recargaPendiente) cancelAnimationFrame(recargaPendiente);
       window.removeEventListener('resize', handleResize);
       window.removeEventListener('storage', handleDbUpdate);
       window.removeEventListener('technoverse_db_updated', handleDbUpdate);
@@ -462,12 +494,12 @@ export default function AdminPanel({
     };
   }, []);
 
-  // `useCallback` con dependencias vacías: no lee nada del closure que
-  // cambie entre renders (los `set...` son estables, `onRefreshTrigger`
-  // es una prop que en la práctica no cambia de identidad). Sin esto,
-  // cada tecla en CUALQUIER formulario del panel recreaba esta función y
-  // rompía la memoización de los cinco módulos lazy a los que se les pasa
-  // como `onDataChanged`/`onRepairUpdated`.
+  // `useCallback` con dependencias vacías: no lee NADA del closure —solo
+  // llama a `set...`, que React garantiza estables—, así que ahora la
+  // lista vacía es literal y no una aproximación. Sin esto, cada tecla en
+  // CUALQUIER formulario del panel recreaba esta función y rompía la
+  // memoización de los cinco módulos lazy a los que se les pasa como
+  // `onDataChanged`/`onRepairUpdated`.
   const loadAllAdminData = useCallback(() => {
     const db = getDB();
     setProducts(db.products || []);
@@ -485,11 +517,28 @@ export default function AdminPanel({
     setDeliveries(db.deliveries || []);
     setCampaigns(db.marketing_campaigns || []);
     setAuditLog(db.audit_log || []);
-    
-    if (onRefreshTrigger) {
-      onRefreshTrigger();
-    }
-  }, [onRefreshTrigger]);
+
+    // AQUÍ IBA UN `onRefreshTrigger()` EN CADA RECARGA. Se quitó porque no
+    // refrescaba nada y costaba un repintado del árbol ENTERO.
+    //
+    // `onRefreshTrigger` es `triggerRefresh` de App.tsx, que hace
+    // `setRefreshTrigger(n + 1)`. Ese estado tiene UN solo consumidor:
+    // la prop `onRefreshTrigger` de `PublicStore`. Y `PublicStore` y este
+    // panel son las dos ramas EXCLUYENTES del mismo ternario en App.tsx
+    // (`currentView === 'store' ? <PublicStore/> : <AdminPanel/>`), así
+    // que mientras el panel está abierto la tienda no está montada y no
+    // hay nadie leyendo ese número.
+    //
+    // El efecto real era, por cada actualización de la base: repintar
+    // App.tsx completo —y con él todo el panel y todas sus pestañas
+    // montadas— para mover un contador que nadie mira. Encima del
+    // repintado que ya causan los ocho `set...` de arriba.
+    //
+    // La tienda sigue enterándose de los cambios: al salir del panel,
+    // `onNavigateToStore` llama a `triggerRefresh()` explícitamente antes
+    // de cambiar de vista, y además `PublicStore` se monta de cero y lee
+    // la base al montarse.
+  }, []);
 
   const handleLogoChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];

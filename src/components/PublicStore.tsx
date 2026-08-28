@@ -13,7 +13,7 @@ import { MarketingRow } from './MarketingRow';
 import { Product, Order, OrderItem, RepairOrder } from '../types';
 import { supabase } from '../supabaseClient';
 import { getDB, getDBVersion, saveDB, addAuditLog } from '../utils/storage';
-import { iniciarSesionVigilada } from '../utils/adminLogin';
+import { iniciarSesionVigilada, conTope } from '../utils/adminLogin';
 import { soportaBiometria, entrarConBiometria, biometriaYaActivada } from '../utils/biometria';
 import { CATEGORIAS_CON_TODOS, coincideCategoria, esRepuesto, esInsumo } from '../utils/categorias';
 import { processSaleAtomic } from '../utils/transactions';
@@ -416,8 +416,15 @@ export default function PublicStore({
 
     let userId = acceso.userId;
     if (!userId) {
-      const { data: sesion } = await supabase.auth.getUser();
-      userId = sesion?.user?.id;
+      // Con tope, por lo mismo que la lectura del perfil de más abajo:
+      // `getUser()` sale a la red y, colgado, dejaba el formulario girando
+      // para siempre.
+      try {
+        const { data: sesion } = await conTope(supabase.auth.getUser(), 8000);
+        userId = sesion?.user?.id;
+      } catch {
+        userId = undefined;
+      }
     }
     if (!userId) {
       toast.error('No se pudo confirmar la sesión. Intente de nuevo.');
@@ -446,22 +453,54 @@ export default function PublicStore({
     // síntomas reportados. Con una segunda oportunidad, ese caso
     // desaparece; si fallan las dos, el problema es real y sí hay que
     // avisar.
+    // CADA INTENTO LLEVA TOPE DE TIEMPO, y no lo llevaba.
+    //
+    // Aquí estaba el bloqueo reportado ("dice verificando y se queda
+    // cargando y cargando"): la contraseña ya se había validado —en la
+    // bitácora de Supabase se ven los ingresos con estado 200— pero esta
+    // lectura del perfil se quedaba COLGADA, que no es lo mismo que
+    // fallar. Un `await` colgado no lanza, no vuelve y no deja continuar:
+    // el `finally` que apaga "Verificando acceso…" nunca llegaba a
+    // correr. Coincidió con dos reinicios de PostgREST en la misma hora,
+    // justo el momento en que una petición se queda esperando sin que
+    // nadie la corte.
+    //
+    // Con el tope, una lectura colgada se convierte en un intento fallido
+    // más y se vuelve a probar. Son tres intentos con pausas crecientes
+    // porque el corte típico —un reinicio del servicio— dura segundos, no
+    // minutos: reintentar es lo que de verdad resuelve el caso, y el tope
+    // es lo que hace posible reintentar.
     let profile: any = null;
-    for (let intento = 0; intento < 2 && !profile; intento++) {
-      if (intento > 0) await new Promise(r => setTimeout(r, 400));
-      // Columnas explícitas: `profiles.security_pin_hash` tiene el SELECT
-      // revocado a nivel de columna para el cliente, así que un
-      // `select('*')` fallaría entero en vez de solo omitirla.
-      const { data } = await supabase
-        .from('profiles')
-        .select('id, email, name, role, created_at')
-        .eq('id', userId)
-        .maybeSingle();
-      profile = data;
+    let huboCorte = false;
+    for (let intento = 0; intento < 3 && !profile; intento++) {
+      if (intento > 0) await new Promise(r => setTimeout(r, 400 * intento));
+      try {
+        // Columnas explícitas: `profiles.security_pin_hash` tiene el SELECT
+        // revocado a nivel de columna para el cliente, así que un
+        // `select('*')` fallaría entero en vez de solo omitirla.
+        const { data } = await conTope(
+          supabase
+            .from('profiles')
+            .select('id, email, name, role, created_at')
+            .eq('id', userId)
+            .maybeSingle(),
+          8000
+        );
+        profile = data;
+      } catch {
+        // Se agotó el tiempo de ESTE intento. Se anota para poder dar un
+        // mensaje que distinga "el servidor no contestó" de "la cuenta no
+        // tiene perfil", que son dos problemas muy distintos.
+        huboCorte = true;
+      }
     }
 
     if (!profile) {
-      toast.error('No se pudo cargar el perfil de la cuenta. Contacte al administrador.');
+      toast.error(
+        huboCorte
+          ? 'El servidor tardó demasiado en responder. Su contraseña es correcta: vuelva a tocar "Iniciar Sesión" en un momento.'
+          : 'No se pudo cargar el perfil de la cuenta. Contacte al administrador.'
+      );
       return;
     }
 
