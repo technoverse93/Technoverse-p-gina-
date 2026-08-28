@@ -4,7 +4,7 @@ import { User } from './types';
 import { initKeyboard } from './mobile/keyboard';
 import { initOtaUpdater } from './mobile/otaUpdater';
 import { OverlayProvider, useToast } from './components/ui/Overlays';
-import { conexionBloqueada, detalleDeBloqueo } from './utils/adminLogin';
+import { conexionBloqueada, detalleDeBloqueo, conTope } from './utils/adminLogin';
 import { registrarVisita } from './utils/huella';
 import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada } from './utils/biometria';
 import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO, UMBRAL_REINGRESO_RAPIDO_MS } from './mobile/appLock';
@@ -212,7 +212,18 @@ function AppInner() {
         // volvería a entrar sola al reabrir la aplicación.
         if (sesionBloqueada()) return;
 
-        const { data } = await supabase.auth.getSession();
+        // CON TOPE DE TIEMPO, igual que el formulario de acceso.
+        //
+        // Es el mismo fallo que dejó a dos cuentas fuera: una petición
+        // que se queda COLGADA (no que falla) durante un reinicio del
+        // servicio. Aquí no hay un indicador girando, pero el efecto para
+        // la persona es igual de malo: `currentUser` se queda en null y la
+        // aplicación la trata como visitante aunque su sesión sea
+        // perfectamente válida — es decir, "no me deja entrar" otra vez,
+        // solo que por el otro camino. Con tope, si no responde se sigue
+        // como visitante y el formulario de acceso queda disponible, que
+        // es un final honesto en vez de una espera infinita.
+        const { data } = await conTope(supabase.auth.getSession(), 8000);
         const usuario = data?.session?.user;
         if (!vigente || !usuario?.id) return;
 
@@ -221,11 +232,14 @@ function AppInner() {
         // ese hash tiene revocado el SELECT a nivel de columna para
         // cualquier rol del cliente. Un `select('*')` fallaría entero con
         // "permission denied for column" en vez de solo omitirla.
-        const { data: perfil } = await supabase
-          .from('profiles')
-          .select('id, email, name, role, created_at')
-          .eq('id', usuario.id)
-          .maybeSingle();
+        const { data: perfil } = await conTope(
+          supabase
+            .from('profiles')
+            .select('id, email, name, role, created_at')
+            .eq('id', usuario.id)
+            .maybeSingle(),
+          8000
+        );
 
         if (!vigente || !perfil) return;
 
