@@ -108,13 +108,21 @@
 .tv-scroll {
   flex: 1;
   overflow-y: auto;
-  overscroll-behavior-y: contain;
+  /* `none`, no `contain`. `contain` corta el encadenamiento hacia el
+     contenedor de arriba pero DEJA el rebote elástico dentro de este
+     mismo elemento: es el "deslizamiento de unos fotogramas" que se
+     sentía en la Nueva pestaña aunque no hubiera nada más abajo. Con
+     `none` el desplazamiento normal sigue igual y solo desaparece ese
+     rebote contra los bordes. */
+  overscroll-behavior-y: none;
   -webkit-overflow-scrolling: touch;
   padding: var(--tv-gap);
-  /* La navegación es la tira de pestañas, arriba: no hay un dock fijo
-     abajo que reservarle sitio. Lo que sí queda es la barra de gestos de
-     Android/iOS. */
-  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
+  /* El relleno inferior quedó heredado del dock: reservaba 28 px para una
+     barra que ya no existe, y eso solo bastaba para empujar el contenido
+     28 px por debajo del borde y crear un scroll que no llevaba a ningún
+     sitio. Ahora es simétrico con el resto, más la barra de gestos de
+     Android/iOS, que sí sigue ahí. */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tv-gap));
 }
 
 @media (min-width: 1024px) {
@@ -751,15 +759,33 @@
 .tv-nueva {
   display: flex;
   flex-direction: column;
-  gap: var(--tv-gap);
+  gap: 14px;
   max-width: 760px;
 }
 
-.tv-nueva-titulo {
+/* Encabezado estático, deliberadamente discreto.
+   ---------------------------------------------------------------------
+   POR QUÉ ESTA REGLA VA ANCLADA A `#admin-panel-root` Y CON `!important`
+   ---------------------------------------------------------------------
+   No es paranoia de especificidad: sin eso, esta regla NO se aplicaba en
+   absoluto. index.css declara `h1 { font-size: clamp(1.35rem, 1.18rem +
+   0.8vw, 1.85rem) !important }` para la tienda, y ese `!important` gana
+   a cualquier declaración normal por muy específica que sea. Medido
+   sobre el panel real, el título salía a 29,6 px en escritorio y 21,9 px
+   en teléfono — contra los 12,5 px de las etiquetas de zona que tiene al
+   lado. Ahí estaba el "se ve demasiado grande y desproporcionado": un
+   rótulo 2,4 veces mayor que todo lo demás, en una pantalla cuyo
+   contenido real son los módulos, no su título.
+   Con `!important` en ambos lados manda la especificidad, y (1,1,0) le
+   gana a (0,0,1).
+   La escala de la tienda no se toca: allá esos tamaños son los correctos
+   y el panel es lo único que se sale del molde. */
+#admin-panel-root .tv-nueva-titulo {
   font-family: var(--font-display);
-  font-size: 19px;
-  font-weight: 800;
-  letter-spacing: -0.015em;
+  font-size: 15px !important;
+  line-height: 1.3;
+  font-weight: 700;
+  letter-spacing: -0.01em;
   color: var(--text-primary);
   margin: 0;
 }
@@ -799,8 +825,8 @@
 }
 
 .tv-nueva-circulo {
-  width: 50px;
-  height: 50px;
+  width: 44px;
+  height: 44px;
   border-radius: 50%;
   background: var(--tv-panel);
   border: 1px solid var(--tv-hairline);
@@ -922,7 +948,7 @@
   .tv-nueva-grid {
     display: grid;
     grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 12px 8px;
+    gap: 10px 8px;
   }
 
   /* Desaparece como caja: sus hijos (la etiqueta y la lista) pasan a ser
@@ -953,16 +979,16 @@
   .tv-nueva-item {
     flex-direction: column;
     align-items: center;
-    gap: 6px;
+    gap: 5px;
     width: 100%;
-    padding: 10px 4px;
+    padding: 8px 4px;
     text-align: center;
   }
 
   .tv-nueva-ic {
-    width: 38px;
-    height: 38px;
-    border-radius: 10px;
+    width: 34px;
+    height: 34px;
+    border-radius: 9px;
     background: var(--tv-panel);
     border: 1px solid var(--tv-hairline);
   }
@@ -981,10 +1007,12 @@
   /* El punto de "abierto" se mueve a la esquina del icono: en la fila
      horizontal iba al final del texto, pero aquí el texto ya no está al
      lado del icono. */
+  /* El 23px sigue al ancho del icono: 34/2 = 17, más 6 de separación. Si
+     `.tv-nueva-ic` cambia de tamaño, este número cambia con él. */
   .tv-nueva-punto-abierto {
     position: absolute;
     top: 6px;
-    right: calc(50% - 25px);
+    right: calc(50% - 23px);
     margin-left: 0;
   }
 }

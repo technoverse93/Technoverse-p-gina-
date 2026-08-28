@@ -125,9 +125,19 @@ function detectarOrigen(): 'apk' | 'web' {
   }
 }
 
-function conTope<T>(promesa: Promise<T>, ms: number): Promise<T> {
+/**
+ * Le pone un límite de tiempo a cualquier espera de red.
+ *
+ * Se exporta porque el formulario de la tienda necesita exactamente lo
+ * mismo para los pasos que vienen DESPUÉS de esta función (ver
+ * `completarInicioSesion` en PublicStore.tsx). Acepta `PromiseLike`
+ * porque los constructores de consulta de supabase-js son "thenables",
+ * no promesas de verdad, y `Promise.race` sobre uno de ellos sin envolver
+ * no se comporta igual.
+ */
+export function conTope<T>(promesa: PromiseLike<T>, ms: number): Promise<T> {
   return Promise.race([
-    promesa,
+    Promise.resolve(promesa),
     new Promise<T>((_, rechazar) =>
       setTimeout(() => rechazar(new Error('tiempo agotado')), ms)
     ),
@@ -137,13 +147,33 @@ function conTope<T>(promesa: Promise<T>, ms: number): Promise<T> {
 /**
  * Camino de respaldo: el de toda la vida, contra Supabase Auth directo.
  * Se usa únicamente cuando el portero no está disponible.
+ *
+ * LLEVA TOPE DE TIEMPO, y no lo llevaba. Esa falta es la que dejaba la
+ * pantalla clavada en "Verificando acceso…" para siempre: si la petición
+ * se quedaba colgada —no rechazada, colgada—, este `await` no terminaba
+ * nunca, el `finally` que apaga el indicador de carga jamás se ejecutaba
+ * y no había mensaje de error que mostrar. El resultado para la persona
+ * es el peor posible: un giro infinito sin explicación y sin forma de
+ * reintentar. Con el tope, un cuelgue se convierte en un error normal y
+ * el formulario vuelve a quedar utilizable.
  */
 async function accesoDirecto(correo: string, password: string): Promise<ResultadoAcceso> {
-  const { data, error } = await supabase.auth.signInWithPassword({ email: correo, password });
-  if (error || !data?.user) {
-    return { ok: false, porteroCaido: true, mensaje: MENSAJE_CREDENCIALES };
+  try {
+    const { data, error } = await conTope(
+      supabase.auth.signInWithPassword({ email: correo, password }),
+      TIEMPO_LIMITE_MS
+    );
+    if (error || !data?.user) {
+      return { ok: false, porteroCaido: true, mensaje: MENSAJE_CREDENCIALES };
+    }
+    return { ok: true, userId: data.user.id, porteroCaido: true };
+  } catch {
+    return {
+      ok: false,
+      porteroCaido: true,
+      mensaje: 'El servidor no respondió a tiempo. Revise su conexión e inténtelo de nuevo.',
+    };
   }
-  return { ok: true, userId: data.user.id, porteroCaido: true };
 }
 
 // ---------------------------------------------------------------------
