@@ -166,10 +166,24 @@
   /* En teléfono las acciones de la pantalla bajan a su propia línea (ver
      más abajo): la regleta tiene que poder crecer para alojarlas. */
   flex-wrap: wrap;
+  /* FALLO CORREGIDO — la regleta entera desaparecía detrás del notch.
+     ---------------------------------------------------------------------
+     `.tv-shell` mide `100dvh` sin ningún relleno arriba, e `index.html`
+     declara `viewport-fit=cover`: en un iPhone con recorte (notch o
+     Dynamic Island) eso deja que el WebView se dibuje de borde a borde,
+     por DEBAJO de la barra de estado. Sin este relleno, la regleta —36 a
+     41 px de alto, medido— caía COMPLETA dentro de esa franja reservada:
+     ni se veía ni se podía tocar. Es justo el "se sobresale hacia arriba
+     y no deja usar las pestañas" que se reportó en un iPhone 13 Pro Max.
+     `env(safe-area-inset-top, 0px)` no rompe nada donde no aplica —
+     Android, escritorio— porque ahí vale 0. */
+  padding-top: env(safe-area-inset-top, 0px);
 }
 
 @media (min-width: 1024px) {
-  .tv-regleta { padding: 0 14px; gap: 10px; }
+  /* El `padding: 0 14px` de acá pisaría el padding-top de arriba si no se
+     repitiera: un shorthand siempre fija los CUATRO lados, así sea a 0. */
+  .tv-regleta { padding: 0 14px; gap: 10px; padding-top: env(safe-area-inset-top, 0px); }
 }
 
 /* EN TELÉFONO Y APK: dos líneas, no una apretada.
@@ -179,7 +193,10 @@
    se queda con toda la primera línea y las acciones ocupan la segunda,
    completa, con su propio desplazamiento lateral. */
 @media (max-width: 899px) {
-  .tv-regleta { padding-top: 4px; padding-bottom: 4px; row-gap: 4px; }
+  /* Este es el que de verdad importa para el fallo del notch: es el que
+     rige en el ancho de un teléfono. Se suma el margen de 4px de siempre
+     al relleno del recorte — no se reemplaza uno por otro. */
+  .tv-regleta { padding-top: calc(4px + env(safe-area-inset-top, 0px)); padding-bottom: 4px; row-gap: 4px; }
   .tv-tabs-zona { flex: 1 1 auto; min-width: 0; }
   /* La especificidad extra es a propósito: la regla base de
      `.tv-regleta-acciones` está declarada más abajo en este archivo y,
