@@ -3,7 +3,7 @@
 // =====================================================================
 // UNA sola definición de los módulos del panel y de sus carpetas,
 // consumida por las superficies que los muestran: la regleta de
-// escritorio, el selector de módulos, el dock de móvil y el buscador.
+// escritorio, la pestaña «Nueva pestaña» y el dock de móvil.
 //
 // ---------------------------------------------------------------------
 // QUÉ CAMBIÓ Y POR QUÉ
@@ -27,7 +27,7 @@
 
 import {
   LayoutDashboard, Package, Wrench, ArrowRightLeft, FileSpreadsheet,
-  Cpu, Boxes,
+  Cpu, Boxes, LayoutGrid,
   MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
   UserCog,
 } from 'lucide-react';
@@ -233,15 +233,36 @@ export const NAV_GROUPS: AdminNavGroup[] = [
 export const NAV_ITEMS: AdminNavItem[] = NAV_GROUPS.flatMap(g => g.items);
 
 /**
- * Módulos que ocupan las ranuras fijas del dock móvil.
- *
- * Son CUATRO y no cinco a propósito: la quinta ranura la ocupa siempre
- * el botón "Más", y meter seis elementos en el ancho de un teléfono
- * deja etiquetas de cuatro letras cortadas. Se eligieron los que se
- * abren varias veces al día; el resto está a un toque de distancia en
- * el selector de módulos, que además es buscable.
+ * La pestaña «Nueva pestaña»: el lanzador que reemplaza al modal del
+ * botón «+», con el mismo espíritu que la página de inicio de un
+ * navegador. No es un módulo real —no aparece en `NAV_GROUPS`, así que
+ * nunca se lista a sí misma en su propia cuadrícula— pero necesita
+ * comportarse como uno para que el resto del sistema de pestañas
+ * (`BarraDePestanas`, `usePestanas`, el ciclo de apertura y cierre) no
+ * tenga que conocer un caso especial.
  */
-export const DOCK_IDS = ['dashboard', 'taller', 'cobros', 'inventario_productos'];
+export const PESTANA_NUEVA = '__nueva__';
+
+const MODULO_NUEVA_PESTANA: AdminNavItem = {
+  id: PESTANA_NUEVA,
+  label: 'Nueva pestaña',
+  short: 'Nueva',
+  icon: LayoutGrid,
+  descripcion: 'Abrir un módulo.',
+  buscar: [],
+};
+
+/**
+ * Los módulos que se abren varias veces al día, de partida.
+ *
+ * Solo alimenta la fila "Frecuentes" de «Nueva pestaña» (ver
+ * `modulosFrecuentes` en `usePestanas.ts`) cuando todavía no hay
+ * historial real de uso guardado — el primer arranque, o un
+ * `localStorage` recién borrado. En cuanto hay uso real, este orden fijo
+ * deja de importar: la lista pasa a ordenarse por lo que la cuenta abre
+ * de verdad.
+ */
+export const MODULOS_HABITUALES = ['dashboard', 'taller', 'cobros', 'inventario_productos'];
 
 /**
  * Traduce un `activeTab` al módulo que le corresponde.
@@ -252,6 +273,8 @@ export const DOCK_IDS = ['dashboard', 'taller', 'cobros', 'inventario_productos'
  * Ciberseguridad.
  */
 export function resolverModulo(tab: string): AdminNavItem {
+  if (tab === PESTANA_NUEVA) return MODULO_NUEVA_PESTANA;
+
   const alias: Record<string, string> = {
     productos: 'inventario_productos',
     inventario: 'inventario_productos',
@@ -284,63 +307,9 @@ export function grupoDe(tab: string): string {
   return grupo?.titulo || 'General';
 }
 
-/** Resultado del buscador: un módulo, o una carpeta concreta de un módulo. */
-export interface ResultadoBusqueda {
-  tab: string;
-  label: string;
-  /** Nombre del módulo cuando el resultado es una carpeta suya. */
-  contexto?: string;
-  icon: LucideIcon;
-}
-
-/**
- * Busca módulos Y carpetas por nombre o por sinónimo.
- *
- * Incluye las carpetas a propósito: al fusionar las cinco vistas de
- * Inventario en un solo módulo, quien escriba "repuestos" tiene que
- * seguir llegando directo a esa vista, no solo a "Inventario".
- *
- * La comparación ignora tildes: quien escribe "bitacora" sin tilde —que
- * es como se escribe con prisa— tiene que encontrar "Bitácora" igual.
- */
-export function buscarModulos(consulta: string, esSupremo = true): ResultadoBusqueda[] {
-  const q = normalizar(consulta);
-  const visibles = NAV_ITEMS.filter(i => !i.soloAdminSupremo || esSupremo);
-
-  const salida: ResultadoBusqueda[] = [];
-  visibles.forEach(item => {
-    const henoModulo = normalizar([item.label, item.descripcion, ...item.buscar].join(' '));
-    if (!q || henoModulo.includes(q)) {
-      salida.push({ tab: item.id, label: item.label, icon: item.icon });
-    }
-    // Las carpetas solo se listan cuando se está buscando algo: sin
-    // consulta, el selector debe enseñar los módulos, no veinte filas.
-    if (q && item.carpetas) {
-      item.carpetas.forEach(c => {
-        const henoCarpeta = normalizar([c.label, ...(c.buscar || [])].join(' '));
-        if (henoCarpeta.includes(q)) {
-          salida.push({ tab: c.tab, label: c.label, contexto: item.label, icon: c.icon || item.icon });
-        }
-      });
-    }
-  });
-
-  // Un módulo con carpetas puede entrar dos veces (por su propio nombre y
-  // por el de una carpeta que comparte palabra). Se deja la primera.
-  const vistos = new Set<string>();
-  return salida.filter(r => (vistos.has(r.tab) ? false : (vistos.add(r.tab), true)));
-}
-
-// Los signos diacríticos que `normalize('NFD')` separa de su letra. Se
-// construye con `RegExp` y no con un literal para que el rango quede
-// escrito con códigos legibles y no como caracteres invisibles en el
-// archivo, que es imposible de revisar en un diff.
-const DIACRITICOS = new RegExp('[\\u0300-\\u036f]', 'g');
-
-function normalizar(texto: string): string {
-  return texto
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(DIACRITICOS, '')
-    .trim();
-}
+// El buscador por texto que vivía aquí (`buscarModulos`, con su
+// `normalizar` de acentos) se retiró junto con el campo de texto del
+// selector de módulos: un input que se enfoca solo levanta el teclado en
+// Android y tapa la lista que se venía a leer. La «Nueva pestaña»
+// (`NuevaPestana.tsx`) que lo reemplaza no busca — enseña los once
+// módulos agrupados, que se leen de un vistazo.

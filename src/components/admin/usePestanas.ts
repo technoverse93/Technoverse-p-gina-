@@ -34,7 +34,7 @@
 
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { RefObject } from 'react';
-import { resolverModulo, resolverCarpeta } from './adminNav';
+import { resolverModulo, resolverCarpeta, MODULOS_HABITUALES, PESTANA_NUEVA } from './adminNav';
 
 /** Módulo que siempre está abierto y que no se puede cerrar. */
 export const PESTANA_INICIAL = 'dashboard';
@@ -58,6 +58,13 @@ export interface EstadoPestanas {
   tabActivo: string;
   /** Abre el módulo que corresponda al tab, o lo activa si ya estaba. */
   abrir: (tab: string) => void;
+  /**
+   * Elige un módulo desde dentro de la pestaña «Nueva pestaña»: la
+   * REEMPLAZA por el módulo elegido en vez de sumar una pestaña más —
+   * igual que en un navegador, tocar un atajo en la página de inicio
+   * navega esa misma pestaña, no abre una nueva encima.
+   */
+  elegirDesdeNueva: (tab: string) => void;
   /** Cierra una pestaña. La inicial no se cierra. */
   cerrar: (modulo: string) => void;
   /** Cierra todas menos la inicial. */
@@ -66,6 +73,58 @@ export interface EstadoPestanas {
   tabDe: (modulo: string) => string;
   /** Si el módulo ya se abrió alguna vez (y por tanto está montado). */
   estaAbierta: (modulo: string) => boolean;
+}
+
+// ---------------------------------------------------------------------
+// FRECUENTES — de verdad, no una lista adivinada
+// ---------------------------------------------------------------------
+// La pestaña «Nueva pestaña» promete los módulos "más usados", así que
+// se cuenta cuántas veces se abre o se activa cada uno y con eso se
+// arma el ranking — no una lista fija a ojo. `localStorage` y no el
+// backend: es una preferencia de ESTE dispositivo, no del negocio, y no
+// vale la pena una tabla ni una sincronización por esto.
+const CLAVE_USO = 'technoverse_uso_modulos';
+const MAX_FRECUENTES = 4;
+
+function registrarUso(modulo: string) {
+  // El panel general está siempre abierto y no es una elección — contarlo
+  // solo inflaría el primer lugar del ranking sin decir nada.
+  if (modulo === PESTANA_NUEVA || modulo === PESTANA_INICIAL) return;
+  try {
+    const bruto = localStorage.getItem(CLAVE_USO);
+    const mapa: Record<string, number> = bruto ? JSON.parse(bruto) : {};
+    mapa[modulo] = (mapa[modulo] || 0) + 1;
+    localStorage.setItem(CLAVE_USO, JSON.stringify(mapa));
+  } catch {
+    // Un dispositivo con almacenamiento lleno o bloqueado se queda sin
+    // frecuentes, no sin panel: no es un error que deba interrumpir nada.
+  }
+}
+
+/**
+ * Los módulos más usados en este dispositivo, más recientes primero en
+ * caso de empate. En una instalación nueva, sin historial todavía, se
+ * completa con `MODULOS_HABITUALES` — un arranque razonable mientras se
+ * acumula uso real.
+ */
+export function modulosFrecuentes(limite = MAX_FRECUENTES): string[] {
+  let mapa: Record<string, number> = {};
+  try {
+    const bruto = localStorage.getItem(CLAVE_USO);
+    mapa = bruto ? JSON.parse(bruto) : {};
+  } catch {
+    mapa = {};
+  }
+
+  const porUso = Object.keys(mapa)
+    .filter(id => resolverModulo(id).id === id) // descarta ids que ya no existen
+    .sort((a, b) => mapa[b] - mapa[a])
+    .slice(0, limite);
+
+  if (porUso.length >= limite) return porUso;
+
+  const relleno = MODULOS_HABITUALES.filter(id => id !== PESTANA_INICIAL && !porUso.includes(id));
+  return [...porUso, ...relleno].slice(0, limite);
 }
 
 export function usePestanas(tabInicial: string): EstadoPestanas {
@@ -109,6 +168,8 @@ export function usePestanas(tabInicial: string): EstadoPestanas {
       carpetaPorModulo.current[modulo] = tab;
     }
 
+    registrarUso(modulo);
+
     setAbiertas(prev => {
       if (prev.includes(modulo)) return prev;
       // Al llegar al tope se descarta la más antigua que NO sea la
@@ -119,6 +180,27 @@ export function usePestanas(tabInicial: string): EstadoPestanas {
       return sacrificable ? siguiente.filter(m => m !== sacrificable) : siguiente;
     });
     setActiva(modulo);
+    repintar(n => n + 1);
+  }, []);
+
+  const elegirDesdeNueva = useCallback((tab: string) => {
+    const modulo = resolverModulo(tab).id;
+    const carpeta = resolverCarpeta(tab);
+    if (carpeta && carpeta.tab === tab) {
+      carpetaPorModulo.current[modulo] = tab;
+    }
+
+    registrarUso(modulo);
+
+    setAbiertas(prev => {
+      const sinNueva = prev.filter(m => m !== PESTANA_NUEVA);
+      // Si el módulo elegido ya estaba abierto en otra pestaña, la «Nueva
+      // pestaña» simplemente desaparece y se salta a la que ya existía —
+      // no tiene sentido abrir el mismo módulo dos veces.
+      return sinNueva.includes(modulo) ? sinNueva : [...sinNueva, modulo];
+    });
+    setActiva(modulo);
+    delete carpetaPorModulo.current[PESTANA_NUEVA];
     repintar(n => n + 1);
   }, []);
 
@@ -155,6 +237,7 @@ export function usePestanas(tabInicial: string): EstadoPestanas {
     activa,
     tabActivo: tabDe(activa),
     abrir,
+    elegirDesdeNueva,
     cerrar,
     cerrarTodas,
     tabDe,
