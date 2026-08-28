@@ -111,10 +111,10 @@
   overscroll-behavior-y: contain;
   -webkit-overflow-scrolling: touch;
   padding: var(--tv-gap);
-  /* En móvil el dock flotante ocupa la franja inferior: sin este hueco
-     la última fila de cualquier tabla queda tapada y no hay forma de
-     llegar a ella. */
-  padding-bottom: calc(var(--tv-dock-h) + env(safe-area-inset-bottom, 0px) + 28px);
+  /* La navegación es la tira de pestañas, arriba: no hay un dock fijo
+     abajo que reservarle sitio. Lo que sí queda es la barra de gestos de
+     Android/iOS. */
+  padding-bottom: calc(env(safe-area-inset-bottom, 0px) + 28px);
 }
 
 @media (min-width: 1024px) {
@@ -734,234 +734,269 @@
 .tv-menu-sep { height: 1px; background: var(--tv-hairline); margin: 5px 4px; }
 
 /* ---------------------------------------------------------------------
-   BUSCADOR DE MÓDULOS (paleta de comandos)
+   NUEVA PESTAÑA
+   ---------------------------------------------------------------------
+   La pantalla que reemplaza al modal del botón «+»: en vez de un
+   recuadro flotante encima del contenido, es el contenido de una
+   pestaña más, con los módulos agrupados por área del negocio.
+
+   El truco de todo este bloque es UN solo árbol de HTML para los dos
+   tamaños. `.tv-nueva-zona` es una caja (escritorio) o directamente
+   `display: contents` — desaparece como caja y dibuja a sus hijos como
+   si fueran hijos DIRECTOS de `.tv-nueva-grid` (teléfono). Sin esto,
+   mostrar "cuadrícula compacta" en móvil y "bloques por zona" en
+   escritorio habría exigido dos marcados distintos.
    --------------------------------------------------------------------- */
 
-.tv-palette-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 100;
-  background: rgba(8, 11, 16, 0.55);
-  backdrop-filter: blur(3px);
-  -webkit-backdrop-filter: blur(3px);
-  display: flex;
-  align-items: flex-start;
-  justify-content: center;
-  padding: 14dvh 16px 16px;
-}
-
-@media (max-width: 640px) {
-  .tv-palette-backdrop { padding: 12px; align-items: flex-start; }
-}
-
-.tv-palette {
-  width: 100%;
-  max-width: 560px;
-  border-radius: var(--tv-radius);
-  background: var(--bg-elevated);
-  border: 1px solid var(--tv-hairline);
-  box-shadow: var(--float-shadow-lg);
-  overflow: hidden;
+.tv-nueva {
   display: flex;
   flex-direction: column;
-  max-height: min(70dvh, 520px);
+  gap: var(--tv-gap);
+  max-width: 760px;
 }
 
-/* Cabecera del selector. Ocupa el sitio del campo de búsqueda que había
-   aquí, y que se retiró a propósito: enfocar un input en Android levanta
-   el teclado al instante y se come más de media pantalla, así que quien
-   solo quería tocar "Inventario" se encontraba tapada justo la lista que
-   venía a leer. Los módulos son once; no hay nada que buscar. */
-.tv-palette-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
-  height: 46px;
-  padding: 0 8px 0 16px;
-  border-bottom: 1px solid var(--tv-hairline);
+.tv-nueva-titulo {
   font-family: var(--font-display);
-  font-size: 13px;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-  flex-shrink: 0;
-}
-
-/* Marca de "ya está abierto en una pestaña". No es un contador ni un
-   aviso: es el estado de la pestaña, y es lo que explica que tocar la
-   fila salte a ella en vez de abrir otra igual. */
-.tv-palette-abierta {
-  margin-left: auto;
-  flex-shrink: 0;
-  padding: 2px 7px;
-  border-radius: 999px;
-  background: var(--tv-accent-soft);
-  color: var(--tv-accent);
-  font-family: var(--font-mono);
-  font-size: 9.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-}
-
-.tv-palette-list {
-  overflow-y: auto;
-  padding: 6px;
-}
-
-.tv-palette-row {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  padding: 10px 11px;
-  border-radius: var(--tv-radius-sm);
-  color: var(--text-primary);
-  font-size: 13.5px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-}
-
-.tv-palette-row[data-cursor='true'] { background: var(--tv-accent-soft); color: var(--tv-accent); }
-.tv-palette-row small {
-  margin-left: auto;
-  font-size: 10.5px;
-  font-weight: 700;
-  letter-spacing: 0.06em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-/* El nombre, que se recorta antes de deformar la fila. */
-.tv-palette-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-/* Contexto a la derecha: "en Inventario" cuando el resultado es una
-   carpeta, o "5 vistas" cuando el módulo tiene carpetas. Es lo que hace
-   que fusionar las cinco entradas de Inventario en una no esconda nada:
-   quien busca "repuestos" ve que existe y de quién es. */
-.tv-palette-ctx {
-  margin-left: auto;
-  flex-shrink: 0;
-  font-size: 11px;
-  font-weight: 600;
-  color: var(--text-muted);
-  white-space: nowrap;
-}
-
-/* Título de sección de la lista sin consulta. */
-.tv-palette-grupo {
-  padding: 12px 14px 5px;
-  font-size: 10px;
+  font-size: 19px;
   font-weight: 800;
+  letter-spacing: -0.015em;
+  color: var(--text-primary);
+  margin: 0;
+}
+
+.tv-nueva-seccion { display: flex; flex-direction: column; gap: 10px; }
+
+.tv-nueva-lbl {
+  font-family: var(--font-mono);
+  font-size: 10px;
+  font-weight: 700;
   letter-spacing: 0.1em;
   text-transform: uppercase;
   color: var(--text-muted);
 }
 
-/* El módulo en el que ya estás, marcado sin robarle el resalte al
-   cursor del teclado. */
-.tv-palette-row[data-actual='true'] {
-  color: var(--tv-accent);
-  font-weight: 700;
-}
-
-/* En teléfono el selector se ancla ABAJO, al alcance del pulgar, en vez
-   de flotar centrado: es la superficie que sustituye a la vieja hoja de
-   "Más" del dock, y se abre con el pulgar desde el dock o desde la
-   regleta. */
-@media (max-width: 640px) {
-  .tv-palette-backdrop { align-items: flex-end; padding: 0; }
-  .tv-palette {
-    width: 100%;
-    max-width: none;
-    max-height: 78dvh;
-    border-radius: 18px 18px 0 0;
-    padding-bottom: env(safe-area-inset-bottom, 0px);
-  }
-}
-
-/* ---------------------------------------------------------------------
-   DOCK INFERIOR (móvil / APK)
-   ---------------------------------------------------------------------
-   Sustituye a la barra inferior a sangre completa. Flota separada de
-   los bordes para que se lea como un control y no como el borde de la
-   pantalla, y respeta la barra de gestos de Android/iOS. */
-
-.tv-dock {
-  position: fixed;
-  left: 10px;
-  right: 10px;
-  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
-  z-index: 45;
-  height: var(--tv-dock-h);
-  padding: 5px;
-  border-radius: 18px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--tv-hairline);
-  box-shadow: var(--float-shadow-lg);
-  align-items: stretch;
-  gap: 2px;
-  /* SIN `display` aquí a propósito: el marcado trae `flex lg:hidden` y
-     declarar display en el CSS anularía ese `hidden`, con lo que el
-     dock aparecería también en escritorio encima del riel. Es
-     exactamente el fallo de menús duplicados que tenía la barra vieja. */
-}
-
-@media (min-width: 1024px) { .tv-dock { display: none !important; } }
-
-/* En tableta el dock no debe estirarse de borde a borde: cinco destinos
-   repartidos en 800px dejan los iconos tan separados que dejan de
-   leerse como un grupo. Se limita el ancho y se centra. */
-@media (min-width: 560px) {
-  .tv-dock {
-    left: 50%;
-    right: auto;
-    width: min(540px, calc(100% - 24px));
-    transform: translateX(-50%);
-  }
-}
-
-.tv-dock-item {
+.tv-nueva-frec-fila {
   display: flex;
-  flex: 1;
-  min-width: 0;
+  gap: 10px;
+  overflow-x: auto;
+  scrollbar-width: none;
+  padding-bottom: 2px;
+}
+
+.tv-nueva-frec-fila::-webkit-scrollbar { height: 0; }
+
+.tv-nueva-frec {
+  flex-shrink: 0;
+  width: 72px;
+  display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: center;
-  gap: 3px;
-  border-radius: 13px;
-  color: var(--text-muted);
-  font-size: 9.5px;
-  font-weight: 700;
-  line-height: 1.1;
-  letter-spacing: 0.01em;
+  gap: 7px;
+  background: none;
+  border: 0;
+  color: var(--text-primary);
   cursor: pointer;
-  transition: color 0.15s ease, background 0.15s ease;
-  -webkit-tap-highlight-color: transparent;
 }
 
-.tv-dock-item span:last-child {
-  max-width: 100%;
+.tv-nueva-circulo {
+  width: 50px;
+  height: 50px;
+  border-radius: 50%;
+  background: var(--tv-panel);
+  border: 1px solid var(--tv-hairline);
+  color: var(--text-secondary);
+  display: grid;
+  place-items: center;
+  transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
+}
+
+.tv-nueva-frec:hover .tv-nueva-circulo {
+  border-color: var(--tv-accent-line);
+  color: var(--tv-accent);
+  transform: translateY(-1px);
+}
+
+.tv-nueva-frec-n {
+  font-size: 10.5px;
+  font-weight: 600;
+  text-align: center;
+  line-height: 1.25;
+}
+
+/* La cuadrícula exterior. En escritorio es una columna de bloques —cada
+   zona con su propio ancho completo—; en teléfono se convierte en la
+   cuadrícula de verdad (ver el `@media` más abajo). */
+.tv-nueva-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.tv-nueva-zona {
+  background: var(--tv-panel);
+  border: 1px solid var(--tv-hairline);
+  border-radius: var(--tv-radius);
+  padding: 14px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.tv-nueva-zona-cab {
+  font-family: var(--font-display);
+  font-size: 12.5px;
+  font-weight: 700;
+  color: var(--text-secondary);
+}
+
+.tv-nueva-zona-lista {
+  display: grid;
+  gap: 8px;
+  /* `auto-fill` y no un número fijo de columnas: una zona con un solo
+     módulo (General, hoy) le da ese único módulo TODO el ancho
+     disponible en vez de encogerlo a 1 de N columnas. */
+  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
+}
+
+.tv-nueva-item {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-width: 0;
+  padding: 9px 11px;
+  border-radius: var(--tv-radius-sm);
+  background: var(--tv-canvas);
+  border: 1px solid var(--tv-hairline);
+  color: var(--text-primary);
+  font-size: 12.5px;
+  font-weight: 600;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease;
+}
+
+.tv-nueva-item:hover { border-color: var(--tv-accent-line); background: var(--tv-accent-soft); }
+
+.tv-nueva-ic {
+  flex-shrink: 0;
+  display: grid;
+  place-items: center;
+  color: var(--text-secondary);
+}
+
+.tv-nueva-ic svg { width: 16px; height: 16px; }
+
+.tv-nueva-n {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
 }
 
-.tv-dock-item[data-active='true'] {
-  color: var(--tv-accent);
-  background: var(--tv-accent-soft);
+/* El punto de "ya abierto". No es un contador ni un aviso — es el mismo
+   estado que llevaba el selector anterior, para que tocar la fila avise
+   de que va a saltar a esa pestaña en vez de duplicarla. */
+.tv-nueva-punto-abierto {
+  flex-shrink: 0;
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--tv-accent);
+  margin-left: auto;
 }
 
-.tv-dock-item:active { transform: scale(0.95); }
+/* ---------------------------------------------------------------------
+   EN TELÉFONO: CUADRÍCULA COMPACTA, NO CAJAS APILADAS
+   ---------------------------------------------------------------------
+   La primera versión repetía en móvil la misma caja de escritorio: un
+   bloque de color por zona, con su propio borde, relleno y encabezado.
+   Con once módulos en cuatro zonas eso eran cuatro cajas completas, una
+   debajo de otra — obligaba a bajar y bajar antes de llegar a la
+   última. Aquí la zona se queda —sigue agrupando— pero deja de ser una
+   CAJA con peso propio y pasa a ser una etiqueta fina, y los módulos de
+   las cuatro zonas caen en UNA sola cuadrícula continua de tres
+   columnas, tan compacta como la de escritorio.
+   --------------------------------------------------------------------- */
+@media (max-width: 640px) {
+  .tv-nueva-grid {
+    display: grid;
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+    gap: 12px 8px;
+  }
 
-/* Hoja inferior del botón "Más". */
+  /* Desaparece como caja: sus hijos (la etiqueta y la lista) pasan a ser
+     hijos directos de `.tv-nueva-grid` y participan en su cuadrícula. */
+  .tv-nueva-zona { display: contents; }
+
+  .tv-nueva-zona-cab {
+    grid-column: 1 / -1;
+    font-family: var(--font-mono);
+    font-size: 9.5px;
+    font-weight: 700;
+    letter-spacing: 0.09em;
+    text-transform: uppercase;
+    color: var(--text-muted);
+    padding-top: 4px;
+  }
+
+  .tv-nueva-zona:first-child .tv-nueva-zona-cab { padding-top: 0; }
+
+  /* La lista también desaparece como caja, por la misma razón: sus
+     `.tv-nueva-item` deben caer en la cuadrícula de 3 columnas, no en
+     una cuadrícula propia de ancho completo. */
+  .tv-nueva-zona-lista { display: contents; }
+
+  /* El ítem cambia de icono-junto-a-texto a icono-encima-de-texto: es el
+     mismo cambio que ya hace el resto del panel para pasar de fila a
+     celda de cuadrícula. */
+  .tv-nueva-item {
+    flex-direction: column;
+    align-items: center;
+    gap: 6px;
+    width: 100%;
+    padding: 10px 4px;
+    text-align: center;
+  }
+
+  .tv-nueva-ic {
+    width: 38px;
+    height: 38px;
+    border-radius: 10px;
+    background: var(--tv-panel);
+    border: 1px solid var(--tv-hairline);
+  }
+
+  .tv-nueva-item .tv-nueva-ic svg { width: 16px; height: 16px; }
+
+  .tv-nueva-n {
+    font-size: 10px;
+    width: 100%;
+    max-width: 100%;
+    white-space: normal;
+    overflow-wrap: anywhere;
+    text-overflow: clip;
+  }
+
+  /* El punto de "abierto" se mueve a la esquina del icono: en la fila
+     horizontal iba al final del texto, pero aquí el texto ya no está al
+     lado del icono. */
+  .tv-nueva-punto-abierto {
+    position: absolute;
+    top: 6px;
+    right: calc(50% - 25px);
+    margin-left: 0;
+  }
+}
+
+
+/* El dock inferior fijo de móvil/APK se retiró: con la tira de pestañas
+   estilo Chrome ya hay una navegación fija y siempre alcanzable (el «+»
+   pegado al borde derecho), y mantener el dock debajo era la misma
+   duplicación de menú que este modelo de navegación vino a eliminar. */
+
+/* Hoja inferior genérica (sin uso activo hoy; se conserva por si un
+   futuro flujo necesita una hoja anclada abajo). */
 .tv-sheet-backdrop {
   position: fixed;
   inset: 0;
@@ -1273,7 +1308,6 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
 /* Respeta a quien pidió menos movimiento en el sistema operativo. */
 @media (prefers-reduced-motion: reduce) {
   #admin-panel-root *,
-  .tv-palette-backdrop *,
   .tv-sheet * {
     transition-duration: 0.01ms !important;
     animation-duration: 0.01ms !important;

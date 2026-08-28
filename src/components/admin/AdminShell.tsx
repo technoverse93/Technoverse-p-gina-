@@ -2,8 +2,7 @@
 // TECHNOVERSE CONSOLE — armazón del panel: "REGLETA Y CARPETAS"
 // =====================================================================
 // Todo lo que rodea al contenido: la regleta de arriba, la fila de
-// carpetas, el selector de módulos, el dock de móvil/APK y los modales
-// de seguridad.
+// carpetas, la pestaña «Nueva pestaña» y los modales de seguridad.
 //
 // ---------------------------------------------------------------------
 // EL PROBLEMA QUE ESTE MODELO RESUELVE
@@ -40,12 +39,19 @@
 //    lo que registre la pantalla— así que es imposible que un módulo la
 //    duplique por su cuenta.
 //
-// 4. MÓVIL Y APK. La tira de pestañas se desliza con el dedo y el «+»
-//    queda fijo al borde derecho, siempre alcanzable. El selector se
-//    abre anclado abajo y NO lleva campo de búsqueda: enfocar un input
-//    levanta el teclado de Android y tapa la lista que se venía a leer.
-//    El dock de cuatro módulos se conserva: en un teléfono el pulgar
-//    necesita un ancla fija.
+// 4. NUEVA PESTAÑA. El «+» ya no abre un recuadro flotante encima del
+//    contenido: abre una pestaña de verdad, en blanco, con los módulos
+//    agrupados por área del negocio (ver `NuevaPestana.tsx`). Elegir uno
+//    ahí REEMPLAZA esa pestaña por el módulo — no suma una más —, igual
+//    que en un navegador tocar un atajo en la página de inicio navega
+//    esa misma pestaña.
+//
+// 5. MÓVIL Y APK. La tira de pestañas se desliza con el dedo y el «+»
+//    queda fijo al borde derecho, siempre alcanzable — es el único punto
+//    de navegación que necesita el pulgar. El dock inferior fijo que
+//    había antes se quitó: era la misma duplicación de menú que este
+//    modelo vino a eliminar en primer lugar, solo que entre pestañas y
+//    dock en vez de entre menú y sub-pestañas.
 // =====================================================================
 
 import React, { useCallback, useEffect, useLayoutEffect, useMemo, useRef, useState } from 'react';
@@ -53,8 +59,7 @@ import {
   Search, Store, LogOut, LayoutGrid,
   X, Plus, RefreshCw, KeyRound, Hash,
 } from 'lucide-react';
-import { NAV_GROUPS, NAV_ITEMS, DOCK_IDS, resolverModulo, resolverCarpeta } from './adminNav';
-import type { AdminNavItem } from './adminNav';
+import { PESTANA_NUEVA, resolverModulo, resolverCarpeta } from './adminNav';
 import { PESTANA_INICIAL } from './usePestanas';
 import { Carpetas } from './AdminKit';
 import type { User } from '../../types';
@@ -97,7 +102,6 @@ export default function AdminShell({
   scrollRef,
 }: AdminShellProps) {
   const [menuPerfil, setMenuPerfil] = useState(false);
-  const [selectorAbierto, setSelectorAbierto] = useState(false);
 
   const perfilRef = useRef<HTMLDivElement | null>(null);
 
@@ -116,31 +120,28 @@ export default function AdminShell({
   const ir = useCallback((tab: string) => {
     onNavigate(tab);
     setMenuPerfil(false);
-    setSelectorAbierto(false);
   }, [onNavigate]);
 
-  // Sin estos dos, cada botón que abre o cierra el selector pasaba un
-  // `() => setSelectorAbierto(…)` nuevo en cada render de AdminShell, lo
-  // que le rompía la memoización a `BarraDePestanas` y a
-  // `SelectorDeModulos` aunque el resto de sus props no hubiera cambiado.
-  const abrirSelector = useCallback(() => setSelectorAbierto(true), []);
-  const cerrarSelector = useCallback(() => setSelectorAbierto(false), []);
+  // Abre (o activa, si ya estaba) la pestaña «Nueva pestaña» — el mismo
+  // destino para el lanzador de la regleta, el «+» de la barra y
+  // Ctrl/⌘+K. Un solo `useCallback` con dependencia estable para que
+  // ninguno de esos tres le rompa la memoización a `BarraDePestanas`.
+  const abrirNuevaPestana = useCallback(() => ir(PESTANA_NUEVA), [ir]);
 
-  // Ctrl/⌘+K abre el selector desde cualquier parte del panel.
+  // Ctrl/⌘+K salta a «Nueva pestaña» desde cualquier parte del panel.
   useEffect(() => {
     const alTeclear = (e: KeyboardEvent) => {
       if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'k') {
         e.preventDefault();
-        setSelectorAbierto(v => !v);
+        abrirNuevaPestana();
       }
       if (e.key === 'Escape') {
-        setSelectorAbierto(false);
         setMenuPerfil(false);
       }
     };
     window.addEventListener('keydown', alTeclear);
     return () => window.removeEventListener('keydown', alTeclear);
-  }, []);
+  }, [abrirNuevaPestana]);
 
   // Cerrar el menú de cuenta al tocar fuera.
   useEffect(() => {
@@ -182,16 +183,6 @@ export default function AdminShell({
     return ((partes[0]?.[0] || 'T') + (partes[1]?.[0] || '')).toUpperCase();
   }, [currentUser]);
 
-  // Los módulos marcados `soloAdminSupremo` (ver adminNav.ts) se quitan
-  // de TODAS las superficies que listan módulos. Es solo la UI: la
-  // restricción de verdad vive en el servidor.
-  const puedeVerModulo = (item: AdminNavItem) => !item.soloAdminSupremo || esSupremo;
-
-  const itemsDock = DOCK_IDS
-    .map(id => NAV_ITEMS.find(i => i.id === id))
-    .filter((i): i is AdminNavItem => !!i)
-    .filter(puedeVerModulo);
-
   /**
    * Las carpetas que declara el propio mapa de navegación (hoy,
    * Inventario). Se dibujan desde aquí para que el módulo no tenga que
@@ -221,7 +212,7 @@ export default function AdminShell({
           <button
             type="button"
             className="tv-lanzador"
-            onClick={abrirSelector}
+            onClick={abrirNuevaPestana}
             aria-label="Todos los módulos"
             title="Todos los módulos  ·  Ctrl K"
           >
@@ -238,7 +229,7 @@ export default function AdminShell({
             activa={pestanaActiva}
             onActivar={ir}
             onCerrar={onCerrarPestana}
-            onNueva={abrirSelector}
+            onNueva={abrirNuevaPestana}
           />
 
           {/* Hueco de las acciones de la pantalla activa. Lo llena cada
@@ -397,50 +388,6 @@ export default function AdminShell({
         </main>
       </div>
 
-      {/* ---------------- DOCK (móvil / APK) ----------------
-          Se conserva tal cual: en un teléfono el pulgar necesita un ancla
-          fija abajo, y estos cuatro son los módulos que se abren varias
-          veces al día. El resto está en el selector, a un toque del
-          lanzador de la regleta. */}
-      <nav className="tv-dock flex lg:hidden" aria-label="Navegación rápida">
-        {itemsDock.map(item => {
-          const activo = resolverModulo(activeTab).id === item.id;
-          return (
-            <button
-              key={item.id}
-              type="button"
-              className="tv-dock-item"
-              data-active={activo || undefined}
-              onClick={() => ir(item.id)}
-              aria-current={activo ? 'page' : undefined}
-            >
-              <item.icon className="w-[19px] h-[19px]" aria-hidden="true" />
-              <span>{item.short}</span>
-            </button>
-          );
-        })}
-        <button
-          type="button"
-          className="tv-dock-item"
-          data-active={selectorAbierto || undefined}
-          onClick={abrirSelector}
-          aria-label="Todos los módulos"
-        >
-          <LayoutGrid className="w-[19px] h-[19px]" aria-hidden="true" />
-          <span>Módulos</span>
-        </button>
-      </nav>
-
-      {selectorAbierto && (
-        <SelectorDeModulos
-          onElegir={ir}
-          onCerrar={cerrarSelector}
-          esSupremo={esSupremo}
-          tabActivo={activeTab}
-          abiertas={pestanasAbiertas}
-        />
-      )}
-
       <CambiarContrasenaModal open={modalContrasenaAbierto} onClose={() => setModalContrasenaAbierto(false)} />
       {esSupremo && (
         <CambiarPinModal open={modalPinAbierto} onClose={() => setModalPinAbierto(false)} />
@@ -457,8 +404,9 @@ export default function AdminShell({
  * Las pestañas abiertas, más el botón de abrir una nueva.
  *
  * Se comporta como la barra de un navegador: cada pestaña lleva su
- * icono, su nombre y una «×» para cerrarla; el «+» de la derecha abre el
- * selector de módulos.
+ * icono, su nombre y una «×» para cerrarla; el «+» de la derecha abre
+ * «Nueva pestaña» — el lanzador que reemplazó al modal, ver
+ * `NuevaPestana.tsx`.
  *
  * En un teléfono la tira se desliza con el dedo y el «+» queda FIJO
  * pegado al borde derecho, encima de la tira. Si el «+» viajara dentro
@@ -545,113 +493,11 @@ const BarraDePestanas = React.memo(function BarraDePestanas({
         type="button"
         className="tv-tab-nueva"
         onClick={onNueva}
-        aria-label="Abrir otro módulo"
-        title="Abrir otro módulo  ·  Ctrl K"
+        aria-label="Nueva pestaña"
+        title="Nueva pestaña  ·  Ctrl K"
       >
         <Plus className="w-4 h-4" aria-hidden="true" />
       </button>
-    </div>
-  );
-});
-
-// ---------------------------------------------------------------------
-// SELECTOR DE MÓDULOS
-// ---------------------------------------------------------------------
-
-/**
- * La lista de todo lo que se puede abrir en una pestaña.
- *
- * ---------------------------------------------------------------------
- * SIN CAMPO DE BÚSQUEDA — Y ES A PROPÓSITO
- * ---------------------------------------------------------------------
- * Antes esta lista abría con un input enfocado. En un teléfono Android
- * —comprobado en Samsung— enfocar un input levanta el teclado al
- * instante, y el teclado se come más de media pantalla: quien solo
- * quería tocar "Inventario" se encontraba con la lista tapada y tenía
- * que cerrar el teclado antes de poder elegir.
- *
- * Los módulos son once. Once filas se leen de un vistazo; no hay nada
- * que buscar. El campo costaba más de lo que resolvía, así que no está.
- *
- * ---------------------------------------------------------------------
- * SIN CONTADORES NI AVISOS JUNTO AL NOMBRE
- * ---------------------------------------------------------------------
- * Tampoco hay «Inventario · 5 vistas» ni «Alertas (3)». Un número al
- * lado del nombre en el menú obliga a leer la fila entera para saber a
- * dónde lleva, y encima el número hay que calcularlo antes de dibujar el
- * menú. Los datos son del módulo: se ven al entrar, que es donde
- * significan algo.
- *
- * Envuelto en `React.memo` por la misma razón que `BarraDePestanas`: se
- * queda montado mientras el selector está abierto y no debe repintarse
- * por cambios ajenos a él (el reloj de la barra, el menú de cuenta…).
- */
-const SelectorDeModulos = React.memo(function SelectorDeModulos({
-  onElegir,
-  onCerrar,
-  esSupremo,
-  tabActivo,
-  abiertas,
-}: {
-  onElegir: (tab: string) => void;
-  onCerrar: () => void;
-  esSupremo: boolean;
-  tabActivo: string;
-  abiertas: string[];
-}) {
-  const moduloActual = useMemo(() => resolverModulo(tabActivo), [tabActivo]);
-
-  return (
-    <div className="tv-palette-backdrop" onClick={onCerrar} role="presentation">
-      <div
-        className="tv-palette"
-        onClick={e => e.stopPropagation()}
-        role="dialog"
-        aria-label="Abrir un módulo"
-      >
-        <div className="tv-palette-head">
-          <span>Abrir en una pestaña</span>
-          <button
-            type="button"
-            className="tv-icon-btn"
-            onClick={onCerrar}
-            aria-label="Cerrar"
-          >
-            <X className="w-4 h-4" />
-          </button>
-        </div>
-
-        <div className="tv-palette-list">
-          {NAV_GROUPS.map(grupo => {
-            const items = grupo.items.filter(i => !i.soloAdminSupremo || esSupremo);
-            if (items.length === 0) return null;
-            return (
-              <div key={grupo.titulo}>
-                <div className="tv-palette-grupo">{grupo.titulo}</div>
-                {items.map(item => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="tv-palette-row"
-                    data-actual={item.id === moduloActual.id || undefined}
-                    onClick={() => onElegir(item.id)}
-                  >
-                    <item.icon className="w-[18px] h-[18px] flex-shrink-0" aria-hidden="true" />
-                    <span className="tv-palette-label">{item.label}</span>
-                    {/* Lo único que se marca es si YA está abierto, para
-                        que quede claro que tocarlo salta a esa pestaña en
-                        vez de abrir otra igual. No es un contador ni un
-                        aviso: es el estado de la propia pestaña. */}
-                    {abiertas.includes(item.id) && (
-                      <span className="tv-palette-abierta" aria-label="Ya abierto">abierto</span>
-                    )}
-                  </button>
-                ))}
-              </div>
-            );
-          })}
-        </div>
-      </div>
     </div>
   );
 });

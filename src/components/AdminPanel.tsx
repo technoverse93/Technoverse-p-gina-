@@ -30,7 +30,8 @@ import { useToast, useConfirm } from './ui/Overlays';
 import AdminShell from './admin/AdminShell';
 import AdminDashboard from './admin/AdminDashboard';
 import { PageHead, Card, Btn, Field, Chip, TableShell, Empty } from './admin/AdminKit';
-import { resolverModulo } from './admin/adminNav';
+import { resolverModulo, PESTANA_NUEVA } from './admin/adminNav';
+import NuevaPestana from './admin/NuevaPestana';
 import { usePestanas, useScrollPorPestana } from './admin/usePestanas';
 import { ContextoPestanaActiva } from './admin/AdminKit';
 import { esAdminSupremo } from '../utils/securityPin';
@@ -1015,6 +1016,19 @@ export default function AdminPanel({
   );
 
   /**
+   * Elegir un módulo desde dentro de «Nueva pestaña»: a diferencia de
+   * `irAModulo`, esto REEMPLAZA esa pestaña por el módulo en vez de sumar
+   * una más — ver `elegirDesdeNueva` en `usePestanas.ts`.
+   */
+  const elegirDesdeNueva = useCallback((tab: string) => {
+    pestanas.elegirDesdeNueva(tab);
+    setActiveDropdown(null);
+    try { window.history.replaceState(null, '', `/admin/${tab}`); } catch { /* la navegación funciona igual */ }
+  }, [pestanas.elegirDesdeNueva]);
+
+  const esSupremo = useMemo(() => esAdminSupremo(currentUser?.email), [currentUser]);
+
+  /**
    * El contenido de UNA pestaña.
    *
    * Se llama una vez por módulo abierto, no una vez por render del
@@ -1027,6 +1041,13 @@ export default function AdminPanel({
    */
   const renderModulo = (tab: string) => (
     <>
+          {tab === PESTANA_NUEVA && (
+            <NuevaPestana
+              onElegir={elegirDesdeNueva}
+              esSupremo={esSupremo}
+              abiertas={pestanas.abiertas}
+            />
+          )}
           {tab === 'dashboard' && (
             <AdminDashboard
               products={products}
