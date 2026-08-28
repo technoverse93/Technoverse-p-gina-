@@ -51,6 +51,16 @@ import { supabase } from '../supabaseClient';
 const LLAVERO = 'technoverse.cr';
 
 /**
+ * Último pase que se logró escribir en el llavero, en memoria.
+ *
+ * Solo sirve para no repetir una escritura idéntica (ver
+ * `guardarPaseActual`). Se pierde al cerrar la aplicación a propósito:
+ * así, al volver a abrirla, la primera renovación siempre reescribe el
+ * llavero aunque coincida con lo que ya había.
+ */
+let ultimoPaseGuardado: string | null = null;
+
+/**
  * Marca de "este teléfono tiene la huella activada".
  *
  * Está SEPARADA del pase guardado, y esa separación es justo lo que
@@ -136,6 +146,61 @@ interface PluginBiometrico {
   setCredentials(opciones: { username: string; password: string; server: string }): Promise<void>;
   getCredentials(opciones: { server: string }): Promise<{ username: string; password: string }>;
   deleteCredentials(opciones: { server: string }): Promise<void>;
+}
+
+/**
+ * Opciones del diálogo nativo de verificación.
+ *
+ * ---------------------------------------------------------------------
+ * `maxAttempts`: LA CORRECCIÓN DE LOS SENSORES BAJO PANTALLA
+ * ---------------------------------------------------------------------
+ * El plugin trae `maxAttempts: 1` por omisión. Con ese valor, al PRIMER
+ * roce que el sensor no reconoce el diálogo del sistema se cierra y la
+ * app da el intento por fallido, obligando a pulsar el botón otra vez.
+ *
+ * En un lector óptico BAJO EL VIDRIO —Honor 600E, Galaxy S26 Ultra— ese
+ * primer roce falla con muchísima más frecuencia que en un sensor
+ * capacitivo tradicional: influyen el protector de pantalla, el dedo
+ * seco, la presión y hasta el brillo de la pantalla en ese momento. De
+ * ahí el "es inestable y exige múltiples intentos" reportado: no es que
+ * el sensor no sirva, es que solo se le daba UNA oportunidad por
+ * pulsación.
+ *
+ * Con 5 —el máximo que admite Android— los reintentos ocurren DENTRO
+ * del propio diálogo del sistema, que es como se comporta cualquier otra
+ * aplicación del teléfono. Face ID no se vio afectado nunca porque en
+ * iOS este parámetro no existe: el sistema ya gestiona sus propios
+ * reintentos.
+ *
+ * ---------------------------------------------------------------------
+ * `useFallback` es SOLO DE iOS aquí — el comentario anterior se equivocaba
+ * ---------------------------------------------------------------------
+ * Decía que con `useFallback: true` el diálogo de Android ofrecería el
+ * PIN/patrón como respaldo tras varios fallos del sensor. Las propias
+ * definiciones del plugin dicen lo contrario, y explican por qué: en
+ * `verifyIdentity()` Android IGNORA esta opción, porque el autenticador
+ * DEVICE_CREDENTIAL y el botón de cancelar son mutuamente excluyentes en
+ * la API de BiometricPrompt. Ese respaldo prometido nunca existió en
+ * Android; conseguirlo exigiría `allowedBiometryTypes:
+ * [DEVICE_CREDENTIAL]`, que a cambio quita el botón de cancelar. Se
+ * mantiene la opción porque en iOS sí hace lo que dice (Face ID cae al
+ * código del teléfono), y ahí sigue siendo lo que se quiere.
+ *
+ * `allowedBiometryTypes` se deja SIN especificar a propósito: así Android
+ * admite todas las clases registradas —huella (fuerte) y rostro (débil en
+ * muchos teléfonos)—, que es lo más compatible. Fijar la lista dejaría
+ * fuera el desbloqueo facial justo en los aparatos que lo clasifican como
+ * débil.
+ */
+function opcionesVerificacion(subtitulo: string, motivo: string) {
+  return {
+    reason: motivo,
+    title: 'Technoverse',
+    subtitle: subtitulo,
+    description: '',
+    useFallback: true,
+    maxAttempts: 5,
+  };
 }
 
 /** ¿Estamos dentro de la APK? */
@@ -265,6 +330,97 @@ function sesionVigente(sesion: any): boolean {
 }
 
 /**
+ * Renueva la sesión probando los pases disponibles, en un orden que
+ * importa mucho.
+ *
+ * ---------------------------------------------------------------------
+ * EL ERROR FATAL DE PERSISTENCIA QUE ESTO CORRIGE
+ * ---------------------------------------------------------------------
+ * Síntoma reportado: tras actualizar la aplicación o pasar uno o dos
+ * días, la huella dejaba de entrar —sin borrarse, no había que volver a
+ * registrarla— y obligaba a escribir la contraseña una vez; después de
+ * eso volvía a funcionar sola.
+ *
+ * La causa es una DESINCRONIZACIÓN entre los dos sitios donde vive un
+ * pase de renovación:
+ *
+ *   · El llavero del teléfono (Keystore/Keychain), que actualiza
+ *     `guardarPaseActual`.
+ *   · El almacenamiento de supabase-js, que rota el pase ÉL SOLO cada
+ *     vez que renueva la sesión (cosa que hace por su cuenta, con la
+ *     aplicación abierta, aproximadamente cada hora).
+ *
+ * Supabase invalida el pase anterior en cada rotación. Así que basta con
+ * que UNA sola escritura al llavero no llegue a completarse —la app se
+ * cierra en ese instante, una actualización OTA recarga el WebView a
+ * medias, el Keystore falla— para que el llavero se quede con un pase ya
+ * muerto mientras supabase-js tiene el bueno. Y una vez desincronizado
+ * NADA lo reparaba: la versión anterior renovaba ÚNICAMENTE con el pase
+ * del llavero, así que fallaba para siempre aunque el pase bueno
+ * estuviera ahí al lado. Escribir la contraseña rearmaba el llavero y por
+ * eso "se arreglaba solo" — ese login manual era un parche, no la cura.
+ *
+ * Cuantas más veces se abre y cierra la app, más probable es que alguna
+ * escritura se pierda: de ahí que tardara "uno o dos días" en aparecer y
+ * que una actualización lo disparara casi siempre.
+ *
+ * ---------------------------------------------------------------------
+ * POR QUÉ EL PASE DE supabase-js VA PRIMERO
+ * ---------------------------------------------------------------------
+ * No es un detalle de estilo. Supabase detecta la REUTILIZACIÓN de un
+ * pase ya rotado y, cuando la ve, revoca la familia entera de sesiones
+ * por seguridad. Es decir: intentar primero con el pase viejo del
+ * llavero no solo falla, sino que puede MATAR la sesión buena que
+ * supabase-js tenía guardada — convirtiendo una desincronización
+ * reparable en un cierre de sesión de verdad.
+ *
+ * Por eso se prueba primero el pase que supabase-js administra (es quien
+ * lleva la rotación, así que es siempre el más fresco) y solo después el
+ * del llavero, que es el respaldo para cuando el almacenamiento del
+ * navegador se perdió —instalación limpia, datos borrados— y el llavero
+ * es lo único que queda.
+ */
+async function renovarConCandidatos(
+  paseDeSupabase?: string | null,
+  paseDelLlavero?: string | null,
+): Promise<any | null> {
+  const candidatos: string[] = [];
+  if (paseDeSupabase) candidatos.push(paseDeSupabase);
+  if (paseDelLlavero && paseDelLlavero !== paseDeSupabase) candidatos.push(paseDelLlavero);
+
+  for (const pase of candidatos) {
+    let sesion: any = null;
+
+    // El tope de espera evita que la pantalla se quede colgada, pero por
+    // sí solo NO basta: si el temporizador vence, la petición ya salió y
+    // el servidor puede haberla atendido igual. El pase queda consumido
+    // allá aunque aquí se dé por perdido. Por eso, ante CUALQUIER final
+    // malo, se mira la sesión real antes de pasar al siguiente candidato.
+    try {
+      const { data, error } = await conTope(
+        supabase.auth.refreshSession({ refresh_token: pase }),
+        20000
+      );
+      if (!error) sesion = data?.session ?? null;
+    } catch {
+      /* se resuelve justo abajo mirando la sesión real */
+    }
+
+    if (!sesionVigente(sesion)) {
+      // supabase-js guarda la sesión en cuanto la recibe, así que si la
+      // renovación llegó al servidor, está aquí aunque la promesa se
+      // haya caído.
+      const { data: rescate } = await supabase.auth.getSession();
+      if (sesionVigente(rescate?.session)) sesion = rescate!.session;
+    }
+
+    if (sesionVigente(sesion)) return sesion;
+  }
+
+  return null;
+}
+
+/**
  * Guarda la sesión actual detrás de la huella.
  *
  * Se guarda el `refresh_token`, no la contraseña. Es importante: la
@@ -283,20 +439,11 @@ export async function activarBiometriaNativa(): Promise<ResultadoNativo> {
 
     // Se pide la huella ANTES de guardar: así se confirma que quien
     // activa esto es quien tiene el dedo, no alguien que agarró el
-    // teléfono desbloqueado.
-    //
-    // `useFallback: true`: si el sensor (sobre todo el óptico en pantalla)
-    // no logra leer la huella tras varios intentos, el propio diálogo de
-    // Android ofrece el PIN/patrón/contraseña del teléfono como respaldo,
-    // sin salir de la verificación nativa. Ni aquí ni en ningún otro punto
-    // se borra `LLAVE_ACTIVA` por un fallo del sensor — ver su comentario.
-    await p.verifyIdentity({
-      reason: 'Confirme su identidad para activar el acceso con huella',
-      title: 'Technoverse',
-      subtitle: correo,
-      description: '',
-      useFallback: true,
-    });
+    // teléfono desbloqueado. Ni aquí ni en ningún otro punto se borra
+    // `LLAVE_ACTIVA` por un fallo del sensor — ver su comentario.
+    await p.verifyIdentity(
+      opcionesVerificacion(correo, 'Confirme su identidad para activar el acceso con huella')
+    );
 
     await p.setCredentials({ username: correo, password: token, server: LLAVERO });
     marcarActiva(true);
@@ -315,26 +462,25 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
     const p = plugin();
     if (!p) return { ok: false, mensaje: 'Esta función solo está disponible en la aplicación.' };
 
-    let guardado: { username: string; password: string };
+    // El pase del llavero. Que NO esté no es motivo para rendirse: el
+    // llavero puede haber quedado vacío tras un fallo anterior mientras la
+    // sesión de este mismo aparato sigue perfectamente viva. Mientras la
+    // huella siga marcada como activada hay algo que rescatar, y de eso se
+    // encarga `renovarConCandidatos` más abajo.
+    let guardado: { username: string; password: string } | null = null;
     try {
       guardado = await p.getCredentials({ server: LLAVERO });
     } catch {
-      return { ok: false, mensaje: 'Todavía no ha activado la huella en este teléfono.' };
+      guardado = null;
     }
-    if (!guardado?.password) {
+
+    if (!guardado?.password && !estaMarcadaActiva()) {
       return { ok: false, mensaje: 'Todavía no ha activado la huella en este teléfono.' };
     }
 
-    // Mismo respaldo nativo que en `activarBiometriaNativa`: si el sensor
-    // falla, Android ofrece PIN/patrón/contraseña dentro del mismo
-    // diálogo, sin tocar `LLAVE_ACTIVA`.
-    await p.verifyIdentity({
-      reason: 'Confirme su identidad para entrar',
-      title: 'Technoverse',
-      subtitle: guardado.username || '',
-      description: '',
-      useFallback: true,
-    });
+    await p.verifyIdentity(
+      opcionesVerificacion(guardado?.username || '', 'Confirme su identidad para entrar')
+    );
 
     // -----------------------------------------------------------------
     // ATAJO: si la sesión de este aparato TODAVÍA sirve, no se renueva.
@@ -358,38 +504,14 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
     }
 
     // -----------------------------------------------------------------
-    // Camino normal: canjear el pase guardado por una sesión nueva.
+    // Camino normal: canjear un pase por una sesión nueva.
     // -----------------------------------------------------------------
-    // El tope de espera evita que la pantalla se quede colgada, pero por
-    // sí solo NO basta, y aquí estaba la segunda causa del fallo: si el
-    // temporizador vence, la petición ya salió y el servidor puede
-    // haberla atendido igual. El pase queda consumido en el servidor
-    // aunque aquí se haya dado por perdido, y el siguiente intento
-    // fracasa con "la sesión guardada caducó" — el síntoma exacto que se
-    // reportó, apareciendo justo después de una huella aceptada.
-    //
-    // Por eso, ante CUALQUIER final malo, se comprueba primero si la
-    // sesión llegó de todas formas antes de declarar el fallo.
-    let sesion: any = null;
-    try {
-      const { data, error } = await conTope(
-        supabase.auth.refreshSession({ refresh_token: guardado.password }),
-        20000
-      );
-      if (!error) sesion = data?.session ?? null;
-    } catch {
-      /* se resuelve abajo mirando la sesión real */
-    }
+    const sesion = await renovarConCandidatos(
+      yaHabia?.session?.refresh_token,
+      guardado?.password
+    );
 
-    if (!sesionVigente(sesion)) {
-      // Segunda oportunidad: supabase-js guarda la sesión en cuanto la
-      // recibe, así que si la renovación llegó al servidor, está aquí
-      // aunque la promesa se haya caído.
-      const { data: rescate } = await supabase.auth.getSession();
-      if (sesionVigente(rescate?.session)) sesion = rescate!.session;
-    }
-
-    if (!sesionVigente(sesion)) {
+    if (!sesion) {
       // Ahora sí: el pase no sirve. Contraseña cambiada, sesión revocada
       // desde otro aparato o cuenta suspendida.
       //
@@ -434,6 +556,10 @@ export async function borrarBiometriaNativa(): Promise<void> {
 
 /** Tira solo el pase, conservando la marca de "huella activada". */
 async function tirarPaseInservible(): Promise<void> {
+  // Sin esto, el atajo de `guardarPaseActual` creería que el pase que se
+  // acaba de borrar sigue en el llavero y se saltaría la reescritura que
+  // lo rearma.
+  ultimoPaseGuardado = null;
   try {
     await plugin()?.deleteCredentials({ server: LLAVERO });
   } catch {
@@ -449,16 +575,32 @@ async function tirarPaseInservible(): Promise<void> {
  * insoportable.
  */
 async function guardarPaseActual(token?: string | null, correo?: string | null): Promise<void> {
-  try {
-    const p = plugin();
-    if (!p || !token || !estaMarcadaActiva()) return;
-    await p.setCredentials({
-      username: correo || '',
-      password: token,
-      server: LLAVERO,
-    });
-  } catch {
-    /* si no se pudo guardar, se reintenta en la próxima renovación */
+  const p = plugin();
+  if (!p || !token || !estaMarcadaActiva()) return;
+
+  // Escribir el mismo pase dos veces no aporta nada y abre otra ventana
+  // para que una escritura se corte por la mitad. supabase-js emite
+  // varios eventos por una sola renovación, así que esto se ahorra la
+  // mayoría de las escrituras.
+  if (token === ultimoPaseGuardado) return;
+
+  // UN reintento. La escritura al llavero es justo el punto donde nacía
+  // la desincronización descrita en `renovarConCandidatos`: fallaba en
+  // silencio y nadie se enteraba hasta que la huella dejaba de entrar
+  // días después. El reintento no lo vuelve infalible —por eso existe
+  // también el respaldo de allá—, pero recorta muchísimo la ventana.
+  for (let intento = 1; intento <= 2; intento++) {
+    try {
+      await p.setCredentials({
+        username: correo || '',
+        password: token,
+        server: LLAVERO,
+      });
+      ultimoPaseGuardado = token;
+      return;
+    } catch {
+      if (intento === 1) await new Promise(resolve => setTimeout(resolve, 300));
+    }
   }
 }
 
@@ -621,6 +763,13 @@ function interpretar(e: any): ResultadoNativo {
   }
   if (codigo === 1) {
     return { ok: false, mensaje: 'La biometría no está disponible en este teléfono en este momento.' };
+  }
+  // 21 = NO_PROTECTED_CREDENTIALS_FOUND. Pasa, entre otros casos, cuando
+  // el teléfono invalida lo guardado porque se registró o se quitó una
+  // huella. No es un fallo de la aplicación y no hay que alarmar: se
+  // vuelve a armar entrando una vez con la contraseña.
+  if (codigo === 21) {
+    return { ok: false, mensaje: 'Hubo un cambio en las huellas registradas del teléfono. Entre con su contraseña una vez y la huella vuelve a quedar lista.' };
   }
 
   // Respaldo si el código no llegó como número (versión vieja del
