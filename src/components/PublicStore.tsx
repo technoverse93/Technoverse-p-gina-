@@ -10,7 +10,7 @@ import {
 import { ProductCard } from './ProductCard';
 import { CustomSelect } from './CustomSelect';
 import { MarketingRow } from './MarketingRow';
-import { Product, Order, OrderItem, RepairOrder } from '../types';
+import { Product, Order, OrderItem, RepairOrder, Banner } from '../types';
 import { supabase } from '../supabaseClient';
 import { getDB, getDBVersion, saveDB, addAuditLog } from '../utils/storage';
 import { iniciarSesionVigilada, conTope } from '../utils/adminLogin';
@@ -26,6 +26,8 @@ import {
 } from '../utils/invoicePdf';
 
 import { User } from '../types';
+import BannerPrincipal from './store/BannerPrincipal';
+import PieDePagina from './store/PieDePagina';
 
 const DEFAULT_CAABYS = '8399000000000';
 
@@ -66,6 +68,7 @@ export default function PublicStore({
 }: PublicStoreProps) {
   const [products, setProducts] = useState<Product[]>([]);
   const [dbInstance, setDbInstance] = useState<any>(null);
+  const [banners, setBanners] = useState<Banner[]>([]);
   const [storeLogo, setStoreLogo] = useState<string | null>(null);
   const db = getDB();
   const handleDropdownEnter = (e: React.MouseEvent<HTMLDivElement | HTMLButtonElement>) => {
@@ -651,6 +654,10 @@ export default function PublicStore({
     const freshDb = getDB();
     setDbInstance(freshDb);
     setStoreLogo(freshDb.settings?.storeLogo || null);
+    // Los banners viajan por el mismo camino que el catálogo (misma caché
+    // local, mismo evento de actualización), así que el cartel aparece en
+    // el primer fotograma igual que los productos.
+    setBanners(freshDb.banners || []);
     // Filter out spare part categories from public store
     const SPARE_PART_CATEGORIES = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
     setProducts((freshDb.products || []).filter(p => p && p.active !== false && Number(p.stock) > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
@@ -1881,6 +1888,13 @@ export default function PublicStore({
         {activeTab === 'store' ? (
           /* PUBLIC STORE VIEW */
           <>
+            {/* Cartel principal. Va aquí a propósito: es el primer hijo de
+                la vista de tienda, o sea justo debajo de la barra superior
+                y por encima de las categorías y del catálogo. Si no hay
+                banners cargados no ocupa ni un píxel — ver el `return null`
+                en el componente. */}
+            <BannerPrincipal banners={banners} />
+
             {/* El carrusel de categorías se retiró: hacía exactamente lo
                 mismo que la barra de chips de abajo, así que la pantalla
                 tenía DOS selectores de categoría, uno encima del otro, que
@@ -1968,9 +1982,14 @@ export default function PublicStore({
                    desproporcionada y entraban solo cuatro artículos por fila.
                    Subiendo a 6 columnas en pantallas anchas la tarjeta baja a
                    un tamaño de vitrina y se ve el triple de catálogo sin
-                   hacer scroll. En teléfono se mantienen las dos columnas,
-                   que ahí sí son el mínimo legible. */
-                <div id="product-bento-grid" className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-3 sm:gap-4">
+                   hacer scroll.
+
+                   SEGUNDA VUELTA: una columna más en cada tamaño, y un
+                   escalón nuevo a partir de 400 px para los teléfonos que
+                   dan de sí. Por debajo de eso se quedan DOS columnas a
+                   propósito: con tres, en un teléfono de 360 px la tarjeta
+                   baja de 100 px de ancho y el nombre deja de leerse. */
+                <div id="product-bento-grid" className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2.5 sm:gap-3">
                   {paginatedProducts.map(prod => prod && (
                     <ProductCard
                       key={prod.id}
@@ -2095,6 +2114,15 @@ export default function PublicStore({
           </motion.div>
         </AnimatePresence>
       </main>
+
+      {/* Pie de página. Va FUERA del `<main>` y fuera del `AnimatePresence`
+          a propósito: es el cierre de la página entera, igual en la vista de
+          tienda que en la de soporte, así que no debe entrar ni salir con la
+          animación de cambio de pestaña. */}
+      <PieDePagina
+        settings={dbInstance?.settings}
+        onIrASoporte={() => { setActiveTab('repairs'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
+      />
 
       {/* Centered Cart & Checkout Modal */}
       {isCartOpen && (

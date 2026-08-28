@@ -59,6 +59,100 @@ function getDefaultDB(): Database {
 let localCache: Database = getDefaultDB();
 let broadcastChannel: BroadcastChannel | null = null;
 
+// =====================================================================
+// CACHÉ LOCAL DEL CATÁLOGO — "cache-first"
+// =====================================================================
+// EL PROBLEMA QUE RESUELVE
+// ---------------------------------------------------------------------
+// `localCache` arrancaba SIEMPRE vacío (`getDefaultDB()` trae
+// `products: []`). Es decir: cada vez que alguien abría la tienda o la
+// APK, el catálogo no existía hasta que Supabase contestaba. Ese viaje
+// de ida y vuelta —636 productos por una conexión móvil— son los ~2
+// segundos de pantalla vacía que se reportaron. No era lentitud del
+// servidor: era que no había NADA que pintar mientras tanto.
+//
+// Ahora la última copia buena del catálogo se guarda en el propio
+// aparato y se rehidrata de forma SÍNCRONA al cargar este módulo, antes
+// de que React pinte por primera vez. El primer fotograma ya lleva
+// productos; la respuesta de Supabase llega después y actualiza sin que
+// se note (stale-while-revalidate).
+//
+// ---------------------------------------------------------------------
+// QUÉ SE GUARDA Y QUÉ NO — ES UNA DECISIÓN DE PRIVACIDAD, NO DE TAMAÑO
+// ---------------------------------------------------------------------
+// SOLO se guardan las tablas que ya son públicas para cualquiera que
+// abra la tienda: catálogo, banners y la configuración visible (logo,
+// teléfono, dirección). NO se guarda nada de `clients`, `orders`,
+// `audit_log`, `chat_conversations` ni `repair_orders`: son datos de
+// personas reales, y `localStorage` lo lee cualquiera que tenga el
+// teléfono o la computadora en la mano. Guardar el catálogo ahí no
+// revela nada que no esté ya en pantalla; guardar la cartera de clientes
+// sí. Esa línea no se cruza para ganar medio segundo.
+const CLAVE_CACHE = 'technoverse_cache_publico';
+
+// Sube este número si cambia la FORMA de lo guardado. Una caché con
+// versión distinta se descarta en vez de intentar interpretarla.
+const VERSION_CACHE = 1;
+
+// Si el almacenamiento está lleno o bloqueado (modo incógnito, cuota),
+// se deja de intentar por el resto de la sesión: reintentar en cada
+// refresco solo gasta CPU para volver a fallar igual.
+let cacheDeshabilitada = false;
+
+function guardarCacheLocal(): void {
+  if (cacheDeshabilitada || typeof window === 'undefined') return;
+  try {
+    localStorage.setItem(CLAVE_CACHE, JSON.stringify({
+      v: VERSION_CACHE,
+      products: localCache.products,
+      banners: localCache.banners,
+      settings: localCache.settings,
+    }));
+  } catch {
+    cacheDeshabilitada = true;
+  }
+}
+
+/**
+ * Rehidrata la caché. Se llama UNA vez, más abajo, en cuanto
+ * `lastSyncedDb` existe.
+ *
+ * Toca las DOS copias a propósito. `lastSyncedDb` es la base contra la
+ * que `saveDB()` calcula qué se agregó, cambió o borró. Si se rellenara
+ * solo `localCache`, el primer guardado compararía 636 productos contra
+ * una base vacía, los daría todos por NUEVOS e intentaría insertarlos de
+ * nuevo en Supabase. Rehidratar solo la mitad no sería una optimización:
+ * sería un duplicador de catálogo.
+ */
+function hidratarCacheLocal(): void {
+  if (typeof window === 'undefined') return;
+  try {
+    const bruto = localStorage.getItem(CLAVE_CACHE);
+    if (!bruto) return;
+    const guardado = JSON.parse(bruto);
+    if (!guardado || guardado.v !== VERSION_CACHE) return;
+
+    if (Array.isArray(guardado.products)) {
+      localCache.products = guardado.products;
+      lastSyncedDb.products = structuredClone(guardado.products);
+    }
+    if (Array.isArray(guardado.banners)) {
+      localCache.banners = guardado.banners;
+      lastSyncedDb.banners = structuredClone(guardado.banners);
+    }
+    if (guardado.settings) {
+      localCache.settings = guardado.settings;
+      lastSyncedDb.settings = structuredClone(guardado.settings);
+    }
+  } catch {
+    // Caché ilegible: se arranca en blanco, exactamente como antes de
+    // que existiera. Nunca vale la pena romper el arranque por esto.
+  }
+}
+
+/** Tablas cuya recarga debe refrescar la copia guardada en el aparato. */
+const TABLAS_CACHEABLES = new Set(['products', 'banners']);
+
 if (typeof window !== 'undefined') {
   try {
     broadcastChannel = new BroadcastChannel('technoverse_db_channel');
@@ -967,6 +1061,16 @@ async function refreshTableFromSupabase(cfg: TableConfig<any>) {
   // duplicado), saveDB() revertía TODO a ese estado de arranque casi vacío,
   // en vez de al último estado real sincronizado — eso vaciaba la interfaz.
   (lastSyncedDb as any)[cfg.key] = structuredClone(items);
+
+  // Se guarda la copia buena para el próximo arranque. Va agrupado
+  // (`coalesce`) porque una ráfaga de Realtime puede refrescar la misma
+  // tabla varias veces seguidas, y serializar el catálogo entero en cada
+  // una sería trabajo de CPU repetido en el hilo principal — justo lo
+  // que este cambio viene a evitar.
+  if (TABLAS_CACHEABLES.has(cfg.key as string)) {
+    coalesce('cache-local', guardarCacheLocal, 500);
+  }
+
   notifyUpdate();
 }
 
@@ -1324,6 +1428,9 @@ async function refreshSettingsFromSupabase() {
     const settings = settingsFromRow(data);
     localCache.settings = settings;
     lastSyncedDb.settings = structuredClone(settings);
+    // El logo y el nombre de la tienda salen de aquí: cachearlos evita
+    // que la cabecera aparezca sin marca en el primer fotograma.
+    coalesce('cache-local', guardarCacheLocal, 500);
     notifyUpdate();
   }
 }
@@ -1523,6 +1630,15 @@ if (typeof window !== 'undefined') {
 // ===================== Guardado principal =====================
 
 let lastSyncedDb: Database = getDefaultDB();
+
+// Rehidratación del catálogo guardado. Va AQUÍ, y no arriba junto a
+// `localCache`, por una razón concreta: necesita escribir también en
+// `lastSyncedDb`, que se declara con `let` en la línea de arriba y hasta
+// este punto está en zona muerta temporal. Es código de módulo, así que
+// corre de forma síncrona al importar `storage.ts` — antes de que React
+// monte nada. Para cuando la tienda hace su primer `getDB()`, el catálogo
+// ya está ahí.
+hidratarCacheLocal();
 
 export async function saveDB(newDb: Database) {
   const oldDb = lastSyncedDb;
