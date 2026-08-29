@@ -200,6 +200,11 @@ function AppInner() {
   // Solo se da por buena una sesión con perfil legible. Si el perfil no se
   // puede leer, se deja la aplicación como estaba: es preferible pedir la
   // contraseña una vez a dejar entrar con datos incompletos.
+  // ¿Ya terminó el INTENTO de recuperar la sesión guardada (con o sin
+  // éxito)? Empieza en falso a propósito — ver por qué en el efecto de
+  // abajo que expulsa al panel administrativo.
+  const [sesionVerificada, setSesionVerificada] = useState(false);
+
   useEffect(() => {
     let vigente = true;
 
@@ -251,6 +256,12 @@ function AppInner() {
         });
       } catch {
         /* sin sesión recuperable se sigue como visitante: nada se rompe */
+      } finally {
+        // SIEMPRE, sin importar por cuál `return`/`catch` se haya salido:
+        // el efecto de abajo (el que expulsa del panel a quien no tiene
+        // sesión) necesita saber que este intento ya terminó, para lo que
+        // sea que haya encontrado.
+        if (vigente) setSesionVerificada(true);
       }
     };
 
@@ -358,8 +369,31 @@ function AppInner() {
     return () => window.removeEventListener(EVENTO_FORZAR_REINGRESO, alForzarReingreso);
   }, [currentUser]);
 
+  // FALLO FATAL CORREGIDO: entrar a CUALQUIER módulo del panel (o a veces
+  // el panel entero) rebotaba a la tienda pública exigiendo iniciar sesión
+  // de nuevo, aunque la cuenta sí tuviera sesión válida.
+  //
+  // La causa era una CARRERA entre este efecto y el de arriba
+  // (`recuperar`). Al abrir la aplicación directo en una URL `/admin/...`
+  // — que es exactamente lo que pasa al recargar la página estando en un
+  // módulo, y la recarga automática de `main.tsx` ante un chunk
+  // desactualizado por un deploy nuevo hace justo eso — `currentView`
+  // arranca en `'admin'` (se calcula leyendo la URL) pero `currentUser`
+  // arranca en `null` (se llena después, de forma asíncrona). Los dos
+  // efectos corren en el mismo instante tras el primer montaje; este
+  // encontraba `!currentUser` ANTES de que `recuperar()` llegara siquiera
+  // a preguntarle a Supabase por la sesión, y expulsaba a una cuenta
+  // perfectamente autenticada.
+  //
+  // La espera a `sesionVerificada` (ver el efecto de arriba, que la pone
+  // en `true` pase lo que pase apenas termina su intento) es lo que cierra
+  // la carrera: mientras el intento de recuperación sigue en curso, este
+  // efecto no decide nada. Solo expulsa cuando YA se sabe, con certeza, si
+  // hay o no sesión — que es exactamente cuándo `!currentUser` deja de ser
+  // un falso negativo para pasar a ser la respuesta real.
   useEffect(() => {
     if (currentView === 'admin') {
+      if (!sesionVerificada) return;
       if (!currentUser) {
         window.history.replaceState(null, "", "/");
         setCurrentView("store");
@@ -370,7 +404,7 @@ function AppInner() {
         setCurrentView("store");
       }
     }
-  }, [currentView, currentUser, toast]);
+  }, [currentView, currentUser, sesionVerificada, toast]);
 
   useEffect(() => {
     const handlePopState = () => {
