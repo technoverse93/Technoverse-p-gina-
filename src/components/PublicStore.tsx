@@ -1523,7 +1523,26 @@ export default function PublicStore({
           >
         {activeTab === 'store' ? (
           /* PUBLIC STORE VIEW */
-          <>
+          /* ---------------------------------------------------------------
+             AISLAMIENTO DEL CATÁLOGO (empuje del footer, solo en móvil)
+             ---------------------------------------------------------------
+             Antes, en un teléfono, el pie de página aparecía asomado desde
+             la primera pantalla junto con el catálogo: saturación visual
+             desde el primer vistazo. `min-h-[100dvh]` obliga a que este
+             bloque (encabezado + banner + categorías + productos) ocupe
+             AL MENOS toda la altura visible del teléfono, así que el pie
+             de página nunca se asoma en la primera impresión — solo
+             aparece con scroll natural, nunca oculto detrás de un menú.
+             Se limpia desde `md:` porque en escritorio la cuadrícula ya
+             sube a 5-7 columnas y llena la pantalla sola; forzar el mismo
+             mínimo ahí dejaría un hueco vacío en catálogos cortos.
+
+             El `pb-20`/`sm:pb-12` es el "respiro" que pide un catálogo
+             LARGO, donde el `min-h` de arriba ya no hace nada (el
+             contenido de sobra supera la pantalla): sin este margen, la
+             última fila de productos y el pie de página quedarían
+             pegados uno contra otro. */
+          <div className="min-h-[100dvh] md:min-h-0 pb-20 sm:pb-12 md:pb-0">
             {/* Cartel principal. Va aquí a propósito: es el primer hijo de
                 la vista de tienda, o sea justo debajo de la barra superior
                 y por encima de las categorías y del catálogo. Si no hay
@@ -1638,7 +1657,7 @@ export default function PublicStore({
                 </div>
               )}
             </div>
-          </>
+          </div>
         ) : (
           /* PUBLIC REPAIRS SUPPORT PORTAL */
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-8" id="repairs-portal-section">
