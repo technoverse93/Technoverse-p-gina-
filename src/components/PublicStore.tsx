@@ -1,11 +1,11 @@
 import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
 import { PaginatedGrid } from './PaginationHelper';
-import { 
-  ShoppingBag, Search, ChevronDown, Trash2, ArrowRight,
+import {
+  ShoppingBag, Trash2, ArrowRight,
   MapPin, CheckCircle, Smartphone, Wrench, Settings,
   MessageSquare, Sparkles, AlertCircle, FileDown, Heart, ShieldAlert,
-  User as UserIcon, X, LogOut, Home, LayoutGrid, Fingerprint
+  User as UserIcon, X, LogOut, Fingerprint
 } from 'lucide-react';
 import { ProductCard } from './ProductCard';
 import { CustomSelect } from './CustomSelect';
@@ -98,21 +98,6 @@ export default function PublicStore({
   const [isAccountDropdownOpen, setIsAccountDropdownOpen] = useState(false);
   const [isCartDropdownOpen, setIsCartDropdownOpen] = useState(false);
   const [isCartBouncing, setIsCartBouncing] = useState(false);
-  const [isCatalogDropdownOpen, setIsCatalogDropdownOpen] = useState(false);
-  const catalogCloseTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
-  const openCatalogDropdown = () => {
-    if (catalogCloseTimer.current) { clearTimeout(catalogCloseTimer.current); catalogCloseTimer.current = null; }
-    setIsAccountDropdownOpen(false);
-    setIsCartDropdownOpen(false);
-    setIsCatalogDropdownOpen(true);
-  };
-  const scheduleCloseCatalogDropdown = () => {
-    if (catalogCloseTimer.current) clearTimeout(catalogCloseTimer.current);
-    catalogCloseTimer.current = setTimeout(() => setIsCatalogDropdownOpen(false), 180);
-  };
-  useEffect(() => {
-    return () => { if (catalogCloseTimer.current) clearTimeout(catalogCloseTimer.current); };
-  }, []);
 
   // Unified login & registration states
   const [isLoginModalOpen, setIsLoginModalOpen] = useState(false);
@@ -145,11 +130,7 @@ export default function PublicStore({
   const [regPassword, setRegPassword] = useState('');
 
   // App state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<Product[]>([]);
-  const [showSearchDropdown, setShowSearchDropdown] = useState(false);
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
-  const [selectedSearchProductId, setSelectedSearchProductId] = useState<string | null>(null);
   const [activeTab, setActiveTab] = useState<'store' | 'repairs'>('store');
   
   // Shopping cart state
@@ -663,37 +644,6 @@ export default function PublicStore({
     setProducts((freshDb.products || []).filter(p => p && p.active !== false && Number(p.stock) > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
   };
 
-  // Search input autocompletion logic in Spanish
-  const handleSearchChange = (val: string) => {
-    setSearchQuery(val);
-    setSelectedSearchProductId(null);
-    if (!val.trim()) {
-      setSearchResults([]);
-      setShowSearchDropdown(false);
-      return;
-    }
-
-    const matched = products.filter(p => p && (
-      (p.name && p.name.toLowerCase().includes(val.toLowerCase())) ||
-      (p.category && p.category.toLowerCase().includes(val.toLowerCase())) ||
-      (p.sku && p.sku.toLowerCase().includes(val.toLowerCase()))
-    ));
-    setSearchResults(matched);
-    setShowSearchDropdown(true);
-  };
-
-  const handleSelectSearchProduct = (p: Product) => {
-    setSearchQuery(p.name);
-    setShowSearchDropdown(false);
-    setSelectedSearchProductId(p.id);
-  };
-
-  const handleResetSearch = () => {
-    setSearchQuery('');
-    setSelectedSearchProductId(null);
-    loadStoreProducts();
-  };
-
   const getProductDiscountedPrice = (prod: Product) => prod.price;
 
   const handleAddToCart = (prod: Product) => {
@@ -1186,18 +1136,8 @@ export default function PublicStore({
         return false;
       }
     }
-    // 2. Selected search product filter
-    if (selectedSearchProductId) {
-      if (p.id !== selectedSearchProductId) return false;
-    } else if (searchQuery.trim()) {
-      const query = searchQuery.toLowerCase().trim();
-      const match = (p.name && p.name.toLowerCase().includes(query)) ||
-                    (p.category && p.category.toLowerCase().includes(query)) ||
-                    (p.sku && p.sku.toLowerCase().includes(query));
-      if (!match) return false;
-    }
     return true;
-  }), [products, selectedCategory, selectedSearchProductId, searchQuery]);
+  }), [products, selectedCategory]);
   // 12 y no 10: la rejilla llega a 6 columnas en pantalla ancha, y 12 es
   // divisible entre 2, 3, 4 y 6 — o sea, la última fila siempre queda
   // completa en todos los tamaños. Con 10 quedaba una fila coja de 4
@@ -1262,121 +1202,6 @@ export default function PublicStore({
             </span>
           </button>
 
-          <nav className="hidden md:flex items-center gap-6">
-            {/* Catalog Dropdown */}
-            <div
-              className="relative"
-              onMouseEnter={openCatalogDropdown}
-              onMouseLeave={scheduleCloseCatalogDropdown}
-            >
-              <button
-                className="group flex items-center gap-1.5 text-sm font-bold text-[var(--text-secondary)] hover:text-blue-600 tracking-wide uppercase transition-colors"
-                onClick={() => (isCatalogDropdownOpen ? setIsCatalogDropdownOpen(false) : openCatalogDropdown())}
-                aria-expanded={isCatalogDropdownOpen}
-                aria-controls="catalog-dropdown"
-              >
-                Catálogo <ChevronDown className={`w-4 h-4 transition-transform duration-200 ${isCatalogDropdownOpen ? 'rotate-180' : ''}`} />
-              </button>
-              <AnimatePresence>
-                {isCatalogDropdownOpen && (
-                  <motion.div
-                    initial={{ opacity: 0, y: 10, scale: 0.96 }}
-                    animate={{ opacity: 1, y: 0, scale: 1 }}
-                    exit={{ opacity: 0, y: 10, scale: 0.96 }}
-                    transition={{ duration: 0.16, ease: [0.23, 1, 0.32, 1] }}
-                    id="catalog-dropdown"
-                    className="absolute top-full left-0 mt-2 w-[280px] max-w-[calc(100vw-32px)] sm:w-64 glass-panel rounded-2xl p-2 z-[70]"
-                    style={{ willChange: 'transform, opacity', transformOrigin: 'top left' }}
-                  >
-                    <div className="px-4 py-2 border-b border-slate-50 mb-1">
-                      <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Explorar Categorías</span>
-                    </div>
-                    <div className="max-h-80 overflow-y-auto custom-scrollbar">
-                      {CATEGORIES.map(cat => cat && (
-                        <button
-                          key={cat}
-                          onClick={() => {
-                            setSelectedCategory(cat === 'Todos' ? null : cat);
-                            setActiveTab('store');
-                            setIsCatalogDropdownOpen(false);
-                          }}
-                          className="w-full text-left py-3 px-4 hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-blue-600 text-sm rounded-xl transition-all font-semibold flex items-center justify-between group/item break-words whitespace-normal"
-                        >
-                          <span className="flex-1 mr-2 leading-tight">{cat}</span>
-                          <ArrowRight className="w-3 h-3 opacity-0 group-hover/item:opacity-100 -translate-x-2 group-hover/item:translate-x-0 transition-all flex-shrink-0" />
-                        </button>
-                      ))}
-                    </div>
-                  </motion.div>
-                )}
-              </AnimatePresence>
-            </div>
-
-            <button 
-              onClick={() => setActiveTab('repairs')}
-              className={`text-sm font-bold tracking-wide uppercase transition-colors px-2 py-1 rounded-lg ${activeTab === 'repairs' ? 'text-blue-600 bg-blue-50 ' : 'text-[var(--text-secondary)] hover:text-blue-600 '}`}
-            >
-              Soporte Técnico
-            </button>
-          </nav>
-        </div>
-
-        {/* Search input with autocomplete */}
-        <div className="flex-1 max-w-lg mx-4 lg:mx-8 relative hidden sm:block">
-          <div className="relative flex items-center bg-[var(--bg-surface)] border border-[var(--border-color)] focus-within:border-blue-500 focus-within:ring-2 focus-within:ring-blue-500/20 rounded-2xl px-4 py-2 transition-all duration-200">
-            <Search className="w-4 h-4 text-[var(--text-muted)] mr-3 flex-shrink-0" />
-            <input
-              type="text"
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="Buscar dispositivos, repuestos o accesorios..."
-              className="w-full bg-transparent text-sm text-[var(--text-secondary)] focus:outline-none placeholder-slate-400 font-medium"
-            />
-            {searchQuery && (
-              <button 
-                onClick={handleResetSearch} 
-                className="text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors p-1"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          <AnimatePresence>
-            {showSearchDropdown && searchResults.length > 0 && (
-              <motion.div 
-                initial={{ opacity: 0, y: 10, scale: 0.98 }}
-                animate={{ opacity: 1, y: 0, scale: 1 }}
-                exit={{ opacity: 0, y: 10, scale: 0.98 }}
-                transition={{ duration: 0.15, ease: "easeOut" }}
-                className="absolute top-full left-0 right-0 mt-2 glass-panel rounded-2xl overflow-hidden max-h-[400px] overflow-y-auto z-[70] py-2"
-                id="search-suggestions-dropdown"
-              >
-                {searchResults.map(p => p && (
-                  <button
-                    key={p.id}
-                    onClick={() => handleSelectSearchProduct(p)}
-                    className="w-full text-left p-4 hover:bg-[var(--bg-surface)] transition-colors flex items-center justify-between border-b border-slate-50 last:border-0"
-                  >
-                    <div className="flex items-center gap-3">
-                      <div className="w-10 h-10 bg-transparent border border-[var(--border-color)] rounded-lg flex items-center justify-center overflow-hidden flex-shrink-0">
-                        {p.imageUrl && !imagenesRotas.has(p.id) ? (
-                          <img src={p.imageUrl} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" onError={() => marcarImagenRota(p.id)} />
-                        ) : (
-                          <Smartphone className="w-5 h-5 text-[var(--text-muted)]" />
-                        )}
-                      </div>
-                      <div>
-                        <div className="text-sm font-bold text-[var(--text-secondary)]">{p.name}</div>
-                        <div className="text-[10px] text-[var(--text-muted)] font-mono uppercase">SKU: {p.sku} • {p.category}</div>
-                      </div>
-                    </div>
-                    <div className="text-sm font-bold text-blue-600 font-mono">₡{p.price.toLocaleString()}</div>
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
         </div>
 
         {/* User context selector and Cart trigger */}
@@ -1387,39 +1212,36 @@ export default function PublicStore({
               usa. En móvil se mantiene visible por el mismo motivo. */}
           <BotonTema className="w-10 h-10 md:w-9 md:h-9" />
 
-          {/* Account Dropdown — trigger button lives in the header on desktop only; on
-              mobile this same state is triggered from the bottom navigation bar */}
+          {/* Cuenta / Perfil. Copia exactamente el diseño de BotonTema
+              (mismas clases base, mismo tamaño w-10 h-10 md:w-9 md:h-9):
+              único cambio es que el estado abierto se marca con el color
+              de acento en vez de depender de un hover, porque este botón sí
+              se queda "activo" mientras el desplegable está abierto. */}
           <div className="relative">
-            <div className="hidden md:block">
-              <button
-                onClick={() => {
-                  // Sin sesión: abrir el modal CENTRADO (no el dropdown inferior
-                  // con inputs, que el teclado móvil empuja y rompe). Con sesión:
-                  // el dropdown solo muestra el menú (sin inputs), sin problema.
-                  setIsCartDropdownOpen(false);
-                  setIsCatalogDropdownOpen(false);
-                  setSearchQuery('');
-                  if (!isAuthenticated) {
-                    setIsRegisterMode(false);
-                    setIsLoginModalOpen(true);
-                    setIsAccountDropdownOpen(false);
-                  } else {
-                    setIsAccountDropdownOpen(!isAccountDropdownOpen);
-                  }
-                }}
-                className={`group p-3 md:p-2.5 rounded-xl transition-all duration-200 flex items-center justify-center relative cursor-pointer ${
-                  isAccountDropdownOpen
-                    ? 'btn-glass-primary'
-                    : 'glass-pill text-[var(--text-secondary)] hover:border-[var(--brand-gold-mid)] hover:text-[var(--brand-gold-mid)]'
-                }`}
-                title="Mi Cuenta"
-              >
-                <UserIcon className="w-5 h-5" />
-                {isAuthenticated && (
-                  <span className="absolute top-1.5 right-1.5 w-2.5 h-2.5 bg-emerald-500 rounded-full border-2 border-white shadow-sm" />
-                )}
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                setIsCartDropdownOpen(false);
+                if (!isAuthenticated) {
+                  setIsRegisterMode(false);
+                  setIsLoginModalOpen(true);
+                  setIsAccountDropdownOpen(false);
+                } else {
+                  setIsAccountDropdownOpen(!isAccountDropdownOpen);
+                }
+              }}
+              aria-label="Mi Cuenta"
+              title="Mi Cuenta"
+              className={`relative flex-shrink-0 inline-flex items-center justify-center rounded-xl border transition cursor-pointer w-10 h-10 md:w-9 md:h-9 ${
+                isAccountDropdownOpen
+                  ? 'border-[var(--accent)] bg-[var(--bg-surface)] text-[var(--accent)]'
+                  : 'border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
+              }`}
+            >
+              <UserIcon className="w-4 h-4" />
+              {isAuthenticated && (
+                <span className="absolute top-1 right-1 w-2 h-2 bg-emerald-500 rounded-full border-2 border-[var(--bg-surface)]" />
+              )}
+            </button>
 
             <AnimatePresence>
               {isAccountDropdownOpen && isAuthenticated && (
@@ -1428,7 +1250,7 @@ export default function PublicStore({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 12, scale: 0.95 }}
                   transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-80 max-w-none md:max-w-[calc(100vw-32px)] max-h-[70dvh] md:max-h-[85dvh] glass-panel rounded-2xl overflow-y-auto z-[70] dynamic-dropdown"
+                  className="fixed inset-x-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-80 max-w-none md:max-w-[calc(100vw-32px)] max-h-[70dvh] md:max-h-[85dvh] glass-panel rounded-2xl overflow-y-auto z-[70] dynamic-dropdown"
                   id="account-dropdown"
                   style={{ willChange: 'transform, opacity' }}
                 >
@@ -1567,32 +1389,28 @@ export default function PublicStore({
             </AnimatePresence>
           </div>
 
-          {/* Cart Dropdown Trigger — button lives in the header on desktop only; on
-              mobile this same state is triggered from the bottom navigation bar */}
+          {/* Carrito. Misma base de BotonTema que el botón de Cuenta. */}
           <div className="relative">
-            <div className="hidden md:block">
-              <button
-                onClick={() => {
-                  setIsCartDropdownOpen(!isCartDropdownOpen);
-                  setIsAccountDropdownOpen(false);
-                  setIsCatalogDropdownOpen(false);
-                  setSearchQuery('');
-                }}
-                className={`p-3 md:p-2.5 rounded-xl transition-all duration-300 relative flex items-center justify-center cursor-pointer ${
-                  isCartDropdownOpen
-                    ? 'btn-glass-primary'
-                    : 'glass-pill text-[var(--text-secondary)] hover:border-[var(--brand-gold-mid)] hover:text-[var(--brand-gold-mid)]'
-                } ${isCartBouncing ? 'scale-110' : 'scale-100'}`}
-                title="Carrito"
-              >
-                <ShoppingBag className="w-5 h-5" />
-                {cart.length > 0 && (
-                  <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[10px] font-black min-w-[20px] h-5 rounded-full flex items-center justify-center border-2 border-white px-1 shadow-sm">
-                    {cart.reduce((sum, it) => sum + it.quantity, 0)}
-                  </span>
-                )}
-              </button>
-            </div>
+            <button
+              onClick={() => {
+                setIsCartDropdownOpen(!isCartDropdownOpen);
+                setIsAccountDropdownOpen(false);
+              }}
+              aria-label="Carrito"
+              title="Carrito"
+              className={`relative flex-shrink-0 inline-flex items-center justify-center rounded-xl border transition cursor-pointer w-10 h-10 md:w-9 md:h-9 ${
+                isCartDropdownOpen
+                  ? 'border-[var(--accent)] bg-[var(--bg-surface)] text-[var(--accent)]'
+                  : 'border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
+              } ${isCartBouncing ? 'scale-110' : 'scale-100'}`}
+            >
+              <ShoppingBag className="w-4 h-4" />
+              {cart.length > 0 && (
+                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[9px] font-black min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-[var(--bg-surface)] px-1 shadow-sm">
+                  {cart.reduce((sum, it) => sum + it.quantity, 0)}
+                </span>
+              )}
+            </button>
 
             <AnimatePresence>
               {isCartDropdownOpen && (
@@ -1601,7 +1419,7 @@ export default function PublicStore({
                   animate={{ opacity: 1, y: 0, scale: 1 }}
                   exit={{ opacity: 0, y: 12, scale: 0.95 }}
                   transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="fixed inset-x-3 bottom-20 md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-96 max-w-none md:max-w-[calc(100vw-32px)] glass-panel rounded-2xl overflow-hidden z-[70] flex flex-col max-h-[70dvh] md:max-h-[600px] dynamic-dropdown"
+                  className="fixed inset-x-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-96 max-w-none md:max-w-[calc(100vw-32px)] glass-panel rounded-2xl overflow-hidden z-[70] flex flex-col max-h-[70dvh] md:max-h-[600px] dynamic-dropdown"
                   id="cart-dropdown"
                   style={{ willChange: 'transform, opacity' }}
                 >
@@ -1684,199 +1502,17 @@ export default function PublicStore({
 
         </div>
         </div>
-
-        {/* Fila de búsqueda SOLO en móvil/APK. Reutiliza exactamente el
-            mismo estado y las mismas funciones que el buscador de
-            escritorio (handleSearchChange, searchResults…): es el MISMO
-            buscador, solo con una fila propia porque en una pantalla
-            angosta no cabe dentro de la barra principal junto al logo y
-            los íconos de cuenta/carrito. */}
-        <div className="sm:hidden border-t border-[var(--border-color)] px-3 py-2 relative">
-          <div className="relative flex items-center bg-[var(--bg-surface)] border border-[var(--border-color)] focus-within:border-[var(--accent)] focus-within:ring-2 focus-within:ring-[var(--accent)]/20 rounded-xl px-3 h-9 transition-all">
-            <Search className="w-4 h-4 text-[var(--text-muted)] mr-2 flex-shrink-0" />
-            <input
-              type="text"
-              inputMode="search"
-              value={searchQuery}
-              onChange={(e) => handleSearchChange(e.target.value)}
-              placeholder="Buscar productos…"
-              className="w-full min-w-0 bg-transparent text-[13px] text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
-            />
-            {searchQuery && (
-              <button
-                type="button"
-                onClick={handleResetSearch}
-                className="flex-shrink-0 text-[var(--text-muted)] hover:text-[var(--text-secondary)] transition-colors p-1 -mr-1"
-                aria-label="Borrar búsqueda"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            )}
-          </div>
-
-          <AnimatePresence>
-            {showSearchDropdown && searchResults.length > 0 && (
-              <motion.div
-                initial={{ opacity: 0, y: 8 }}
-                animate={{ opacity: 1, y: 0 }}
-                exit={{ opacity: 0, y: 8 }}
-                transition={{ duration: 0.14, ease: 'easeOut' }}
-                className="absolute left-3 right-3 top-full mt-1.5 glass-panel rounded-2xl overflow-hidden max-h-[60dvh] overflow-y-auto z-[70] py-1.5"
-              >
-                {searchResults.map(p => p && (
-                  <button
-                    key={p.id}
-                    onClick={() => handleSelectSearchProduct(p)}
-                    className="w-full text-left p-3 hover:bg-[var(--bg-sunken)] transition-colors flex items-center gap-3 border-b border-[var(--border-soft)] last:border-0"
-                  >
-                    <div className="w-9 h-9 flex-shrink-0 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-lg flex items-center justify-center overflow-hidden">
-                      {p.imageUrl && !imagenesRotas.has(p.id) ? (
-                        <img src={p.imageUrl} alt="" className="w-full h-full object-contain" loading="lazy" decoding="async" onError={() => marcarImagenRota(p.id)} />
-                      ) : (
-                        <Smartphone className="w-4 h-4 text-[var(--text-muted)]" />
-                      )}
-                    </div>
-                    <div className="min-w-0 flex-1">
-                      <div className="tv-ellipsis text-[12.5px] font-semibold text-[var(--text-primary)]">{p.name}</div>
-                      <div className="text-[10px] text-[var(--text-muted)] font-mono uppercase">{p.category}</div>
-                    </div>
-                    <div className="flex-shrink-0 text-[12.5px] font-bold text-[var(--accent)] font-mono">₡{p.price.toLocaleString()}</div>
-                  </button>
-                ))}
-              </motion.div>
-            )}
-          </AnimatePresence>
-        </div>
       </header>
 
-      {/* Mobile catalog floating sheet — triggered from the bottom navigation bar.
-          Reuses the same isCatalogDropdownOpen state as the desktop dropdown;
-          the desktop version above is unreachable on mobile (hidden md:flex ancestor),
-          so this is a dedicated mobile-anchored rendering of the same category list. */}
-      <AnimatePresence>
-        {isCatalogDropdownOpen && (
-          <motion.div
-            initial={{ opacity: 0, y: 16, scale: 0.97 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: 16, scale: 0.97 }}
-            transition={{ duration: 0.18, ease: [0.23, 1, 0.32, 1] }}
-            className="floating-sheet-mobile glass-panel rounded-2xl p-2 md:hidden"
-          >
-            <div className="px-4 py-2 border-b border-[var(--border-color)] mb-1">
-              <span className="text-[10px] font-black text-[var(--text-muted)] uppercase tracking-widest">Explorar Categorías</span>
-            </div>
-            <div className="p-1 space-y-1">
-              {CATEGORIES.map(cat => cat && (
-                <button
-                  key={cat}
-                  onClick={() => {
-                    setSelectedCategory(cat === 'Todos' ? null : cat);
-                    setActiveTab('store');
-                    setIsCatalogDropdownOpen(false);
-                  }}
-                  className={`w-full text-left py-3 px-4 text-sm rounded-xl transition-all font-semibold ${
-                    (selectedCategory === cat || (cat === 'Todos' && selectedCategory === null))
-                      ? 'bg-[var(--brand-gold-mid)] text-[var(--accent-ink)] '
-                      : 'text-[var(--text-secondary)] hover:bg-[var(--bg-base)] hover:text-blue-600 '
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-            </div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-
-      {/* Global bottom navigation bar (mobile only) — replaces the hamburger menu
-          entirely. Drives the exact same state/handlers as the desktop header. */}
-      <nav className="bottom-nav-bar md:hidden flex items-stretch">
-        <button
-          className={`bottom-nav-item ${activeTab === 'store' && !isCatalogDropdownOpen ? 'active' : ''}`}
-          onClick={() => {
-            setActiveTab('store');
-            setSelectedCategory(null);
-            setIsCatalogDropdownOpen(false);
-            setIsAccountDropdownOpen(false);
-            setIsCartDropdownOpen(false);
-          }}
-        >
-          <span className="bn-icon-wrap"><Home className="w-5 h-5" /></span>
-          Inicio
-        </button>
-        <button
-          className={`bottom-nav-item ${isCatalogDropdownOpen ? 'active' : ''}`}
-          onClick={() => {
-            if (isCatalogDropdownOpen) { setIsCatalogDropdownOpen(false); return; }
-            setIsAccountDropdownOpen(false);
-            setIsCartDropdownOpen(false);
-            setIsCatalogDropdownOpen(true);
-          }}
-        >
-          <span className="bn-icon-wrap"><LayoutGrid className="w-5 h-5" /></span>
-          Catálogo
-        </button>
-        <button
-          className={`bottom-nav-item ${activeTab === 'repairs' ? 'active' : ''}`}
-          onClick={() => {
-            setActiveTab('repairs');
-            setIsCatalogDropdownOpen(false);
-            setIsAccountDropdownOpen(false);
-            setIsCartDropdownOpen(false);
-          }}
-        >
-          <span className="bn-icon-wrap"><Wrench className="w-5 h-5" /></span>
-          Soporte
-        </button>
-        <button
-          className={`bottom-nav-item ${isAccountDropdownOpen || (isLoginModalOpen && !isAuthenticated) ? 'active' : ''}`}
-          onClick={() => {
-            setIsCatalogDropdownOpen(false);
-            setIsCartDropdownOpen(false);
-            setSearchQuery('');
-            if (!isAuthenticated) {
-              // Sin sesión: modal centrado (el teclado no rompe el layout).
-              setIsAccountDropdownOpen(false);
-              setIsRegisterMode(false);
-              setIsLoginModalOpen(true);
-              return;
-            }
-            // Con sesión: menú inferior (sin inputs), toggle normal.
-            if (isAccountDropdownOpen) { setIsAccountDropdownOpen(false); return; }
-            setIsAccountDropdownOpen(true);
-          }}
-        >
-          <span className="bn-icon-wrap"><UserIcon className="w-5 h-5" /></span>
-          Cuenta
-        </button>
-        <button
-          className={`bottom-nav-item relative ${isCartDropdownOpen ? 'active' : ''}`}
-          onClick={() => {
-            if (isCartDropdownOpen) { setIsCartDropdownOpen(false); return; }
-            setIsCatalogDropdownOpen(false);
-            setIsAccountDropdownOpen(false);
-            setIsCartDropdownOpen(true);
-            setSearchQuery('');
-          }}
-        >
-          <span className="bn-icon-wrap relative">
-            <ShoppingBag className="w-5 h-5" />
-            {cart.length > 0 && (
-              <span className="absolute -top-1.5 -right-2 bg-rose-600 text-white text-[9px] font-black min-w-[16px] h-4 rounded-full flex items-center justify-center px-1">
-                {cart.reduce((sum, it) => sum + it.quantity, 0)}
-              </span>
-            )}
-          </span>
-          Carrito
-        </button>
-      </nav>
       {/* Main Body */}
-      {/* pt-[122px] en móvil: el header ahora mide dos filas (barra
-          principal + buscador). El valor se verificó visualmente para que
-          no quede ni un hueco ni una superposición contra la primera fila
-          de productos. Desde `sm:` el buscador móvil desaparece y el
-          padding vuelve al de siempre. */}
-      <main className="pt-[122px] sm:pt-20 pb-28 md:pb-20 px-4 md:px-6 max-w-7xl mx-auto space-y-12">
+      {/* El header es ahora una sola fila (h-14 sm:h-16) más el relleno de
+          `env(safe-area-inset-top)` que le agrega .glass-nav bajo el
+          notch/Dynamic Island — por eso el padding se calcula sumando
+          ambos términos en vez de usar un valor fijo, o en un iPhone con
+          notch el catálogo quedaría tapado bajo la barra. Sin barra
+          inferior fija, tampoco hace falta el pb-28/pb-20 que antes le
+          reservaba espacio. */}
+      <main className="pt-[calc(3.5rem+env(safe-area-inset-top)+1rem)] sm:pt-[calc(4rem+env(safe-area-inset-top)+1.5rem)] pb-8 px-4 md:px-6 max-w-7xl mx-auto space-y-12">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}

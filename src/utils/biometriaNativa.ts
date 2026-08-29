@@ -203,6 +203,76 @@ function opcionesVerificacion(subtitulo: string, motivo: string) {
   };
 }
 
+/**
+ * Cuántas veces se vuelve a mostrar el diálogo si el sensor da la huella
+ * por no reconocida. Ver `verificarConReintentos` para el porqué esto es
+ * una capa DISTINTA de `maxAttempts` de arriba, no la misma cosa repetida.
+ */
+const MAX_INTENTOS_HUELLA = 5;
+
+/** Marca que se agotaron los reintentos SIN que el pase guardado se tocara. */
+class LecturaAgotada extends Error {
+  constructor(public original: any) {
+    super('lectura agotada');
+  }
+}
+
+/**
+ * Vuelve a mostrar el diálogo de huella cuando el sensor simplemente no
+ * reconoció el dedo, en vez de dar el intento por perdido a la primera.
+ *
+ * ---------------------------------------------------------------------
+ * EL FALLO QUE ESTO CORRIGE
+ * ---------------------------------------------------------------------
+ * Reporte: "si el lector falla en el primer intento, el sistema descarta
+ * la sesión biométrica" — obligaba a entrar con contraseña, cerrar sesión,
+ * y solo ENTONCES la huella volvía a funcionar.
+ *
+ * La causa no estaba en que se borrara nada (`entrarConBiometriaNativa`
+ * nunca tocó el pase guardado por un simple fallo del sensor — eso solo
+ * pasa si la SESIÓN, no la huella, resultó inservible, ver
+ * `renovarConCandidatos`). Estaba en que un solo roce mal leído ya
+ * rechazaba la promesa de `verifyIdentity()` entera, y ahí terminaba el
+ * intento: quien tocara el sensor una vez de más tenía que volver a tocar
+ * el BOTÓN a mano. Para quien no se fija en el mensaje de error, eso se
+ * siente exactamente como "la huella dejó de funcionar".
+ *
+ * `maxAttempts: 5` en `opcionesVerificacion` ataca esto mismo pero es una
+ * capa DISTINTA: son los roces que Android deja probar DENTRO de un
+ * mismo diálogo abierto, y ese parámetro no existe en iOS —Face ID
+ * gestiona sus propios reintentos internos y a veces basta un parpadeo
+ * mal capturado para que el sistema rechace de una vez. Esta función
+ * cubre esa otra capa: si el diálogo se cerró con "no reconocido"
+ * (código 10, no cancelado ni bloqueado), se vuelve a abrir uno nuevo,
+ * hasta `MAX_INTENTOS_HUELLA` veces.
+ *
+ * Lo que NO se reintenta a la fuerza, a propósito:
+ *   · Cancelado por la persona (11/12/13/15/16/17): es su decisión, no un
+ *     fallo que corregir insistiendo.
+ *   · Bloqueo temporal por demasiados fallos (2/4): volver a intentar DE
+ *     INMEDIATO es exactamente lo que NO hay que hacer ante un bloqueo;
+ *     hay que esperar, como ya dice su propio mensaje en `interpretar()`.
+ *   · Cualquier otro código (sin huella registrada, sin bloqueo de
+ *     pantalla, etc.): son fallos de configuración, no de lectura —
+ *     reintentar el mismo diálogo no cambia nada.
+ */
+async function verificarConReintentos(p: PluginBiometrico, opciones: any): Promise<void> {
+  let ultimoError: any = null;
+  for (let intento = 1; intento <= MAX_INTENTOS_HUELLA; intento++) {
+    try {
+      await p.verifyIdentity(opciones);
+      return;
+    } catch (e: any) {
+      ultimoError = e;
+      // Código 10 = Authentication Failed: el sensor SÍ se activó y no
+      // reconoció el dedo. Cualquier otro código sale de inmediato — ver
+      // el porqué de cada exclusión arriba.
+      if (Number(e?.code) !== 10) throw e;
+    }
+  }
+  throw new LecturaAgotada(ultimoError);
+}
+
 /** ¿Estamos dentro de la APK? */
 export function esAplicacionNativa(): boolean {
   try {
@@ -441,7 +511,8 @@ export async function activarBiometriaNativa(): Promise<ResultadoNativo> {
     // activa esto es quien tiene el dedo, no alguien que agarró el
     // teléfono desbloqueado. Ni aquí ni en ningún otro punto se borra
     // `LLAVE_ACTIVA` por un fallo del sensor — ver su comentario.
-    await p.verifyIdentity(
+    await verificarConReintentos(
+      p,
       opcionesVerificacion(correo, 'Confirme su identidad para activar el acceso con huella')
     );
 
@@ -449,6 +520,12 @@ export async function activarBiometriaNativa(): Promise<ResultadoNativo> {
     marcarActiva(true);
     return { ok: true, mensaje: 'Acceso con huella activado en este teléfono.' };
   } catch (e: any) {
+    if (e instanceof LecturaAgotada) {
+      return {
+        ok: false,
+        mensaje: `El lector no reconoció la huella tras ${MAX_INTENTOS_HUELLA} intentos. Puede intentarlo de nuevo cuando quiera.`,
+      };
+    }
     return interpretar(e);
   }
 }
@@ -478,7 +555,8 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
       return { ok: false, mensaje: 'Todavía no ha activado la huella en este teléfono.' };
     }
 
-    await p.verifyIdentity(
+    await verificarConReintentos(
+      p,
       opcionesVerificacion(guardado?.username || '', 'Confirme su identidad para entrar')
     );
 
@@ -540,6 +618,17 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
       email: sesion.user?.email || undefined,
     };
   } catch (e: any) {
+    // Se agotaron los reintentos SIN tocar el pase guardado ni la marca
+    // de "huella activada" — `verificarConReintentos` nunca llega a
+    // `getCredentials`/`renovarConCandidatos`/`tirarPaseInservible`, así
+    // que no hay nada que rearmar: la huella sigue lista para el próximo
+    // toque, y mientras tanto se ofrece la contraseña como respaldo.
+    if (e instanceof LecturaAgotada) {
+      return {
+        ok: false,
+        mensaje: `El lector no reconoció la huella tras ${MAX_INTENTOS_HUELLA} intentos. Puede volver a intentarlo, o entrar con su correo y contraseña.`,
+      };
+    }
     return interpretar(e);
   }
 }
