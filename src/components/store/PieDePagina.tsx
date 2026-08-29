@@ -18,8 +18,8 @@
 // se dibuja solo.
 // =====================================================================
 
-import React, { useState } from 'react';
-import { ChevronDown, MessageCircle, Phone, MapPin, Clock, Navigation } from 'lucide-react';
+import React from 'react';
+import { MessageCircle, Phone, MapPin, Clock, Navigation } from 'lucide-react';
 import type { AppSettings } from '../../types';
 
 interface Props {
@@ -77,31 +77,22 @@ const PREGUNTAS: { p: string; r: string }[] = [
 // `key` como atributo especial de JSX, así que hay que declararlo.
 interface PreguntaProps { key?: any; p: string; r: string }
 
+/**
+ * Pregunta y respuesta EXPUESTAS de una: nada de acordeón. La respuesta se
+ * separa de la pregunta con su propia tarjeta (fondo apenas más claro que
+ * el del pie de página) para que la vista, con las cinco ya abiertas, se
+ * lea como bloques distintos y no como un solo párrafo denso.
+ */
 function Pregunta({ p, r }: PreguntaProps): React.ReactElement {
-  const [abierta, setAbierta] = useState(false);
   return (
-    <div className="border-b border-white/10">
-      <button
-        type="button"
-        onClick={() => setAbierta(v => !v)}
-        aria-expanded={abierta}
-        className="flex w-full items-center justify-between gap-3 py-3 text-left"
-      >
-        {/* Color en línea por lo mismo que en el banner: las reglas sin
-            capa de index.css le ganan a las utilidades de Tailwind, y aquí
-            el fondo es oscuro a la fuerza. */}
-        <span className="text-[13px] font-semibold" style={{ color: '#E9ECF1' }}>{p}</span>
-        <ChevronDown
-          className={`h-4 w-4 flex-shrink-0 transition-transform ${abierta ? 'rotate-180' : ''}`}
-          style={{ color: '#8C97A8' }}
-          aria-hidden="true"
-        />
-      </button>
-      {abierta && (
-        <p className="pb-3 pr-6 text-[12.5px] leading-relaxed" style={{ color: '#A7AFBD' }}>
-          {r}
-        </p>
-      )}
+    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.035)' }}>
+      {/* Color en línea por lo mismo que en el banner: las reglas sin
+          capa de index.css le ganan a las utilidades de Tailwind, y aquí
+          el fondo es oscuro a la fuerza. */}
+      <div className="text-[13px] font-semibold" style={{ color: '#E9ECF1' }}>{p}</div>
+      <p className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: '#A7AFBD' }}>
+        {r}
+      </p>
     </div>
   );
 }
@@ -137,7 +128,7 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
       className="mt-16 border-t border-white/10"
       style={{ background: '#0F1217' }}
     >
-      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-8 px-5 py-10 md:grid-cols-2 lg:grid-cols-4 md:px-8">
+      <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-5 py-12 md:grid-cols-2 md:gap-8 md:py-10 lg:grid-cols-4 md:px-8">
 
         {/* ------------------------- Marca ------------------------- */}
         <div className="lg:col-span-1">
@@ -163,7 +154,7 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
         {/* --------------------- Preguntas frecuentes --------------------- */}
         <div className="lg:col-span-1">
           <Titulo>Preguntas frecuentes</Titulo>
-          <div>
+          <div className="space-y-2.5">
             {PREGUNTAS.map(q => <Pregunta key={q.p} {...q} />)}
           </div>
         </div>
