@@ -1179,6 +1179,62 @@ function flushGenericPending(cfg: TableConfig<any>) {
 let chatReady = false;
 let chatPending: { added: ChatConversation[]; modified: ChatConversation[]; deleted: ChatConversation[] }[] = [];
 
+// =====================================================================
+// MENSAJES EN VUELO — lo que arreglaba de verdad el "retraso de 2-3 s"
+// =====================================================================
+// El síntoma no era que el mensaje tardara en aparecer: aparecía al
+// instante (la interfaz ya era optimista), se BORRABA solo, y volvía dos
+// o tres segundos después. Eso confundía, porque parecía lentitud de red
+// cuando en realidad era la aplicación pisándose a sí misma.
+//
+// La secuencia exacta:
+//   1. Se toca "Enviar" y el mensaje se pinta al instante.
+//   2. Sale el INSERT hacia Supabase, que tarda lo que tarde la red.
+//   3. ENTRE MEDIO, el sondeo que corría cada 2 segundos ejecutaba
+//      `refreshChatFromSupabase()`, que NO fusiona: reemplaza entero
+//      `localCache.chat_conversations` por lo que hay en el servidor. Y
+//      en el servidor todavía no estaba el mensaje.
+//   4. `notifyUpdate()` avisaba, la pantalla releía la caché… y el
+//      mensaje recién escrito desaparecía.
+//   5. Al completarse el INSERT, el siguiente sondeo lo traía de vuelta.
+//
+// De ahí los 2-3 segundos: era exactamente un ciclo de sondeo.
+//
+// Este registro guarda los mensajes que ya se pintaron pero que el
+// servidor todavía no confirma. Cualquier recarga completa los vuelve a
+// inyectar, así que un mensaje enviado NUNCA puede desaparecer de la
+// pantalla por una recarga que llegó a destiempo.
+const mensajesEnVuelo = new Map<string, { convId: string; msg: ChatMessage }>();
+
+export function marcarMensajeEnVuelo(convId: string, msg: ChatMessage): void {
+  mensajesEnVuelo.set(msg.id, { convId, msg });
+}
+
+export function confirmarMensajeEnVuelo(id: string): void {
+  mensajesEnVuelo.delete(id);
+}
+
+/**
+ * Devuelve a su sitio los mensajes que el servidor todavía no reporta.
+ *
+ * Se llama SIEMPRE justo antes de publicar el resultado de una recarga
+ * completa. Si el servidor ya trae el mensaje, se da por confirmado y se
+ * saca del registro; si no, se reinyecta para que la pantalla no lo
+ * pierda.
+ */
+function reinyectarMensajesEnVuelo(conversaciones: ChatConversation[]): void {
+  if (mensajesEnVuelo.size === 0) return;
+  for (const [id, { convId, msg }] of mensajesEnVuelo) {
+    const conv = conversaciones.find(c => c.id === convId);
+    if (!conv) continue;
+    if (conv.messages.some(m => m.id === id)) {
+      mensajesEnVuelo.delete(id);   // el servidor ya lo tiene: misión cumplida
+      continue;
+    }
+    conv.messages.push(msg);
+  }
+}
+
 function chatConvToRow(c: ChatConversation) {
   const row: any = {
     id: c.id, customer_name: c.customerName || '', customer_email: c.customerEmail || '',
@@ -1218,6 +1274,7 @@ async function refreshChatFromSupabase() {
         imageUrl: m.image_url || undefined, isInternalNote: !!m.is_internal_note
       }))
     }));
+    reinyectarMensajesEnVuelo(conversations);
     localCache.chat_conversations = conversations;
     lastSyncedDb.chat_conversations = structuredClone(conversations);
     notifyUpdate();
@@ -1253,6 +1310,7 @@ async function refreshChatFromSupabase() {
     customerToken: r.customer_token || undefined,
     updatedAt: r.updated_at || r.created_at || undefined
   }));
+  reinyectarMensajesEnVuelo(conversations);
   localCache.chat_conversations = conversations;
   lastSyncedDb.chat_conversations = structuredClone(conversations);
   notifyUpdate();
@@ -1284,7 +1342,25 @@ async function refreshChatFromSupabase() {
  */
 function aplicarMensajeEntrante(row: any): void {
   if (!row?.id || !row?.conversation_id) return;
-  const conv = (localCache.chat_conversations || []).find(c => c.id === row.conversation_id);
+  agregarMensajeAConversacion(row.conversation_id, {
+    id: row.id, sender: row.sender, text: row.text, timestamp: row.created_at,
+    imageUrl: row.image_url || undefined, isInternalNote: !!row.is_internal_note,
+  });
+}
+
+/**
+ * Mete un mensaje en su conversación, venga por donde venga.
+ *
+ * Lo usan los dos canales de recepción —`postgres_changes` (personal con
+ * sesión) y la difusión (cliente anónimo)— porque el trabajo es idéntico
+ * y duplicarlo garantizaba que un día se arreglara solo uno.
+ *
+ * Es idempotente por `id`: que el mismo mensaje llegue por los dos
+ * caminos a la vez no lo duplica en pantalla.
+ */
+function agregarMensajeAConversacion(convId: string, msg: ChatMessage): void {
+  if (!convId || !msg?.id) return;
+  const conv = (localCache.chat_conversations || []).find(c => c.id === convId);
   if (!conv) {
     // Conversación que este cliente todavía no tiene en memoria (recién
     // creada, o su primer mensaje): no hay nada parcial que agregar, así
@@ -1292,38 +1368,137 @@ function aplicarMensajeEntrante(row: any): void {
     coalesce('chat', () => refreshChatFromSupabase(), 30);
     return;
   }
-  if (conv.messages.some(m => m.id === row.id)) return; // ya lo teníamos (propio mensaje optimista ya confirmado)
+  if (conv.messages.some(m => m.id === msg.id)) return; // ya lo teníamos
 
-  conv.messages.push({
-    id: row.id, sender: row.sender, text: row.text, timestamp: row.created_at,
-    imageUrl: row.image_url || undefined, isInternalNote: !!row.is_internal_note,
-  });
+  conv.messages.push(msg);
+  // Si era un mensaje propio que estaba esperando confirmación, ya no
+  // hace falta protegerlo de las recargas: el servidor lo devolvió.
+  confirmarMensajeEnVuelo(msg.id);
   lastSyncedDb.chat_conversations = structuredClone(localCache.chat_conversations);
   notifyUpdate();
+}
+
+// =====================================================================
+// DIFUSIÓN EN TIEMPO REAL — el canal del cliente anónimo
+// =====================================================================
+// Aquí estaba la razón de fondo por la que existía el sondeo cada 2
+// segundos, y por la que no bastaba con borrarlo:
+//
+// Un visitante del chat público NO tiene sesión de Supabase. Realtime
+// aplica las políticas RLS con el token de quien se suscribe, y la
+// política de `chat_messages` exige `is_staff() O el correo de la
+// conversación = current_email()`. Para un anónimo `current_email()` es
+// nulo, así que NUNCA le llega un `postgres_changes` de un mensaje. Esa
+// restricción es correcta —nadie sin sesión debe poder leer chats
+// ajenos— y no se toca.
+//
+// La salida no es aflojar RLS ni volver al sondeo, sino usar el OTRO
+// mecanismo de Realtime: la difusión (broadcast), que es un canal de
+// publicación/suscripción y no consulta ninguna tabla, así que no pasa
+// por RLS de filas. Cada conversación tiene su propio canal
+// `chat-conv-<id>`, y el identificador de la conversación es largo y
+// aleatorio: funciona como la llave de esa sala. El cliente se suscribe
+// SOLO a la suya —la que ya tiene en su propio token—, así que sigue sin
+// poder escuchar conversaciones de otros, igual que antes.
+const canalesDifusion = new Map<string, any>();
+
+/**
+ * Canal de una conversación, creado la primera vez que hace falta.
+ *
+ * Sirve para las dos cosas a la vez, escuchar y publicar, porque un
+ * canal de Supabase es bidireccional: abrir uno para enviar y otro para
+ * recibir sería pagar dos conexiones por la misma sala.
+ */
+function canalDeConversacion(convId: string): any {
+  let canal = canalesDifusion.get(convId);
+  if (canal) return canal;
+  try {
+    canal = supabase.channel(`chat-conv-${convId}`, {
+      // `self: false` evita que quien publica reciba su propio mensaje de
+      // vuelta. No rompería nada —`agregarMensajeAConversacion` descarta
+      // por id— pero es tráfico y trabajo para nada.
+      config: { broadcast: { self: false } },
+    });
+    canal.on('broadcast', { event: 'mensaje' }, ({ payload }: any) => {
+      if (payload?.msg) agregarMensajeAConversacion(payload.convId || convId, payload.msg);
+    });
+    canal.subscribe();
+    canalesDifusion.set(convId, canal);
+  } catch {
+    return null;
+  }
+  return canal;
+}
+
+/**
+ * Publica un mensaje ya guardado para que la otra parte lo vea al
+ * instante.
+ *
+ * Se llama DESPUÉS de que el INSERT salió bien, nunca antes: la difusión
+ * es un acelerador de entrega, no la fuente de la verdad. Si fallara, el
+ * mensaje sigue en la base y llega igual por el refresco al volver a la
+ * pestaña — por eso los errores se tragan sin ruido.
+ */
+function difundirMensaje(convId: string, msg: ChatMessage): void {
+  try {
+    canalDeConversacion(convId)?.send({
+      type: 'broadcast',
+      event: 'mensaje',
+      payload: { convId, msg },
+    });
+  } catch {
+    /* la entrega instantánea es un extra; la verdad ya está en la base */
+  }
+}
+
+/** Abre los canales de las conversaciones que este cliente puede ver. */
+function sincronizarCanalesDeDifusion(): void {
+  for (const conv of localCache.chat_conversations || []) {
+    if (conv?.id) canalDeConversacion(conv.id);
+  }
 }
 
 function initChatRealtimeSync() {
   refreshChatFromSupabase().then(() => {
     chatReady = true;
     flushChatPending();
+    sincronizarCanalesDeDifusion();
   });
 
-  // Respaldo por sondeo — necesario, no solo por si el WebSocket se corta
-  // en silencio (WebView de Android/Capacitor), sino porque un cliente
-  // ANÓNIMO del chat público nunca recibe `postgres_changes` de
-  // `chat_messages` por WebSocket: la política RLS que permite leer un
-  // mensaje exige `is_staff() O el correo de la conversación coincide con
-  // current_email()`, y un visitante anónimo no tiene sesión de Supabase
-  // (usa un token propio, no un correo autenticado) — así que
-  // `current_email()` da null y la fila nunca pasa el filtro. Eso es
-  // intencional (nadie sin sesión puede leer chats ajenos) y no algo que
-  // debiera aflojarse. El sondeo es, para el cliente, el ÚNICO canal real
-  // de recepción, por eso corre cada 2 segundos y no cada 6: es lo más
-  // cerca de "instantáneo" que se puede llegar sin exponer RLS.
+  // -------------------------------------------------------------------
+  // SIN SONDEO. Ni cada 2 segundos ni cada 30.
+  // -------------------------------------------------------------------
+  // Aquí corría un `setInterval` de 2 segundos que releía TODO el chat.
+  // Hacía dos daños a la vez:
+  //
+  //   · Borraba de la pantalla el mensaje recién enviado cuando caía
+  //     entre el pintado optimista y el INSERT (ver `mensajesEnVuelo`
+  //     más arriba). Ese era el "retraso de 2-3 segundos" reportado.
+  //   · Descargaba la tabla entera de mensajes cada 2 segundos, para
+  //     todo el mundo, creciera lo que creciera el historial.
+  //
+  // Ahora la recepción es puramente por WebSocket: `postgres_changes`
+  // para quien tiene sesión, y difusión para el cliente anónimo (ver el
+  // bloque de difusión). Lo único que queda son refrescos POR EVENTO,
+  // que no son sondeo: ocurren cuando algo cambió de verdad, no cada N
+  // segundos contra el reloj.
   if (typeof window !== 'undefined') {
-    setInterval(() => {
-      if (document.visibilityState === 'visible') refreshChatFromSupabase();
-    }, 2000);
+    // Al volver a la pestaña: mientras estuvo oculta el navegador pudo
+    // haber dormido el WebSocket, así que se comprueba una vez lo que se
+    // haya perdido. Una sola lectura al volver, no una cada 2 segundos
+    // mientras se está mirando.
+    document.addEventListener('visibilitychange', () => {
+      if (document.visibilityState === 'visible') {
+        coalesce('chat', () => refreshChatFromSupabase().then(sincronizarCanalesDeDifusion), 300);
+      }
+    });
+
+    // Al recuperar la conexión, por lo mismo: es un evento real, no un
+    // reloj. Cubre el caso del WebView de Android que pierde el socket
+    // en silencio al cambiar de wifi a datos.
+    window.addEventListener('online', () => {
+      coalesce('chat', () => refreshChatFromSupabase().then(sincronizarCanalesDeDifusion), 300);
+    });
   }
 }
 
@@ -1359,7 +1534,14 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
         id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp,
         image_url: msg.imageUrl || null, is_internal_note: !!msg.isInternalNote
       });
-      if (msgErr) errors.push(`crear mensaje ${msg.id}: ${msgErr}`);
+      if (msgErr) {
+        errors.push(`crear mensaje ${msg.id}: ${msgErr}`);
+      } else {
+        // Guardado de verdad: ya se puede soltar la protección contra
+        // recargas y avisarle al otro lado por el canal instantáneo.
+        confirmarMensajeEnVuelo(msg.id);
+        difundirMensaje(conv.id, msg);
+      }
     }
   }
 
@@ -1375,7 +1557,12 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
         id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp,
         image_url: msg.imageUrl || null, is_internal_note: !!msg.isInternalNote
       });
-      if (msgErr) errors.push(`crear mensaje ${msg.id}: ${msgErr}`);
+      if (msgErr) {
+        errors.push(`crear mensaje ${msg.id}: ${msgErr}`);
+      } else {
+        confirmarMensajeEnVuelo(msg.id);
+        difundirMensaje(conv.id, msg);
+      }
     }
   }
 
