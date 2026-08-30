@@ -40,8 +40,30 @@
   --tv-regleta-h: 36px;
   --tv-dock-h: 62px;
 
-  --tv-radius: 14px;
-  --tv-radius-sm: 10px;
+  /* -------------------------------------------------------------------
+     GEOMETRÍA — variación "Mixta" (la elegida de las tres propuestas)
+     -------------------------------------------------------------------
+     La idea de esta forma: los CONTENEDORES llevan una curva generosa y
+     los CONTROLES son casi rectos. Esa diferencia hace, sola, el trabajo
+     que normalmente se le pide al color — se distingue de un vistazo qué
+     es superficie y qué se puede tocar, sin pintar nada.
+     Por eso los dos radios se separan tanto (18 contra 6) en vez de ser
+     dos pasos de una misma escala: si se parecieran, el recurso se
+     pierde y vuelve a ser "todo redondeado, unos más que otros".
+
+     Toda regla nueva que necesite una esquina debe usar estos tokens y
+     no un número suelto; si no, queda fuera del sistema y se nota. */
+  --tv-radius: 18px;
+  --tv-radius-sm: 6px;
+  /* Píldora, reservada a lo que es ETIQUETA y no control: chips de
+     estado, insignias, contadores. Es el contraste que sostiene la
+     variación. */
+  --tv-radius-pill: 999px;
+  /* Peso y traqueo que acompañan a esta geometría. Con la curva amplia
+     de los contenedores, un titular demasiado ligero se deshace; 780 y
+     un traqueo apretado le devuelven el aplomo. */
+  --tv-peso-titulo: 780;
+  --tv-traqueo-titulo: -0.015em;
 
   /* Superficie de trabajo: un punto más profunda que la tienda para que
      las tarjetas floten sin necesidad de sombras pesadas. */
@@ -1476,3 +1498,93 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
 #admin-panel-root .bg-sky-500.text-slate-950,
 #admin-panel-root .bg-amber-500.text-slate-950,
 #admin-panel-root .bg-rose-500.text-white { color: var(--accent-ink) !important; }
+
+/* =====================================================================
+   GEOMETRÍA MIXTA — controles rectos dentro de contenedores curvos
+   ---------------------------------------------------------------------
+   Los tokens de arriba ya reforman todo lo que dibuja sus esquinas con
+   `var(--tv-radius)` / `var(--tv-radius-sm)`, que es la mayor parte del
+   panel. Lo que queda aquí son los elementos que Tailwind pinta con su
+   propia clase de radio (`rounded-xl`, `rounded-lg`…) escrita en el
+   marcado, y que por tanto no leen ningún token.
+
+   Se corrigen por clase y no editando cientos de componentes: son las
+   mismas utilidades repetidas por todo el panel, así que una regla por
+   utilidad cubre la aplicación entera y, sobre todo, cubre también el
+   código que se escriba mañana sin que nadie tenga que acordarse.
+
+   Todo va bajo `#admin-panel-root`: la tienda pública no se toca.
+   ===================================================================== */
+
+/* --- Controles: casi rectos ----------------------------------------- */
+#admin-panel-root button:not(.tv-pestana):not(.tv-menu-item):not(.tv-chip),
+#admin-panel-root input:not([type="checkbox"]):not([type="radio"]),
+#admin-panel-root select,
+#admin-panel-root textarea {
+  border-radius: var(--tv-radius-sm);
+}
+
+/* Tailwind escribe el radio en el marcado, así que un botón con
+   `rounded-2xl` seguiría curvado pese a la regla de arriba. Se corrige
+   SOLO cuando esa clase cae sobre un control — no sobre cualquier
+   elemento que la lleve.
+   ---------------------------------------------------------------------
+   Esto empezó siendo una regla general para `.rounded-lg/-xl/-2xl` y
+   estaba mal: aplanaba también modales, desplegables y tarjetas, que en
+   esta variación son justamente lo que DEBE conservar la curva amplia.
+   Habría convertido la forma mixta en una forma rígida a medias. */
+#admin-panel-root button.rounded-lg,
+#admin-panel-root button.rounded-xl,
+#admin-panel-root button.rounded-2xl,
+#admin-panel-root input.rounded-lg,
+#admin-panel-root input.rounded-xl,
+#admin-panel-root input.rounded-2xl,
+#admin-panel-root select.rounded-lg,
+#admin-panel-root select.rounded-xl,
+#admin-panel-root select.rounded-2xl,
+#admin-panel-root textarea.rounded-lg,
+#admin-panel-root textarea.rounded-xl,
+#admin-panel-root textarea.rounded-2xl {
+  border-radius: var(--tv-radius-sm);
+}
+
+/* --- Contenedores: curva generosa ------------------------------------ */
+/* Las superficies grandes conservan la curva amplia. Las que ya dibujan
+   con `var(--tv-radius)` se reformaron solas al cambiar el token; estas
+   llevan su radio por clase propia y hay que nombrarlas. */
+#admin-panel-root .tv-tarjeta,
+#admin-panel-root .tv-panel,
+#admin-panel-root .glass-panel,
+#admin-panel-root .glass-panel-strong,
+#admin-panel-root .glass-card {
+  border-radius: var(--tv-radius);
+}
+
+/* --- Etiquetas: píldora ---------------------------------------------- */
+/* Chips, insignias y contadores son etiquetas, no controles: mantienen
+   el óvalo, y ese contraste es justamente el recurso de esta variación. */
+#admin-panel-root .tv-chip,
+#admin-panel-root .rounded-full {
+  border-radius: var(--tv-radius-pill);
+}
+
+/* --- Titulares ------------------------------------------------------- */
+#admin-panel-root .tv-titulo,
+#admin-panel-root .tv-page-title,
+#admin-panel-root h1,
+#admin-panel-root h2,
+#admin-panel-root h3 {
+  font-weight: var(--tv-peso-titulo);
+  letter-spacing: var(--tv-traqueo-titulo);
+}
+
+/* --- Excepciones que NO deben perder su forma ------------------------- */
+/* Avatares, indicadores de estado y botones de icono circulares: si
+   cayeran en la regla de controles rectos quedarían como cuadraditos.
+   `rounded-full` ya los cubre arriba, pero estos llevan el radio en
+   línea o por su propia clase. */
+#admin-panel-root .tv-avatar,
+#admin-panel-root .tv-punto,
+#admin-panel-root [class*="rounded-full"] {
+  border-radius: 999px;
+}
