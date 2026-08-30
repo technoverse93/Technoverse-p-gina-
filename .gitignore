@@ -19,3 +19,6 @@ android/
 #
 # Estos archivos se guardan fuera del repositorio, en un sitio privado.
 supabase/respaldos/
+
+# Artefactos temporales del CLI de Supabase (versión descargada, etc.)
+supabase/.temp/

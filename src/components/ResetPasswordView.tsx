@@ -81,7 +81,19 @@ export default function ResetPasswordView({ onListo }: Props) {
       if (updError) throw updError;
       toast.success('Contraseña actualizada correctamente.');
       setEstado('exito');
-      await supabase.auth.signOut();
+      // AQUÍ el alcance global SÍ es el correcto, y es el único sitio de
+      // la aplicación donde lo es. No quitarlo "para no romper la
+      // huella": quien acaba de cambiar su contraseña por el correo de
+      // recuperación suele hacerlo justamente porque sospecha que
+      // alguien más entró, y lo que necesita es echar a ese alguien de
+      // todos los aparatos. Que la huella de sus propios teléfonos pida
+      // la contraseña una vez después de esto es el comportamiento
+      // esperado y deseable — se rearma sola en el siguiente ingreso.
+      //
+      // El resto de cierres de sesión de la aplicación usan
+      // `scope: 'local'` a propósito; ver `cerrarSesionConservandoBiometria`
+      // en utils/biometriaNativa.ts.
+      await supabase.auth.signOut({ scope: 'global' });
     } catch (err: any) {
       const msg = err?.message || 'No se pudo actualizar la contraseña.';
       setError(msg);

@@ -747,25 +747,44 @@ export function iniciarSincronizacionBiometrica(): void {
  * Termina la sesión de la forma que corresponda a este aparato.
  *
  * ---------------------------------------------------------------------
- * NO HAY NINGÚN `signOut` QUE CONSERVE EL PASE. NINGUNO.
+ * EL FALLO DE RAÍZ: `signOut()` SIN ÁMBITO MATABA LA HUELLA DEL TELÉFONO
+ * DESDE OTRO APARATO
  * ---------------------------------------------------------------------
- * Conviene dejarlo escrito porque el comentario que ocupaba este sitio
- * afirmaba lo contrario —que `scope: 'local'` "borra la sesión de este
- * aparato y deja el pase válido"— y esa frase es exactamente la creencia
- * que produjo el fallo.
+ * Esta era la causa real de "la huella dice que la sesión caducó" y de
+ * que la huella no aguantara en dos teléfonos a la vez. El ámbito por
+ * defecto de `supabase.auth.signOut()` es **`global`**, y global
+ * significa, literalmente: destruir TODAS las sesiones de esa cuenta en
+ * TODOS los aparatos, con sus pases de renovación incluidos.
  *
- * Lo que ocurre de verdad: supabase-js manda `POST /logout?scope=local`
- * CON el JWT de la sesión, y para GoTrue `local` significa "cierra solo
- * esta sesión, no las de los demás aparatos". El pase de esta sesión
- * —el que está guardado detrás de la huella— se revoca igual.
+ * O sea que un cierre de sesión en el navegador —el del botón, o el
+ * automático por inactividad— borraba del servidor el pase que el
+ * teléfono tenía guardado detrás de la huella. El teléfono no se
+ * enteraba de nada: seguía con su pase en el llavero, ya muerto, y al
+ * poner el dedo horas después recibía "La sesión guardada caducó" y
+ * pedía la contraseña. Se veía como una caducidad por tiempo, pero no lo
+ * era: era otro aparato apagándole la sesión.
  *
- * Así que hay dos comportamientos, y ninguno intenta lo imposible:
+ * En la base de datos se veía clarísimo: cada cuenta tenía UNA sola
+ * fila en `auth.sessions`, nunca dos, por más aparatos que se usaran.
+ * Cada ingreso nuevo borraba el anterior.
+ *
+ * `scope: 'local'` cierra ÚNICAMENTE la sesión de este aparato y deja
+ * intactas las de los demás. Con eso:
+ *
+ *   · La huella del teléfono sobrevive a cualquier cierre de sesión
+ *     hecho en la web, y al revés.
+ *   · Dos teléfonos (o tres) pueden tener su huella activada a la vez,
+ *     cada uno con su propia sesión y su propio pase, y ninguno pisa al
+ *     otro. Es el soporte multi-dispositivo pedido.
+ *
+ * Se conservan los dos comportamientos de siempre:
  *
  *   · APK con la huella activada → se echa la LLAVE. No se llama a
  *     `signOut` en absoluto. La sesión sigue viva en el aparato y la
  *     aplicación la trata como cerrada hasta que la huella la abra.
  *
- *   · Web, o APK sin huella activada → cierre real y global de siempre.
+ *   · Web, o APK sin huella activada → cierre real, pero SOLO de este
+ *     aparato.
  */
 export async function cerrarSesionConservandoBiometria(): Promise<void> {
   const cerrarConLlave = esAplicacionNativa() && estaMarcadaActiva();
@@ -786,11 +805,14 @@ export async function cerrarSesionConservandoBiometria(): Promise<void> {
     return;
   }
 
+  // `scope: 'local'` NO es opcional ni una preferencia de estilo: sin él
+  // este cierre de sesión apaga la huella de todos los demás aparatos de
+  // esta misma cuenta. Ver el bloque de arriba.
   try {
-    await supabase.auth.signOut();
+    await supabase.auth.signOut({ scope: 'local' });
   } catch {
     /* si falla, se reintenta para no dejar la sesión viva por error */
-    try { await supabase.auth.signOut(); } catch { /* nada más que hacer */ }
+    try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* nada más que hacer */ }
   }
 }
 

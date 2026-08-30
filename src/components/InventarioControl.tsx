@@ -8,9 +8,9 @@ import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
 import { ProductImage } from './ProductImage';
 import { 
-  Package, Plus, Edit, Trash2, Search, Filter, History, MapPin, 
+  Package, Plus, Edit, Trash2, Search, Filter, History, MapPin,
   Box, FileText, AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronRight, X, Image as ImageIcon, Save, Download,
-  Upload, Check, AlertCircle, Send, Boxes
+  Upload, Check, AlertCircle, Send, Boxes, Sparkles, Loader2
 } from 'lucide-react';
 
 // CAABYS genérico ("Otros servicios n.c.p."), respaldo mientras se clasifica
@@ -122,6 +122,8 @@ function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'produc
   const [prodName, setProdName] = useState('');
   const [prodSku, setProdSku] = useState('');
   const [prodDesc, setProdDesc] = useState('');
+  // Auto-completado de la descripción (ver `autocompletarDescripcion`).
+  const [autocompletandoDesc, setAutocompletandoDesc] = useState(false);
   const [prodCategory, setProdCategory] = useState<string>('Accesorios');
   // Marca del teléfono al que corresponde el repuesto (Samsung, iPhone...).
   // Solo aplica a Repuestos: category ya dice qué PIEZA es, brand dice PARA
@@ -792,6 +794,51 @@ function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'produc
 
   const autocompletarDesdeHistorico = (skuBuscado: string) => {
     recuperarHistorico(skuBuscado);
+  };
+
+  /**
+   * Rellena la descripción con las características del producto.
+   *
+   * Llama a la función `autocompletar-producto` del servidor, que arma
+   * la lista a partir del propio nombre y de fuentes públicas gratuitas
+   * (ver el encabezado de esa función para el detalle de las fuentes).
+   *
+   * Lo que llega SUSTITUYE lo que hubiera escrito, y es a propósito: el
+   * botón se toca justamente cuando el campo está vacío o cuando no
+   * convence lo que hay. Por eso se avisa antes de pisar un texto ya
+   * escrito, en vez de hacerlo en silencio.
+   *
+   * El resultado NO se guarda solo: queda en el cuadro de texto para
+   * revisarlo y corregirlo antes de guardar el producto. La orden lo
+   * pide así y además es lo correcto — ninguna fuente automática merece
+   * publicarse al catálogo sin que alguien la lea.
+   */
+  const autocompletarDescripcion = async () => {
+    const nombre = prodName.trim();
+    if (nombre.length < 3) {
+      showToast('Escriba primero el nombre del producto.', 'warning');
+      return;
+    }
+    if (prodDesc.trim() && !window.confirm('Ya hay una descripción escrita. ¿Reemplazarla por la generada automáticamente?')) {
+      return;
+    }
+
+    setAutocompletandoDesc(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('autocompletar-producto', {
+        body: { nombre },
+      });
+      if (error) throw error;
+      if (!data?.ok || !data?.descripcion) {
+        throw new Error(data?.error || 'No se pudo generar la descripción.');
+      }
+      setProdDesc(data.descripcion);
+      showToast(`Descripción generada a partir de: ${data.fuente}. Revísela antes de guardar.`, 'success');
+    } catch (err: any) {
+      showToast('No se pudo generar la descripción: ' + (err?.message || 'error desconocido'), 'error');
+    } finally {
+      setAutocompletandoDesc(false);
+    }
   };
 
   const currentDb = getDB();
@@ -2005,8 +2052,37 @@ if (!m) return null;
                     </div>
 
                     <div>
-                      <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Descripción</label>
-                      <textarea rows={3} value={prodDesc} onChange={e => setProdDesc(e.target.value)} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] resize-none" />
+                      <div className="flex items-center justify-between gap-2 mb-1">
+                        <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)]">Descripción</label>
+                        {/* Auto-completado. Se deshabilita sin nombre porque
+                            es el único dato del que parte la búsqueda: sin él
+                            no hay nada que consultar. */}
+                        <button
+                          type="button"
+                          onClick={autocompletarDescripcion}
+                          disabled={autocompletandoDesc || prodName.trim().length < 3}
+                          title={prodName.trim().length < 3
+                            ? 'Escriba primero el nombre del producto'
+                            : 'Buscar las características de este producto y llenar la descripción'}
+                          className="inline-flex items-center gap-1.5 rounded-lg border border-[var(--accent)] px-2.5 py-1 text-[10px] font-bold uppercase tracking-wide text-[var(--accent)] transition hover:bg-[var(--accent)] hover:text-[var(--accent-ink)] disabled:cursor-not-allowed disabled:opacity-40 disabled:hover:bg-transparent disabled:hover:text-[var(--accent)]"
+                        >
+                          {autocompletandoDesc ? (
+                            <><Loader2 className="w-3 h-3 animate-spin" /> Buscando…</>
+                          ) : (
+                            <><Sparkles className="w-3 h-3" /> Auto-completar datos</>
+                          )}
+                        </button>
+                      </div>
+                      <textarea
+                        rows={6}
+                        value={prodDesc}
+                        onChange={e => setProdDesc(e.target.value)}
+                        placeholder={'- Característica 1\n\n- Característica 2'}
+                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] resize-y leading-relaxed placeholder:text-[var(--text-muted)]"
+                      />
+                      <p className="text-[9px] text-[var(--text-muted)] mt-1">
+                        El auto-completado llena este campo a partir del nombre del producto. Revise y corrija antes de guardar.
+                      </p>
                     </div>
                     <div className="grid grid-cols-2 gap-4">
                       {!(sparePartCategories.includes(prodCategory) || prodCategory === 'Repuestos') && (

@@ -22,5 +22,17 @@
     },
     "allowImportingTsExtensions": true,
     "noEmit": true
-  }
+  },
+  "exclude": [
+    "node_modules",
+    "dist",
+    "android",
+    "ios",
+    // Las Edge Functions corren en Deno, no en el navegador: usan
+    // `Deno.serve`, importan por `jsr:` y nunca entran al bundle de
+    // Vite. Comprobarlas con la configuración de la aplicación web
+    // fallaba con "Cannot find name 'Deno'", que no es un error real
+    // sino el runtime equivocado. Se validan al desplegarlas.
+    "supabase/functions"
+  ]
 }
