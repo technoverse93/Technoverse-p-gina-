@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, X, Bot, User, Menu, Plus, Check, CheckCheck } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
-import { getDB, saveDB, ensureCustomerChatToken } from '../utils/storage';
+import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo } from '../utils/storage';
 
 export const FAQ_DATA = [
   {
@@ -219,6 +219,12 @@ export default function LiveChat() {
       msgs.forEach(m => next.add(m.id));
       return next;
     });
+    // `pendingIds` es local a este componente y solo sirve para pintar el
+    // mensaje como "enviando". Esto otro es global: protege el mensaje de
+    // que una recarga completa del chat —llegada justo entre este pintado
+    // y el guardado— lo borre de la caché y con ella de la pantalla. Ver
+    // `mensajesEnVuelo` en storage.ts.
+    msgs.forEach(m => marcarMensajeEnVuelo(convId, m));
     setConversations(prev => prev.map(c => c.id === convId
       ? { ...c, messages: [...c.messages, ...msgs], unreadCount: c.unreadCount + unreadDelta }
       : c));
@@ -230,6 +236,7 @@ export default function LiveChat() {
       ids.forEach(id => next.delete(id));
       return next;
     });
+    ids.forEach(confirmarMensajeEnVuelo);
   };
 
   const rollbackOptimistic = (convId: string, ids: string[]) => {

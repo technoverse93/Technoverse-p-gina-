@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { ChatConversation, User } from '../../types';
-import { getDB, saveDB, addAuditLog } from '../../utils/storage';
+import { getDB, saveDB, addAuditLog, marcarMensajeEnVuelo, confirmarMensajeEnVuelo } from '../../utils/storage';
 import { supabase } from '../../supabaseClient';
 import ChatInbox from './ChatInbox';
 import ChatThread from './ChatThread';
@@ -118,6 +118,13 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
     // termine el guardado. Si `persist()` falla, `loadConversations()`
     // (que corre en el catch) relee de `getDB()` y esta fila optimista
     // desaparece sola — no hace falta un rollback manual aparte.
+    //
+    // El registro de "en vuelo" es lo que impide que una recarga completa
+    // del chat, llegada entre este pintado y el INSERT, borre el mensaje
+    // de la pantalla. Era exactamente el parpadeo que se veía como un
+    // retraso de 2-3 segundos. Ver `mensajesEnVuelo` en storage.ts.
+    marcarMensajeEnVuelo(convId, newMsg);
+
     if (isMountedRef.current) {
       setConversations(prev => prev.map(c => c.id === convId
         ? { ...c, messages: [...c.messages, newMsg], unreadCount: 0 }
@@ -130,7 +137,16 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
       db.chat_conversations[idx].messages.push(newMsg);
       db.chat_conversations[idx].unreadCount = 0;
     });
-    if (ok) addAuditLog(currentUser?.email || 'admin', 'Soporte', payload.isInternalNote ? 'Nota Interna' : 'Respuesta Chat', `Conversación ${convId}`);
+    if (ok) {
+      addAuditLog(currentUser?.email || 'admin', 'Soporte', payload.isInternalNote ? 'Nota Interna' : 'Respuesta Chat', `Conversación ${convId}`);
+    } else {
+      // El guardado falló y el mensaje NO existe en el servidor. Hay que
+      // soltar la protección: si se quedara marcado como "en vuelo", cada
+      // recarga volvería a inyectarlo y quedaría en pantalla para siempre
+      // un mensaje que nunca se envió — que es peor que verlo desaparecer,
+      // porque el administrador creería que el cliente ya lo recibió.
+      confirmarMensajeEnVuelo(newMsg.id);
+    }
   };
 
   const handleAssign = async (convId: string, email: string) => {
