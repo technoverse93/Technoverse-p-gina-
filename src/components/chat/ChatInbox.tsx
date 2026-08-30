@@ -1,6 +1,7 @@
 import React from 'react';
 import { Clock } from 'lucide-react';
 import { ChatConversation } from '../../types';
+import { selloDeLista } from './formatoChat';
 import type { ChatStatusFilter, ResolvedRange } from './ChatCRM';
 
 interface ChatInboxProps {
@@ -31,9 +32,13 @@ const RESOLVED_RANGES: { id: ResolvedRange; label: string }[] = [
   { id: '30d', label: '1 Mes' }
 ];
 
-function lastPreview(conv: ChatConversation): string {
+function ultimoVisible(conv: ChatConversation) {
   const visible = conv.messages.filter(m => !m.isInternalNote);
-  const last = visible[visible.length - 1];
+  return visible[visible.length - 1];
+}
+
+function lastPreview(conv: ChatConversation): string {
+  const last = ultimoVisible(conv);
   if (!last) return 'Sin mensajes todavía';
   if (last.imageUrl) return '📷 Imagen';
   return last.text;
@@ -117,9 +122,19 @@ export default function ChatInbox({
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
                   <span className="font-semibold text-xs text-[var(--text-primary)] truncate">{conv.customerName || 'Cliente'}</span>
-                  {conv.unreadCount > 0 && (
-                    <span className="w-2 h-2 rounded-full bg-rose-500 shrink-0 animate-pulse" />
-                  )}
+                  <span className="flex items-center gap-1.5 shrink-0">
+                    {/* Sello del último mensaje: en una bandeja es lo que
+                        ordena de un vistazo qué está fresco y qué lleva días
+                        parado, sin abrir la conversación. */}
+                    {ultimoVisible(conv) && (
+                      <span className="font-mono text-[9px] text-[var(--text-muted)]">
+                        {selloDeLista(ultimoVisible(conv).timestamp)}
+                      </span>
+                    )}
+                    {conv.unreadCount > 0 && (
+                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
+                    )}
+                  </span>
                 </div>
                 <p className="text-[11px] text-[var(--text-secondary)] truncate">{lastPreview(conv)}</p>
               </div>

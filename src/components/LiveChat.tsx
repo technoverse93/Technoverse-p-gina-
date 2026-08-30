@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Bot, User, Menu, Plus, Check, CheckCheck } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Menu, Plus, Check, CheckCheck } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo } from '../utils/storage';
+import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 
 export const FAQ_DATA = [
   {
@@ -463,42 +464,64 @@ export default function LiveChat() {
                       </button>
                     </div>
                   )}
-                  {mensajesClienteVisibles.map(msg => {
+                  {mensajesClienteVisibles.map((msg, i) => {
                     const isCustomer = msg.sender === 'customer';
                     const isBot = msg.sender === 'bot';
                     const pending = pendingIds.has(msg.id);
+                    const separador = abreDiaNuevo(msg.timestamp, mensajesClienteVisibles[i - 1]?.timestamp);
                     return (
-                      <div key={msg.id} className={`flex gap-1.5 max-w-[82%] animate-in fade-in slide-in-from-bottom-1 duration-200 ${isCustomer ? 'ml-auto flex-row-reverse' : ''}`}>
-                        {!isCustomer && (
-                          <div className="w-[22px] h-[22px] rounded-full bg-[var(--bg-sunken)] text-[var(--text-muted)] flex items-center justify-center shrink-0 mt-0.5">
-                            {isBot ? <Bot className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                      <React.Fragment key={msg.id}>
+                        {separador && (
+                          <div className="flex justify-center py-1">
+                            <span className="text-[9px] font-bold uppercase tracking-[0.09em] px-2.5 py-1 rounded-full bg-[var(--bg-sunken)] text-[var(--text-muted)]">
+                              {etiquetaDeDia(msg.timestamp)}
+                            </span>
                           </div>
                         )}
-                        <div className="min-w-0">
-                          <div
-                            className={`rounded-2xl px-3 py-2 text-xs shadow-sm ${
-                              isCustomer
-                                ? 'rounded-br-[5px] bg-[var(--bubble-out)] text-[var(--bubble-out-ink)]'
-                                : isBot
-                                ? 'rounded-bl-[5px] bg-transparent border border-[var(--border-color)] text-[var(--text-primary)]'
-                                : 'rounded-bl-[5px] bg-[var(--bubble-in)] text-[var(--bubble-in-ink)]'
-                            }`}
-                          >
-                            {msg.imageUrl && (
-                              <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-lg max-w-full mb-1.5 max-h-56 object-cover" loading="lazy" />
-                            )}
-                            {msg.text && <p className="tv-break whitespace-pre-wrap leading-relaxed">{msg.text}</p>}
-                          </div>
-                          <div className={`flex items-center gap-1 mt-1 text-[9.5px] font-mono text-[var(--text-muted)] ${isCustomer ? 'justify-end' : ''}`}>
-                            <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            {isCustomer && (
-                              pending
-                                ? <Check className="w-3 h-3 opacity-50" />
-                                : <CheckCheck className="w-3 h-3 text-[var(--accent)]" />
-                            )}
+                        <div className={`flex gap-2 max-w-[82%] animate-in fade-in slide-in-from-bottom-1 duration-200 ${isCustomer ? 'ml-auto flex-row-reverse' : ''}`}>
+                          {!isCustomer && (
+                            <div className="w-6 h-6 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0 self-end font-display font-bold text-[9.5px]">
+                              {isBot ? <Bot className="w-3 h-3" /> : 'T'}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            {/* Hora y acuse DENTRO de la burbuja, alineados a
+                                la derecha. Antes iban en una fila aparte
+                                debajo, que en un hilo largo suma una línea de
+                                ruido por cada mensaje. */}
+                            {/* Mismos tokens de burbuja que el hilo del panel:
+                                es la MISMA conversación vista desde el otro
+                                lado, así que el verde y el gris tienen que ser
+                                exactamente los mismos en las dos pantallas. */}
+                            <div
+                              className={`px-3.5 py-2.5 text-xs rounded-2xl ${
+                                isCustomer
+                                  ? 'rounded-br-[4px] bg-[var(--bubble-out)] text-[var(--bubble-out-ink)] shadow-[0_2px_10px_-4px_rgba(var(--accent-rgb),0.5)]'
+                                  : isBot
+                                  ? 'rounded-bl-[4px] bg-transparent border border-[var(--border-color)] text-[var(--text-primary)]'
+                                  : 'rounded-bl-[4px] bg-[var(--bubble-in)] text-[var(--bubble-in-ink)] shadow-[0_1px_2px_rgba(15,21,18,0.06),0_6px_16px_-12px_rgba(15,21,18,0.3)]'
+                              }`}
+                            >
+                              {msg.imageUrl && (
+                                <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-xl max-w-full mb-1.5 max-h-56 object-cover" loading="lazy" />
+                              )}
+                              {msg.text && <p className="tv-break whitespace-pre-wrap leading-relaxed">{msg.text}</p>}
+                              <span className={`flex items-center justify-end gap-1 font-mono text-[8.5px] mt-1 ${isCustomer ? 'opacity-80' : 'opacity-55'}`}>
+                                {soloHora(msg.timestamp)}
+                                {/* Un solo tic mientras el guardado va en
+                                    camino, doble cuando el servidor ya lo
+                                    confirmó. Es el estado REAL del envío, no
+                                    un adorno fijo. */}
+                                {isCustomer && (
+                                  pending
+                                    ? <Check className="w-3 h-3 opacity-70" />
+                                    : <CheckCheck className="w-3 h-3" />
+                                )}
+                              </span>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      </React.Fragment>
                     );
                   })}
                 </div>
