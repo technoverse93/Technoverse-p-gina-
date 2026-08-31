@@ -19,7 +19,7 @@
 // =====================================================================
 
 import React from 'react';
-import { MessageCircle, Phone, MapPin, Clock, Navigation } from 'lucide-react';
+import { MessageCircle, Phone, MapPin, Clock, Navigation, ChevronDown } from 'lucide-react';
 import type { AppSettings } from '../../types';
 
 interface Props {
@@ -78,21 +78,69 @@ const PREGUNTAS: { p: string; r: string }[] = [
 interface PreguntaProps { key?: any; p: string; r: string }
 
 /**
- * Pregunta y respuesta EXPUESTAS de una: nada de acordeón. La respuesta se
- * separa de la pregunta con su propia tarjeta (fondo apenas más claro que
- * el del pie de página) para que la vista, con las cinco ya abiertas, se
- * lea como bloques distintos y no como un solo párrafo denso.
+ * Pregunta plegable. Cerrada al cargar: solo se ve el título.
+ *
+ * Con las cinco respuestas expuestas, el pie de página medía más que la
+ * tienda entera y había que recorrer un muro de texto para llegar a los
+ * datos de contacto, que es a lo que la gente baja. Plegadas, el bloque
+ * queda en cinco renglones y la respuesta aparece solo si se pide.
+ *
+ * La animación es sobre `grid-template-rows` de `0fr` a `1fr`, no sobre
+ * `max-height`. Con `max-height` hay que inventar un tope: si se queda
+ * corto recorta la respuesta más larga, y si sobra —lo normal, porque se
+ * pone de más por seguridad— la transición gasta la mitad del tiempo
+ * animando vacío y el cierre arranca con un tirón. Con la rejilla el
+ * navegador anima hasta el alto REAL del texto, sea el que sea.
  */
 function Pregunta({ p, r }: PreguntaProps): React.ReactElement {
+  const [abierta, setAbierta] = React.useState(false);
+  const idRespuesta = React.useId();
+
   return (
-    <div className="rounded-xl p-4" style={{ background: 'rgba(255,255,255,0.035)' }}>
-      {/* Color en línea por lo mismo que en el banner: las reglas sin
-          capa de index.css le ganan a las utilidades de Tailwind, y aquí
-          el fondo es oscuro a la fuerza. */}
-      <div className="text-[13px] font-semibold" style={{ color: '#E9ECF1' }}>{p}</div>
-      <p className="mt-1.5 text-[12.5px] leading-relaxed" style={{ color: '#A7AFBD' }}>
-        {r}
-      </p>
+    <div className="rounded-xl" style={{ background: 'rgba(255,255,255,0.035)' }}>
+      {/* Botón de verdad, no un div con onClick: así responde al teclado y
+          los lectores de pantalla anuncian si está abierta o cerrada. */}
+      <button
+        type="button"
+        onClick={() => setAbierta(v => !v)}
+        aria-expanded={abierta}
+        aria-controls={idRespuesta}
+        className="flex w-full items-start justify-between gap-3 p-4 text-left transition-colors hover:bg-white/[0.03] rounded-xl"
+      >
+        {/* Color en línea por lo mismo que en el banner: las reglas sin
+            capa de index.css le ganan a las utilidades de Tailwind, y aquí
+            el fondo es oscuro a la fuerza. */}
+        <span className="text-[13px] font-semibold" style={{ color: '#E9ECF1' }}>{p}</span>
+        {/* La flecha va envuelta en un <span> a propósito. `index.css` tiene
+            una regla para botones de SOLO ícono —`button:has(> svg.lucide)`—
+            que impone `justify-content: center`, y al estar fuera de las
+            capas le gana a las utilidades de Tailwind. Este botón lleva
+            texto y flecha, así que centraba el par y los títulos cortos
+            quedaban 17 px más adentro que los largos: medido, unos
+            arrancaban en 53 px y otros en 36. Con la flecha de nieta en vez
+            de hija, el selector ya no lo alcanza. */}
+        <span className="mt-0.5 flex-shrink-0">
+          <ChevronDown
+            aria-hidden="true"
+            className={`h-4 w-4 transition-transform duration-300 ${abierta ? 'rotate-180' : ''}`}
+            style={{ color: '#6EE7B7' }}
+          />
+        </span>
+      </button>
+
+      <div
+        id={idRespuesta}
+        className="grid transition-[grid-template-rows] duration-300 ease-out motion-reduce:transition-none"
+        style={{ gridTemplateRows: abierta ? '1fr' : '0fr' }}
+      >
+        {/* El `overflow-hidden` va en el hijo de la rejilla: es lo que
+            recorta el texto mientras la fila crece de 0fr a 1fr. */}
+        <div className="overflow-hidden">
+          <p className="px-4 pb-4 text-[12.5px] leading-relaxed" style={{ color: '#A7AFBD' }}>
+            {r}
+          </p>
+        </div>
+      </div>
     </div>
   );
 }
