@@ -70,6 +70,15 @@ import CambiarPinModal from '../security/CambiarPinModal';
 import BotonTema from '../ui/BotonTema';
 import { esAdminSupremo } from '../../utils/securityPin';
 
+/**
+ * Módulos que ocupan el alto disponible en vez de crecer hacia abajo.
+ *
+ * Es una lista, y no una propiedad del módulo, porque quien tiene que
+ * saberlo es el contenedor: el alto se reparte desde arriba, y el módulo
+ * de adentro no puede medir lo que le dejaron sin adivinar.
+ */
+const MODULOS_PANTALLA_COMPLETA = new Set(['chat']);
+
 interface AdminShellProps {
   activeTab: string;
   onNavigate: (tab: string) => void;
@@ -107,6 +116,18 @@ export default function AdminShell({
 
   const moduloActivo = useMemo(() => resolverModulo(activeTab), [activeTab]);
   const carpetaActiva = useMemo(() => resolverCarpeta(activeTab), [activeTab]);
+
+  // Módulos que se comportan como una PANTALLA y no como un documento.
+  //
+  // Casi todo el panel es una hoja que crece hacia abajo y se recorre con
+  // el scroll de `.tv-scroll`. El chat no: es una conversación con el
+  // redactor abajo del todo, y tiene que ocupar el alto que HAY. Antes se
+  // lo adivinaba con `calc(100dvh - 220px)` — un número escrito a mano que
+  // no coincide con la altura real de la regleta, la barra de carpetas y
+  // la pista, que además cambian de tamaño entre teléfono y escritorio.
+  // En un teléfono eso dejaba la conversación flotando arriba, con un
+  // hueco en blanco enorme debajo y el redactor a media pantalla.
+  const pantallaCompleta = MODULOS_PANTALLA_COMPLETA.has(pestanaActiva);
 
   const toast = useToast();
   const otaStatus = useOtaStatus();
@@ -383,7 +404,11 @@ export default function AdminShell({
             pestaña (ver `useScrollPorPestana`): sin eso, volver a una
             pestaña donde se había bajado veinte filas devolvía siempre al
             principio de la lista. */}
-        <main className="tv-scroll" ref={scrollRef as React.RefObject<HTMLElement>}>
+        <main
+          className="tv-scroll"
+          data-pantalla={pantallaCompleta ? 'completa' : undefined}
+          ref={scrollRef as React.RefObject<HTMLElement>}
+        >
           <div className="tv-container">{children}</div>
         </main>
       </div>

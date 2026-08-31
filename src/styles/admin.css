@@ -1588,3 +1588,28 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
 #admin-panel-root [class*="rounded-full"] {
   border-radius: 999px;
 }
+
+/* ==========================================================================
+   MÓDULOS DE PANTALLA COMPLETA (el chat)
+   --------------------------------------------------------------------------
+   Casi todo el panel es una hoja: crece hacia abajo y se recorre con el
+   scroll de `.tv-scroll`. El chat no. Es una conversación con el redactor
+   abajo del todo, y tiene que ocupar el alto que HAY, no uno inventado.
+
+   Antes el módulo se lo adivinaba solo, con `calc(100dvh - 220px)`. Ese 220
+   es un número escrito a mano que no corresponde a nada medido: la regleta,
+   la barra de carpetas y la pista cambian de alto entre teléfono y
+   escritorio, y en el teléfono suman bastante menos. Resultado: la
+   conversación quedaba flotando en la mitad de arriba, con un hueco en
+   blanco enorme debajo, el redactor a media pantalla y el último mensaje
+   cortado por detrás.
+
+   El alto se reparte desde arriba, así que se pasa desde arriba.
+   `.tv-scroll` ya tiene un alto definido (es `flex: 1` dentro de una
+   columna de `100dvh` con `overflow: hidden`), y por eso el `100%` de sus
+   hijos sí resuelve. Se deja el scroll en `auto` a propósito: si la
+   ventana es más baja que el mínimo del chat, se puede recorrer en vez de
+   quedar recortado.
+   ========================================================================== */
+.tv-scroll[data-pantalla='completa'] > .tv-container { height: 100%; }
+.tv-scroll[data-pantalla='completa'] .tv-tab-panel:not([hidden]) { height: 100%; }

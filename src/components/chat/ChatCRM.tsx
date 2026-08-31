@@ -187,7 +187,11 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   };
 
   return (
-    <div className="flex flex-col md:flex-row h-[calc(100dvh-220px)] md:h-[75dvh] min-h-[500px] gap-4" id="chat-crm-root">
+    // `h-full`, no un alto calculado a mano: el contenedor de la pestaña ya
+    // recibe el alto disponible (ver `[data-pantalla='completa']` en
+    // admin.css). El mínimo es un piso para ventanas muy bajas — por debajo
+    // de eso el panel se recorre en vez de aplastar la conversación.
+    <div className="flex flex-col md:flex-row h-full min-h-[420px] gap-4" id="chat-crm-root">
       <div className={`${selectedConvId ? 'hidden md:flex' : 'flex'} md:w-[30%] md:min-w-[300px] md:max-w-sm flex-col glass-panel rounded-2xl overflow-hidden`}>
         <ChatInbox
           conversations={filteredConversations}

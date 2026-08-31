@@ -498,7 +498,7 @@ export default function LiveChat() {
                                 isCustomer
                                   ? 'rounded-br-[4px] bg-[var(--bubble-out)] text-[var(--bubble-out-ink)] shadow-[0_2px_10px_-4px_rgba(var(--accent-rgb),0.5)]'
                                   : isBot
-                                  ? 'rounded-bl-[4px] bg-transparent border border-[var(--border-color)] text-[var(--text-primary)]'
+                                  ? 'rounded-bl-[4px] bg-[var(--bubble-in)] text-[var(--bubble-in-ink)] border border-[var(--border-color)]'
                                   : 'rounded-bl-[4px] bg-[var(--bubble-in)] text-[var(--bubble-in-ink)] shadow-[0_1px_2px_rgba(15,21,18,0.06),0_6px_16px_-12px_rgba(15,21,18,0.3)]'
                               }`}
                             >

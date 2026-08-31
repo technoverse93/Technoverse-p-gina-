@@ -98,8 +98,13 @@
     --radius-card: 14px;
     --radius-lg: 16px;
 
-    /* Chat: burbujas neutras. */
-    --bubble-in: #F1F4F8;
+    /* Chat: burbujas neutras.
+       La entrante es BLANCA, no gris. El hilo se dibuja sobre `--bg-base`
+       (#F8FAFC) y la burbuja estaba en #F1F4F8: siete unidades de
+       diferencia, que en un teléfono al sol no se distinguen. Se veían
+       cajas planas flotando sobre el mismo tono en vez de mensajes. En
+       blanco, con la sombra suave, la burbuja se despega de verdad. */
+    --bubble-in: #FFFFFF;
     --bubble-in-ink: #0F172A;
     --bubble-out: #0E6B4F;
     --bubble-out-ink: #FFFFFF;
