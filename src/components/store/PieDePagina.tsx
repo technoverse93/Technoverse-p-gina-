@@ -125,7 +125,12 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
 
   return (
     <footer
-      className="mt-16 border-t border-white/10"
+      /* Sin separación en teléfono: ese `mt-16` dejaba 64 px de fondo vacío
+         entre la última fila de productos y el pie, justo pasado el borde de
+         la pantalla. Con el catálogo corto era una franja en blanco que había
+         que recorrer sin nada que ver antes de llegar al pie. En pantallas
+         grandes sí separa dos bloques que se ven a la vez, y ahí se conserva. */
+      className="mt-0 md:mt-16 border-t border-white/10"
       style={{ background: '#0F1217' }}
     >
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-5 py-12 md:grid-cols-2 md:gap-8 md:py-10 lg:grid-cols-4 md:px-8">
