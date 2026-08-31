@@ -101,7 +101,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           </div>
           <div className="min-w-0">
             <h4 className="font-display font-bold text-[13.5px] text-[var(--text-primary)] truncate leading-tight">{conversation.customerName || 'Cliente'}</h4>
-            <p className="text-[10.5px] font-mono text-[var(--text-secondary)] truncate">{conversation.customerEmail}</p>
+            <p className="text-[11px] text-[var(--text-secondary)] truncate">{conversation.customerEmail}</p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -148,7 +148,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           // una nota también puede ser lo primero de un día.
           const separador = abreDiaNuevo(msg.timestamp, mensajesVisibles[i - 1]?.timestamp) ? (
             <div key={`dia-${msg.id}`} className="flex justify-center py-1">
-              <span className="text-[9px] font-bold uppercase tracking-[0.09em] px-2.5 py-1 rounded-full bg-[var(--bg-sunken)] text-[var(--text-muted)]">
+              <span className="text-[10px] font-bold uppercase tracking-[0.08em] px-3 py-1 rounded-full bg-[var(--bg-sunken)] text-[var(--text-muted)]">
                 {etiquetaDeDia(msg.timestamp)}
               </span>
             </div>
@@ -159,11 +159,11 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
               <React.Fragment key={msg.id}>
                 {separador}
                 <div className="flex justify-center">
-                  <div className="max-w-[min(88%,32rem)] rounded-2xl px-3.5 py-2.5 text-[11px] bg-amber-400/12 border border-amber-500/35 text-amber-700 flex items-start gap-1.5">
+                  <div className="max-w-[min(88%,32rem)] rounded-2xl px-3.5 py-2.5 text-[12.5px] bg-amber-400/12 border border-amber-500/35 text-amber-700 flex items-start gap-1.5">
                     <StickyNote className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                     <div>
-                      {msg.text && <p className="tv-break whitespace-pre-wrap">{msg.text}</p>}
-                      <span className="block mt-1 text-[9px] opacity-70 font-mono">Nota interna &middot; {soloHora(msg.timestamp)}</span>
+                      {msg.text && <p className="tv-break whitespace-pre-wrap leading-[1.5]">{msg.text}</p>}
+                      <span className="block mt-1 text-[10.5px] font-semibold opacity-70">Nota interna &middot; {soloHora(msg.timestamp)}</span>
                     </div>
                   </div>
                 </div>
@@ -187,7 +187,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                   al volver. En móvil manda el 78% y nada cambia. */}
               <div className={`flex gap-2 max-w-[min(78%,32rem)] ${isSupport ? 'ml-auto flex-row-reverse' : ''}`}>
                 {!isSupport && (
-                  <div className="w-6 h-6 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0 self-end font-display font-bold text-[9.5px]">
+                  <div className="w-6 h-6 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0 self-end font-display font-bold text-[10px]">
                     {isBot ? <Bot className="w-3 h-3" /> : inicial}
                   </div>
                 )}
@@ -203,7 +203,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                       en oscuro la burbuja entrante (#1D2421) se despega del
                       fondo por tono, que es como se marca elevación ahí,
                       porque una sombra negra sobre fondo negro no se ve. */}
-                  <div className={`px-3.5 py-2.5 text-xs rounded-2xl ${
+                  <div className={`px-3.5 py-2 text-[13px] rounded-2xl ${
                     isSupport
                       ? 'rounded-br-[4px] bg-[var(--bubble-out)] text-[var(--bubble-out-ink)] shadow-[0_2px_10px_-4px_rgba(var(--accent-rgb),0.5)]'
                       : isBot
@@ -213,10 +213,20 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                     {msg.imageUrl && (
                       <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-xl max-w-full mb-1.5 max-h-64 object-cover" loading="lazy" decoding="async" />
                     )}
-                    {msg.text && <p className="tv-break whitespace-pre-wrap leading-relaxed">{msg.text}</p>}
-                    <span className={`block text-right font-mono text-[8.5px] mt-1 ${isSupport ? 'opacity-70' : 'opacity-55'}`}>
-                      {soloHora(msg.timestamp)}{isSupport ? ' ✓✓' : ''}
-                    </span>
+                    {/* `flow-root` contiene el flotante de la hora; sin eso la
+                        burbuja no lo cuenta al medir su alto y la hora se
+                        sale por abajo. */}
+                    <div className="flow-root tv-break whitespace-pre-wrap leading-[1.5]">
+                      {msg.text}
+                      {/* La hora FLOTA al final del texto: si cabe, se acomoda
+                          en el mismo renglón; si no, baja sola. Antes ocupaba
+                          siempre una línea entera, y en un mensaje corto como
+                          "Gracias" eso estiraba la burbuja al ancho de la
+                          hora y la dejaba descuadrada. */}
+                      <span className={`float-right ml-2.5 mt-[7px] text-[10px] tabular-nums whitespace-nowrap select-none ${isSupport ? 'opacity-75' : 'opacity-55'}`}>
+                        {soloHora(msg.timestamp)}{isSupport ? ' ✓✓' : ''}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -250,7 +260,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder={noteMode ? 'Nota interna (solo visible para el equipo)...' : 'Escribe tu respuesta...'}
-          className="flex-1 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-full px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 transition"
+          className="flex-1 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-full px-4 py-2.5 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 transition"
         />
         <button type="submit" className="w-9 h-9 rounded-full flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] hover:scale-105 active:scale-95 text-[var(--accent-ink)] transition shrink-0 shadow-[0_4px_10px_-4px_rgba(var(--accent-rgb),0.6)]" aria-label="Enviar">
           <Send className="w-3.5 h-3.5" />

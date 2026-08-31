@@ -47,11 +47,30 @@ export function abreDiaNuevo(actual: string, anterior?: string): boolean {
   return etiquetaDeDia(actual) !== etiquetaDeDia(anterior);
 }
 
-/** Solo la hora, que es lo que va dentro de la burbuja. */
+/**
+ * Compacta el meridiano.
+ *
+ * `es-CR` lo escribe "a. m.", con espacios adentro (y uno de ellos es un
+ * espacio fino especial). Dentro de una burbuja, en cuerpo pequeño y pegado
+ * al texto del mensaje, esos espacios parten la hora en tres pedazos y se
+ * lee como un error de formato, no como una hora.
+ */
+function compactarMeridiano(hora: string): string {
+  return hora
+    .replace(/\s*a\.\s*m\./i, ' a.m.')
+    .replace(/\s*p\.\s*m\./i, ' p.m.');
+}
+
+/**
+ * Solo la hora, que es lo que va dentro de la burbuja.
+ *
+ * Sin cero a la izquierda: "8:40" y no "08:40". El cero solo suma un
+ * caracter que nadie lee y desalinea la hora respecto al texto.
+ */
 export function soloHora(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return '';
-  return d.toLocaleTimeString(LOCALE, { hour: '2-digit', minute: '2-digit' });
+  return compactarMeridiano(d.toLocaleTimeString(LOCALE, { hour: 'numeric', minute: '2-digit' }));
 }
 
 /**

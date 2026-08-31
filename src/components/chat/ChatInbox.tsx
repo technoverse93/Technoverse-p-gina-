@@ -21,11 +21,11 @@ const FILTERS: { id: ChatStatusFilter; label: string; dot: string }[] = [
   { id: 'resueltos', label: 'Resueltos', dot: 'bg-emerald-500' }
 ];
 
-// Componente propietario (sin <select> nativo del OS/navegador): segmented
-// control de pills, coherente con FILTERS de arriba, que se adapta con
-// flex-wrap tanto al ancho angosto del A12 como al panel de la Redmi Pad
-// SE 12" (el ancho del sidebar no cambia entre ambos: es md:max-w-sm), sin
-// overlays flotantes que puedan colisionar con otros elementos/z-index.
+// Componente propietario (sin <select> nativo del OS/navegador): pills en
+// línea, coherentes con FILTERS de arriba, que caben igual en el ancho
+// angosto del A12 que en el panel de la Redmi Pad SE 12" (el ancho del
+// sidebar no cambia entre ambos: es md:max-w-sm), sin overlays flotantes que
+// puedan colisionar con otros elementos/z-index.
 const RESOLVED_RANGES: { id: ResolvedRange; label: string }[] = [
   { id: '1d', label: '1 Día' },
   { id: '7d', label: '1 Semana' },
@@ -56,16 +56,21 @@ export default function ChatInbox({
   return (
     <>
       <div className="border-b border-[var(--border-color)]/60" id="chat-inbox-filters">
-        <div className="p-3 flex gap-1.5 flex-wrap">
+        {/* Dos columnas, no cuatro en fila. La bandeja mide como mucho
+            `max-w-sm`: repartida entre cuatro, a cada filtro le quedaban unos
+            60px y "Pendientes" y "Resueltos" salían cortados como "Pe..." y
+            "Re...", que es justo lo que no se puede leer de un vistazo. En dos
+            columnas cada etiqueta cabe entera en cualquier ancho. */}
+        <div className="p-3 grid grid-cols-2 gap-1.5">
           {FILTERS.map(f => (
             <button
               key={f.id}
               type="button"
               onClick={() => onFilterChange(f.id)}
-              className={`flex-1 min-w-[70px] text-[11px] font-bold px-2 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 ${
+              className={`text-[11.5px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 ${
                 statusFilter === f.id
                   ? 'bg-[var(--text-primary)] text-[var(--bg-surface)]'
-                  : 'bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:bg-[var(--border-color)]/40'
+                  : 'bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
               }`}
             >
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${f.dot}`} />
@@ -121,13 +126,13 @@ export default function ChatInbox({
               </div>
               <div className="min-w-0 flex-1">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-xs text-[var(--text-primary)] truncate">{conv.customerName || 'Cliente'}</span>
+                  <span className="font-semibold text-[13px] text-[var(--text-primary)] truncate">{conv.customerName || 'Cliente'}</span>
                   <span className="flex items-center gap-1.5 shrink-0">
                     {/* Sello del último mensaje: en una bandeja es lo que
                         ordena de un vistazo qué está fresco y qué lleva días
                         parado, sin abrir la conversación. */}
                     {ultimoVisible(conv) && (
-                      <span className="font-mono text-[9px] text-[var(--text-muted)]">
+                      <span className="text-[10px] tabular-nums text-[var(--text-muted)]">
                         {selloDeLista(ultimoVisible(conv).timestamp)}
                       </span>
                     )}
@@ -136,7 +141,7 @@ export default function ChatInbox({
                     )}
                   </span>
                 </div>
-                <p className="text-[11px] text-[var(--text-secondary)] truncate">{lastPreview(conv)}</p>
+                <p className="text-xs text-[var(--text-secondary)] truncate mt-0.5">{lastPreview(conv)}</p>
               </div>
               <span className={`w-2 h-2 rounded-full shrink-0 ${conv.status === 'nuevo' ? 'bg-blue-500' : conv.status === 'pendiente' ? 'bg-orange-500' : 'bg-slate-400'}`} />
             </button>

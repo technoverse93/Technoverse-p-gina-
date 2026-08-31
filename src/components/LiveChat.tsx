@@ -473,14 +473,14 @@ export default function LiveChat() {
                       <React.Fragment key={msg.id}>
                         {separador && (
                           <div className="flex justify-center py-1">
-                            <span className="text-[9px] font-bold uppercase tracking-[0.09em] px-2.5 py-1 rounded-full bg-[var(--bg-sunken)] text-[var(--text-muted)]">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.08em] px-3 py-1 rounded-full bg-[var(--bg-sunken)] text-[var(--text-muted)]">
                               {etiquetaDeDia(msg.timestamp)}
                             </span>
                           </div>
                         )}
                         <div className={`flex gap-2 max-w-[82%] animate-in fade-in slide-in-from-bottom-1 duration-200 ${isCustomer ? 'ml-auto flex-row-reverse' : ''}`}>
                           {!isCustomer && (
-                            <div className="w-6 h-6 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0 self-end font-display font-bold text-[9.5px]">
+                            <div className="w-6 h-6 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0 self-end font-display font-bold text-[10px]">
                               {isBot ? <Bot className="w-3 h-3" /> : 'T'}
                             </div>
                           )}
@@ -494,7 +494,7 @@ export default function LiveChat() {
                                 lado, así que el verde y el gris tienen que ser
                                 exactamente los mismos en las dos pantallas. */}
                             <div
-                              className={`px-3.5 py-2.5 text-xs rounded-2xl ${
+                              className={`px-3.5 py-2 text-[13px] rounded-2xl ${
                                 isCustomer
                                   ? 'rounded-br-[4px] bg-[var(--bubble-out)] text-[var(--bubble-out-ink)] shadow-[0_2px_10px_-4px_rgba(var(--accent-rgb),0.5)]'
                                   : isBot
@@ -505,19 +505,30 @@ export default function LiveChat() {
                               {msg.imageUrl && (
                                 <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-xl max-w-full mb-1.5 max-h-56 object-cover" loading="lazy" />
                               )}
-                              {msg.text && <p className="tv-break whitespace-pre-wrap leading-relaxed">{msg.text}</p>}
-                              <span className={`flex items-center justify-end gap-1 font-mono text-[8.5px] mt-1 ${isCustomer ? 'opacity-80' : 'opacity-55'}`}>
-                                {soloHora(msg.timestamp)}
-                                {/* Un solo tic mientras el guardado va en
-                                    camino, doble cuando el servidor ya lo
-                                    confirmó. Es el estado REAL del envío, no
-                                    un adorno fijo. */}
-                                {isCustomer && (
-                                  pending
-                                    ? <Check className="w-3 h-3 opacity-70" />
-                                    : <CheckCheck className="w-3 h-3" />
-                                )}
-                              </span>
+                              {/* `flow-root` contiene el flotante de la hora;
+                                  sin eso la burbuja no lo cuenta al medir su
+                                  alto y la hora se sale por abajo. */}
+                              <div className="flow-root tv-break whitespace-pre-wrap leading-[1.5]">
+                                {msg.text}
+                                {/* La hora FLOTA al final del texto: si cabe,
+                                    se acomoda en el mismo renglón; si no, baja
+                                    sola. Antes ocupaba siempre una línea
+                                    entera, y en un mensaje corto como
+                                    "Gracias" eso estiraba la burbuja al ancho
+                                    de la hora y la dejaba descuadrada. */}
+                                <span className={`float-right inline-flex items-center gap-1 ml-2.5 mt-[7px] text-[10px] tabular-nums whitespace-nowrap select-none ${isCustomer ? 'opacity-85' : 'opacity-55'}`}>
+                                  {soloHora(msg.timestamp)}
+                                  {/* Un solo tic mientras el guardado va en
+                                      camino, doble cuando el servidor ya lo
+                                      confirmó. Es el estado REAL del envío, no
+                                      un adorno fijo. */}
+                                  {isCustomer && (
+                                    pending
+                                      ? <Check className="w-3 h-3 opacity-70" />
+                                      : <CheckCheck className="w-3 h-3" />
+                                  )}
+                                </span>
+                              </div>
                             </div>
                           </div>
                         </div>
@@ -564,7 +575,7 @@ export default function LiveChat() {
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         placeholder="Escribe tu mensaje aquí..."
-                        className="flex-1 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-full px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 transition"
+                        className="flex-1 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-full px-4 py-2.5 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 transition"
                       />
                       <button
                         type="submit"
