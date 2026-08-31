@@ -9,13 +9,15 @@ interface MarketingRowProps {
   onProductClick: (prod: Product) => void;
   onAddToCart: (prod: Product) => void;
   getProductDiscountedPrice: (prod: Product) => number;
+  /** Clases del contenedor: quien la usa decide dónde se muestra. */
+  className?: string;
 }
 
-export function MarketingRow({ title, products, onProductClick, onAddToCart, getProductDiscountedPrice }: MarketingRowProps) {
+export function MarketingRow({ title, products, onProductClick, onAddToCart, getProductDiscountedPrice, className = '' }: MarketingRowProps) {
   if (!products || products.length === 0) return null;
 
   return (
-    <div className="mb-10">
+    <div className={`mb-10 ${className}`}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-3">
           <h3 className="text-xl font-bold text-[var(--text-primary)]">{title}</h3>

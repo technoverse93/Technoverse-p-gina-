@@ -80,7 +80,7 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
           ser `object-contain` la imagen NO se recorta ni se deforma —solo
           se le da menos alto al marco—, así que se gana densidad sin
           maltratar ninguna foto. */}
-      <div className="product-media relative aspect-[5/4] w-full flex-shrink-0 overflow-hidden bg-[var(--bg-sunken)]">
+      <div className="product-media relative aspect-[8/5] sm:aspect-[5/4] w-full flex-shrink-0 overflow-hidden bg-[var(--bg-sunken)]">
         {prod.imageUrl && !imagenRota ? (
           <img
             src={prod.imageUrl}
@@ -120,19 +120,19 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
       </div>
 
       {/* ----------------------------- Detalle ---------------------------- */}
-      <div className="flex min-w-0 flex-1 flex-col gap-0.5 p-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-0 sm:gap-0.5 p-1.5 sm:p-2">
         {/* Alto RESERVADO de dos líneas, no solo recorte: con line-clamp a
             secas un nombre de una línea deja la tarjeta más baja que su
             vecina y la fila de la rejilla queda desalineada. */}
-        <h4 className="tv-clamp-2 min-h-[1.95rem] text-[11px] font-semibold leading-snug text-[var(--text-primary)]">
+        <h4 className="tv-nombre-producto tv-clamp-2 min-h-[1.6rem] sm:min-h-[1.95rem] font-semibold text-[var(--text-primary)]">
           {prod.name}
         </h4>
 
         {/* `mt-auto` empuja precio y botón al fondo, así todas las tarjetas
             de la fila alinean su botón aunque el nombre ocupe una línea. */}
-        <div className="mt-auto flex min-w-0 flex-col gap-0.5">
+        <div className="mt-auto flex min-w-0 flex-col gap-0 sm:gap-0.5">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
-            <span className="font-mono text-[13px] font-bold tracking-tight text-[var(--accent)]">
+            <span className="font-mono text-[12px] sm:text-[13px] font-bold leading-tight tracking-tight text-[var(--accent)]">
               ₡{discountedPrice.toLocaleString()}
             </span>
             {isDiscounted && (
@@ -146,7 +146,7 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
               líneas separadas —y la categoría ya se ve en los chips de
               arriba y en la ficha—, así que juntarlas quita alto sin quitar
               información. */}
-          <span className="tv-ellipsis text-[9.5px] text-[var(--text-muted)]">
+          <span className="tv-ellipsis text-[9.5px] leading-tight text-[var(--text-muted)]">
             {prod.category}
             {' · '}
             {agotado ? 'Bajo pedido' : `${prod.stock} ${prod.stock === 1 ? 'disponible' : 'disponibles'}`}
@@ -163,7 +163,7 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
             type="button"
             onClick={(e) => { e.stopPropagation(); onAddToCart(prod); }}
             disabled={agotado}
-            className={`tv-ellipsis mt-0.5 rounded-lg px-2 py-1 text-center text-[10.5px] font-bold transition-colors ${
+            className={`tv-ellipsis mt-0.5 rounded-lg px-2 py-[3px] sm:py-1 text-center text-[10.5px] font-bold transition-colors ${
               agotado
                 ? 'cursor-not-allowed bg-[var(--bg-sunken)] text-[var(--text-muted)]'
                 : 'bg-[var(--accent)] text-[var(--accent-ink)] hover:bg-[var(--accent-hover)]'

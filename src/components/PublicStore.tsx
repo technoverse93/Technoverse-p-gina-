@@ -42,6 +42,35 @@ interface PublicStoreProps {
   onClearAutoOpenLogin?: () => void;
 }
 
+/**
+ * Cuántos productos caben en la primera pantalla de un teléfono.
+ *
+ * Es la rejilla de 2 columnas × 3 filas que se ve sin desplazarse en el
+ * aparato de referencia (Galaxy A12, 360×800 puntos). Hasta ese número el
+ * catálogo cabe entero arriba; a partir de ahí ya hay que desplazarse de
+ * todos modos y el bloque debe crecer libremente.
+ */
+const PRODUCTOS_PRIMERA_PANTALLA = 6;
+
+// El bloque del catálogo termina EXACTO en el borde inferior visible.
+//
+// `100dvh` a secas no servía: este bloque no empieza arriba del todo, sino
+// debajo de la barra fija, y `<main>` le suma sus propios respiros arriba y
+// abajo. Pidiendo la pantalla completa desde ahí, el total se pasaba de
+// largo por la suma de todo eso y quedaba una franja de fondo vacío que
+// había que recorrer antes de llegar al pie. Restando el mismo relleno que
+// pone `<main>` (3.5rem de barra + el recorte de pantalla + 1rem arriba,
+// 2rem abajo), el corte cae justo en el borde: el pie aparece apenas se
+// desliza, sin vacío de por medio.
+const ALTO_CATALOGO_CORTO =
+  'min-h-[calc(100dvh-3.5rem-env(safe-area-inset-top,0px)-3rem)] ' +
+  'sm:min-h-[calc(100dvh-4rem-env(safe-area-inset-top,0px)-3.5rem)] md:min-h-0';
+
+// Con catálogo largo el mínimo sobra —el contenido ya pasa de la pantalla—
+// y lo que hace falta es el respiro para que la última fila no quede pegada
+// contra el pie de página.
+const ALTO_CATALOGO_LARGO = 'min-h-0 pb-20 sm:pb-12 md:pb-0';
+
 const COSTA_RICA_PROVINCES = [
   'San José', 'Alajuela', 'Cartago', 'Heredia', 'Guanacaste', 'Puntarenas', 'Limón'
 ];
@@ -1168,6 +1197,15 @@ export default function PublicStore({
     return conteo;
   }, [products]);
 
+  // ¿Cabe el catálogo entero en la primera pantalla del teléfono?
+  //
+  // De eso depende cómo se cierra el bloque: con pocos productos se corta
+  // exacto en el borde visible, para que el pie de página aparezca apenas se
+  // desliza y no quede una franja de fondo vacío en el medio. Con muchos, el
+  // mínimo no pinta nada —el contenido ya se pasa de largo— y lo que hace
+  // falta es el respiro entre la última fila y el pie.
+  const catalogoCorto = filteredProducts.length <= PRODUCTOS_PRIMERA_PANTALLA;
+
   return (
     <div className="min-h-dvh bg-[var(--bg-base)] text-[var(--text-primary)] font-sans relative" id="store-page-root">
       
@@ -1205,7 +1243,7 @@ export default function PublicStore({
         </div>
 
         {/* User context selector and Cart trigger */}
-        <div className="flex items-center gap-2 sm:gap-4">
+        <div className="relative flex items-center gap-2 sm:gap-4">
           {/* Interruptor de tema. Va aquí y no en un menú porque es una
               preferencia que la gente cambia según la luz del momento, no
               una vez y para siempre: escondida detrás de dos toques no se
@@ -1217,17 +1255,19 @@ export default function PublicStore({
               único cambio es que el estado abierto se marca con el color
               de acento en vez de depender de un hover, porque este botón sí
               se queda "activo" mientras el desplegable está abierto. */}
-          <div className="relative">
+          <div>
             <button
               onClick={() => {
+                // Siempre el desplegable, tanto para entrar como para ver la
+                // cuenta ya abierta. Antes, sin sesión, este botón abría un
+                // modal a pantalla completa: el panel aparecía desligado del
+                // ícono que se acababa de tocar, y encima el formulario de
+                // ingreso YA existía dentro del desplegable, sin usarse
+                // nunca. El registro, que es un formulario largo, sigue
+                // siendo un modal aparte al que se llega desde aquí.
                 setIsCartDropdownOpen(false);
-                if (!isAuthenticated) {
-                  setIsRegisterMode(false);
-                  setIsLoginModalOpen(true);
-                  setIsAccountDropdownOpen(false);
-                } else {
-                  setIsAccountDropdownOpen(!isAccountDropdownOpen);
-                }
+                setIsRegisterMode(false);
+                setIsAccountDropdownOpen(!isAccountDropdownOpen);
               }}
               aria-label="Mi Cuenta"
               title="Mi Cuenta"
@@ -1244,13 +1284,13 @@ export default function PublicStore({
             </button>
 
             <AnimatePresence>
-              {isAccountDropdownOpen && isAuthenticated && (
+              {isAccountDropdownOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: 12, scale: 0.95, transformOrigin: 'top right' }}
+                  initial={{ opacity: 0, y: -6, scale: 0.96, transformOrigin: 'top right' }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 12, scale: 0.95 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
                   transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="fixed inset-x-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-80 max-w-none md:max-w-[calc(100vw-32px)] max-h-[70dvh] md:max-h-[85dvh] glass-panel rounded-2xl overflow-y-auto z-[70] dynamic-dropdown"
+                  className="absolute right-0 top-full mt-2 w-[min(21rem,calc(100vw-1.25rem))] max-w-[calc(100vw-1.25rem)] max-h-[min(72dvh,34rem)] md:max-h-[85dvh] md:w-80 glass-panel rounded-2xl overflow-y-auto z-[70] dynamic-dropdown"
                   id="account-dropdown"
                   style={{ willChange: 'transform, opacity' }}
                 >
@@ -1390,7 +1430,7 @@ export default function PublicStore({
           </div>
 
           {/* Carrito. Misma base de BotonTema que el botón de Cuenta. */}
-          <div className="relative">
+          <div>
             <button
               onClick={() => {
                 setIsCartDropdownOpen(!isCartDropdownOpen);
@@ -1415,11 +1455,11 @@ export default function PublicStore({
             <AnimatePresence>
               {isCartDropdownOpen && (
                 <motion.div
-                  initial={{ opacity: 0, y: 12, scale: 0.95, transformOrigin: 'top right' }}
+                  initial={{ opacity: 0, y: -6, scale: 0.96, transformOrigin: 'top right' }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={{ opacity: 0, y: 12, scale: 0.95 }}
+                  exit={{ opacity: 0, y: -6, scale: 0.96 }}
                   transition={{ duration: 0.2, ease: [0.23, 1, 0.32, 1] }}
-                  className="fixed inset-x-3 bottom-[calc(1rem+env(safe-area-inset-bottom))] md:absolute md:inset-x-auto md:left-auto md:right-0 md:bottom-auto md:top-full md:mt-3 w-auto md:w-96 max-w-none md:max-w-[calc(100vw-32px)] glass-panel rounded-2xl overflow-hidden z-[70] flex flex-col max-h-[70dvh] md:max-h-[600px] dynamic-dropdown"
+                  className="absolute right-0 top-full mt-2 w-[min(21rem,calc(100vw-1.25rem))] max-w-[calc(100vw-1.25rem)] max-h-[min(72dvh,34rem)] md:max-h-[85dvh] md:w-96 md:max-h-[600px] glass-panel rounded-2xl overflow-hidden z-[70] flex flex-col dynamic-dropdown"
                   id="cart-dropdown"
                   style={{ willChange: 'transform, opacity' }}
                 >
@@ -1542,7 +1582,7 @@ export default function PublicStore({
              contenido de sobra supera la pantalla): sin este margen, la
              última fila de productos y el pie de página quedarían
              pegados uno contra otro. */
-          <div className="min-h-[100dvh] md:min-h-0 pb-20 sm:pb-12 md:pb-0">
+          <div className={catalogoCorto ? ALTO_CATALOGO_CORTO : ALTO_CATALOGO_LARGO}>
             {/* Cartel principal. Va aquí a propósito: es el primer hijo de
                 la vista de tienda, o sea justo debajo de la barra superior
                 y por encima de las categorías y del catálogo. Si no hay
@@ -1556,9 +1596,17 @@ export default function PublicStore({
                 además podían mostrar estados distintos. Se conserva el de
                 chips porque muestra el conteo real de cada categoría. */}
 
-            {/* Marketing Row - Tendencias */}
+            {/* Marketing Row - Tendencias.
+                `hidden md:block`: medida sobre la tienda real en un Galaxy
+                A12 (360×800), esta fila ocupa 814 px — más que la pantalla
+                entera. Con ella arriba, la rejilla empezaba en el píxel
+                1038 y no se veía UN SOLO producto sin desplazarse: la
+                primera impresión de la tienda era una vitrina de cuatro
+                artículos elegidos, no el catálogo. En escritorio sí cabe
+                junto al catálogo y ahí se conserva tal cual. */}
             {!selectedCategory && filteredProducts.length > 4 && (
-              <MarketingRow 
+              <MarketingRow
+                className="hidden md:block"
                 title="Tendencias" 
                 products={filteredProducts.slice(0, 8)} // Passed top items, row will slice to 4
                 onProductClick={(prod) => { setSelectedProductDetail(prod); setDetailQuantity(1); }}
@@ -1644,7 +1692,7 @@ export default function PublicStore({
                    dan de sí. Por debajo de eso se quedan DOS columnas a
                    propósito: con tres, en un teléfono de 360 px la tarjeta
                    baja de 100 px de ancho y el nombre deja de leerse. */
-                <div id="product-bento-grid" className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2.5 sm:gap-3">
+                <div id="product-bento-grid" className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 sm:gap-3">
                   {paginatedProducts.map(prod => prod && (
                     <ProductCard
                       key={prod.id}
