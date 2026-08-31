@@ -1,7 +1,8 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Bot, User, Menu, Plus, Check, CheckCheck } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Menu, Plus, Check, CheckCheck } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo } from '../utils/storage';
+import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 
 export const FAQ_DATA = [
   {
@@ -463,42 +464,75 @@ export default function LiveChat() {
                       </button>
                     </div>
                   )}
-                  {mensajesClienteVisibles.map(msg => {
+                  {mensajesClienteVisibles.map((msg, i) => {
                     const isCustomer = msg.sender === 'customer';
                     const isBot = msg.sender === 'bot';
                     const pending = pendingIds.has(msg.id);
+                    const separador = abreDiaNuevo(msg.timestamp, mensajesClienteVisibles[i - 1]?.timestamp);
                     return (
-                      <div key={msg.id} className={`flex gap-1.5 max-w-[82%] animate-in fade-in slide-in-from-bottom-1 duration-200 ${isCustomer ? 'ml-auto flex-row-reverse' : ''}`}>
-                        {!isCustomer && (
-                          <div className="w-[22px] h-[22px] rounded-full bg-[var(--bg-sunken)] text-[var(--text-muted)] flex items-center justify-center shrink-0 mt-0.5">
-                            {isBot ? <Bot className="w-3 h-3" /> : <User className="w-3 h-3" />}
+                      <React.Fragment key={msg.id}>
+                        {separador && (
+                          <div className="flex justify-center py-1">
+                            <span className="text-[10px] font-bold uppercase tracking-[0.08em] px-3 py-1 rounded-full bg-[var(--bg-sunken)] text-[var(--text-muted)]">
+                              {etiquetaDeDia(msg.timestamp)}
+                            </span>
                           </div>
                         )}
-                        <div className="min-w-0">
-                          <div
-                            className={`rounded-2xl px-3 py-2 text-xs shadow-sm ${
-                              isCustomer
-                                ? 'rounded-br-[5px] bg-[var(--bubble-out)] text-[var(--bubble-out-ink)]'
-                                : isBot
-                                ? 'rounded-bl-[5px] bg-transparent border border-[var(--border-color)] text-[var(--text-primary)]'
-                                : 'rounded-bl-[5px] bg-[var(--bubble-in)] text-[var(--bubble-in-ink)]'
-                            }`}
-                          >
-                            {msg.imageUrl && (
-                              <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-lg max-w-full mb-1.5 max-h-56 object-cover" loading="lazy" />
-                            )}
-                            {msg.text && <p className="tv-break whitespace-pre-wrap leading-relaxed">{msg.text}</p>}
-                          </div>
-                          <div className={`flex items-center gap-1 mt-1 text-[9.5px] font-mono text-[var(--text-muted)] ${isCustomer ? 'justify-end' : ''}`}>
-                            <span>{new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
-                            {isCustomer && (
-                              pending
-                                ? <Check className="w-3 h-3 opacity-50" />
-                                : <CheckCheck className="w-3 h-3 text-[var(--accent)]" />
-                            )}
+                        <div className={`flex gap-2 max-w-[82%] animate-in fade-in slide-in-from-bottom-1 duration-200 ${isCustomer ? 'ml-auto flex-row-reverse' : ''}`}>
+                          {!isCustomer && (
+                            <div className="w-6 h-6 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0 self-end font-display font-bold text-[10px]">
+                              {isBot ? <Bot className="w-3 h-3" /> : 'T'}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            {/* Hora y acuse DENTRO de la burbuja, alineados a
+                                la derecha. Antes iban en una fila aparte
+                                debajo, que en un hilo largo suma una línea de
+                                ruido por cada mensaje. */}
+                            {/* Mismos tokens de burbuja que el hilo del panel:
+                                es la MISMA conversación vista desde el otro
+                                lado, así que el verde y el gris tienen que ser
+                                exactamente los mismos en las dos pantallas. */}
+                            <div
+                              className={`px-3.5 py-2 text-[13px] rounded-2xl ${
+                                isCustomer
+                                  ? 'rounded-br-[4px] bg-[var(--bubble-out)] text-[var(--bubble-out-ink)] shadow-[0_2px_10px_-4px_rgba(var(--accent-rgb),0.5)]'
+                                  : isBot
+                                  ? 'rounded-bl-[4px] bg-transparent border border-[var(--border-color)] text-[var(--text-primary)]'
+                                  : 'rounded-bl-[4px] bg-[var(--bubble-in)] text-[var(--bubble-in-ink)] shadow-[0_1px_2px_rgba(15,21,18,0.06),0_6px_16px_-12px_rgba(15,21,18,0.3)]'
+                              }`}
+                            >
+                              {msg.imageUrl && (
+                                <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-xl max-w-full mb-1.5 max-h-56 object-cover" loading="lazy" />
+                              )}
+                              {/* `flow-root` contiene el flotante de la hora;
+                                  sin eso la burbuja no lo cuenta al medir su
+                                  alto y la hora se sale por abajo. */}
+                              <div className="flow-root tv-break whitespace-pre-wrap leading-[1.5]">
+                                {msg.text}
+                                {/* La hora FLOTA al final del texto: si cabe,
+                                    se acomoda en el mismo renglón; si no, baja
+                                    sola. Antes ocupaba siempre una línea
+                                    entera, y en un mensaje corto como
+                                    "Gracias" eso estiraba la burbuja al ancho
+                                    de la hora y la dejaba descuadrada. */}
+                                <span className={`float-right inline-flex items-center gap-1 ml-2.5 mt-[7px] text-[10px] tabular-nums whitespace-nowrap select-none ${isCustomer ? 'opacity-85' : 'opacity-55'}`}>
+                                  {soloHora(msg.timestamp)}
+                                  {/* Un solo tic mientras el guardado va en
+                                      camino, doble cuando el servidor ya lo
+                                      confirmó. Es el estado REAL del envío, no
+                                      un adorno fijo. */}
+                                  {isCustomer && (
+                                    pending
+                                      ? <Check className="w-3 h-3 opacity-70" />
+                                      : <CheckCheck className="w-3 h-3" />
+                                  )}
+                                </span>
+                              </div>
+                            </div>
                           </div>
                         </div>
-                      </div>
+                      </React.Fragment>
                     );
                   })}
                 </div>
@@ -541,7 +575,7 @@ export default function LiveChat() {
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         placeholder="Escribe tu mensaje aquí..."
-                        className="flex-1 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-full px-4 py-2.5 text-xs text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 transition"
+                        className="flex-1 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-full px-4 py-2.5 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 transition"
                       />
                       <button
                         type="submit"
