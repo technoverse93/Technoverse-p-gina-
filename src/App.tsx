@@ -12,6 +12,7 @@ import { marcarBloqueo } from './utils/biometriaNativa';
 import { supabase } from './supabaseClient';
 import { tieneTokenSeguridad } from './utils/securityPin';
 import { esGestion } from './utils/roles';
+import { registrarIngreso } from './utils/auditoria';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
 import ResetPasswordView from './components/ResetPasswordView';
@@ -290,6 +291,10 @@ function AppInner() {
     window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: user } }));
     setAutoOpenLogin(false);
     triggerRefresh();
+    // Deja constancia del ingreso para la auditoría del Superadmin. Va solo
+    // aquí —el embudo de login explícito— y no en la recuperación de sesión
+    // al recargar: reabrir la app no es un ingreso nuevo. Dispara y olvida.
+    void registrarIngreso();
   };
 
   // ---- Token de seguridad de 4 dígitos: creación forzada -------------------

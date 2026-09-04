@@ -29,7 +29,7 @@ import {
   LayoutDashboard, Package, Wrench, ArrowRightLeft, FileSpreadsheet,
   Cpu, Boxes, LayoutGrid,
   MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
-  UserCog,
+  UserCog, ShieldCheck,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -215,6 +215,15 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         icon: Settings,
         descripcion: 'Datos fiscales, logo de la tienda y creación de administradores.',
         buscar: ['configuracion', 'ajustes', 'logo', 'cedula', 'fiscal', 'usuarios', 'administradores'],
+      },
+      {
+        id: 'ingresos',
+        label: 'Ingresos',
+        short: 'Ingresos',
+        icon: ShieldCheck,
+        descripcion: 'Auditoría en vivo de cada autenticación exitosa: correo, hora y entorno.',
+        buscar: ['ingresos', 'accesos', 'auditoria', 'sesiones', 'login', 'seguridad', 'supremo', 'zero trust'],
+        soloAdminSupremo: true,
       },
       {
         id: 'gestion_usuarios',
