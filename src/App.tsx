@@ -11,6 +11,7 @@ import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO, UMBRAL_REINGRESO
 import { marcarBloqueo } from './utils/biometriaNativa';
 import { supabase } from './supabaseClient';
 import { tieneTokenSeguridad } from './utils/securityPin';
+import { esGestion } from './utils/roles';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
 import ResetPasswordView from './components/ResetPasswordView';
@@ -302,7 +303,9 @@ function AppInner() {
   const [requiereTokenSeguridad, setRequiereTokenSeguridad] = useState(false);
   useEffect(() => {
     let vigente = true;
-    if (!currentUser || currentUser.role !== 'Dueño') {
+    // El PIN de seguridad es cosa de gestión (superadmin/admin), no del
+    // tier empleado. `esGestion` cubre lo que antes gateaba `role==='Dueño'`.
+    if (!currentUser || !esGestion(currentUser.role)) {
       setRequiereTokenSeguridad(false);
       return;
     }

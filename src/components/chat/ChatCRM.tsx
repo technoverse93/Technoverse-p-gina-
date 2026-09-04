@@ -54,9 +54,9 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
 
   useEffect(() => {
     let active = true;
-    // Estrictamente cuentas Dueño reales (el rol Empleado quedó sin uso tras
-    // la eliminación del módulo de Nómina/RRHH y no debe listarse como staff).
-    supabase.from('profiles').select('email').eq('role', 'Dueño').then(({ data }) => {
+    // Todo el personal que puede atender el chat: superadmin, admin y
+    // empleado. (Antes era solo 'Dueño'; el modelo Zero Trust lo dividió.)
+    supabase.from('profiles').select('email').in('role', ['superadmin', 'admin', 'empleado']).then(({ data }) => {
       if (active && data) setStaffEmails(data.map((p: any) => p.email).filter(Boolean));
     });
     return () => { active = false; };
