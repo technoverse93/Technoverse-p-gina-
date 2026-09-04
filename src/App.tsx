@@ -11,8 +11,9 @@ import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO, UMBRAL_REINGRESO
 import { marcarBloqueo } from './utils/biometriaNativa';
 import { supabase } from './supabaseClient';
 import { tieneTokenSeguridad } from './utils/securityPin';
-import { esGestion } from './utils/roles';
+import { esGestion, esStaff } from './utils/roles';
 import { registrarIngreso } from './utils/auditoria';
+import { iniciarSupervision, detenerSupervision } from './supervision/grabador';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
 import ResetPasswordView from './components/ResetPasswordView';
@@ -318,6 +319,19 @@ function AppInner() {
       if (vigente) setRequiereTokenSeguridad(!tiene);
     });
     return () => { vigente = false; };
+  }, [currentUser]);
+
+  // Supervisión (Zero Trust · Etapa 3): mientras haya sesión de PERSONAL,
+  // se mantiene el latido de presencia y la escucha de control. La grabación
+  // en sí solo arranca cuando el Superadmin lo pide (ver grabador.ts). Un
+  // Cliente nunca entra aquí. Cubre login, recuperación de sesión y cierre
+  // con un solo efecto.
+  useEffect(() => {
+    if (currentUser && esStaff(currentUser.role)) {
+      iniciarSupervision(currentUser);
+      return () => detenerSupervision();
+    }
+    detenerSupervision();
   }, [currentUser]);
 
   const handleLogout = () => {
