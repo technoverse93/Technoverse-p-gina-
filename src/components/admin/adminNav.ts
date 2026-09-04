@@ -29,7 +29,7 @@ import {
   LayoutDashboard, Package, Wrench, ArrowRightLeft, FileSpreadsheet,
   Cpu, Boxes, LayoutGrid,
   MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
-  UserCog, ShieldCheck,
+  UserCog, ShieldCheck, MonitorPlay,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -223,6 +223,15 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         icon: ShieldCheck,
         descripcion: 'Auditoría en vivo de cada autenticación exitosa: correo, hora y entorno.',
         buscar: ['ingresos', 'accesos', 'auditoria', 'sesiones', 'login', 'seguridad', 'supremo', 'zero trust'],
+        soloAdminSupremo: true,
+      },
+      {
+        id: 'supervision',
+        label: 'Supervisión',
+        short: 'Espejo',
+        icon: MonitorPlay,
+        descripcion: 'Espejo en vivo de la sesión del personal conectado (web y APK).',
+        buscar: ['supervision', 'espejo', 'monitoreo', 'pantalla', 'sesion', 'replay', 'vigilancia', 'supremo', 'zero trust'],
         soloAdminSupremo: true,
       },
       {
