@@ -82,21 +82,25 @@ export default function ConsolaSupervision() {
     if (lienzoRef.current) lienzoRef.current.innerHTML = '';
   }, []);
 
-  const manejarLote = useCallback(async (lote: any[]) => {
-    if (!Array.isArray(lote) || lote.length === 0) return;
-    if (replayerRef.current) {
-      lote.forEach(ev => replayerRef.current.addEvent(ev));
-      return;
-    }
-    // Aún no hay reproductor: el primer lote trae la foto completa. Si ya
-    // estamos creándolo, encolamos para no perder eventos.
-    if (iniciandoRef.current) { colaRef.current.push(...lote); return; }
+  // Arranca el reproductor SOLO cuando ya tenemos una foto completa
+  // (evento tipo 2). rrweb no puede pintar el interior sin ella: por eso,
+  // si se engancha entre foto y foto, todo el panel se veía en blanco.
+  // Como el grabador reenvía una foto cada 12 s, esto se autocura solo.
+  const iniciarSiHayFoto = useCallback(async () => {
+    if (replayerRef.current || iniciandoRef.current) return;
+    const cola = colaRef.current;
+    let snap = -1;
+    for (let i = cola.length - 1; i >= 0; i--) { if (cola[i]?.type === 2) { snap = i; break; } }
+    if (snap === -1) return; // todavía sin foto: seguir esperando
+    // rrweb quiere el Meta (tipo 4) justo antes de la foto.
+    const desde = (snap > 0 && cola[snap - 1]?.type === 4) ? snap - 1 : snap;
+    const eventosIniciales = cola.slice(desde);
     iniciandoRef.current = true;
     try {
       const { Replayer } = await import('rrweb');
       if (!lienzoRef.current) { iniciandoRef.current = false; return; }
       lienzoRef.current.innerHTML = '';
-      const r = new Replayer(lote, {
+      const r = new Replayer(eventosIniciales, {
         root: lienzoRef.current,
         liveMode: true,
         mouseTail: false,
@@ -105,16 +109,27 @@ export default function ConsolaSupervision() {
       r.on('resize', (e: any) => ajustarEscala(e?.width, e?.height));
       r.startLive();
       replayerRef.current = r;
-      // vacía lo que llegó mientras se creaba
-      colaRef.current.forEach(ev => r.addEvent(ev));
       colaRef.current = [];
       setEstado('vivo');
     } catch {
-      /* si rrweb no cargó, se queda en "esperando" */
+      /* si rrweb no cargó, se queda en "esperando" hasta el próximo checkout */
     } finally {
       iniciandoRef.current = false;
     }
   }, [ajustarEscala]);
+
+  const manejarLote = useCallback((lote: any[]) => {
+    if (!Array.isArray(lote) || lote.length === 0) return;
+    if (replayerRef.current) {
+      for (const ev of lote) { try { replayerRef.current.addEvent(ev); } catch { /* evento suelto */ } }
+      return;
+    }
+    // Aún sin reproductor: acumula hasta que llegue una foto completa. Se
+    // acota la cola por si el dispositivo tarda en mandar la primera foto.
+    colaRef.current.push(...lote);
+    if (colaRef.current.length > 2000) colaRef.current = colaRef.current.slice(-2000);
+    void iniciarSiHayFoto();
+  }, [iniciarSiHayFoto]);
 
   const soltar = useCallback(async (userId: string | null) => {
     if (canalEventosRef.current) { try { supabase.removeChannel(canalEventosRef.current); } catch { /* nada */ } canalEventosRef.current = null; }
