@@ -69,14 +69,31 @@ async function empezarAGrabar(): Promise<void> {
     detenerGrabacion = record({
       emit(evento: any) {
         buffer.push(evento);
-        // Vuelca antes si se acumula mucho, para que el espejo no se
-        // atrase en pantallas con mucho movimiento.
-        if (buffer.length >= 60) void volcar();
+        // Umbral bajo: en pantallas con mucho movimiento vuelca enseguida
+        // para que el espejo no se atrase.
+        if (buffer.length >= 20) void volcar();
       },
       recordCanvas: false,
       collectFonts: false,
+      // Deja las hojas de estilo dentro de la foto: sin esto el panel
+      // interior podía renderizarse sin estilos y verse "en blanco".
+      inlineStylesheet: true,
+      maskAllInputs: false,
+      // 'all' emite CADA tecla en vivo. El valor por defecto ('last') solo
+      // manda el contenido del input al perder el foco — por eso no se veía
+      // teclear el chat, ni los montos ni los datos de facturación en vivo.
+      sampling: { input: 'all' },
+      // Re-emite una foto COMPLETA cada 12 s. Si la consola se engancha un
+      // instante tarde o se pierde la foto inicial, se autocura en el
+      // próximo checkout en vez de quedar con el interior en blanco.
+      checkoutEveryNms: 12000,
     }) || null;
-    flushTimer = setInterval(() => void volcar(), 1200);
+    // 300 ms en vez de 1200: mata el retraso de ~2 s. La contraseña sigue
+    // enmascarada por rrweb (comportamiento por defecto), que es lo único
+    // que no debe viajar ni siquiera al Superadmin.
+    flushTimer = setInterval(() => void volcar(), 300);
+    // La foto inicial sale de inmediato para enganchar rápido.
+    setTimeout(() => void volcar(), 0);
   } catch {
     grabando = false;
   }
