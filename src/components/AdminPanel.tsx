@@ -18,6 +18,7 @@ import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 
 import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog } from '../types';
 import { useToast, useConfirm } from './ui/Overlays';
+import { esGestion } from '../utils/roles';
 
 // ---------------------------------------------------------------------
 // TECHNOVERSE CONSOLE
@@ -1035,7 +1036,8 @@ export default function AdminPanel({
     );
   }
 
-  const isOwner = currentUser?.role === 'Dueño';
+  // Nivel de gestión: superadmin o admin (lo que 'Dueño' daba antes).
+  const isOwner = esGestion(currentUser?.role);
 
   /**
   /**

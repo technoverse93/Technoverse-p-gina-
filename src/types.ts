@@ -1,7 +1,10 @@
 export interface User {
   id: string;
   email: string;
-  role: 'Dueño' | 'Cliente';
+  // Modelo Zero Trust (ver src/utils/roles.ts y la migración de roles).
+  // Antes era 'Dueño' | 'Cliente'; 'Dueño' se dividió en superadmin/admin
+  // y se sumó 'empleado'.
+  role: 'superadmin' | 'admin' | 'empleado' | 'Cliente';
   name: string;
   token?: string;
 }

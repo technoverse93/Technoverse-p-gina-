@@ -48,7 +48,7 @@ const DEFAULT_SETTINGS: AppSettings = { cedulaJuridica: '', companyPhone: '', co
 
 function getDefaultDB(): Database {
   return {
-    users: [{ id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'Dueño', name: 'Administrador Technoverse' }],
+    users: [{ id: 'admin-id', email: 'technoverse.admin@gmail.com', role: 'superadmin', name: 'Administrador Technoverse' }],
     products: [], inventory_movements: [], repair_orders: [], orders: [],
     chat_conversations: [],
     audit_log: [], clients: [], deliveries: [], marketing_campaigns: [], marketing_requests: [],
