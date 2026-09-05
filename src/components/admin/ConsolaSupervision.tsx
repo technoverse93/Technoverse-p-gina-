@@ -35,10 +35,32 @@ interface Presencia {
   watch: boolean;
 }
 
+/**
+ * Un cliente navegando la tienda. A propósito NO tiene correo, nombre, IP
+ * ni user_id: lo único que identifica a un cliente es el MODELO de su
+ * aparato. La tabla del servidor está hecha igual, para que la regla no
+ * dependa de que alguien se acuerde de no mostrarlo.
+ */
+interface Visitante {
+  visita: string;
+  modelo: string | null;
+  tipo: string | null;
+  entorno: string | null;
+  ruta: string | null;
+  last_seen: string;
+  watch: boolean;
+}
+
 const ONLINE_MS = 40000;
+
+/** Lo que se muestra de un cliente. Nunca hay nada más que esto. */
+function nombreDeAparato(v: Visitante): string {
+  return (v.modelo || '').trim() || (v.tipo || '').trim() || 'Aparato';
+}
 
 export default function ConsolaSupervision() {
   const [gente, setGente] = useState<Presencia[]>([]);
+  const [visitantes, setVisitantes] = useState<Visitante[]>([]);
   const [sel, setSel] = useState<string | null>(null);
   const [estado, setEstado] = useState<'idle' | 'esperando' | 'vivo'>('idle');
   const [refrescando, setRefrescando] = useState(false);
@@ -51,21 +73,26 @@ export default function ConsolaSupervision() {
   const canalEventosRef = useRef<any>(null);
   const canalEspejoRef = useRef<any>(null);
   const trozosRef = useRef<Map<string, { n: number; partes: string[] }>>(new Map());
-  // Cuando el usuario cambia de tema, el espejo debe REMONTARSE con la
-  // foto nueva en vez de intentar parchear el DOM viejo.
-  const remontarRef = useRef(false);
   const selRef = useRef<string | null>(null);
   selRef.current = sel;
 
   // --------------------------- Presencia ---------------------------
   const cargar = useCallback(async () => {
-    const { data } = await supabase
-      .from('supervision_state')
-      .select('user_id, email, ruta, entorno, last_seen, watch')
-      .order('last_seen', { ascending: false });
-    const filas = (data as Presencia[]) || [];
+    const [personal, clientes] = await Promise.all([
+      supabase
+        .from('supervision_state')
+        .select('user_id, email, ruta, entorno, last_seen, watch')
+        .order('last_seen', { ascending: false }),
+      supabase
+        .from('supervision_visitantes')
+        .select('visita, modelo, tipo, entorno, ruta, last_seen, watch')
+        .order('last_seen', { ascending: false }),
+    ]);
+    const filas = (personal.data as Presencia[]) || [];
+    const visitas = (clientes.data as Visitante[]) || [];
     setGente(filas);
-    return filas;
+    setVisitantes(visitas);
+    return { filas, visitas };
   }, []);
 
   useEffect(() => {
@@ -73,12 +100,15 @@ export default function ConsolaSupervision() {
     const canal = supabase
       .channel('supervision-presencia')
       .on('postgres_changes', { event: '*', schema: 'public', table: 'supervision_state' }, () => cargar())
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'supervision_visitantes' }, () => cargar())
       .subscribe();
     const t = setInterval(cargar, 12000);
     return () => { supabase.removeChannel(canal); clearInterval(t); };
   }, [cargar]);
 
-  const enLinea = (p: Presencia) => Date.now() - new Date(p.last_seen).getTime() < ONLINE_MS;
+  const frescura = (iso: string) => Date.now() - new Date(iso).getTime() < ONLINE_MS;
+  const enLinea = (p: Presencia) => frescura(p.last_seen);
+  const visitaEnLinea = (v: Visitante) => frescura(v.last_seen);
 
   // --------------------------- Escala del espejo ---------------------------
   const ajustarEscala = useCallback((w: number, h: number) => {
@@ -148,8 +178,9 @@ export default function ConsolaSupervision() {
       // montar con la foto completa que viene justo detrás. Sin esto, el
       // panel del supervisado se veía en blanco al pasar a oscuro.
       if (ev?.type === 5 && ev?.data?.tag === 'tema') {
+        // Al destruirlo, los eventos que siguen se encolan hasta que
+        // llegue la foto completa que el grabador manda justo detrás.
         destruirReplayer();
-        remontarRef.current = true;
         continue;
       }
 
@@ -163,10 +194,7 @@ export default function ConsolaSupervision() {
       if (colaRef.current.length > 2000) colaRef.current = colaRef.current.slice(-2000);
     }
 
-    if (!replayerRef.current) {
-      remontarRef.current = false;
-      void iniciarSiHayFoto();
-    }
+    if (!replayerRef.current) void iniciarSiHayFoto();
   }, [iniciarSiHayFoto, destruirReplayer]);
 
   /** Reensambla los trozos del canal rápido y descomprime los eventos. */
@@ -196,45 +224,67 @@ export default function ConsolaSupervision() {
     if (canalEspejoRef.current) { try { supabase.removeChannel(canalEspejoRef.current); } catch { /* nada */ } canalEspejoRef.current = null; }
   }, []);
 
-  const soltar = useCallback(async (userId: string | null) => {
+  // La selección es UNA clave para los dos tipos de supervisado:
+  //   · personal  → su user_id
+  //   · cliente   → "v:" + el id de su aparato
+  // Así todo el motor del espejo (canales, cola, remonte por tema) es el
+  // mismo para ambos y no hay dos caminos que mantener en paralelo.
+  const esVisita = (clave: string) => clave.startsWith('v:');
+  const idDeVisita = (clave: string) => clave.slice(2);
+
+  const pedirGrabacion = useCallback(async (clave: string, encendido: boolean) => {
+    try {
+      if (esVisita(clave)) {
+        await supabase.rpc('visitante_mirar', { p_visita: idDeVisita(clave), p_watch: encendido });
+      } else {
+        await supabase.from('supervision_state').update({ watch: encendido }).eq('user_id', clave);
+      }
+    } catch { /* nada */ }
+  }, []);
+
+  const soltar = useCallback(async (clave: string | null) => {
     cerrarCanales();
     destruirReplayer();
-    if (userId) { try { await supabase.from('supervision_state').update({ watch: false }).eq('user_id', userId); } catch { /* nada */ } }
-  }, [destruirReplayer, cerrarCanales]);
+    if (clave) await pedirGrabacion(clave, false);
+  }, [destruirReplayer, cerrarCanales, pedirGrabacion]);
 
   /** Abre los dos caminos (rápido y respaldo) y pide la grabación. */
-  const engancharA = useCallback(async (userId: string) => {
+  const engancharA = useCallback(async (clave: string) => {
     setEstado('esperando');
 
-    // Camino rápido: canal privado de broadcast.
+    // Camino rápido: canal privado de broadcast. Es el único que tienen
+    // los clientes de la tienda (no pueden escribir en la tabla).
     try {
-      const espejo = supabase.channel(`espejo:${userId}`, { config: { private: true } });
+      const topic = esVisita(clave) ? `espejo:v:${idDeVisita(clave)}` : `espejo:${clave}`;
+      const espejo = supabase.channel(topic, { config: { private: true } });
       espejo.on('broadcast', { event: 'lote' }, (msg: any) => {
-        if (selRef.current === userId) void manejarTrozo(msg?.payload);
+        if (selRef.current === clave) void manejarTrozo(msg?.payload);
       });
       espejo.subscribe();
       canalEspejoRef.current = espejo;
     } catch { /* si el canal no se puede abrir, queda el respaldo */ }
 
-    // Camino de respaldo: la tabla, como antes.
-    const canal = supabase
-      .channel(`supervision-ev-${userId}`)
-      .on('postgres_changes',
-        { event: 'INSERT', schema: 'public', table: 'supervision_events', filter: `user_id=eq.${userId}` },
-        (payload: any) => { if (selRef.current === userId) void manejarLote(payload?.new?.lote || []); })
-      .subscribe();
-    canalEventosRef.current = canal;
+    // Camino de respaldo por tabla: solo existe para el personal.
+    if (!esVisita(clave)) {
+      const canal = supabase
+        .channel(`supervision-ev-${clave}`)
+        .on('postgres_changes',
+          { event: 'INSERT', schema: 'public', table: 'supervision_events', filter: `user_id=eq.${clave}` },
+          (payload: any) => { if (selRef.current === clave) void manejarLote(payload?.new?.lote || []); })
+        .subscribe();
+      canalEventosRef.current = canal;
+    }
 
     // Se pide la grabación DESPUÉS de estar escuchando, para no perderse
     // la primera foto.
-    try { await supabase.from('supervision_state').update({ watch: true }).eq('user_id', userId); } catch { /* nada */ }
-  }, [manejarLote, manejarTrozo]);
+    await pedirGrabacion(clave, true);
+  }, [manejarLote, manejarTrozo, pedirGrabacion]);
 
-  const mirar = useCallback(async (userId: string) => {
-    if (sel === userId) { await soltar(userId); setSel(null); setEstado('idle'); return; }
+  const mirar = useCallback(async (clave: string) => {
+    if (sel === clave) { await soltar(clave); setSel(null); setEstado('idle'); return; }
     await soltar(sel);
-    setSel(userId);
-    await engancharA(userId);
+    setSel(clave);
+    await engancharA(clave);
   }, [sel, soltar, engancharA]);
 
   // --------------------------- Botón "Actualizar" ---------------------------
@@ -249,24 +299,34 @@ export default function ConsolaSupervision() {
     setRefrescando(true);
     setAviso(null);
     try {
-      const filas = await cargar();
+      const { filas, visitas } = await cargar();
 
-      // (a) Barre las fichas que ya no laten. Si alguien solo estaba en
-      // segundo plano, vuelve a aparecer con su próximo latido (10 s).
+      // (a) Barre las fichas que ya no laten, de personal y de clientes.
+      // Si alguien solo estaba en segundo plano, vuelve a aparecer con su
+      // próximo latido (10 s).
       const caducadas = filas.filter(p => !enLinea(p)).map(p => p.user_id);
       if (caducadas.length > 0) {
         try { await supabase.from('supervision_state').delete().in('user_id', caducadas); } catch { /* nada */ }
         setGente(prev => prev.filter(p => !caducadas.includes(p.user_id)));
       }
+      const visitasIdas = visitas.filter(v => !visitaEnLinea(v)).map(v => v.visita);
+      if (visitasIdas.length > 0) {
+        try { await supabase.from('supervision_visitantes').delete().in('visita', visitasIdas); } catch { /* nada */ }
+        setVisitantes(prev => prev.filter(v => !visitasIdas.includes(v.visita)));
+      }
 
       const actual = selRef.current;
+      const retiradas = caducadas.length + visitasIdas.length;
       if (!actual) {
-        setAviso(caducadas.length > 0 ? `Se retiraron ${caducadas.length} sesión(es) cerradas.` : 'Lista al día.');
+        setAviso(retiradas > 0 ? `Se retiraron ${retiradas} sesión(es) cerradas.` : 'Lista al día.');
         return;
       }
 
-      const fila = filas.find(p => p.user_id === actual);
-      if (!fila || !enLinea(fila)) {
+      const sigueVivo = esVisita(actual)
+        ? visitas.some(v => v.visita === idDeVisita(actual) && visitaEnLinea(v))
+        : filas.some(p => p.user_id === actual && enLinea(p));
+
+      if (!sigueVivo) {
         // (a) A quien mirábamos ya no está: se suelta y se quita.
         await soltar(actual);
         setSel(null);
@@ -289,7 +349,17 @@ export default function ConsolaSupervision() {
   // Al desmontar, suelta a quien se esté mirando (para su grabación).
   useEffect(() => () => { void soltar(selRef.current); }, [soltar]);
 
-  const seleccionado = gente.find(p => p.user_id === sel) || null;
+  // Título y pie del espejo, sirva para personal o para un cliente. De un
+  // cliente solo se puede decir el modelo: no hay más datos que mostrar.
+  const visitaSel = sel && esVisita(sel) ? visitantes.find(v => v.visita === idDeVisita(sel)) || null : null;
+  const personaSel = sel && !esVisita(sel) ? gente.find(p => p.user_id === sel) || null : null;
+  const seleccionado = personaSel || visitaSel
+    ? {
+        titulo: personaSel ? (personaSel.email || 'desconocido') : nombreDeAparato(visitaSel!),
+        ruta: (personaSel ? personaSel.ruta : visitaSel!.ruta) || '—',
+        last_seen: personaSel ? personaSel.last_seen : visitaSel!.last_seen,
+      }
+    : null;
 
   return (
     <div className="tv-stack">
@@ -362,13 +432,52 @@ export default function ConsolaSupervision() {
               );
             })
           )}
+
+          {/* --------- Clientes en la tienda ---------
+              SOLO el modelo del aparato. Nunca correo, nombre ni IP:
+              ni siquiera llegan hasta aquí (ver supervision/visitante.ts
+              y la tabla supervision_visitantes). */}
+          <div className="px-3 py-2 border-y border-[var(--border-color)] bg-[var(--bg-sunken)] flex items-center justify-between">
+            <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">En la tienda</span>
+            <span className="text-[10px] font-mono text-[var(--text-muted)]">solo modelo</span>
+          </div>
+          {visitantes.filter(visitaEnLinea).length === 0 ? (
+            <p className="text-[12px] text-[var(--text-muted)] italic px-3 py-5 text-center">Ningún cliente navegando ahora.</p>
+          ) : (
+            visitantes.filter(visitaEnLinea).map(v => {
+              const clave = `v:${v.visita}`;
+              const esApk = v.entorno === 'apk';
+              const activo = clave === sel;
+              return (
+                <button
+                  key={v.visita}
+                  type="button"
+                  onClick={() => void mirar(clave)}
+                  className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 border-b border-[var(--border-color)]/50 last:border-b-0 transition ${
+                    activo ? 'bg-[var(--accent)]/10' : 'hover:bg-[var(--bg-sunken)]'
+                  }`}
+                >
+                  <span className="relative shrink-0">
+                    <span className="w-8 h-8 rounded-lg bg-[var(--bg-sunken)] text-[var(--text-secondary)] flex items-center justify-center">
+                      {esApk ? <Smartphone className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
+                    </span>
+                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[var(--ok)] border-2 border-[var(--bg-surface)]" />
+                  </span>
+                  <span className="min-w-0 flex-1">
+                    <span className="block text-[12.5px] font-semibold text-[var(--text-primary)] truncate">{nombreDeAparato(v)}</span>
+                    <span className="block text-[10.5px] text-[var(--text-secondary)] truncate">{v.ruta || '—'}</span>
+                  </span>
+                </button>
+              );
+            })
+          )}
         </div>
 
         {/* Espejo */}
         <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-base)] overflow-hidden min-h-[280px] flex flex-col">
           <div className="px-3 py-2 border-b border-[var(--border-color)] bg-[var(--bg-surface)] flex items-center justify-between">
             <span className="text-[12px] font-semibold text-[var(--text-primary)] truncate">
-              {seleccionado ? seleccionado.email : 'Elegí a alguien de la izquierda'}
+              {seleccionado ? seleccionado.titulo : 'Elegí a alguien de la izquierda'}
             </span>
             {estado === 'vivo' && (
               <span className="flex items-center gap-1.5 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[var(--ok-soft)] text-[var(--ok)]">
@@ -396,7 +505,7 @@ export default function ConsolaSupervision() {
 
           {seleccionado && (
             <div className="px-3 py-2 border-t border-[var(--border-color)] bg-[var(--bg-surface)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
-              <span className="truncate">{seleccionado.ruta || '—'}</span>
+              <span className="truncate">{seleccionado.ruta}</span>
               <span className="font-mono tabular-nums shrink-0">visto {soloHora(seleccionado.last_seen)}</span>
             </div>
           )}

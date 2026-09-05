@@ -37,23 +37,13 @@
 
 import { supabase } from '../supabaseClient';
 import { esStaff } from '../utils/roles';
+import { crearEspejo, type Espejo } from './motorEspejo';
 import type { User } from '../types';
 
 let latidoTimer: ReturnType<typeof setInterval> | null = null;
 let canalControl: any = null;
-let canalEspejo: any = null;
-let espejoListo = false;
-let detenerGrabacion: (() => void) | null = null;
-let flushTimer: ReturnType<typeof setInterval> | null = null;
-let observadorTema: MutationObserver | null = null;
-let tomarFoto: ((isCheckout?: boolean) => void) | null = null;
-let buffer: any[] = [];
+let espejo: Espejo | null = null;
 let userId: string | null = null;
-let grabando = false;
-
-/** Tope por mensaje. El límite real de Realtime es bastante mayor; se
- *  deja holgura para las cabeceras y para el peor caso de compresión. */
-const TROZO_MAX = 120_000;
 
 function entorno(): string {
   try { if ((window as any)?.Capacitor?.isNativePlatform?.()) return 'apk'; } catch { /* web */ }
@@ -79,127 +69,21 @@ async function latido(user: User): Promise<void> {
 }
 
 /**
- * Manda un lote por el canal rápido; si el canal no está listo o falla,
- * cae a la tabla. Trocea siempre: un lote con una foto completa puede
- * pasar del tamaño máximo de un mensaje aunque vaya comprimido.
+ * Respaldo: el camino de siempre, por la tabla. Solo se usa si el canal
+ * privado no llegó a establecerse. Más lento, pero nunca deja el espejo
+ * en blanco.
  */
-async function enviarLote(lote: any[]): Promise<void> {
-  if (!userId || lote.length === 0) return;
-
-  if (canalEspejo && espejoListo) {
-    try {
-      const cuerpo = JSON.stringify(lote);
-      const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      const partes = Math.ceil(cuerpo.length / TROZO_MAX) || 1;
-      for (let i = 0; i < partes; i++) {
-        await canalEspejo.send({
-          type: 'broadcast',
-          event: 'lote',
-          payload: { id, i, n: partes, d: cuerpo.slice(i * TROZO_MAX, (i + 1) * TROZO_MAX) },
-        });
-      }
-      return;
-    } catch { /* el canal falló: se sigue por la tabla */ }
-  }
-
-  // Respaldo: el camino de siempre. Más lento, pero nunca deja el espejo
-  // en blanco si el canal privado no llegó a establecerse.
-  try { await supabase.from('supervision_events').insert({ user_id: userId, lote }); }
-  catch { /* si falla, se pierde ese lote y nada más */ }
-}
-
-async function volcar(): Promise<void> {
-  if (!userId || buffer.length === 0) return;
-  const lote = buffer;
-  buffer = [];
-  await enviarLote(lote);
-}
-
-/**
- * El cambio de tema (claro/oscuro) es una clase que se pone y se quita en
- * <html>. Ese tipo de mutación global reescribe de golpe cómo se pinta
- * TODO el documento, y el espejo se quedaba en blanco hasta la siguiente
- * foto automática.
- *
- * Aquí se vigila el <html> y, en cuanto cambia su `class` o su `style`,
- * se fuerza una foto completa nueva y se manda de inmediato: el espejo se
- * reconstruye con el tema nuevo en el acto, sin pantallazo blanco.
- */
-function vigilarTema(addCustomEvent: (tag: string, payload: any) => void): void {
-  try {
-    observadorTema?.disconnect();
-    observadorTema = new MutationObserver(() => {
-      try {
-        // Avisa a la consola de que lo que viene es un cambio de tema,
-        // para que remonte el espejo en vez de intentar parchearlo.
-        addCustomEvent('tema', { clase: document.documentElement.className });
-        tomarFoto?.(true);
-      } catch { /* si rrweb ya paró, no pasa nada */ }
-      void volcar();
-    });
-    observadorTema.observe(document.documentElement, {
-      attributes: true,
-      attributeFilter: ['class', 'style', 'data-theme'],
-    });
-  } catch { /* sin MutationObserver: se autocura en el checkout periódico */ }
+async function respaldoPorTabla(lote: any[]): Promise<void> {
+  if (!userId) return;
+  await supabase.from('supervision_events').insert({ user_id: userId, lote });
 }
 
 async function empezarAGrabar(): Promise<void> {
-  if (grabando) return;
-  grabando = true;
-  buffer = [];
-  try {
-    const { record, pack, addCustomEvent } = await import('rrweb');
-    tomarFoto = (isCheckout?: boolean) => record.takeFullSnapshot?.(isCheckout);
-
-    detenerGrabacion = record({
-      emit(evento: any) {
-        buffer.push(evento);
-        // Umbral bajo: en pantallas con mucho movimiento vuelca enseguida
-        // para que el espejo no se atrase.
-        if (buffer.length >= 20) void volcar();
-      },
-      // Comprime cada evento. Sin esto una foto completa con los estilos
-      // dentro no cabría en un mensaje del canal.
-      packFn: pack,
-      recordCanvas: false,
-      collectFonts: false,
-      // Deja las hojas de estilo dentro de la foto: sin esto el panel
-      // interior podía renderizarse sin estilos y verse "en blanco".
-      inlineStylesheet: true,
-      maskAllInputs: false,
-      // 'all' emite CADA tecla en vivo. El valor por defecto ('last') solo
-      // manda el contenido del input al perder el foco — por eso no se veía
-      // teclear el chat, ni los montos ni los datos de facturación en vivo.
-      sampling: { input: 'all' },
-      // Re-emite una foto COMPLETA cada 12 s. Si la consola se engancha un
-      // instante tarde o se pierde la foto inicial, se autocura en el
-      // próximo checkout en vez de quedar con el interior en blanco.
-      checkoutEveryNms: 12000,
-    }) || null;
-
-    vigilarTema(addCustomEvent);
-
-    // 100 ms: con el canal de broadcast el viaje ya no pasa por la base,
-    // así que el único retraso que queda es este intervalo. La contraseña
-    // sigue enmascarada por rrweb (comportamiento por defecto), que es lo
-    // único que no debe viajar ni siquiera al Superadmin.
-    flushTimer = setInterval(() => void volcar(), 100);
-    // La foto inicial sale de inmediato para enganchar rápido.
-    setTimeout(() => void volcar(), 0);
-  } catch {
-    grabando = false;
-  }
+  await espejo?.arrancar();
 }
 
 async function pararDeGrabar(): Promise<void> {
-  if (flushTimer) { clearInterval(flushTimer); flushTimer = null; }
-  if (observadorTema) { try { observadorTema.disconnect(); } catch { /* nada */ } observadorTema = null; }
-  if (detenerGrabacion) { try { detenerGrabacion(); } catch { /* ya parado */ } detenerGrabacion = null; }
-  tomarFoto = null;
-  await volcar();
-  buffer = [];
-  grabando = false;
+  await espejo?.parar();
   // Limpia los lotes propios del respaldo: el espejo es en vivo, no un
   // archivo. RLS permite borrar solo lo de uno mismo.
   if (userId) { try { await supabase.from('supervision_events').delete().eq('user_id', userId); } catch { /* nada */ } }
@@ -213,12 +97,9 @@ export function iniciarSupervision(user: User): void {
   void latido(user);
   latidoTimer = setInterval(() => void latido(user), 10000);
 
-  // Canal privado del espejo. Se deja abierto desde el principio para que
-  // la primera foto salga sin esperar a negociar nada.
-  try {
-    canalEspejo = supabase.channel(`espejo:${user.id}`, { config: { private: true } });
-    canalEspejo.subscribe((estado: string) => { espejoListo = estado === 'SUBSCRIBED'; });
-  } catch { espejoListo = false; }
+  // El canal privado se abre desde ya, para que la primera foto salga
+  // sin esperar a negociar nada.
+  espejo = crearEspejo({ topic: `espejo:${user.id}`, respaldo: respaldoPorTabla });
 
   canalControl = supabase
     .channel(`supervision-control-${user.id}`)
@@ -237,12 +118,18 @@ export function iniciarSupervision(user: User): void {
 export function detenerSupervision(): void {
   if (latidoTimer) { clearInterval(latidoTimer); latidoTimer = null; }
   if (canalControl) { try { supabase.removeChannel(canalControl); } catch { /* nada */ } canalControl = null; }
-  void pararDeGrabar();
   const id = userId;
-  if (canalEspejo) { try { supabase.removeChannel(canalEspejo); } catch { /* nada */ } canalEspejo = null; }
-  espejoListo = false;
-  // Retira la ficha de presencia: si cerró sesión, no debe seguir
-  // apareciendo como conectado en la consola del Superadmin.
-  if (id) { try { void supabase.from('supervision_state').delete().eq('user_id', id); } catch { /* nada */ } }
+  if (espejo) {
+    const e = espejo;
+    espejo = null;
+    void e.parar().finally(() => e.cerrar());
+  }
+  if (id) {
+    // Los lotes del respaldo son un espejo en vivo, no un archivo.
+    try { void supabase.from('supervision_events').delete().eq('user_id', id); } catch { /* nada */ }
+    // Y la ficha de presencia se retira: quien cerró sesión no debe
+    // seguir apareciendo como conectado en la consola del Superadmin.
+    try { void supabase.from('supervision_state').delete().eq('user_id', id); } catch { /* nada */ }
+  }
   userId = null;
 }

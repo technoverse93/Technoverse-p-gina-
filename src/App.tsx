@@ -14,6 +14,7 @@ import { tieneTokenSeguridad } from './utils/securityPin';
 import { esGestion, esStaff } from './utils/roles';
 import { registrarIngreso } from './utils/auditoria';
 import { iniciarSupervision, detenerSupervision } from './supervision/grabador';
+import { iniciarVisitante, detenerVisitante } from './supervision/visitante';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
 import ResetPasswordView from './components/ResetPasswordView';
@@ -328,10 +329,17 @@ function AppInner() {
   // con un solo efecto.
   useEffect(() => {
     if (currentUser && esStaff(currentUser.role)) {
+      // PERSONAL: presencia con su correo y espejo bajo demanda.
+      detenerVisitante();
       iniciarSupervision(currentUser);
       return () => detenerSupervision();
     }
+    // CLIENTE o visitante anónimo de la tienda: presencia y espejo
+    // identificados SOLO por el modelo del aparato — nunca por correo,
+    // nombre ni IP (ver supervision/visitante.ts).
     detenerSupervision();
+    iniciarVisitante();
+    return () => detenerVisitante();
   }, [currentUser]);
 
   const handleLogout = () => {
