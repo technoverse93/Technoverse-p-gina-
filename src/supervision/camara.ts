@@ -25,7 +25,6 @@
 // el mismo túnel seguro que la pantalla, sin infraestructura nueva.
 // =====================================================================
 
-import { supabase } from '../supabaseClient';
 
 // Cuadros por segundo y tamaño. Bajos a propósito: para supervisar una
 // cara no hace falta vídeo fluido, y así cada cuadro es un JPEG de pocos
@@ -35,8 +34,11 @@ const ANCHO = 240;
 const CALIDAD = 0.5;
 const ID_AVISO = 'tv-cam-aviso';
 
+/** Manda un mensaje por el canal del espejo. Lo presta motorEspejo. */
+export type EmisorCam = (evento: string, payload: any) => Promise<void>;
+
 let stream: MediaStream | null = null;
-let canal: any = null;
+let emitir: EmisorCam | null = null;
 let video: HTMLVideoElement | null = null;
 let lienzo: HTMLCanvasElement | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
@@ -65,7 +67,7 @@ function quitarAviso(): void {
 }
 
 function transmitirCuadro(): void {
-  if (!video || !lienzo || !canal) return;
+  if (!video || !lienzo || !emitir) return;
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw || !vh) return;
   const alto = Math.round((ANCHO * vh) / vw);
@@ -76,9 +78,7 @@ function transmitirCuadro(): void {
   ctx.drawImage(video, 0, 0, ANCHO, alto);
   let datos: string;
   try { datos = lienzo.toDataURL('image/jpeg', CALIDAD); } catch { return; }
-  try {
-    void canal.send({ type: 'broadcast', event: 'cam', payload: { d: datos, t: Date.now() } });
-  } catch { /* un cuadro perdido no importa: viene otro enseguida */ }
+  void emitir('cam', { d: datos, t: Date.now() });
 }
 
 // ---------------------------------------------------------------------
@@ -130,8 +130,13 @@ export async function registrarPermisoCamara(): Promise<void> {
  * espejo. Si la persona NIEGA el permiso, el espejo de pantalla sigue
  * funcionando igual: la cara simplemente no viaja.
  */
-export async function iniciarCamara(topic: string): Promise<void> {
-  if (activo || typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+export async function iniciarCamara(enviar: EmisorCam): Promise<void> {
+  if (activo) return;
+  emitir = enviar;
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    void enviar('cam-estado', { estado: 'sin-soporte' });
+    return;
+  }
   activo = true;
   try {
     // Esto ABRE el prompt de permiso del navegador y enciende el indicador
@@ -140,8 +145,13 @@ export async function iniciarCamara(topic: string): Promise<void> {
       video: { facingMode: 'user', width: { ideal: 320 } },
       audio: false,
     });
-  } catch {
-    // Permiso negado o sin cámara: se cancela en silencio, sin romper nada.
+  } catch (e: any) {
+    // Se avisa al Superadmin POR QUÉ no hay cara, en vez de dejarlo
+    // adivinando frente a un recuadro vacío.
+    const motivo = e?.name === 'NotAllowedError' ? 'sin-permiso'
+      : e?.name === 'NotFoundError' ? 'sin-camara'
+      : 'error';
+    void enviar('cam-estado', { estado: motivo });
     activo = false;
     return;
   }
@@ -158,10 +168,7 @@ export async function iniciarCamara(topic: string): Promise<void> {
   try { await video.play(); } catch { /* algunos navegadores no necesitan play explícito */ }
 
   lienzo = document.createElement('canvas');
-
-  canal = supabase.channel(topic, { config: { private: true, broadcast: { self: false } } });
-  canal.subscribe();
-
+  void enviar('cam-estado', { estado: 'ok' });
   mostrarAviso();
   timer = setInterval(transmitirCuadro, Math.round(1000 / FPS));
 }
@@ -173,6 +180,6 @@ export function pararCamara(): void {
   if (stream) { try { stream.getTracks().forEach(t => t.stop()); } catch { /* nada */ } stream = null; }
   if (video) { try { video.srcObject = null; } catch { /* nada */ } video = null; }
   lienzo = null;
-  if (canal) { try { supabase.removeChannel(canal); } catch { /* nada */ } canal = null; }
+  emitir = null;
   quitarAviso();
 }

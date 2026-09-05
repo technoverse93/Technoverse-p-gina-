@@ -96,6 +96,8 @@ export default function ConsolaSupervision() {
   const [aviso, setAviso] = useState<string | null>(null);
   /** Último cuadro de la cámara del supervisado, para el recuadro PiP. */
   const [caraCuadro, setCaraCuadro] = useState<string | null>(null);
+  /** Por qué NO hay cara, cuando no la hay. Evita adivinar frente a un hueco. */
+  const [camEstado, setCamEstado] = useState<string | null>(null);
 
   const lienzoRef = useRef<HTMLDivElement>(null);
   const replayerRef = useRef<any>(null);
@@ -111,15 +113,24 @@ export default function ConsolaSupervision() {
 
   // --------------------------- Presencia ---------------------------
   const cargar = useCallback(async () => {
+    // Solo lo FRESCO, y filtrado en el servidor. Antes se traía la tabla
+    // entera —incluidas fichas viejas que igual se descartaban al pintar—,
+    // y con el tiempo eso es lo que hacía lenta la apertura del panel.
+    // Un margen sobre la ventana de "en línea" cubre el latido en curso.
+    const desde = new Date(Date.now() - ONLINE_MS * 2).toISOString();
     const [personal, clientes] = await Promise.all([
       supabase
         .from('supervision_state')
         .select('user_id, email, ruta, entorno, last_seen, watch')
-        .order('last_seen', { ascending: false }),
+        .gte('last_seen', desde)
+        .order('last_seen', { ascending: false })
+        .limit(50),
       supabase
         .from('supervision_visitantes')
         .select('visita, modelo, tipo, entorno, ruta, last_seen, watch')
-        .order('last_seen', { ascending: false }),
+        .gte('last_seen', desde)
+        .order('last_seen', { ascending: false })
+        .limit(50),
     ]);
     const filas = (personal.data as Presencia[]) || [];
     const visitas = (clientes.data as Visitante[]) || [];
@@ -216,6 +227,7 @@ export default function ConsolaSupervision() {
     // La cara es de quien se miraba: no debe quedar colgada al soltar ni
     // reaparecer sobre el espejo de otra persona.
     setCaraCuadro(null);
+    setCamEstado(null);
     if (lienzoRef.current) lienzoRef.current.innerHTML = '';
   }, []);
 
@@ -360,26 +372,41 @@ export default function ConsolaSupervision() {
       espejo.on('broadcast', { event: 'cam' }, (msg: any) => {
         if (selRef.current === clave && typeof msg?.payload?.d === 'string') {
           setCaraCuadro(msg.payload.d);
+          setCamEstado('ok');
         }
+      });
+      // El operador avisa POR QUÉ no hay cara (sin permiso, sin cámara…),
+      // para no dejar al Superadmin adivinando frente a un hueco.
+      espejo.on('broadcast', { event: 'cam-estado' }, (msg: any) => {
+        if (selRef.current === clave) setCamEstado(msg?.payload?.estado || null);
       });
       espejo.subscribe();
       canalEspejoRef.current = espejo;
     } catch { /* si el canal no se puede abrir, queda el respaldo */ }
 
-    // Camino de respaldo por tabla: solo existe para el personal.
-    if (!esVisita(clave)) {
-      const canal = supabase
-        .channel(`supervision-ev-${clave}`)
-        .on('postgres_changes',
-          { event: 'INSERT', schema: 'public', table: 'supervision_events', filter: `user_id=eq.${clave}` },
-          (payload: any) => { if (selRef.current === clave) void manejarLote(payload?.new?.lote || []); })
-        .subscribe();
-      canalEventosRef.current = canal;
-    }
-
-    // Se pide la grabación DESPUÉS de estar escuchando, para no perderse
-    // la primera foto.
+    // Se pide la grabación en cuanto el camino rápido está escuchando. Va
+    // ANTES que el canal de respaldo a propósito: es lo único que el
+    // empleado necesita para empezar a mandar, y adelantarlo le quita al
+    // arranque el tiempo de negociar un segundo WebSocket.
     await pedirGrabacion(clave, true);
+
+    // Camino de respaldo por tabla: solo existe para el personal, y se
+    // engancha FUERA del camino crítico. Antes se suscribía siempre y de
+    // entrada, sumando un apretón de manos completo a la espera aunque el
+    // canal rápido fuera a funcionar —que es lo normal—. Ahora se arma un
+    // par de segundos después, y solo sigue ahí por si el rápido falla.
+    if (!esVisita(clave)) {
+      setTimeout(() => {
+        if (selRef.current !== clave || canalEventosRef.current) return;
+        const canal = supabase
+          .channel(`supervision-ev-${clave}`)
+          .on('postgres_changes',
+            { event: 'INSERT', schema: 'public', table: 'supervision_events', filter: `user_id=eq.${clave}` },
+            (payload: any) => { if (selRef.current === clave) void manejarLote(payload?.new?.lote || []); })
+          .subscribe();
+        canalEventosRef.current = canal;
+      }, 2000);
+    }
   }, [manejarLote, manejarTrozo, pedirGrabacion]);
 
   const mirar = useCallback(async (clave: string) => {
@@ -612,6 +639,17 @@ export default function ConsolaSupervision() {
                   <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
                   Cámara
                 </span>
+              </div>
+            )}
+
+            {/* Sin cara: se dice POR QUÉ, en vez de dejar un hueco mudo. */}
+            {!caraCuadro && camEstado && camEstado !== 'ok' && estado === 'vivo' && (
+              <div className="absolute bottom-3 right-3 max-w-[190px] rounded-lg bg-black/75 px-2.5 py-1.5 text-[10.5px] leading-snug text-white/80">
+                {camEstado === 'sin-permiso'
+                  ? 'Cámara sin permiso: la persona lo negó. Debe habilitarla en los ajustes de su navegador.'
+                  : camEstado === 'sin-camara'
+                    ? 'Ese aparato no tiene cámara disponible.'
+                    : 'No se pudo abrir la cámara en ese aparato.'}
               </div>
             )}
             {estado !== 'vivo' && (

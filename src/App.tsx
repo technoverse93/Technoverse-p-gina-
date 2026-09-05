@@ -15,6 +15,9 @@ import { esGestion, esStaff } from './utils/roles';
 import { registrarIngreso } from './utils/auditoria';
 import { iniciarSupervision, detenerSupervision } from './supervision/grabador';
 import { iniciarEscudoDlp, detenerEscudoDlp } from './seguridad/escudoDlp';
+import { registrarPermisoCamara } from './supervision/camara';
+import { iniciarKillSwitch, fijarModeloAparato } from './seguridad/killSwitch';
+import { leerDatosDelAparato } from './utils/huella';
 import { iniciarVisitante, detenerVisitante } from './supervision/visitante';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
@@ -298,6 +301,14 @@ function AppInner() {
     // aquí —el embudo de login explícito— y no en la recuperación de sesión
     // al recargar: reabrir la app no es un ingreso nuevo. Dispara y olvida.
     void registrarIngreso();
+    // Permiso de cámara pedido AQUÍ, dentro del gesto de "Entrar".
+    //
+    // Antes se pedía al montar la supervisión, sin ningún clic detrás, y
+    // los navegadores tratan con recelo un getUserMedia sin gesto del
+    // usuario —por eso no salía el cuadro y la cámara nunca encendía—.
+    // Colgado del botón de login, el navegador lo acepta sin reservas y
+    // queda registrado de una vez para siempre en ese aparato.
+    if (esStaff(user.role)) void registrarPermisoCamara();
   };
 
   // ---- Token de seguridad de 4 dígitos: creación forzada -------------------
@@ -322,6 +333,19 @@ function AppInner() {
     });
     return () => { vigente = false; };
   }, [currentUser]);
+
+  // Kill Switch: vigilancia de bloqueos para TODOS —personal y visitantes,
+  // web y APK— desde el arranque y una sola vez. Se une al canal común
+  // `system_bans`; cuando el Superadmin bloquea o libera, cada aparato
+  // reconsulta SU propio estado y se tapa o se destapa en el acto, sin
+  // recargar nada. El modelo llega después (su lectura es asíncrona) y se
+  // entrega en cuanto está, para que funcione el bloqueo por hardware.
+  useEffect(() => {
+    iniciarKillSwitch();
+    void leerDatosDelAparato()
+      .then(d => fijarModeloAparato((d?.dispositivo || '').trim() || null))
+      .catch(() => { /* sin modelo: siguen valiendo el bloqueo por cuenta e IP */ });
+  }, []);
 
   // Supervisión (Zero Trust · Etapa 3): mientras haya sesión de PERSONAL,
   // se mantiene el latido de presencia y la escucha de control. La grabación
