@@ -103,7 +103,17 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
       observadorTema?.disconnect();
       observadorTema = new MutationObserver(() => {
         try {
-          addCustomEvent('tema', { clase: document.documentElement.className });
+          const raiz = document.documentElement;
+          addCustomEvent('tema', {
+            clase: raiz.className,
+            // Variables de tema puestas en linea, si las hubiera.
+            estilo: raiz.getAttribute('style') || '',
+            data: raiz.getAttribute('data-theme') || '',
+          });
+          // Red de seguridad para cualquier otro cambio global de estilo.
+          // Ya NO es lo que arregla el tema —la consola aplica la clase
+          // directamente sobre el iframe—, asi que aunque esta foto no
+          // saliera, el espejo no se queda en blanco.
           tomarFoto?.(true);
         } catch { /* si rrweb ya paró, no pasa nada */ }
         void volcar();
@@ -139,9 +149,23 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
           packFn: pack,
           recordCanvas: false,
           collectFonts: false,
-          // Deja las hojas de estilo dentro de la foto: sin esto el panel
-          // interior podía renderizarse sin estilos y verse "en blanco".
-          inlineStylesheet: true,
+          // NO empotrar las hojas de estilo dentro de la foto.
+          //
+          // Esto estaba en `true` y era LA causa del interior en blanco.
+          // Empotrar obliga a rrweb a reconstruir el CSS recorriendo el
+          // CSSOM regla por regla, y esa reconstruccion PIERDE los bloques
+          // @layer y @property de Tailwind v4. En este proyecto TODAS las
+          // variables de color (--bg-surface, --text-primary, --border-color)
+          // viven dentro de `@layer base` en index.css, asi que llegaban
+          // vacias: los paneles quedaban transparentes y el texto sin color.
+          // Se veia como un fallo de tema porque las pocas reglas que hay
+          // FUERA del @layer (`.dark .bg-white`...) si sobrevivian, y eran
+          // lo unico que cambiaba al alternar claro/oscuro.
+          //
+          // La consola inyecta la hoja de estilos REAL en el iframe del
+          // espejo (ver ConsolaSupervision), que es fiel al 100% y ademas
+          // hace la foto mucho mas liviana: menos troceado, menos latencia.
+          inlineStylesheet: false,
           maskAllInputs: false,
           // 'all' emite CADA tecla en vivo. El valor por defecto ('last')
           // solo manda el contenido del input al perder el foco.

@@ -73,6 +73,8 @@ export default function ConsolaSupervision() {
   const canalEventosRef = useRef<any>(null);
   const canalEspejoRef = useRef<any>(null);
   const trozosRef = useRef<Map<string, { n: number; partes: string[] }>>(new Map());
+  /** Último tema conocido del supervisado. Se reaplica tras cada foto. */
+  const temaRef = useRef<{ clase: string; estilo: string; data: string } | null>(null);
   const selRef = useRef<string | null>(null);
   selRef.current = sel;
 
@@ -123,12 +125,63 @@ export default function ConsolaSupervision() {
     cont.style.height = `${Math.round(h * escala)}px`;
   }, []);
 
+  // --------------------------- Fidelidad visual del espejo ---------------------------
+  // rrweb reproduce dentro de un IFRAME propio. Eso ya aísla el espejo del
+  // tema del Superadmin —son dos documentos distintos—, así que si vos
+  // estás en oscuro y el supervisado en claro, se ve el claro de él.
+  //
+  // Lo que faltaba era el CSS. El grabador ya no empotra las hojas de
+  // estilo (perdía los @layer de Tailwind v4 y con ellos TODAS las
+  // variables de color). Aquí se inyecta la hoja de estilos REAL: el
+  // supervisado y vos corren el mismo build en el mismo dominio, así que
+  // es exactamente el mismo CSS, sin reconstruir nada.
+  const inyectarEstilos = useCallback(() => {
+    try {
+      const doc = (replayerRef.current?.iframe as HTMLIFrameElement | undefined)?.contentDocument;
+      if (!doc?.head) return;
+      // Tras cada foto completa rrweb rehace el <head>, así que la marca
+      // desaparece y toca volver a inyectar. Si sigue ahí, no duplicamos.
+      if (doc.head.querySelector('[data-tv-css]')) return;
+      document.querySelectorAll('link[rel="stylesheet"], style').forEach(hoja => {
+        try {
+          const copia = doc.importNode(hoja, true) as HTMLElement;
+          copia.setAttribute('data-tv-css', '');
+          doc.head.appendChild(copia);
+        } catch { /* una hoja suelta no debe tumbar al resto */ }
+      });
+    } catch { /* iframe aún no accesible: la próxima foto lo reintenta */ }
+  }, []);
+
+  /** Pinta el tema del SUPERVISADO sobre el <html> del iframe. */
+  const aplicarTema = useCallback(() => {
+    try {
+      const raiz = (replayerRef.current?.iframe as HTMLIFrameElement | undefined)
+        ?.contentDocument?.documentElement;
+      const t = temaRef.current;
+      if (!raiz || !t) return;
+      raiz.className = t.clase;
+      if (t.estilo) raiz.setAttribute('style', t.estilo);
+      if (t.data) raiz.setAttribute('data-theme', t.data);
+      else raiz.removeAttribute('data-theme');
+    } catch { /* nada */ }
+  }, []);
+
+  /** Lo que hay que rehacer cada vez que rrweb reconstruye el documento. */
+  const rehidratar = useCallback(() => {
+    inyectarEstilos();
+    aplicarTema();
+  }, [inyectarEstilos, aplicarTema]);
+
   // --------------------------- Reproductor ---------------------------
   const destruirReplayer = useCallback(() => {
     try { replayerRef.current?.pause?.(); } catch { /* nada */ }
     replayerRef.current = null;
     colaRef.current = [];
     trozosRef.current.clear();
+    // El tema es de QUIEN se estaba mirando: si no se olvida, el siguiente
+    // supervisado heredaría el claro/oscuro del anterior hasta su primer
+    // cambio de tema.
+    temaRef.current = null;
     if (lienzoRef.current) lienzoRef.current.innerHTML = '';
   }, []);
 
@@ -157,8 +210,14 @@ export default function ConsolaSupervision() {
         speed: 1,
       });
       r.on('resize', (e: any) => ajustarEscala(e?.width, e?.height));
+      // Cada foto completa rehace el documento del iframe y se lleva por
+      // delante el CSS inyectado y la clase de tema. Se vuelven a poner.
+      r.on('fullsnapshot-rebuilded', () => rehidratar());
       r.startLive();
       replayerRef.current = r;
+      // La primera foto ya se procesó en el constructor, así que se
+      // rehidrata de una: no esperamos al siguiente checkout.
+      rehidratar();
       colaRef.current = [];
       setEstado('vivo');
     } catch {
@@ -172,15 +231,16 @@ export default function ConsolaSupervision() {
     if (!Array.isArray(lote) || lote.length === 0) return;
 
     for (const ev of lote) {
-      // Evento propio del grabador (tipo 5) avisando de un cambio de tema:
-      // la clase global de <html> cambió, así que el DOM que ya está
-      // pintado dejó de ser válido. Se tira el reproductor y se vuelve a
-      // montar con la foto completa que viene justo detrás. Sin esto, el
-      // panel del supervisado se veía en blanco al pasar a oscuro.
+      // Cambio de tema del supervisado. Antes esto DESTRUÍA el reproductor
+      // para remontarlo con la foto siguiente, y ahí nacía el parpadeo en
+      // blanco: entre tirar el DOM y recibir la foto nueva no había nada
+      // que pintar. Ahora solo se anota el tema y se pinta la clase sobre
+      // el <html> del iframe — es un atributo, no una reconstrucción, así
+      // que el cambio es instantáneo y el contenido no se pierde nunca.
       if (ev?.type === 5 && ev?.data?.tag === 'tema') {
-        // Al destruirlo, los eventos que siguen se encolan hasta que
-        // llegue la foto completa que el grabador manda justo detrás.
-        destruirReplayer();
+        const p = ev.data.payload || {};
+        temaRef.current = { clase: p.clase || '', estilo: p.estilo || '', data: p.data || '' };
+        aplicarTema();
         continue;
       }
 
@@ -195,7 +255,7 @@ export default function ConsolaSupervision() {
     }
 
     if (!replayerRef.current) void iniciarSiHayFoto();
-  }, [iniciarSiHayFoto, destruirReplayer]);
+  }, [iniciarSiHayFoto, aplicarTema]);
 
   /** Reensambla los trozos del canal rápido y descomprime los eventos. */
   const manejarTrozo = useCallback(async (p: any) => {
