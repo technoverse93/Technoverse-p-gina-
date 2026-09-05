@@ -28,6 +28,17 @@ const config: CapacitorConfig = {
     CapacitorUpdater: {
       autoUpdate: false,
       appReadyTimeout: 10000
+    },
+    // FLAG_SECURE nativo (Etapa 4 · DLP). `enable: false` a propósito: NO
+    // se activa al arrancar, porque quién puede capturar lo decide la lista
+    // blanca en tiempo de ejecución (ver src/seguridad/flagSecure.ts, que
+    // llama a enable()/disable() según lo que diga la base).
+    // `preventScreenshots` es lo que hace que en Android enable() aplique
+    // FLAG_SECURE de verdad —bloqueo real de captura y de grabación de
+    // pantalla— y no solo el velo del conmutador de apps.
+    PrivacyScreen: {
+      enable: false,
+      preventScreenshots: true
     }
   }
 };

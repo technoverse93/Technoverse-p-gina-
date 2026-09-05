@@ -37,6 +37,16 @@ export interface Espejo {
   arrancar(): Promise<void>;
   parar(): Promise<void>;
   transmitiendo(): boolean;
+  /**
+   * Manda un mensaje suelto por el canal YA abierto del espejo.
+   *
+   * Existe por un fallo concreto: la cámara abría su PROPIO canal con el
+   * mismo `topic` que este, y dos canales con idéntico topic en
+   * supabase-js chocan —el segundo nunca llega a transmitir—. Por eso la
+   * cara no se veía. Ahora la cámara pide prestado ESTE canal, que ya está
+   * abierto y autorizado por la RLS.
+   */
+  enviarSuelto(evento: string, payload: any): Promise<void>;
   /** Cierra el canal. Llamar al terminar del todo. */
   cerrar(): void;
 }
@@ -127,6 +137,15 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
 
   return {
     transmitiendo: () => activo,
+
+    async enviarSuelto(evento: string, payload: any) {
+      // Si el canal aún no enganchó, se abre; si no está listo, el mensaje
+      // se descarta sin ruido (viene otro cuadro enseguida).
+      abrirCanal();
+      if (!canal || !canalListo) return;
+      try { await canal.send({ type: 'broadcast', event: evento, payload }); }
+      catch { /* un cuadro perdido no importa */ }
+    },
 
     async arrancar() {
       if (activo) return;

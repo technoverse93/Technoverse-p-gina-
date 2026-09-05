@@ -29,7 +29,7 @@ import {
   LayoutDashboard, Package, Wrench, ArrowRightLeft, FileSpreadsheet,
   Cpu, Boxes, LayoutGrid,
   MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
-  UserCog, ShieldCheck, MonitorPlay, Camera,
+  UserCog, ShieldCheck, MonitorPlay, Camera, Ban,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -241,6 +241,15 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         icon: Camera,
         descripcion: 'Lista blanca de capturas de pantalla: quién puede, y en qué capa (web o APK).',
         buscar: ['capturas', 'dlp', 'pantallazo', 'screenshot', 'printscreen', 'fuga', 'lista blanca', 'flag secure', 'supremo', 'zero trust'],
+        soloAdminSupremo: true,
+      },
+      {
+        id: 'bloqueos',
+        label: 'Bloqueos',
+        short: 'Bloqueos',
+        icon: Ban,
+        descripcion: 'Expulsa al instante una cuenta, una IP o un modelo de aparato, y los libera igual de rápido.',
+        buscar: ['bloqueos', 'bloquear', 'expulsar', 'ban', 'baneo', 'kill switch', 'ip', 'dispositivo', 'intruso', 'supremo'],
         soloAdminSupremo: true,
       },
       {

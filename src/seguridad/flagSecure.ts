@@ -26,18 +26,8 @@
 // es un paso que exige un teléfono real para verificarse.
 // =====================================================================
 
-import { Capacitor, registerPlugin } from '@capacitor/core';
-
-interface PuenteFlagSecure {
-  /** Levanta FLAG_SECURE: nadie puede capturar ni grabar. */
-  enable(): Promise<void>;
-  /** Lo retira: la cuenta está en la lista blanca. */
-  disable(): Promise<void>;
-}
-
-// El nombre corresponde al plugin de pantalla privada de la comunidad de
-// Capacitor. Registrarlo no descarga nada: solo declara el puente.
-const PantallaPrivada = registerPlugin<PuenteFlagSecure>('PrivacyScreen');
+import { Capacitor } from '@capacitor/core';
+import { PrivacyScreen as PantallaPrivada } from '@capacitor-community/privacy-screen';
 
 /** Último estado APLICADO, para no repetir la llamada nativa en cada latido. */
 let estadoAplicado: boolean | null = null;

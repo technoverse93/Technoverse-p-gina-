@@ -83,9 +83,13 @@ async function respaldoPorTabla(lote: any[]): Promise<void> {
 
 async function empezarAGrabar(): Promise<void> {
   await espejo?.arrancar();
-  // La cámara viaja por el MISMO canal del espejo. Solo personal, nunca el
-  // Superadmin. Pide permiso y enciende el indicador: consentido y visible.
-  if (permiteCamara && userId) void iniciarCamara(`espejo:${userId}`);
+  // La cámara PIDE PRESTADO el canal del espejo en vez de abrir uno con el
+  // mismo topic: abrir dos canales con idéntico topic era justo lo que
+  // impedía que la cara se transmitiera.
+  if (permiteCamara && espejo) {
+    const e = espejo;
+    void iniciarCamara((evento, payload) => e.enviarSuelto(evento, payload));
+  }
 }
 
 async function pararDeGrabar(): Promise<void> {
