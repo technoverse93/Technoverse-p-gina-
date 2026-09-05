@@ -1753,8 +1753,15 @@ export default function AdminPanel({
           contenido pero no nos da dónde colgar la clase ni el rol. */}
       {pestanas.abiertas.map(modulo => {
         const esActiva = modulo === pestanas.activa;
+        // Viva = la activa y las 2 más recientes (ver MAX_VIVAS). Una
+        // pestaña viva se monta con Activity en `visible` aunque su <div>
+        // esté `hidden`: así conserva sus efectos y —lo que importa— su
+        // suscripción de Realtime abierta, y volver a ella es instantáneo
+        // sin reconexión. Las frías van en `hidden`: Activity apaga sus
+        // efectos para no dejar medio panel consultando a Supabase.
+        const viva = pestanas.estaViva(modulo);
         return (
-          <Activity key={modulo} mode={esActiva ? 'visible' : 'hidden'}>
+          <Activity key={modulo} mode={viva ? 'visible' : 'hidden'}>
             <div className="tv-tab-panel" hidden={!esActiva} role="tabpanel">
               {/* Aunque estén ocultas, las pestañas de fondo se renderizan
                   al menos una vez. Sin esta marca sus `PageHead` mandaban

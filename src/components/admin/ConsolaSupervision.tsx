@@ -58,6 +58,35 @@ function nombreDeAparato(v: Visitante): string {
   return (v.modelo || '').trim() || (v.tipo || '').trim() || 'Aparato';
 }
 
+// ---------------------------------------------------------------------
+// CSS DEL ESPEJO — en TEXTO, no por <link>
+// ---------------------------------------------------------------------
+// La versión anterior copiaba el <link href="/assets/index-*.css"> dentro
+// del iframe. Un <link> carga ASÍNCRONO: en cada foto completa el <head>
+// del iframe se rehace, se vuelve a copiar el link y hay un instante sin
+// estilos —el panel en blanco— hasta que la hoja carga. A veces estaba en
+// caché y se veía bien, a veces no: esa era la "carrera" del tema.
+//
+// La cura es leer el CSS UNA vez, como texto, de las hojas del propio
+// dominio (mismo build, mismo origen → `cssRules` es accesible) y luego
+// inyectarlo como un <style> en línea. Un <style> con el texto ya dentro
+// aplica de inmediato, sin viaje de red, así que no hay parpadeo posible.
+let cssCache: string | null = null;
+
+function cssDelDocumento(): string {
+  if (cssCache !== null) return cssCache;
+  let texto = '';
+  for (const hoja of Array.from(document.styleSheets)) {
+    try {
+      // `cssRules` lanza en hojas de otro origen (p. ej. Google Fonts);
+      // esas se ignoran —son tipografías, no el color que se perdía—.
+      for (const regla of Array.from(hoja.cssRules)) texto += regla.cssText + '\n';
+    } catch { /* hoja de otro origen: se salta */ }
+  }
+  cssCache = texto;
+  return cssCache;
+}
+
 export default function ConsolaSupervision() {
   const [gente, setGente] = useState<Presencia[]>([]);
   const [visitantes, setVisitantes] = useState<Visitante[]>([]);
@@ -142,13 +171,13 @@ export default function ConsolaSupervision() {
       // Tras cada foto completa rrweb rehace el <head>, así que la marca
       // desaparece y toca volver a inyectar. Si sigue ahí, no duplicamos.
       if (doc.head.querySelector('[data-tv-css]')) return;
-      document.querySelectorAll('link[rel="stylesheet"], style').forEach(hoja => {
-        try {
-          const copia = doc.importNode(hoja, true) as HTMLElement;
-          copia.setAttribute('data-tv-css', '');
-          doc.head.appendChild(copia);
-        } catch { /* una hoja suelta no debe tumbar al resto */ }
-      });
+      const estilo = doc.createElement('style');
+      estilo.setAttribute('data-tv-css', '');
+      estilo.textContent = cssDelDocumento();
+      // Primero en el <head>, para que gane sobre cualquier estilo que
+      // rrweb hubiera dejado y para que esté aplicado antes del primer
+      // pintado del contenido reconstruido.
+      doc.head.insertBefore(estilo, doc.head.firstChild);
     } catch { /* iframe aún no accesible: la próxima foto lo reintenta */ }
   }, []);
 

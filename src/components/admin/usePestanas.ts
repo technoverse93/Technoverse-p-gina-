@@ -49,6 +49,25 @@ export const PESTANA_INICIAL = 'dashboard';
  */
 export const MAX_PESTANAS = 8;
 
+/**
+ * Cuántas pestañas se mantienen VIVAS a la vez (con sus efectos e
+ * intervalos corriendo y, sobre todo, sus suscripciones de Realtime
+ * abiertas).
+ *
+ * Una pestaña abierta pero FRÍA conserva su estado y su DOM, pero React
+ * —vía <Activity mode="hidden">— apaga sus efectos mientras no se mira,
+ * para no tener cinco módulos consultando a Supabase en segundo plano. El
+ * costo es que, al volver a una pestaña fría, su canal se vuelve a abrir y
+ * eso se siente como un tironcito.
+ *
+ * Con este tope, la pestaña activa y las DOS últimas que se visitaron se
+ * quedan CALIENTES: sus WebSockets nunca se cierran, así que alternar
+ * entre las que uno usa de verdad —cobrar y consultar existencias, por
+ * ejemplo— es instantáneo y sin reconexión. Tres es el equilibrio: cubre
+ * el ir y venir real sin dejar medio panel vivo gastando red.
+ */
+export const MAX_VIVAS = 3;
+
 export interface EstadoPestanas {
   /** Módulos abiertos, en el orden en que se abrieron. */
   abiertas: string[];
@@ -73,6 +92,12 @@ export interface EstadoPestanas {
   tabDe: (modulo: string) => string;
   /** Si el módulo ya se abrió alguna vez (y por tanto está montado). */
   estaAbierta: (modulo: string) => boolean;
+  /**
+   * Si el módulo debe mantenerse VIVO (efectos y WebSockets corriendo)
+   * aunque no sea el activo. Son la pestaña activa y las últimas que se
+   * visitaron, hasta `MAX_VIVAS`.
+   */
+  estaViva: (modulo: string) => boolean;
 }
 
 // ---------------------------------------------------------------------
@@ -137,6 +162,24 @@ export function usePestanas(tabInicial: string): EstadoPestanas {
     moduloInicial === PESTANA_INICIAL ? [PESTANA_INICIAL] : [PESTANA_INICIAL, moduloInicial]
   );
   const [activa, setActiva] = useState<string>(moduloInicial);
+
+  // Orden de uso reciente (MRU): la primera es la que se está viendo. De
+  // aquí salen las pestañas que se mantienen calientes. Se actualiza cada
+  // vez que cambia la activa, así que refleja el ir y venir real.
+  const [ordenUso, setOrdenUso] = useState<string[]>([moduloInicial]);
+  useEffect(() => {
+    setOrdenUso(prev => [activa, ...prev.filter(m => m !== activa)]);
+  }, [activa]);
+
+  // Las vivas: la activa y las siguientes más recientes que sigan
+  // abiertas, hasta el tope. Un Set para que `estaViva` sea O(1).
+  const vivas = useRef<Set<string>>(new Set([moduloInicial]));
+  vivas.current = new Set(
+    ordenUso.filter(m => abiertas.includes(m)).slice(0, MAX_VIVAS)
+  );
+  // La activa siempre está viva, aunque el efecto de `ordenUso` todavía no
+  // la haya subido al frente en este mismo render.
+  vivas.current.add(activa);
 
   // Carpeta abierta dentro de cada módulo. Se guarda en una ref y no en
   // estado porque cambiarla NO debe repintar la barra de pestañas: la
@@ -231,6 +274,7 @@ export function usePestanas(tabInicial: string): EstadoPestanas {
   }, []);
 
   const estaAbierta = useCallback((modulo: string) => abiertas.includes(modulo), [abiertas]);
+  const estaViva = useCallback((modulo: string) => vivas.current.has(modulo), [ordenUso, abiertas, activa]);
 
   return {
     abiertas,
@@ -242,6 +286,7 @@ export function usePestanas(tabInicial: string): EstadoPestanas {
     cerrarTodas,
     tabDe,
     estaAbierta,
+    estaViva,
   };
 }
 
