@@ -12,7 +12,7 @@
 // =====================================================================
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { ShieldCheck, Smartphone, Monitor, RefreshCw } from 'lucide-react';
+import { ShieldCheck, Smartphone, Monitor, RefreshCw, Globe } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { etiquetaDeDia, soloHora } from '../chat/formatoChat';
 
@@ -21,6 +21,8 @@ interface Ingreso {
   email: string;
   entorno: 'web' | 'apk';
   dispositivo: string | null;
+  /** IP pública, sellada por el servidor desde las cabeceras. */
+  ip: string | null;
   created_at: string;
 }
 
@@ -41,7 +43,7 @@ export default function ConsolaIngresos() {
     setCargando(true);
     const { data, error } = await supabase
       .from('security_login_events')
-      .select('id, email, entorno, dispositivo, created_at')
+      .select('id, email, entorno, dispositivo, ip, created_at')
       .order('created_at', { ascending: false })
       .limit(TANDA);
     if (!montado.current) return;
@@ -150,6 +152,15 @@ export default function ConsolaIngresos() {
                         ? <Smartphone className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />
                         : <Monitor className="w-3.5 h-3.5 shrink-0 text-[var(--text-muted)]" />}
                       <span className="truncate">{i.dispositivo || (esApk ? 'APK' : 'Web')}</span>
+                      {i.ip && (
+                        <>
+                          <span className="text-[var(--text-muted)] shrink-0">·</span>
+                          <span className="flex items-center gap-1 shrink-0 font-mono tabular-nums text-[11px] text-[var(--text-muted)]">
+                            <Globe className="w-3 h-3 shrink-0" />
+                            {i.ip}
+                          </span>
+                        </>
+                      )}
                     </div>
                   </div>
                   <div className="text-right shrink-0">

@@ -6,9 +6,19 @@
 // gate en AdminPanel).
 //
 // Flujo: al elegir a un empleado se pone `watch = true` en su fila. Eso le
-// dice a SU cliente que empiece a grabar (ver grabador.ts); los lotes
-// llegan por Realtime y alimentan un Replayer en modo vivo. Al soltarlo se
-// pone `watch = false` y su cliente para y borra sus lotes.
+// dice a SU cliente que empiece a grabar (ver grabador.ts).
+//
+// ---------------------------------------------------------------------
+// POR DÓNDE LLEGAN LOS FOTOGRAMAS
+// ---------------------------------------------------------------------
+// Camino rápido: BROADCAST en el canal privado `espejo:<id>`. No toca la
+// base, así que el fotograma llega prácticamente en el acto. Vienen
+// comprimidos y troceados; aquí se reensamblan y se descomprimen.
+//
+// Camino de respaldo: los INSERT de `supervision_events`, que es como
+// funcionaba antes. Solo se usa si el canal privado no se pudo
+// establecer. Se escuchan los dos a la vez: si el rápido funciona, el
+// lento nunca llega, porque el grabador no lo usa.
 // =====================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
@@ -31,12 +41,19 @@ export default function ConsolaSupervision() {
   const [gente, setGente] = useState<Presencia[]>([]);
   const [sel, setSel] = useState<string | null>(null);
   const [estado, setEstado] = useState<'idle' | 'esperando' | 'vivo'>('idle');
+  const [refrescando, setRefrescando] = useState(false);
+  const [aviso, setAviso] = useState<string | null>(null);
 
   const lienzoRef = useRef<HTMLDivElement>(null);
   const replayerRef = useRef<any>(null);
   const iniciandoRef = useRef(false);
   const colaRef = useRef<any[]>([]);
   const canalEventosRef = useRef<any>(null);
+  const canalEspejoRef = useRef<any>(null);
+  const trozosRef = useRef<Map<string, { n: number; partes: string[] }>>(new Map());
+  // Cuando el usuario cambia de tema, el espejo debe REMONTARSE con la
+  // foto nueva en vez de intentar parchear el DOM viejo.
+  const remontarRef = useRef(false);
   const selRef = useRef<string | null>(null);
   selRef.current = sel;
 
@@ -46,7 +63,9 @@ export default function ConsolaSupervision() {
       .from('supervision_state')
       .select('user_id, email, ruta, entorno, last_seen, watch')
       .order('last_seen', { ascending: false });
-    setGente((data as Presencia[]) || []);
+    const filas = (data as Presencia[]) || [];
+    setGente(filas);
+    return filas;
   }, []);
 
   useEffect(() => {
@@ -79,6 +98,7 @@ export default function ConsolaSupervision() {
     try { replayerRef.current?.pause?.(); } catch { /* nada */ }
     replayerRef.current = null;
     colaRef.current = [];
+    trozosRef.current.clear();
     if (lienzoRef.current) lienzoRef.current.innerHTML = '';
   }, []);
 
@@ -120,29 +140,83 @@ export default function ConsolaSupervision() {
 
   const manejarLote = useCallback((lote: any[]) => {
     if (!Array.isArray(lote) || lote.length === 0) return;
-    if (replayerRef.current) {
-      for (const ev of lote) { try { replayerRef.current.addEvent(ev); } catch { /* evento suelto */ } }
-      return;
+
+    for (const ev of lote) {
+      // Evento propio del grabador (tipo 5) avisando de un cambio de tema:
+      // la clase global de <html> cambió, así que el DOM que ya está
+      // pintado dejó de ser válido. Se tira el reproductor y se vuelve a
+      // montar con la foto completa que viene justo detrás. Sin esto, el
+      // panel del supervisado se veía en blanco al pasar a oscuro.
+      if (ev?.type === 5 && ev?.data?.tag === 'tema') {
+        destruirReplayer();
+        remontarRef.current = true;
+        continue;
+      }
+
+      if (replayerRef.current) {
+        try { replayerRef.current.addEvent(ev); } catch { /* evento suelto */ }
+        continue;
+      }
+
+      // Aún sin reproductor: acumula hasta que llegue una foto completa.
+      colaRef.current.push(ev);
+      if (colaRef.current.length > 2000) colaRef.current = colaRef.current.slice(-2000);
     }
-    // Aún sin reproductor: acumula hasta que llegue una foto completa. Se
-    // acota la cola por si el dispositivo tarda en mandar la primera foto.
-    colaRef.current.push(...lote);
-    if (colaRef.current.length > 2000) colaRef.current = colaRef.current.slice(-2000);
-    void iniciarSiHayFoto();
-  }, [iniciarSiHayFoto]);
+
+    if (!replayerRef.current) {
+      remontarRef.current = false;
+      void iniciarSiHayFoto();
+    }
+  }, [iniciarSiHayFoto, destruirReplayer]);
+
+  /** Reensambla los trozos del canal rápido y descomprime los eventos. */
+  const manejarTrozo = useCallback(async (p: any) => {
+    if (!p?.id || typeof p.d !== 'string') return;
+    const mapa = trozosRef.current;
+    const entrada = mapa.get(p.id) || { n: p.n || 1, partes: [] };
+    entrada.partes[p.i || 0] = p.d;
+    mapa.set(p.id, entrada);
+
+    const completo = entrada.partes.filter(Boolean).length === entrada.n;
+    if (!completo) return;
+    mapa.delete(p.id);
+
+    try {
+      const crudo = JSON.parse(entrada.partes.join(''));
+      const { unpack } = await import('rrweb');
+      // El grabador comprime cada evento; `unpack` devuelve el objeto.
+      const eventos = (crudo as any[]).map(e => { try { return unpack(e); } catch { return e; } });
+      manejarLote(eventos);
+    } catch { /* lote corrupto: el próximo checkout lo arregla */ }
+  }, [manejarLote]);
+
+  // --------------------------- Enganche / desenganche ---------------------------
+  const cerrarCanales = useCallback(() => {
+    if (canalEventosRef.current) { try { supabase.removeChannel(canalEventosRef.current); } catch { /* nada */ } canalEventosRef.current = null; }
+    if (canalEspejoRef.current) { try { supabase.removeChannel(canalEspejoRef.current); } catch { /* nada */ } canalEspejoRef.current = null; }
+  }, []);
 
   const soltar = useCallback(async (userId: string | null) => {
-    if (canalEventosRef.current) { try { supabase.removeChannel(canalEventosRef.current); } catch { /* nada */ } canalEventosRef.current = null; }
+    cerrarCanales();
     destruirReplayer();
     if (userId) { try { await supabase.from('supervision_state').update({ watch: false }).eq('user_id', userId); } catch { /* nada */ } }
-  }, [destruirReplayer]);
+  }, [destruirReplayer, cerrarCanales]);
 
-  const mirar = useCallback(async (userId: string) => {
-    if (sel === userId) { await soltar(userId); setSel(null); setEstado('idle'); return; }
-    await soltar(sel);
-    setSel(userId);
+  /** Abre los dos caminos (rápido y respaldo) y pide la grabación. */
+  const engancharA = useCallback(async (userId: string) => {
     setEstado('esperando');
-    try { await supabase.from('supervision_state').update({ watch: true }).eq('user_id', userId); } catch { /* nada */ }
+
+    // Camino rápido: canal privado de broadcast.
+    try {
+      const espejo = supabase.channel(`espejo:${userId}`, { config: { private: true } });
+      espejo.on('broadcast', { event: 'lote' }, (msg: any) => {
+        if (selRef.current === userId) void manejarTrozo(msg?.payload);
+      });
+      espejo.subscribe();
+      canalEspejoRef.current = espejo;
+    } catch { /* si el canal no se puede abrir, queda el respaldo */ }
+
+    // Camino de respaldo: la tabla, como antes.
     const canal = supabase
       .channel(`supervision-ev-${userId}`)
       .on('postgres_changes',
@@ -150,7 +224,67 @@ export default function ConsolaSupervision() {
         (payload: any) => { if (selRef.current === userId) void manejarLote(payload?.new?.lote || []); })
       .subscribe();
     canalEventosRef.current = canal;
-  }, [sel, soltar, manejarLote]);
+
+    // Se pide la grabación DESPUÉS de estar escuchando, para no perderse
+    // la primera foto.
+    try { await supabase.from('supervision_state').update({ watch: true }).eq('user_id', userId); } catch { /* nada */ }
+  }, [manejarLote, manejarTrozo]);
+
+  const mirar = useCallback(async (userId: string) => {
+    if (sel === userId) { await soltar(userId); setSel(null); setEstado('idle'); return; }
+    await soltar(sel);
+    setSel(userId);
+    await engancharA(userId);
+  }, [sel, soltar, engancharA]);
+
+  // --------------------------- Botón "Actualizar" ---------------------------
+  // Dos trabajos distintos, según lo que pase de verdad:
+  //
+  //   a) La ficha quedó colgada porque la persona ya cerró sesión o cerró
+  //      la app  → se retira de la lista en el acto.
+  //   b) La persona sigue conectada pero el espejo no cargó → se fuerza
+  //      una reconexión limpia del canal (se suelta y se vuelve a pedir la
+  //      grabación), que es lo que destraba la pantalla.
+  const actualizar = useCallback(async () => {
+    setRefrescando(true);
+    setAviso(null);
+    try {
+      const filas = await cargar();
+
+      // (a) Barre las fichas que ya no laten. Si alguien solo estaba en
+      // segundo plano, vuelve a aparecer con su próximo latido (10 s).
+      const caducadas = filas.filter(p => !enLinea(p)).map(p => p.user_id);
+      if (caducadas.length > 0) {
+        try { await supabase.from('supervision_state').delete().in('user_id', caducadas); } catch { /* nada */ }
+        setGente(prev => prev.filter(p => !caducadas.includes(p.user_id)));
+      }
+
+      const actual = selRef.current;
+      if (!actual) {
+        setAviso(caducadas.length > 0 ? `Se retiraron ${caducadas.length} sesión(es) cerradas.` : 'Lista al día.');
+        return;
+      }
+
+      const fila = filas.find(p => p.user_id === actual);
+      if (!fila || !enLinea(fila)) {
+        // (a) A quien mirábamos ya no está: se suelta y se quita.
+        await soltar(actual);
+        setSel(null);
+        setEstado('idle');
+        setAviso('Esa persona ya cerró sesión. Se quitó de la lista.');
+        return;
+      }
+
+      // (b) Sigue conectada: reconexión limpia del canal.
+      await soltar(actual);
+      destruirReplayer();
+      await new Promise(r => setTimeout(r, 400));
+      await engancharA(actual);
+      setAviso('Canal reconectado. Reintentando el espejo…');
+    } finally {
+      setRefrescando(false);
+    }
+  }, [cargar, soltar, engancharA, destruirReplayer]);
 
   // Al desmontar, suelta a quien se esté mirando (para su grabación).
   useEffect(() => () => { void soltar(selRef.current); }, [soltar]);
@@ -169,15 +303,26 @@ export default function ConsolaSupervision() {
             <p className="text-[11.5px] text-[var(--text-secondary)]">Espejo en vivo de la sesión del personal.</p>
           </div>
         </div>
-        <button
-          type="button"
-          onClick={cargar}
-          className="w-8 h-8 rounded-lg flex items-center justify-center border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition"
-          aria-label="Recargar"
-        >
-          <RefreshCw className="w-4 h-4" />
-        </button>
+        <div className="flex items-center gap-2">
+          {aviso && (
+            <span className="hidden sm:block text-[11px] text-[var(--text-secondary)] max-w-[280px] truncate">{aviso}</span>
+          )}
+          <button
+            type="button"
+            onClick={() => void actualizar()}
+            disabled={refrescando}
+            className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition disabled:opacity-60"
+            aria-label="Actualizar"
+          >
+            <RefreshCw className={`w-4 h-4 ${refrescando ? 'animate-spin' : ''}`} />
+            <span className="text-[11.5px] font-semibold">Actualizar</span>
+          </button>
+        </div>
       </div>
+
+      {aviso && (
+        <p className="sm:hidden text-[11.5px] text-[var(--text-secondary)] -mt-1">{aviso}</p>
+      )}
 
       <div className="grid grid-cols-1 md:grid-cols-[220px_1fr] gap-4">
         {/* Selector de personal conectado */}
