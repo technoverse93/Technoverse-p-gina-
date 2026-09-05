@@ -49,10 +49,10 @@ jobs:
       # ubicación por IP (que apenas acierta la ciudad).
       #
       # Se comprueba que no esté ya puesto, para que el paso sea repetible.
-      - name: Declarar permisos de ubicación, biometría y almacenamiento en el manifiesto
+      - name: Declarar permisos de ubicación, biometría, almacenamiento y cámara en el manifiesto
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          if grep -q "ACCESS_FINE_LOCATION" "$MANIFEST" && grep -q "USE_BIOMETRIC" "$MANIFEST" && grep -q "WRITE_EXTERNAL_STORAGE" "$MANIFEST"; then
+          if grep -q "ACCESS_FINE_LOCATION" "$MANIFEST" && grep -q "USE_BIOMETRIC" "$MANIFEST" && grep -q "WRITE_EXTERNAL_STORAGE" "$MANIFEST" && grep -q "permission.CAMERA" "$MANIFEST"; then
             echo "El permiso ya estaba declarado; no se toca nada."
           else
             python3 - "$MANIFEST" <<'PY'
@@ -79,6 +79,22 @@ jobs:
               # circulan en Costa Rica sí lo requieren.
               '    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n'
               '    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />\n'
+              # Cámara: el recuadro PiP del Hub de supervisión. Sin esta
+              # línea el WebView de la APK ni siquiera puede PREGUNTAR, y
+              # getUserMedia falla en seco aunque en la web funcione.
+              #
+              # Android pide este permiso UNA sola vez por instalación y lo
+              # recuerda para siempre; si se reinstala la APK, vuelve a
+              # preguntarlo una vez (eso lo decide el sistema operativo, no
+              # la aplicación).
+              '    <uses-permission android:name="android.permission.CAMERA" />\n'
+              # `required=false`: un equipo sin cámara debe poder instalar
+              # la aplicación igual y usar todo lo demás.
+              '    <uses-feature android:name="android.hardware.camera" android:required="false" />\n'
+              '    <uses-feature android:name="android.hardware.camera.front" android:required="false" />\n'
+              # NO se pide RECORD_AUDIO a propósito: el Hub transmite vídeo
+              # con `audio: false`. Nunca se graba sonido, así que pedir el
+              # micrófono sería reclamar un permiso que no se usa.
               '</manifest>'
           )
           if '</manifest>' not in texto:
