@@ -21,13 +21,13 @@
 // =====================================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, ShieldOff, RefreshCw, Mail, Globe, Smartphone, TriangleAlert } from 'lucide-react';
+import { Ban, ShieldOff, RefreshCw, Mail, Globe, Smartphone, TriangleAlert, Fingerprint } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { avisarCambioDeBloqueos } from '../../seguridad/killSwitch';
 
 interface Bloqueo {
   id: number;
-  tipo: 'email' | 'ip' | 'modelo';
+  tipo: 'email' | 'ip' | 'modelo' | 'device';
   valor: string;
   motivo: string | null;
   hasta: string | null;
@@ -37,8 +37,9 @@ interface Bloqueo {
 
 const TIPOS: { id: Bloqueo['tipo']; etiqueta: string; pista: string; icono: typeof Mail }[] = [
   { id: 'email', etiqueta: 'Cuenta', pista: 'persona@correo.com', icono: Mail },
+  { id: 'device', etiqueta: 'Aparato', pista: 'huella del dispositivo físico', icono: Fingerprint },
   { id: 'ip', etiqueta: 'Dirección IP', pista: '190.x.x.x', icono: Globe },
-  { id: 'modelo', etiqueta: 'Modelo', pista: 'Honor Pad SE', icono: Smartphone },
+  { id: 'modelo', etiqueta: 'Modelo', pista: 'Honor Pad SE (todos)', icono: Smartphone },
 ];
 
 /** Duraciones ofrecidas. `null` = para siempre. */
@@ -116,7 +117,7 @@ export default function ConsolaBloqueos() {
   };
 
   const porTipo = useMemo(() => {
-    const m: Record<string, Bloqueo[]> = { email: [], ip: [], modelo: [] };
+    const m: Record<string, Bloqueo[]> = { email: [], device: [], ip: [], modelo: [] };
     for (const b of lista) (m[b.tipo] ||= []).push(b);
     return m;
   }, [lista]);

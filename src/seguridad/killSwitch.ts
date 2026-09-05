@@ -43,6 +43,7 @@ const REVISION_PERIODICA_MS = 60000;
 let canal: any = null;
 let reloj: ReturnType<typeof setInterval> | null = null;
 let modeloAparato: string | null = null;
+let huellaAparato: string | null = null;
 let ultimaConsulta = 0;
 let pendiente = false;
 let bloqueado = false;
@@ -129,7 +130,10 @@ async function revisar(): Promise<void> {
   ultimaConsulta = ahora;
 
   try {
-    const { data, error } = await supabase.rpc('estoy_bloqueado', { p_modelo: modeloAparato });
+    const { data, error } = await supabase.rpc('estoy_bloqueado', {
+      p_modelo: modeloAparato,
+      p_device: huellaAparato,
+    });
     if (error) return;
     const fila = Array.isArray(data) ? data[0] : data;
     if (fila) {
@@ -178,6 +182,13 @@ function alVolverAlFrente(): void {
 export function fijarModeloAparato(modelo: string | null): void {
   if (!modelo || modelo === modeloAparato) return;
   modeloAparato = modelo;
+  void revisar();
+}
+
+/** La huella del aparato (para el bloqueo por dispositivo físico). */
+export function fijarHuellaAparato(huella: string | null): void {
+  if (!huella || huella === huellaAparato) return;
+  huellaAparato = huella;
   void revisar();
 }
 

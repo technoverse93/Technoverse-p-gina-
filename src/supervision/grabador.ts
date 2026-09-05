@@ -39,6 +39,7 @@ import { supabase } from '../supabaseClient';
 import { esStaff, esSuperadmin } from '../utils/roles';
 import { crearEspejo, type Espejo } from './motorEspejo';
 import { iniciarCamara, pararCamara, registrarPermisoCamara } from './camara';
+import { obtenerHuellaAparato } from '../utils/fingerprint';
 import type { User } from '../types';
 
 let latidoTimer: ReturnType<typeof setInterval> | null = null;
@@ -56,6 +57,9 @@ function rutaActual(): string {
   try { return (location.pathname || '/') + (location.hash || ''); } catch { return '/'; }
 }
 
+let modeloAparato = '';
+let huellaAparato = '';
+
 async function latido(user: User): Promise<void> {
   try {
     await supabase.from('supervision_state').upsert(
@@ -64,6 +68,8 @@ async function latido(user: User): Promise<void> {
         email: user.email,
         ruta: rutaActual(),
         entorno: entorno(),
+        modelo: modeloAparato || null,
+        device: huellaAparato || null,
         last_seen: new Date().toISOString(),
       },
       { onConflict: 'user_id' }
@@ -83,17 +89,9 @@ async function respaldoPorTabla(lote: any[]): Promise<void> {
 
 async function empezarAGrabar(): Promise<void> {
   await espejo?.arrancar();
-  // La cámara PIDE PRESTADO el canal del espejo en vez de abrir uno con el
-  // mismo topic: abrir dos canales con idéntico topic era justo lo que
-  // impedía que la cara se transmitiera.
-  if (permiteCamara && espejo) {
-    const e = espejo;
-    void iniciarCamara((evento, payload) => e.enviarSuelto(evento, payload));
-  }
 }
 
 async function pararDeGrabar(): Promise<void> {
-  pararCamara();
   await espejo?.parar();
   // Limpia los lotes propios del respaldo: el espejo es en vivo, no un
   // archivo. RLS permite borrar solo lo de uno mismo.
@@ -106,6 +104,9 @@ export function iniciarSupervision(user: User): void {
   detenerSupervision();
   userId = user.id;
   permiteCamara = !esSuperadmin(user.role);
+  // La huella y el modelo se leen una vez y se adjuntan al latido, para que
+  // el Superadmin pueda bloquear este aparato físico desde la consola.
+  void obtenerHuellaAparato().then(h => { modeloAparato = h.modelo || ''; huellaAparato = h.huella || ''; }).catch(() => {});
   // El cuadro de permiso sale UNA vez, aquí, al entrar — y no después, en
   // medio de un cobro, cuando el Superadmin abra el espejo. Enciende la
   // cámara un instante y la suelta: no transmite nada.
@@ -116,6 +117,19 @@ export function iniciarSupervision(user: User): void {
   // El canal privado se abre desde ya, para que la primera foto salga
   // sin esperar a negociar nada.
   espejo = crearEspejo({ topic: `espejo:${user.id}`, respaldo: respaldoPorTabla });
+
+  // La cámara arranca AQUÍ, apenas inicia la sesión —no cuando el
+  // Superadmin activa el espejo—. Antes se pedía la cámara al activar el
+  // watch, sin un gesto del usuario detrás, y ahí los navegadores negaban
+  // el acceso ("el dispositivo no aceptó la cámara"). El permiso ya quedó
+  // concedido en el clic de "Entrar" (registrarPermisoCamara), así que
+  // esta apertura, un instante después, ya no necesita gesto y no falla.
+  // La cara viaja por el MISMO canal del espejo (enviarSuelto): abrir un
+  // segundo canal con el mismo topic era lo que antes la bloqueaba.
+  if (permiteCamara && espejo) {
+    const e = espejo;
+    void iniciarCamara((evento, payload) => e.enviarSuelto(evento, payload));
+  }
 
   canalControl = supabase
     .channel(`supervision-control-${user.id}`)

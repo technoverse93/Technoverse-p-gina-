@@ -22,7 +22,7 @@
 // =====================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio } from 'lucide-react';
+import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { soloHora } from '../chat/formatoChat';
 
@@ -31,6 +31,8 @@ interface Presencia {
   email: string | null;
   ruta: string | null;
   entorno: string | null;
+  modelo: string | null;
+  device: string | null;
   last_seen: string;
   watch: boolean;
 }
@@ -121,7 +123,7 @@ export default function ConsolaSupervision() {
     const [personal, clientes] = await Promise.all([
       supabase
         .from('supervision_state')
-        .select('user_id, email, ruta, entorno, last_seen, watch')
+        .select('user_id, email, ruta, entorno, modelo, device, last_seen, watch')
         .gte('last_seen', desde)
         .order('last_seen', { ascending: false })
         .limit(50),
@@ -390,6 +392,18 @@ export default function ConsolaSupervision() {
     // arranque el tiempo de negociar un segundo WebSocket.
     await pedirGrabacion(clave, true);
 
+    // "Volcá tu DOM ya": fuerza el arranque inmediato del espejo sin
+    // esperar al checkout periódico. Se repite unas veces por si la
+    // grabación aún estaba levantándose cuando llegó el primer pedido —así
+    // el arranque es < 1 s en vez de depender de la foto de los 12 s.
+    const canalEspejo = canalEspejoRef.current;
+    if (canalEspejo) {
+      const pedirFoto = () => { try { void canalEspejo.send({ type: 'broadcast', event: 'pedir-foto', payload: {} }); } catch { /* nada */ } };
+      for (const ms of [250, 700, 1500, 3000]) {
+        setTimeout(() => { if (selRef.current === clave && !replayerRef.current) pedirFoto(); }, ms);
+      }
+    }
+
     // Camino de respaldo por tabla: solo existe para el personal, y se
     // engancha FUERA del camino crítico. Antes se suscribía siempre y de
     // entrada, sumando un apretón de manos completo a la espera aunque el
@@ -482,6 +496,25 @@ export default function ConsolaSupervision() {
   // cliente solo se puede decir el modelo: no hay más datos que mostrar.
   const visitaSel = sel && esVisita(sel) ? visitantes.find(v => v.visita === idDeVisita(sel)) || null : null;
   const personaSel = sel && !esVisita(sel) ? gente.find(p => p.user_id === sel) || null : null;
+
+  // Bloqueo del aparato físico de quien se está mirando, en un clic. Deja
+  // el objetivo en el Kill Switch y avisa a todos: si es su propio equipo,
+  // le cae la pantalla de bloqueo en el acto.
+  const [bloqueandoAparato, setBloqueandoAparato] = useState(false);
+  const bloquearAparato = useCallback(async () => {
+    const device = personaSel?.device;
+    if (!device) return;
+    setBloqueandoAparato(true);
+    try {
+      await supabase.from('system_bans').insert({
+        tipo: 'device', valor: device,
+        motivo: `Aparato de ${personaSel?.email || 'personal'} bloqueado desde supervisión`,
+      });
+      const { avisarCambioDeBloqueos } = await import('../../seguridad/killSwitch');
+      await avisarCambioDeBloqueos();
+    } catch { /* el panel de Bloqueos muestra el detalle si algo falla */ }
+    finally { setBloqueandoAparato(false); }
+  }, [personaSel]);
   const seleccionado = personaSel || visitaSel
     ? {
         titulo: personaSel ? (personaSel.email || 'desconocido') : nombreDeAparato(visitaSel!),
@@ -663,9 +696,24 @@ export default function ConsolaSupervision() {
           </div>
 
           {seleccionado && (
-            <div className="px-3 py-2 border-t border-[var(--border-color)] bg-[var(--bg-surface)] flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
-              <span className="truncate">{seleccionado.ruta}</span>
-              <span className="font-mono tabular-nums shrink-0">visto {soloHora(seleccionado.last_seen)}</span>
+            <div className="px-3 py-2 border-t border-[var(--border-color)] bg-[var(--bg-surface)] flex items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)]">
+              <span className="truncate min-w-0">
+                {seleccionado.ruta}
+                {personaSel?.modelo ? <span className="text-[var(--text-muted)]"> · {personaSel.modelo}</span> : null}
+              </span>
+              <div className="flex items-center gap-2 shrink-0">
+                {personaSel?.device && (
+                  <button
+                    type="button" onClick={() => void bloquearAparato()} disabled={bloqueandoAparato}
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-bold text-white transition disabled:opacity-50"
+                    style={{ background: '#e5484d' }}
+                    title="Bloquea este aparato físico en el Kill Switch, al instante"
+                  >
+                    <Ban className="w-3 h-3" /> Bloquear aparato
+                  </button>
+                )}
+                <span className="font-mono tabular-nums">visto {soloHora(seleccionado.last_seen)}</span>
+              </div>
             </div>
           )}
         </div>
