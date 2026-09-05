@@ -43,6 +43,15 @@ let visita: string | null = null;
 let modelo = '';
 let tipo = '';
 
+/**
+ * Marca de arranque. Leer el modelo del aparato es asíncrono, así que
+ * entre que se pide y llega, la sesión pudo cambiar (entra un empleado, o
+ * se cierra la tienda) y ya se habrá llamado a `detenerVisitante`. Sin
+ * este contador, aquel arranque viejo terminaba igual y dejaba un latido
+ * huérfano corriendo para siempre.
+ */
+let generacion = 0;
+
 function entorno(): string {
   try { if ((window as any)?.Capacitor?.isNativePlatform?.()) return 'apk'; } catch { /* web */ }
   return 'web';
@@ -81,6 +90,8 @@ export function iniciarVisitante(): void {
   if (!id) return;   // sin almacenamiento no hay a quién atribuir la visita
   visita = id;
 
+  const mia = ++generacion;
+
   // El modelo se lee una vez: no cambia mientras la app está abierta.
   void leerDatosDelAparato()
     .then(datos => {
@@ -89,6 +100,9 @@ export function iniciarVisitante(): void {
     })
     .catch(() => { /* se queda sin modelo: aparecerá como "Aparato" */ })
     .finally(() => {
+      // Si mientras se leía el aparato alguien paró o volvió a arrancar,
+      // este arranque ya no manda: se abandona sin dejar nada corriendo.
+      if (mia !== generacion) return;
       espejo = crearEspejo({ topic: `espejo:v:${id}` });
       void latir();
       latidoTimer = setInterval(() => void latir(), 10000);
@@ -97,6 +111,7 @@ export function iniciarVisitante(): void {
 
 /** Corta presencia y transmisión. */
 export function detenerVisitante(): void {
+  generacion++;   // invalida cualquier arranque que siga en vuelo
   if (latidoTimer) { clearInterval(latidoTimer); latidoTimer = null; }
   if (espejo) {
     const e = espejo;
