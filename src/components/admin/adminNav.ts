@@ -29,7 +29,7 @@ import {
   LayoutDashboard, Package, Wrench, ArrowRightLeft, FileSpreadsheet,
   Cpu, Boxes, LayoutGrid,
   MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
-  UserCog, ShieldCheck, MonitorPlay,
+  UserCog, ShieldCheck, MonitorPlay, Camera,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -232,6 +232,15 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         icon: MonitorPlay,
         descripcion: 'Espejo en vivo de la sesión del personal conectado (web y APK).',
         buscar: ['supervision', 'espejo', 'monitoreo', 'pantalla', 'sesion', 'replay', 'vigilancia', 'supremo', 'zero trust'],
+        soloAdminSupremo: true,
+      },
+      {
+        id: 'dlp',
+        label: 'Capturas',
+        short: 'Capturas',
+        icon: Camera,
+        descripcion: 'Lista blanca de capturas de pantalla: quién puede, y en qué capa (web o APK).',
+        buscar: ['capturas', 'dlp', 'pantallazo', 'screenshot', 'printscreen', 'fuga', 'lista blanca', 'flag secure', 'supremo', 'zero trust'],
         soloAdminSupremo: true,
       },
       {

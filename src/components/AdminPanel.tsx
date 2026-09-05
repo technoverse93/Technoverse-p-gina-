@@ -50,6 +50,7 @@ const FacturacionPanel = lazy(() => import('./FacturacionPanel'));
 const GestionUsuariosPanel = lazy(() => import('./admin/GestionUsuariosPanel'));
 const ConsolaIngresos = lazy(() => import('./admin/ConsolaIngresos'));
 const ConsolaSupervision = lazy(() => import('./admin/ConsolaSupervision'));
+const ConsolaDlp = lazy(() => import('./admin/ConsolaDlp'));
 
 const TabLoadingFallback = () => (
   <div className="flex items-center justify-center py-24 text-[var(--text-muted)] text-sm gap-2">
@@ -1693,6 +1694,12 @@ export default function AdminPanel({
         {tab === 'ingresos' && esAdminSupremo(currentUser?.email) && (
           <Suspense fallback={<TabLoadingFallback />}>
             <ConsolaIngresos />
+          </Suspense>
+        )}
+
+        {tab === 'dlp' && esAdminSupremo(currentUser?.email) && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <ConsolaDlp />
           </Suspense>
         )}
 

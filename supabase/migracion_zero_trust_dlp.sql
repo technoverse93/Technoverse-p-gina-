@@ -1,16 +1,10 @@
 -- =====================================================================
 -- ZERO TRUST · Etapa 4 — DLP (prevención de fuga por capturas)
 -- =====================================================================
--- ⚠️  BORRADOR · TODAVÍA NO APLICADO EN PRODUCCIÓN ⚠️
---
--- A diferencia del resto de migraciones de esta carpeta, esta NO se ha
--- ejecutado contra la base. La Etapa 4 quedó PAUSADA a mitad, cuando
--- llegó la orden de hotfixes de supervisión, y solo alcanzó a escribirse
--- este esquema. No hay nada de código que lo use todavía: ni escudo web,
--- ni panel de lista blanca, ni FLAG_SECURE en la APK.
---
--- Queda aquí para no perder el diseño. Antes de aplicarlo hay que
--- retomar la Etapa 4 completa.
+-- APLICADO Y VERIFICADO EN PRODUCCIÓN. Lo consumen:
+--   · src/seguridad/escudoDlp.ts      — el escudo de cada empleado
+--   · src/seguridad/flagSecure.ts     — el bloqueo nativo de la APK
+--   · src/components/admin/ConsolaDlp.tsx — la matriz del Superadmin
 -- =====================================================================
 -- Regla base: NADIE puede capturar pantalla (DENY ALL). El Superadmin
 -- habilita excepciones por cuenta y por capa (web / APK). Una cuenta sin
@@ -133,3 +127,8 @@ grant execute on function public.dlp_fijar(uuid, boolean, boolean) to authentica
 -- al instante cuando se cambia un permiso (idempotente).
 do $$ begin alter publication supabase_realtime add table public.dlp_whitelist;
 exception when duplicate_object then null; when undefined_object then null; end $$;
+
+-- Sin identidad COMPLETA, el payload de un DELETE no lleva el user_id, y el
+-- canal del empleado —filtrado por user_id=eq.<id>— no reconocería su propia
+-- revocación. Sin esto, quitarle el permiso a alguien no le llegaría en vivo.
+alter table public.dlp_whitelist replica identity full;
