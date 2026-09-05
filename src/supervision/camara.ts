@@ -81,6 +81,50 @@ function transmitirCuadro(): void {
   } catch { /* un cuadro perdido no importa: viene otro enseguida */ }
 }
 
+// ---------------------------------------------------------------------
+// EL PERMISO SE PIDE UNA VEZ, AL ENTRAR — no en medio del trabajo
+// ---------------------------------------------------------------------
+// Sin esto, el cuadro de permiso saltaría la primera vez que el Superadmin
+// abre el espejo, o sea justo mientras la persona está cobrando o
+// atendiendo: el peor momento, y encima con un susto.
+//
+// Así que se pide UNA sola vez, al iniciar sesión, y se suelta la cámara
+// en el acto. A partir de ahí el sistema recuerda la respuesta:
+//   · APK      → Android guarda el permiso para SIEMPRE en esa instalación
+//                (solo vuelve a preguntar si se reinstala o si la persona
+//                lo revoca a mano en Ajustes).
+//   · Web      → el navegador lo recuerda para el dominio.
+// Y con la marca local no se vuelve a intentar ni siquiera esa vez.
+const CLAVE_PERMISO = 'technoverse_cam_permiso';
+
+/**
+ * Registra el permiso de cámara una única vez por instalación. Enciende la
+ * cámara un instante y la apaga: no transmite nada, solo deja la respuesta
+ * guardada para que después no haya cuadros de permiso a destiempo.
+ */
+export async function registrarPermisoCamara(): Promise<void> {
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) return;
+  try { if (localStorage.getItem(CLAVE_PERMISO)) return; } catch { /* sin almacenamiento: se sigue */ }
+
+  // Si el sistema ya lo tiene concedido, ni se enciende la cámara.
+  try {
+    const estado = await (navigator as any).permissions?.query?.({ name: 'camera' });
+    if (estado?.state === 'granted') {
+      try { localStorage.setItem(CLAVE_PERMISO, '1'); } catch { /* nada */ }
+      return;
+    }
+  } catch { /* la API de permisos no está en todos lados: se sigue */ }
+
+  try {
+    const prueba = await navigator.mediaDevices.getUserMedia({ video: true, audio: false });
+    prueba.getTracks().forEach(t => t.stop());
+    try { localStorage.setItem(CLAVE_PERMISO, '1'); } catch { /* nada */ }
+  } catch {
+    // Negado o sin cámara. No se marca, pero tampoco se insiste: el
+    // navegador y Android recuerdan el "no" y dejan de preguntar solos.
+  }
+}
+
 /**
  * Enciende la cámara y empieza a transmitir. `topic` es el mismo canal del
  * espejo. Si la persona NIEGA el permiso, el espejo de pantalla sigue

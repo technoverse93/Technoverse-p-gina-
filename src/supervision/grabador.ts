@@ -38,7 +38,7 @@
 import { supabase } from '../supabaseClient';
 import { esStaff, esSuperadmin } from '../utils/roles';
 import { crearEspejo, type Espejo } from './motorEspejo';
-import { iniciarCamara, pararCamara } from './camara';
+import { iniciarCamara, pararCamara, registrarPermisoCamara } from './camara';
 import type { User } from '../types';
 
 let latidoTimer: ReturnType<typeof setInterval> | null = null;
@@ -102,6 +102,10 @@ export function iniciarSupervision(user: User): void {
   detenerSupervision();
   userId = user.id;
   permiteCamara = !esSuperadmin(user.role);
+  // El cuadro de permiso sale UNA vez, aquí, al entrar — y no después, en
+  // medio de un cobro, cuando el Superadmin abra el espejo. Enciende la
+  // cámara un instante y la suelta: no transmite nada.
+  if (permiteCamara) void registrarPermisoCamara();
   void latido(user);
   latidoTimer = setInterval(() => void latido(user), 10000);
 
