@@ -14,6 +14,7 @@ import { tieneTokenSeguridad } from './utils/securityPin';
 import { esGestion, esStaff } from './utils/roles';
 import { registrarIngreso } from './utils/auditoria';
 import { iniciarSupervision, detenerSupervision } from './supervision/grabador';
+import { iniciarEscudoDlp, detenerEscudoDlp } from './seguridad/escudoDlp';
 import { iniciarVisitante, detenerVisitante } from './supervision/visitante';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
@@ -332,8 +333,14 @@ function AppInner() {
       // PERSONAL: presencia con su correo y espejo bajo demanda.
       detenerVisitante();
       iniciarSupervision(currentUser);
-      return () => detenerSupervision();
+      // Escudo anti-captura (Etapa 4): puesto por defecto, se retira solo
+      // si el Superadmin autorizó a esta cuenta en esta capa. El propio
+      // Superadmin queda exento (ver escudoDlp.ts).
+      iniciarEscudoDlp(currentUser);
+      return () => { detenerSupervision(); detenerEscudoDlp(); };
     }
+    // La tienda pública NUNCA se escuda: sería hostil con quien viene a comprar.
+    detenerEscudoDlp();
     // CLIENTE o visitante anónimo de la tienda: presencia y espejo
     // identificados SOLO por el modelo del aparato — nunca por correo,
     // nombre ni IP (ver supervision/visitante.ts).
