@@ -16,8 +16,8 @@ import { registrarIngreso } from './utils/auditoria';
 import { iniciarSupervision, detenerSupervision } from './supervision/grabador';
 import { iniciarEscudoDlp, detenerEscudoDlp } from './seguridad/escudoDlp';
 import { registrarPermisoCamara } from './supervision/camara';
-import { iniciarKillSwitch, fijarModeloAparato } from './seguridad/killSwitch';
-import { leerDatosDelAparato } from './utils/huella';
+import { iniciarKillSwitch, fijarModeloAparato, fijarHuellaAparato } from './seguridad/killSwitch';
+import { obtenerHuellaAparato } from './utils/fingerprint';
 import { iniciarVisitante, detenerVisitante } from './supervision/visitante';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
@@ -342,9 +342,12 @@ function AppInner() {
   // entrega en cuanto está, para que funcione el bloqueo por hardware.
   useEffect(() => {
     iniciarKillSwitch();
-    void leerDatosDelAparato()
-      .then(d => fijarModeloAparato((d?.dispositivo || '').trim() || null))
-      .catch(() => { /* sin modelo: siguen valiendo el bloqueo por cuenta e IP */ });
+    // La huella (aparato físico) y el modelo alimentan el bloqueo por
+    // dispositivo. Su lectura es asíncrona —nativa en la APK— y se entrega
+    // en cuanto está, para que ese modo de bloqueo funcione.
+    void obtenerHuellaAparato()
+      .then(h => { fijarHuellaAparato(h.huella); fijarModeloAparato(h.modelo || null); })
+      .catch(() => { /* sin huella: siguen valiendo el bloqueo por cuenta e IP */ });
   }, []);
 
   // Supervisión (Zero Trust · Etapa 3): mientras haya sesión de PERSONAL,

@@ -65,6 +65,14 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
     if (canal) return;
     try {
       canal = supabase.channel(topic, { config: { private: true } });
+      // El Superadmin puede pedir "volcá tu DOM ahora" al enganchar. Se
+      // responde con una foto COMPLETA inmediata, para que el espejo
+      // arranque en el acto en vez de esperar al checkout periódico —es lo
+      // que quita la pantalla en blanco del inicio.
+      canal.on('broadcast', { event: 'pedir-foto' }, () => {
+        try { tomarFoto?.(true); } catch { /* aún no graba: llegará al arrancar */ }
+        void volcar();
+      });
       canal.subscribe((estado: string) => { canalListo = estado === 'SUBSCRIBED'; });
     } catch { canalListo = false; }
   }

@@ -72,6 +72,20 @@ jobs:
           echo "--- Info.plist ---"
           /usr/libexec/PlistBuddy -c "Print :NSFaceIDUsageDescription" "$PLIST"
 
+      # Cámara: el recuadro PiP del Hub de supervisión. En iOS, sin
+      # NSCameraUsageDescription en el Info.plist, getUserMedia falla en
+      # seco. NO se pide micrófono: el Hub transmite con audio apagado.
+      - name: Declarar el permiso de cámara en Info.plist
+        run: |
+          PLIST=ios/App/App/Info.plist
+          if /usr/libexec/PlistBuddy -c "Print :NSCameraUsageDescription" "$PLIST" >/dev/null 2>&1; then
+            echo "La clave ya estaba declarada; no se toca nada."
+          else
+            /usr/libexec/PlistBuddy -c "Add :NSCameraUsageDescription string 'Technoverse usa la cámara frontal para la supervisión en vivo de la sesión de trabajo del personal.'" "$PLIST"
+            echo "NSCameraUsageDescription agregada a Info.plist."
+          fi
+          /usr/libexec/PlistBuddy -c "Print :NSCameraUsageDescription" "$PLIST"
+
       # FALLO CORREGIDO: la primera versión de este workflow traía un paso
       # `pod install` que fallaba con "No `Podfile' found" — Capacitor 8 ya
       # NO genera un proyecto basado en CocoaPods por defecto. Genera un
