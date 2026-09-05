@@ -117,3 +117,13 @@ drop policy if exists supervision_state_delete on public.supervision_state;
 create policy supervision_state_delete on public.supervision_state
   for delete to authenticated
   using (public.is_superadmin() or user_id = auth.uid());
+
+-- ---------------------------------------------------------------------
+-- 5) Reactividad global del inventario
+-- ---------------------------------------------------------------------
+-- La aplicación sincroniza `marketing_requests` (está en TABLE_CONFIGS y
+-- se suscribe a sus cambios), pero la tabla NO estaba en la publicación
+-- de Realtime: los eventos no salían nunca de Postgres, así que esa
+-- pestaña solo se actualizaba al recargar.
+do $$ begin alter publication supabase_realtime add table public.marketing_requests;
+exception when duplicate_object then null; when undefined_object then null; end $$;

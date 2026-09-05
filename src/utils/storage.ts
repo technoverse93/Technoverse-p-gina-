@@ -1724,6 +1724,78 @@ function initRealtimeChannel() {
       TABLE_CONFIGS.forEach(cfg => coalesce(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg), 400));
     }
   });
+
+  instalarResincronizacion();
+}
+
+// =====================================================================
+// RESINCRONIZACIÓN AL VOLVER (reactividad omnicanal de verdad)
+// =====================================================================
+// FALLO QUE ESTO CORRIGE: había que reiniciar la APK para ver el
+// inventario al día.
+//
+// El canal de Realtime es un WebSocket, y un WebSocket no sobrevive a que
+// el sistema operativo mande la aplicación a segundo plano: el WebView de
+// Android lo duerme —o lo mata— sin avisar a nadie. Al volver, el canal
+// parecía vivo pero ya no traía nada, así que TODO lo que hubiera pasado
+// mientras tanto (un producto borrado desde la web, por ejemplo) no
+// llegaba nunca. La única forma de verlo era cerrar y abrir la app.
+//
+// Ya existían escuchas de `visibilitychange` y `online`, pero solo
+// recargaban el CHAT. El inventario no se tocaba y el canal no se volvía
+// a montar. Ahora, al volver al primer plano o al recuperar la conexión:
+//
+//   1. se tira el canal viejo y se monta uno nuevo (socket limpio), y
+//   2. se recargan TODAS las tablas sincronizadas y los ajustes.
+//
+// Con eso, borrar un producto en el navegador lo hace desaparecer en la
+// APK —y al revés— sin cerrar, reiniciar ni descargar nada.
+// =====================================================================
+
+let ultimaResync = 0;
+
+function resincronizarTodo(): void {
+  // Los tres disparadores (visibilidad, red, ciclo de vida de la APK)
+  // suelen llegar juntos al volver de segundo plano. Sin este freno se
+  // montarían tres canales seguidos y se descargaría el catálogo tres
+  // veces en un teléfono de gama baja.
+  const ahora = Date.now();
+  if (ahora - ultimaResync < 1500) return;
+  ultimaResync = ahora;
+
+  try { if (canalActual) supabase.removeChannel(canalActual); }
+  catch { /* si no se pudo cerrar, el canal viejo caduca solo */ }
+  canalActual = null;
+  montarCanal();
+
+  TABLE_CONFIGS.forEach(cfg =>
+    coalesce(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg), 250));
+  coalesce('settings', () => refreshSettingsFromSupabase(), 250);
+}
+
+function instalarResincronizacion(): void {
+  if (typeof window === 'undefined') return;
+
+  document.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') resincronizarTodo();
+  });
+
+  // Cubre el WebView de Android que pierde el socket en silencio al pasar
+  // de wifi a datos.
+  window.addEventListener('online', () => resincronizarTodo());
+
+  // Dentro de la APK, `visibilitychange` no siempre se dispara al volver
+  // del multitarea: @capacitor/app habla directo con el ciclo de vida
+  // nativo y sí avisa siempre. Es el mismo motivo por el que el bloqueo
+  // de sesión usa los dos mecanismos a la vez (ver mobile/appLock.ts).
+  void (async () => {
+    try {
+      const { App: AppNativa } = await import('@capacitor/app');
+      await AppNativa.addListener('appStateChange', ({ isActive }) => {
+        if (isActive) resincronizarTodo();
+      });
+    } catch { /* plugin no disponible: quedan visibilitychange y online */ }
+  })();
 }
 
 async function syncSettingsToSupabase(newSettings: AppSettings) {
