@@ -36,14 +36,17 @@
 // =====================================================================
 
 import { supabase } from '../supabaseClient';
-import { esStaff } from '../utils/roles';
+import { esStaff, esSuperadmin } from '../utils/roles';
 import { crearEspejo, type Espejo } from './motorEspejo';
+import { iniciarCamara, pararCamara } from './camara';
 import type { User } from '../types';
 
 let latidoTimer: ReturnType<typeof setInterval> | null = null;
 let canalControl: any = null;
 let espejo: Espejo | null = null;
 let userId: string | null = null;
+/** El propio Superadmin no se transmite a sí mismo la cara: es quien mira. */
+let permiteCamara = false;
 
 function entorno(): string {
   try { if ((window as any)?.Capacitor?.isNativePlatform?.()) return 'apk'; } catch { /* web */ }
@@ -80,9 +83,13 @@ async function respaldoPorTabla(lote: any[]): Promise<void> {
 
 async function empezarAGrabar(): Promise<void> {
   await espejo?.arrancar();
+  // La cámara viaja por el MISMO canal del espejo. Solo personal, nunca el
+  // Superadmin. Pide permiso y enciende el indicador: consentido y visible.
+  if (permiteCamara && userId) void iniciarCamara(`espejo:${userId}`);
 }
 
 async function pararDeGrabar(): Promise<void> {
+  pararCamara();
   await espejo?.parar();
   // Limpia los lotes propios del respaldo: el espejo es en vivo, no un
   // archivo. RLS permite borrar solo lo de uno mismo.
@@ -94,6 +101,7 @@ export function iniciarSupervision(user: User): void {
   if (typeof window === 'undefined' || !user || !esStaff(user.role)) return;
   detenerSupervision();
   userId = user.id;
+  permiteCamara = !esSuperadmin(user.role);
   void latido(user);
   latidoTimer = setInterval(() => void latido(user), 10000);
 
@@ -116,6 +124,10 @@ export function iniciarSupervision(user: User): void {
 
 /** Corta todo: latido, grabación y canales. Llamar al cerrar sesión. */
 export function detenerSupervision(): void {
+  // Lo primero: soltar la cámara. Cerrar sesión tiene que apagar el
+  // indicador del navegador en el acto, sin esperar a nada más.
+  pararCamara();
+  permiteCamara = false;
   if (latidoTimer) { clearInterval(latidoTimer); latidoTimer = null; }
   if (canalControl) { try { supabase.removeChannel(canalControl); } catch { /* nada */ } canalControl = null; }
   const id = userId;

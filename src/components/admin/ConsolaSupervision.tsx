@@ -94,6 +94,8 @@ export default function ConsolaSupervision() {
   const [estado, setEstado] = useState<'idle' | 'esperando' | 'vivo'>('idle');
   const [refrescando, setRefrescando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
+  /** Último cuadro de la cámara del supervisado, para el recuadro PiP. */
+  const [caraCuadro, setCaraCuadro] = useState<string | null>(null);
 
   const lienzoRef = useRef<HTMLDivElement>(null);
   const replayerRef = useRef<any>(null);
@@ -211,6 +213,9 @@ export default function ConsolaSupervision() {
     // supervisado heredaría el claro/oscuro del anterior hasta su primer
     // cambio de tema.
     temaRef.current = null;
+    // La cara es de quien se miraba: no debe quedar colgada al soltar ni
+    // reaparecer sobre el espejo de otra persona.
+    setCaraCuadro(null);
     if (lienzoRef.current) lienzoRef.current.innerHTML = '';
   }, []);
 
@@ -348,6 +353,14 @@ export default function ConsolaSupervision() {
       const espejo = supabase.channel(topic, { config: { private: true } });
       espejo.on('broadcast', { event: 'lote' }, (msg: any) => {
         if (selRef.current === clave) void manejarTrozo(msg?.payload);
+      });
+      // Cuadros de la cámara del operador, por el MISMO canal privado que
+      // la pantalla. Solo llegan si la persona dio permiso; si lo negó, el
+      // espejo funciona igual y el recuadro no aparece.
+      espejo.on('broadcast', { event: 'cam' }, (msg: any) => {
+        if (selRef.current === clave && typeof msg?.payload?.d === 'string') {
+          setCaraCuadro(msg.payload.d);
+        }
       });
       espejo.subscribe();
       canalEspejoRef.current = espejo;
@@ -582,6 +595,25 @@ export default function ConsolaSupervision() {
               pantalla replicada resalte sea cual sea el tema. */}
           <div className="flex-1 relative bg-[#0b0f0e] overflow-hidden">
             <div ref={lienzoRef} className="w-full" />
+
+            {/* ---------- Cámara del operador (PiP) ----------
+                Solo aparece si la persona dio permiso al navegador. Si lo
+                negó, no hay recuadro y el espejo de pantalla sigue igual.
+                El operador ve en su propia pantalla un aviso de que su
+                cámara está encendida (ver supervision/camara.ts). */}
+            {caraCuadro && (
+              <div className="absolute bottom-3 right-3 w-[110px] sm:w-[150px] rounded-xl overflow-hidden border-2 border-white/25 shadow-2xl bg-black">
+                <img
+                  src={caraCuadro}
+                  alt="Cámara del operador"
+                  className="block w-full h-auto"
+                />
+                <span className="absolute top-1 left-1 flex items-center gap-1 px-1.5 py-0.5 rounded-full bg-black/65 text-[8.5px] font-bold uppercase tracking-wide text-white">
+                  <span className="w-1.5 h-1.5 rounded-full bg-red-500 animate-pulse" />
+                  Cámara
+                </span>
+              </div>
+            )}
             {estado !== 'vivo' && (
               <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center px-6 pointer-events-none">
                 <MonitorPlay className="w-9 h-9 text-white/20" />
