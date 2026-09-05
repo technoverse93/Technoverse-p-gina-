@@ -80,42 +80,88 @@ function velo(): HTMLElement {
   const el = document.createElement('div');
   el.id = ID_VELO;
   el.setAttribute('aria-hidden', 'true');
+  // NEGRO PURO, estilo "Netflix": si una captura llega a colarse, que lo
+  // que salga sea una lámina negra, no una versión atenuada del panel. El
+  // z-index es el máximo posible y se pinta con su propio color de fondo
+  // opaco, sin depender de ningún filtro que el sistema pudiera ignorar al
+  // capturar.
   el.style.cssText = [
     'position:fixed', 'inset:0', 'z-index:2147483647',
-    'background:#0b0f0d', 'display:none',
+    'background:#000', 'display:none',
     'align-items:center', 'justify-content:center',
     'padding:24px', 'text-align:center',
-    'color:#8aa79b', 'font:600 13px system-ui,sans-serif',
+    'color:#4b5563', 'font:600 13px system-ui,sans-serif',
     'letter-spacing:.01em', 'user-select:none',
   ].join(';');
-  el.textContent = 'Contenido protegido. Volvé a la ventana para continuar.';
+  el.textContent = 'Contenido protegido.';
   document.body.appendChild(el);
   return el;
 }
 
+/** Cuánto se sostiene el negro tras un intento de captura. */
+const DESTELLO_MS = 1200;
+let destelloTimer: ReturnType<typeof setTimeout> | null = null;
+
 function taparPantalla(tapar: boolean): void {
   if (!puesto) return;
+  // Un destello en curso manda: no lo cortamos con un focus intermedio.
+  if (!tapar && destelloTimer) return;
   velo().style.display = tapar ? 'flex' : 'none';
+}
+
+/**
+ * Blackout inmediato ante un INTENTO de captura por atajo del sistema.
+ * En la web no se puede impedir la captura, pero muchos atajos —el Recorte
+ * de Windows (Win+Shift+S), la captura de macOS (Cmd+Shift+3/4/5)— dejan un
+ * instante entre que se pulsa la tecla y el sistema congela la pantalla.
+ * Pintar el negro en ese instante hace que lo que se capture sea la lámina.
+ * No es garantía (a veces el sistema gana la carrera), pero sube mucho el
+ * costo del descuido, que es de lo que se trata.
+ */
+function destelloBlackout(): void {
+  if (!puesto) return;
+  velo().style.display = 'flex';
+  if (destelloTimer) clearTimeout(destelloTimer);
+  destelloTimer = setTimeout(() => {
+    destelloTimer = null;
+    // Solo se baja si la ventana está al frente; si no, lo mantiene el
+    // velo normal de pérdida de foco.
+    if (document.visibilityState === 'visible' && document.hasFocus()) {
+      velo().style.display = 'none';
+    }
+  }, DESTELLO_MS);
 }
 
 const alPerderFoco = () => taparPantalla(true);
 const alRecuperarFoco = () => taparPantalla(false);
 const alCambiarVisibilidad = () => taparPantalla(document.visibilityState === 'hidden');
 
+function esCombinacionDeCaptura(e: KeyboardEvent): boolean {
+  // Windows: Win+Shift+S (Recorte). El navegador ve la Meta + Shift + S.
+  if (e.shiftKey && e.metaKey && (e.key === 'S' || e.key === 's')) return true;
+  // macOS: Cmd+Shift+3/4/5. La 5 abre la barra de grabación.
+  if (e.shiftKey && e.metaKey && ['3', '4', '5'].includes(e.key)) return true;
+  return false;
+}
+
 function alTeclear(e: KeyboardEvent): void {
   // Imprimir / Guardar como PDF: se corta antes de abrir el diálogo.
   if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
     e.preventDefault();
     e.stopPropagation();
+    return;
   }
+  // Atajos de recorte del sistema: negro de inmediato.
+  if (esCombinacionDeCaptura(e) || e.key === 'PrintScreen') destelloBlackout();
 }
 
 function alSoltarTecla(e: KeyboardEvent): void {
   if (e.key !== 'PrintScreen') return;
-  // La tecla ya disparó la captura del sistema: no se puede cancelar. Lo
-  // que sí se puede es PISAR el portapapeles para que lo capturado no
-  // sirva de nada al pegarlo.
+  // La tecla ya disparó la captura del sistema: no se puede cancelar. Se
+  // pisa el portapapeles para que lo capturado no sirva al pegarlo, y se
+  // deja el negro puesto un instante por si la captura fuera diferida.
   try { void navigator.clipboard?.writeText('')?.catch?.(() => {}); } catch { /* sin permiso */ }
+  destelloBlackout();
 }
 
 // ---------------------------------------------------------------------
@@ -137,6 +183,7 @@ function aplicarEscudo(): void {
 function quitarEscudo(): void {
   if (!puesto) return;
   puesto = false;
+  if (destelloTimer) { clearTimeout(destelloTimer); destelloTimer = null; }
   window.removeEventListener('blur', alPerderFoco);
   window.removeEventListener('focus', alRecuperarFoco);
   document.removeEventListener('visibilitychange', alCambiarVisibilidad);
