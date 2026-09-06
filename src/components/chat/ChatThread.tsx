@@ -1,5 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, MoreVertical, Send, StickyNote, ImagePlus, RefreshCw, Bot } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Send, StickyNote, ImagePlus, RefreshCw, Bot, Trash2 } from 'lucide-react';
+import { subirAdjuntoChat, ACEPTA_ADJUNTOS } from '../../utils/adjuntosChat';
+import { borrarMensajeParaTodos, cerrarConversacion } from '../../utils/storage';
 import { ChatConversation } from '../../types';
 import { compressImage } from '../../utils/storage';
 import { supabase } from '../../supabaseClient';
@@ -11,7 +13,7 @@ interface ChatThreadProps {
   conversation: ChatConversation;
   staffEmails: string[];
   onBack: () => void;
-  onSendMessage: (convId: string, payload: { text: string; imageUrl?: string; isInternalNote?: boolean }) => Promise<void>;
+  onSendMessage: (convId: string, payload: { text: string; imageUrl?: string; videoUrl?: string; isInternalNote?: boolean }) => Promise<void>;
   onAssign: (convId: string, email: string) => Promise<void>;
   onChangeStatus: (convId: string, status: 'nuevo' | 'pendiente') => Promise<void>;
   onResolve: (convId: string) => Promise<void>;
@@ -22,6 +24,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   const [inputText, setInputText] = useState('');
   const [noteMode, setNoteMode] = useState(false);
   const [uploading, setUploading] = useState(false);
+  const [borrandoId, setBorrandoId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -69,23 +72,45 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
     if (!file) return;
     setUploading(true);
     try {
-      const reader = new FileReader();
-      const dataUrl: string = await new Promise((resolve, reject) => {
-        reader.onload = () => resolve(reader.result as string);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-      });
-      const compressed = await compressImage(dataUrl, 1000, 1000, 0.7);
-      const blob = await (await fetch(compressed)).blob();
-      const path = `${conversation.id}/${Date.now()}.jpg`;
-      const { error: uploadError } = await supabase.storage.from('chat-images').upload(path, blob, { contentType: 'image/jpeg' });
-      if (uploadError) throw uploadError;
-      const { data } = supabase.storage.from('chat-images').getPublicUrl(path);
-      await onSendMessage(conversation.id, { text: '', imageUrl: data.publicUrl });
+      // Mismo camino que usa el cliente: fotos comprimidas, videos tal cual
+      // y con tope de tamaño comprobado antes de salir (ver adjuntosChat.ts).
+      const adjunto = await subirAdjuntoChat(conversation.id, file);
+      await onSendMessage(conversation.id, { text: '', ...adjunto });
     } catch (err: any) {
-      if (isMountedRef.current) toast.error('No se pudo subir la imagen. Detalle: ' + (err?.message || err));
+      if (isMountedRef.current) toast.error('No se pudo enviar el adjunto. ' + (err?.message || err));
     } finally {
       if (isMountedRef.current) setUploading(false);
+    }
+  };
+
+  /** Cierra y borra ESTA conversación, para todos y al instante. */
+  const cerrarYBorrar = async () => {
+    setShowMenu(false);
+    try {
+      const n = await cerrarConversacion(conversation.id);
+      toast.success(`Conversación cerrada. Se borraron ${n} mensajes.`);
+      onBack();
+    } catch (err: any) {
+      toast.error('No se pudo cerrar. ' + (err?.message || err));
+    }
+  };
+
+  /**
+   * Borra un mensaje PARA TODOS — sea del cliente o propio.
+   *
+   * El borrado lo hace una función del servidor que vuelve a comprobar que
+   * quien llama es personal, y el aviso viaja por WebSocket: el mensaje
+   * desaparece de la pantalla del cliente sin que recargue nada.
+   */
+  const borrarMensaje = async (msgId: string) => {
+    if (borrandoId) return;
+    setBorrandoId(msgId);
+    try {
+      await borrarMensajeParaTodos(msgId);
+    } catch (err: any) {
+      if (isMountedRef.current) toast.error('No se pudo borrar. ' + (err?.message || err));
+    } finally {
+      if (isMountedRef.current) setBorrandoId(null);
     }
   };
 
@@ -126,6 +151,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
               onAssign={(email) => onAssign(conversation.id, email)}
               onChangeStatus={(status) => onChangeStatus(conversation.id, status)}
               onResolve={() => onResolve(conversation.id)}
+              onCerrarYBorrar={() => void cerrarYBorrar()}
             />
           )}
         </div>
@@ -185,7 +211,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                   respuesta larga se estira de lado a lado y se vuelve un
                   párrafo de página, no un mensaje: el ojo pierde el renglón
                   al volver. En móvil manda el 78% y nada cambia. */}
-              <div className={`flex gap-2 max-w-[min(78%,32rem)] ${isSupport ? 'ml-auto flex-row-reverse' : ''}`}>
+              <div className={`group/msg flex gap-2 max-w-[min(78%,32rem)] ${isSupport ? 'ml-auto flex-row-reverse' : ''}`}>
                 {!isSupport && (
                   <div className="w-6 h-6 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0 self-end font-display font-bold text-[10px]">
                     {isBot ? <Bot className="w-3 h-3" /> : inicial}
@@ -213,6 +239,18 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                     {msg.imageUrl && (
                       <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-xl max-w-full mb-1.5 max-h-64 object-cover" loading="lazy" decoding="async" />
                     )}
+                    {msg.videoUrl && (
+                      // `preload="metadata"`: baja solo la carátula y la
+                      // duración. Con `auto`, abrir una conversación con
+                      // varios videos empezaría a descargarlos todos.
+                      <video
+                        src={msg.videoUrl}
+                        controls
+                        playsInline
+                        preload="metadata"
+                        className="rounded-xl max-w-full mb-1.5 max-h-64 bg-black"
+                      />
+                    )}
                     {/* `flow-root` contiene el flotante de la hora; sin eso la
                         burbuja no lo cuenta al medir su alto y la hora se
                         sale por abajo. */}
@@ -229,6 +267,22 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                     </div>
                   </div>
                 </div>
+
+                {/* Borrar para todos. Vale para CUALQUIER mensaje —propio o
+                    del cliente—: es una herramienta de moderación, no de
+                    "deshacer lo mío". */}
+                <button
+                  type="button"
+                  onClick={() => void borrarMensaje(msg.id)}
+                  disabled={borrandoId === msg.id}
+                  aria-label="Borrar este mensaje para todos"
+                  title="Borrar para todos"
+                  className="self-center shrink-0 p-1 rounded-md text-[var(--text-muted)] opacity-0 hover:opacity-100 focus-visible:opacity-100 group-hover/msg:opacity-100 hover:text-[#e5484d] transition disabled:opacity-40"
+                >
+                  {borrandoId === msg.id
+                    ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+                    : <Trash2 className="w-3.5 h-3.5" />}
+                </button>
               </div>
             </React.Fragment>
           );
@@ -237,7 +291,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
       </div>
 
       <form onSubmit={handleSendText} className={`p-3 border-t border-[var(--border-color)] flex items-center gap-2 transition-colors ${noteMode ? 'bg-amber-400/10' : 'bg-[var(--bg-elevated)]'}`} id="chat-thread-input">
-        <input ref={fileInputRef} type="file" accept="image/*" className="hidden" onChange={handleImagePick} />
+        <input ref={fileInputRef} type="file" accept={ACEPTA_ADJUNTOS} className="hidden" onChange={handleImagePick} />
         <button
           type="button"
           onClick={() => setNoteMode(v => !v)}

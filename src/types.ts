@@ -156,6 +156,8 @@ export interface ChatMessage {
   text: string;
   timestamp: string;
   imageUrl?: string;
+  /** Video adjunto. Se sube sin recomprimir (ver adjuntosChat.ts). */
+  videoUrl?: string;
   isInternalNote?: boolean;
 }
 
