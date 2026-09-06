@@ -19,6 +19,16 @@ import { registrarPermisoCamara } from './supervision/camara';
 import { iniciarKillSwitch, fijarModeloAparato, fijarHuellaAparato } from './seguridad/killSwitch';
 import { obtenerHuellaAparato } from './utils/fingerprint';
 import { iniciarAvisoDePurga } from './seguridad/avisoPurgaChat';
+import { esNavegadorAndroid } from './seguridad/soloApp';
+import AvisoSoloApp from './components/AvisoSoloApp';
+import { getDB } from './utils/storage';
+
+/**
+ * Se resuelve UNA vez, al cargar el módulo. La plataforma no cambia a
+ * mitad de sesión, y dejarlo fijo evita que un fallo momentáneo del puente
+ * nativo destape la tienda en una pantalla donde no debe verse.
+ */
+const SOLO_APP = esNavegadorAndroid();
 import { iniciarVisitante, detenerVisitante } from './supervision/visitante';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
@@ -521,6 +531,18 @@ function AppInner() {
 
   if (accesoBloqueado) {
     return <PantallaBloqueada porCuenta={bloqueoPorCuenta} />;
+  }
+
+  // ANDROID FUERA DE LA APK: no se pinta la aplicación.
+  //
+  // En el navegador no existe forma de impedir una captura —FLAG_SECURE
+  // solo la puede poner el dueño de la ventana, y ahí la ventana es de
+  // Chrome—, así que la única manera real de que una captura no se lleve
+  // nada es que no haya nada dibujado. Va ANTES que todo lo demás para
+  // que ni un fotograma del catálogo llegue a pintarse.
+  // Ver `seguridad/soloApp.ts`: el porqué, el costo y cómo revertirlo.
+  if (SOLO_APP) {
+    return <AvisoSoloApp telefono={getDB().settings?.companyPhone} />;
   }
 
   return (
