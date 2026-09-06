@@ -1,24 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Bot, Menu, Plus, Check, CheckCheck, ImagePlus, Loader2, ShieldCheck } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, ImagePlus, Loader2 } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../utils/storage';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 import { subirAdjuntoChat, ACEPTA_ADJUNTOS } from '../utils/adjuntosChat';
 import { escudoDeChat } from '../seguridad/escudoDlp';
-import { esNativo } from '../seguridad/flagSecure';
 
-/**
- * ¿Corre dentro de la APK?
- *
- * De esto depende si el HISTORIAL de la conversación se pinta. Escribir
- * funciona en todos lados; leer, solo donde la captura está bloqueada de
- * verdad. Se calcula una vez al cargar el módulo: la plataforma no cambia
- * a mitad de sesión, y dejarlo fijo evita que un fallo momentáneo del
- * puente nativo destape la conversación donde no debería verse.
- *
- * Para volver a mostrar el historial en el navegador: `= true`.
- */
-const EN_LA_APP = esNativo();
+// ---------------------------------------------------------------------
+// DECISIÓN TOMADA: el chat funciona COMPLETO en los dos lados
+// ---------------------------------------------------------------------
+// Se probó esconder el historial fuera de la APK —era la única forma de
+// que una captura en el navegador no se llevara la conversación, porque
+// taparla en el momento es imposible: el sistema captura antes de que la
+// página se entere, y con los botones físicos ni siquiera llega un evento.
+//
+// Se descartó: obligaba al cliente a instalar la app para leer una
+// respuesta, y eso es peor que el riesgo que evitaba. Escribir y leer
+// funcionan igual en el navegador y en la APK, para anónimos y para
+// clientes con sesión.
+//
+// Lo que queda protegido de verdad es la APK, donde FLAG_SECURE bloquea la
+// captura a nivel de sistema. En el navegador el escudo DISUADE —recorte
+// de Windows, cambio de aplicación, portapapeles vacío, impresión en
+// blanco— pero no impide una captura con botones ni con PrintScreen.
+// Eso está asumido a conciencia, no es un descuido.
+// ---------------------------------------------------------------------
 
 export const FAQ_DATA = [
   {
@@ -95,7 +101,6 @@ export default function LiveChat() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   // Mensajes que ya se ven en pantalla (optimistic UI) pero todavía no
   // confirma Supabase. Es solo para el "check" tenue del recibo — la
   // conversación en sí ya se actualizó de una, no espera a esto.
@@ -254,18 +259,12 @@ export default function LiveChat() {
   const handleNewConsulta = async () => {
     if (isSubmitting) return;
     setChatError(null);
-    setDrawerOpen(false);
     const name = readLS(NAME_KEY) || clientName || 'Cliente';
     const email = readLS(EMAIL_KEY) || clientEmail;
     if (!email) return;
     setIsSubmitting(true);
     await persistNewConversation(name, email);
     setIsSubmitting(false);
-  };
-
-  const handleSelectConversation = (id: string) => {
-    setActiveConvId(id);
-    setDrawerOpen(false);
   };
 
   /**
@@ -426,8 +425,6 @@ export default function LiveChat() {
   };
 
   const activeConv = conversations.find(c => c.id === activeConvId);
-  const activeChats = conversations.filter(c => c.status === 'nuevo' || c.status === 'pendiente');
-  const closedChats = conversations.filter(c => c.status === 'resuelto');
   const mostrarRespuestasRapidas = !yaEscribioElCliente(activeConv);
 
   // Igual que del lado admin (ChatThread): dibuja solo los últimos N para
@@ -439,14 +436,6 @@ export default function LiveChat() {
   const indiceInicioCliente = Math.max(0, mensajesClienteFiltrados.length - cantidadVisibleCliente);
   const mensajesClienteVisibles = mensajesClienteFiltrados.slice(indiceInicioCliente);
   const hayMensajesAnterioresCliente = indiceInicioCliente > 0;
-
-  const convPreview = (c: ChatConversation): string => {
-    const visible = (c.messages || []).filter(m => !m.isInternalNote);
-    const last = visible[visible.length - 1];
-    if (!last) return 'Sin mensajes';
-    if (last.imageUrl && !last.text) return '📷 Imagen';
-    return last.text.length > 38 ? last.text.slice(0, 38) + '…' : last.text;
-  };
 
   return (
     <>
@@ -480,20 +469,9 @@ export default function LiveChat() {
           {/* Header */}
           <div className="p-3.5 bg-gradient-to-r from-[var(--brand-gold-dark)] to-[var(--brand-gold-mid)] text-[var(--accent-ink)] flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
-              {/* El cajón lista las consultas anteriores con su último
-                  mensaje: es historial, así que sigue la misma regla que
-                  el historial. Fuera de la APK no se abre. */}
-              {EN_LA_APP && isRegistered && (
-                <button
-                  onClick={() => setDrawerOpen(true)}
-                  className="hover:opacity-75 transition p-1 -ml-1 shrink-0"
-                  title="Mis consultas"
-                  aria-label="Abrir historial de consultas"
-                  id="btn-chat-drawer"
-                >
-                  <Menu className="w-5 h-5" />
-                </button>
-              )}
+              {/* Aquí vivía "Mis Consultas". El archivo de conversaciones
+                  pasadas es ahora una herramienta del panel, no del
+                  cliente: ver el comentario del ARCHIVO más abajo. */}
               <div className="w-9 h-9 rounded-full bg-white/25 border border-white/50 flex items-center justify-center shrink-0">
                 <Bot className="w-[18px] h-[18px]" />
               </div>
@@ -563,37 +541,7 @@ export default function LiveChat() {
               /* Chatting Screen */
               <>
                 <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--bg-base)]">
-                  {/* EL HISTORIAL NO SE PINTA FUERA DE LA APK.
-                      ---------------------------------------------------
-                      Una captura de pantalla la hace el sistema operativo,
-                      no la página: con los botones físicos de un teléfono
-                      no llega ningún evento —ni tecla, ni foco, ni
-                      visibilidad— y con PrintScreen el sistema ya capturó
-                      antes de que el navegador avise. No existe API web
-                      para impedirlo, así que tapar la conversación EN EL
-                      MOMENTO es imposible.
-                      Lo que sí se puede es no dibujarla: lo que nunca se
-                      pintó no sale en ninguna captura. Escribir sigue
-                      funcionando —el cliente nunca se queda sin poder
-                      preguntar—; lo que se guarda para la app es LEER.
-                      En la APK se muestra todo, porque ahí FLAG_SECURE
-                      bloquea la captura de verdad. */}
-                  {!EN_LA_APP && (
-                    <div className="flex flex-col items-center text-center gap-2 py-6 px-2">
-                      <div className="w-10 h-10 rounded-full bg-[rgba(var(--accent-rgb),0.12)] text-[var(--accent)] flex items-center justify-center">
-                        <ShieldCheck className="w-5 h-5" />
-                      </div>
-                      <p className="text-[12px] font-semibold text-[var(--text-primary)]">
-                        Escribinos por aquí
-                      </p>
-                      <p className="text-[11.5px] leading-relaxed text-[var(--text-secondary)] max-w-[250px]">
-                        Tu consulta nos llega igual. Las respuestas y el
-                        historial se leen desde la app, donde la
-                        conversación queda protegida.
-                      </p>
-                    </div>
-                  )}
-                  {EN_LA_APP && hayMensajesAnterioresCliente && (
+                  {hayMensajesAnterioresCliente && (
                     <div className="flex justify-center pb-1">
                       <button
                         type="button"
@@ -604,7 +552,7 @@ export default function LiveChat() {
                       </button>
                     </div>
                   )}
-                  {(EN_LA_APP ? mensajesClienteVisibles : []).map((msg, i) => {
+                  {mensajesClienteVisibles.map((msg, i) => {
                     const isCustomer = msg.sender === 'customer';
                     const isBot = msg.sender === 'bot';
                     const pending = pendingIds.has(msg.id);
@@ -759,85 +707,24 @@ export default function LiveChat() {
               </div>
             )}
 
-            {/* Drawer / historial lateral — transform puro (60 FPS), sin librerías */}
-            {isRegistered && (
-              <>
-                <div
-                  onClick={() => setDrawerOpen(false)}
-                  className={`absolute inset-0 z-20 bg-black/50 transition-opacity duration-300 ${drawerOpen ? 'opacity-100' : 'opacity-0 pointer-events-none'}`}
-                />
-                <div
-                  className={`absolute inset-y-0 left-0 z-30 w-[78%] max-w-[280px] bg-[var(--bg-elevated)] border-r border-[var(--border-color)] flex flex-col transition-transform duration-300 ease-out will-change-transform ${drawerOpen ? 'translate-x-0' : '-translate-x-full'}`}
-                  id="chat-history-drawer"
-                >
-                  <div className="p-4 border-b border-[var(--border-color)] flex items-center justify-between shrink-0">
-                    <span className="text-sm font-display font-bold text-[var(--text-primary)]">Mis Consultas</span>
-                    <button onClick={() => setDrawerOpen(false)} className="text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition p-1">
-                      <X className="w-4 h-4" />
-                    </button>
-                  </div>
+            {/* EL ARCHIVO DE CONVERSACIONES ES DEL PANEL, NO DEL CLIENTE.
+                ------------------------------------------------------------
+                Aquí había un cajón "Mis Consultas" que le listaba al cliente
+                todas sus conversaciones pasadas, incluidas las cerradas. Se
+                quitó por dos razones que apuntan al mismo lado:
 
-                  <div className="p-3 shrink-0">
-                    <button
-                      onClick={handleNewConsulta}
-                      disabled={isSubmitting}
-                      className="w-full flex items-center justify-center gap-2 bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--accent-ink)] text-xs font-bold py-2.5 rounded-xl transition disabled:opacity-50"
-                    >
-                      <Plus className="w-4 h-4" /> Crear Nueva Consulta
-                    </button>
-                  </div>
+                1. Contradecía el borrado. El administrador cierra o borra una
+                   conversación para que deje de existir; tener al cliente
+                   paseándose por su propio archivo es la puerta de atrás por
+                   la que eso vuelve.
+                2. El archivo es una herramienta de gestión —seguimiento de
+                   un caso, historial de un cliente— y esa es la vista del
+                   panel, donde el personal ya lo tiene completo.
 
-                  <div className="flex-1 overflow-y-auto px-3 pb-3 space-y-3">
-                    <div>
-                      <span className="text-[10px] font-bold uppercase text-[var(--brand-gold-dark)] tracking-wider">Chats Activos</span>
-                      <div className="mt-1.5 space-y-1.5">
-                        {activeChats.length === 0 && (
-                          <p className="text-[11px] text-[var(--text-muted)] px-1">Sin consultas activas.</p>
-                        )}
-                        {activeChats.map(c => (
-                          <button
-                            key={c.id}
-                            onClick={() => handleSelectConversation(c.id)}
-                            className={`w-full text-left rounded-xl px-3 py-2 border transition ${
-                              c.id === activeConvId
-                                ? 'bg-[var(--accent)]/10 border-[var(--accent)]/50'
-                                : 'bg-[var(--bg-surface)] border-[var(--border-color)] hover:border-[var(--text-muted)]'
-                            }`}
-                          >
-                            <div className="flex items-center justify-between gap-2">
-                              <span className="text-[11px] font-bold text-[var(--text-primary)] truncate">
-                                {c.status === 'pendiente' ? 'En atención' : 'Consulta nueva'}
-                              </span>
-                              {c.assignedAdminEmail && <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 shrink-0" />}
-                            </div>
-                            <p className="text-[10px] text-[var(--text-secondary)] truncate mt-0.5">{convPreview(c)}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div>
-                      <span className="text-[10px] font-bold uppercase text-[var(--text-muted)] tracking-wider">Historial Cerrado</span>
-                      <div className="mt-1.5 space-y-1.5">
-                        {closedChats.length === 0 && (
-                          <p className="text-[11px] text-[var(--text-muted)] px-1">Sin chats cerrados.</p>
-                        )}
-                        {closedChats.map(c => (
-                          <button
-                            key={c.id}
-                            onClick={() => handleSelectConversation(c.id)}
-                            className="w-full text-left rounded-xl px-3 py-2 border bg-[var(--bg-surface)] border-[var(--border-color)] hover:border-[var(--text-muted)] transition opacity-80"
-                          >
-                            <span className="text-[11px] font-bold text-[var(--text-secondary)] truncate block">Consulta resuelta</span>
-                            <p className="text-[10px] text-[var(--text-muted)] truncate mt-0.5">{convPreview(c)}</p>
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </>
-            )}
+                El cliente ve SU conversación en curso, entera y en tiempo
+                real. El servidor tampoco le manda las demás: `get_customer_chat`
+                devuelve únicamente la más reciente de su token, así que las
+                viejas ni siquiera llegan al aparato. */}
           </div>
         </div>
       )}
