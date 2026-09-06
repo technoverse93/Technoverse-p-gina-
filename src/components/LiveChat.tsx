@@ -1,24 +1,30 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Bot, Menu, Plus, Check, CheckCheck, ImagePlus, Loader2, ShieldCheck } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Menu, Plus, Check, CheckCheck, ImagePlus, Loader2 } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../utils/storage';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 import { subirAdjuntoChat, ACEPTA_ADJUNTOS } from '../utils/adjuntosChat';
 import { escudoDeChat } from '../seguridad/escudoDlp';
-import { esNativo } from '../seguridad/flagSecure';
 
-/**
- * ¿Corre dentro de la APK?
- *
- * De esto depende si el HISTORIAL de la conversación se pinta. Escribir
- * funciona en todos lados; leer, solo donde la captura está bloqueada de
- * verdad. Se calcula una vez al cargar el módulo: la plataforma no cambia
- * a mitad de sesión, y dejarlo fijo evita que un fallo momentáneo del
- * puente nativo destape la conversación donde no debería verse.
- *
- * Para volver a mostrar el historial en el navegador: `= true`.
- */
-const EN_LA_APP = esNativo();
+// ---------------------------------------------------------------------
+// DECISIÓN TOMADA: el chat funciona COMPLETO en los dos lados
+// ---------------------------------------------------------------------
+// Se probó esconder el historial fuera de la APK —era la única forma de
+// que una captura en el navegador no se llevara la conversación, porque
+// taparla en el momento es imposible: el sistema captura antes de que la
+// página se entere, y con los botones físicos ni siquiera llega un evento.
+//
+// Se descartó: obligaba al cliente a instalar la app para leer una
+// respuesta, y eso es peor que el riesgo que evitaba. Escribir y leer
+// funcionan igual en el navegador y en la APK, para anónimos y para
+// clientes con sesión.
+//
+// Lo que queda protegido de verdad es la APK, donde FLAG_SECURE bloquea la
+// captura a nivel de sistema. En el navegador el escudo DISUADE —recorte
+// de Windows, cambio de aplicación, portapapeles vacío, impresión en
+// blanco— pero no impide una captura con botones ni con PrintScreen.
+// Eso está asumido a conciencia, no es un descuido.
+// ---------------------------------------------------------------------
 
 export const FAQ_DATA = [
   {
@@ -480,10 +486,7 @@ export default function LiveChat() {
           {/* Header */}
           <div className="p-3.5 bg-gradient-to-r from-[var(--brand-gold-dark)] to-[var(--brand-gold-mid)] text-[var(--accent-ink)] flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">
-              {/* El cajón lista las consultas anteriores con su último
-                  mensaje: es historial, así que sigue la misma regla que
-                  el historial. Fuera de la APK no se abre. */}
-              {EN_LA_APP && isRegistered && (
+              {isRegistered && (
                 <button
                   onClick={() => setDrawerOpen(true)}
                   className="hover:opacity-75 transition p-1 -ml-1 shrink-0"
@@ -563,37 +566,7 @@ export default function LiveChat() {
               /* Chatting Screen */
               <>
                 <div ref={messagesContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--bg-base)]">
-                  {/* EL HISTORIAL NO SE PINTA FUERA DE LA APK.
-                      ---------------------------------------------------
-                      Una captura de pantalla la hace el sistema operativo,
-                      no la página: con los botones físicos de un teléfono
-                      no llega ningún evento —ni tecla, ni foco, ni
-                      visibilidad— y con PrintScreen el sistema ya capturó
-                      antes de que el navegador avise. No existe API web
-                      para impedirlo, así que tapar la conversación EN EL
-                      MOMENTO es imposible.
-                      Lo que sí se puede es no dibujarla: lo que nunca se
-                      pintó no sale en ninguna captura. Escribir sigue
-                      funcionando —el cliente nunca se queda sin poder
-                      preguntar—; lo que se guarda para la app es LEER.
-                      En la APK se muestra todo, porque ahí FLAG_SECURE
-                      bloquea la captura de verdad. */}
-                  {!EN_LA_APP && (
-                    <div className="flex flex-col items-center text-center gap-2 py-6 px-2">
-                      <div className="w-10 h-10 rounded-full bg-[rgba(var(--accent-rgb),0.12)] text-[var(--accent)] flex items-center justify-center">
-                        <ShieldCheck className="w-5 h-5" />
-                      </div>
-                      <p className="text-[12px] font-semibold text-[var(--text-primary)]">
-                        Escribinos por aquí
-                      </p>
-                      <p className="text-[11.5px] leading-relaxed text-[var(--text-secondary)] max-w-[250px]">
-                        Tu consulta nos llega igual. Las respuestas y el
-                        historial se leen desde la app, donde la
-                        conversación queda protegida.
-                      </p>
-                    </div>
-                  )}
-                  {EN_LA_APP && hayMensajesAnterioresCliente && (
+                  {hayMensajesAnterioresCliente && (
                     <div className="flex justify-center pb-1">
                       <button
                         type="button"
@@ -604,7 +577,7 @@ export default function LiveChat() {
                       </button>
                     </div>
                   )}
-                  {(EN_LA_APP ? mensajesClienteVisibles : []).map((msg, i) => {
+                  {mensajesClienteVisibles.map((msg, i) => {
                     const isCustomer = msg.sender === 'customer';
                     const isBot = msg.sender === 'bot';
                     const pending = pendingIds.has(msg.id);
