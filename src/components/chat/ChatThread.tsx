@@ -25,6 +25,8 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   const [noteMode, setNoteMode] = useState(false);
   const [uploading, setUploading] = useState(false);
   const [borrandoId, setBorrandoId] = useState<string | null>(null);
+  /** Mensaje cuyo menú de acciones está abierto (se abre al tocarlo). */
+  const [menuMsgId, setMenuMsgId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -211,7 +213,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                   respuesta larga se estira de lado a lado y se vuelve un
                   párrafo de página, no un mensaje: el ojo pierde el renglón
                   al volver. En móvil manda el 78% y nada cambia. */}
-              <div className={`group/msg flex gap-2 max-w-[min(78%,32rem)] ${isSupport ? 'ml-auto flex-row-reverse' : ''}`}>
+              <div className={`relative flex gap-2 max-w-[min(78%,32rem)] ${isSupport ? 'ml-auto flex-row-reverse' : ''}`}>
                 {!isSupport && (
                   <div className="w-6 h-6 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0 self-end font-display font-bold text-[10px]">
                     {isBot ? <Bot className="w-3 h-3" /> : inicial}
@@ -229,7 +231,12 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                       en oscuro la burbuja entrante (#1D2421) se despega del
                       fondo por tono, que es como se marca elevación ahí,
                       porque una sombra negra sobre fondo negro no se ve. */}
-                  <div className={`px-3.5 py-2 text-[13px] rounded-2xl ${
+                  <div
+                    role="button"
+                    tabIndex={0}
+                    onClick={() => setMenuMsgId(id => id === msg.id ? null : msg.id)}
+                    onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMenuMsgId(id => id === msg.id ? null : msg.id); } }}
+                    className={`cursor-pointer px-3.5 py-2 text-[13px] rounded-2xl ${
                     isSupport
                       ? 'rounded-br-[4px] bg-[var(--bubble-out)] text-[var(--bubble-out-ink)] shadow-[0_2px_10px_-4px_rgba(var(--accent-rgb),0.5)]'
                       : isBot
@@ -248,6 +255,9 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                         controls
                         playsInline
                         preload="metadata"
+                        // Los controles del video son suyos: sin esto, darle
+                        // a "play" abriría además el menú de borrar.
+                        onClick={(e) => e.stopPropagation()}
                         className="rounded-xl max-w-full mb-1.5 max-h-64 bg-black"
                       />
                     )}
@@ -268,21 +278,41 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                   </div>
                 </div>
 
-                {/* Borrar para todos. Vale para CUALQUIER mensaje —propio o
-                    del cliente—: es una herramienta de moderación, no de
-                    "deshacer lo mío". */}
-                <button
-                  type="button"
-                  onClick={() => void borrarMensaje(msg.id)}
-                  disabled={borrandoId === msg.id}
-                  aria-label="Borrar este mensaje para todos"
-                  title="Borrar para todos"
-                  className="self-center shrink-0 p-1 rounded-md text-[var(--text-muted)] opacity-0 hover:opacity-100 focus-visible:opacity-100 group-hover/msg:opacity-100 hover:text-[#e5484d] transition disabled:opacity-40"
-                >
-                  {borrandoId === msg.id
-                    ? <RefreshCw className="w-3.5 h-3.5 animate-spin" />
-                    : <Trash2 className="w-3.5 h-3.5" />}
-                </button>
+                {/* MENÚ AL TOCAR EL MENSAJE.
+                    Antes esto era un ícono que solo aparecía al pasar el
+                    cursor por encima. En un teléfono NO hay cursor, así que
+                    el botón quedaba invisible para siempre y no había forma
+                    de borrar nada desde el móvil — que es justo desde donde
+                    se atiende. Ahora se toca el mensaje y sale la opción,
+                    igual que en WhatsApp: funciona con dedo y con ratón.
+
+                    Vale para CUALQUIER mensaje, propio o del cliente: es
+                    moderación, no un "deshacer lo mío". */}
+                {menuMsgId === msg.id && (
+                  <div
+                    className={`absolute z-30 top-full mt-1 ${isSupport ? 'right-0' : 'left-0'} w-52 rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] shadow-lg overflow-hidden`}
+                  >
+                    <button
+                      type="button"
+                      onClick={() => { setMenuMsgId(null); void borrarMensaje(msg.id); }}
+                      disabled={borrandoId === msg.id}
+                      className="w-full flex items-center gap-2 px-3 py-2.5 text-[12.5px] font-semibold hover:bg-[var(--bg-sunken)] disabled:opacity-50"
+                      style={{ color: '#e5484d' }}
+                    >
+                      {borrandoId === msg.id
+                        ? <RefreshCw className="w-4 h-4 animate-spin" />
+                        : <Trash2 className="w-4 h-4" />}
+                      Borrar para todos
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setMenuMsgId(null)}
+                      className="w-full px-3 py-2 text-[12px] text-[var(--text-secondary)] border-t border-[var(--border-color)] hover:bg-[var(--bg-sunken)]"
+                    >
+                      Cancelar
+                    </button>
+                  </div>
+                )}
               </div>
             </React.Fragment>
           );

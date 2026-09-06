@@ -36,7 +36,7 @@
 // =====================================================================
 
 import { supabase } from '../supabaseClient';
-import { esStaff, esSuperadmin } from '../utils/roles';
+import { esStaff } from '../utils/roles';
 import { fijarFlagSecure, esNativo } from './flagSecure';
 import type { User } from '../types';
 
@@ -85,17 +85,35 @@ function velo(): HTMLElement {
   // z-index es el máximo posible y se pinta con su propio color de fondo
   // opaco, sin depender de ningún filtro que el sistema pudiera ignorar al
   // capturar.
+  //
+  // SE QUEDA MONTADO Y SE ENCIENDE CON `visibility`, NO CON `display`.
+  // Con `display:none` el navegador tiene que rehacer el layout de la
+  // página entera antes de poder pintar el negro, y eso son varios
+  // milisegundos justo en el instante en que la captura ya está saliendo.
+  // Montado desde el principio, promovido a su propia capa con
+  // `translateZ(0)` y `will-change`, encenderlo es solo un cambio de
+  // composición: se pinta en el siguiente fotograma sin recalcular nada.
   el.style.cssText = [
     'position:fixed', 'inset:0', 'z-index:2147483647',
-    'background:#000', 'display:none',
+    'background:#000',
+    'display:flex', 'visibility:hidden', 'opacity:0',
     'align-items:center', 'justify-content:center',
     'padding:24px', 'text-align:center',
     'color:#4b5563', 'font:600 13px system-ui,sans-serif',
     'letter-spacing:.01em', 'user-select:none',
+    'pointer-events:none',
+    'transform:translateZ(0)', 'will-change:opacity,visibility',
   ].join(';');
   el.textContent = 'Contenido protegido.';
   document.body.appendChild(el);
   return el;
+}
+
+/** Enciende o apaga el velo ya montado. Sin recalcular layout. */
+function pintarVelo(el: HTMLElement, encendido: boolean): void {
+  el.style.visibility = encendido ? 'visible' : 'hidden';
+  el.style.opacity = encendido ? '1' : '0';
+  el.style.pointerEvents = encendido ? 'auto' : 'none';
 }
 
 /** Cuánto se sostiene el negro tras un intento de captura. */
@@ -106,7 +124,7 @@ function taparPantalla(tapar: boolean): void {
   if (!puesto) return;
   // Un destello en curso manda: no lo cortamos con un focus intermedio.
   if (!tapar && destelloTimer) return;
-  velo().style.display = tapar ? 'flex' : 'none';
+  pintarVelo(velo(), tapar);
 }
 
 /**
@@ -120,16 +138,40 @@ function taparPantalla(tapar: boolean): void {
  */
 function destelloBlackout(): void {
   if (!puesto) return;
-  velo().style.display = 'flex';
+  pintarVelo(velo(), true);
   if (destelloTimer) clearTimeout(destelloTimer);
   destelloTimer = setTimeout(() => {
     destelloTimer = null;
     // Solo se baja si la ventana está al frente; si no, lo mantiene el
     // velo normal de pérdida de foco.
     if (document.visibilityState === 'visible' && document.hasFocus()) {
-      velo().style.display = 'none';
+      pintarVelo(velo(), false);
     }
   }, DESTELLO_MS);
+}
+
+/**
+ * Pisa el portapapeles VARIAS VECES tras un PrintScreen.
+ *
+ * Windows no copia la imagen en el mismo instante en que se suelta la
+ * tecla: la escribe un poco después. Pisarlo una sola vez, de inmediato,
+ * llegaba ANTES que el sistema — se borraba el portapapeles vacío y el
+ * sistema escribía la captura encima, tan tranquilo. Repitiéndolo durante
+ * el segundo siguiente, el último en escribir somos nosotros y lo que
+ * quede al pegar es vacío.
+ *
+ * `writeText` exige que el documento tenga el foco; si lo perdió, el
+ * intento falla en silencio y lo cubre el siguiente.
+ */
+function pisarPortapapeles(): void {
+  const intentar = () => {
+    try {
+      if (!document.hasFocus()) return;
+      void navigator.clipboard?.writeText('')?.catch?.(() => {});
+    } catch { /* sin permiso */ }
+  };
+  intentar();
+  [120, 350, 800, 1500].forEach(ms => setTimeout(intentar, ms));
 }
 
 const alPerderFoco = () => taparPantalla(true);
@@ -141,6 +183,13 @@ function esCombinacionDeCaptura(e: KeyboardEvent): boolean {
   if (e.shiftKey && e.metaKey && (e.key === 'S' || e.key === 's')) return true;
   // macOS: Cmd+Shift+3/4/5. La 5 abre la barra de grabación.
   if (e.shiftKey && e.metaKey && ['3', '4', '5'].includes(e.key)) return true;
+  // ADELANTARSE: la tecla Windows / Cmd SOLA. Los atajos de recorte
+  // empiezan siempre por ella, y entre que se pulsa y llega la S pasan
+  // decenas de milisegundos — una eternidad comparada con el fotograma
+  // que necesita el velo. Poniendo el negro ya en la modificadora, el
+  // recorte encuentra la lámina puesta en vez de llegar tarde.
+  // Si no era una captura, el destello se retira solo en 1,2 s.
+  if (e.key === 'Meta' || e.key === 'OS') return true;
   return false;
 }
 
@@ -160,7 +209,7 @@ function alSoltarTecla(e: KeyboardEvent): void {
   // La tecla ya disparó la captura del sistema: no se puede cancelar. Se
   // pisa el portapapeles para que lo capturado no sirva al pegarlo, y se
   // deja el negro puesto un instante por si la captura fuera diferida.
-  try { void navigator.clipboard?.writeText('')?.catch?.(() => {}); } catch { /* sin permiso */ }
+  pisarPortapapeles();
   destelloBlackout();
 }
 
@@ -270,15 +319,20 @@ async function sincronizar(): Promise<void> {
 /**
  * Arranca el escudo para una sesión de PERSONAL. Idempotente.
  *
- * El Superadmin queda fuera a propósito: es quien administra la lista, y
- * restringirlo solo lograría que no pudiera documentar el propio sistema.
+ * MANDA LA LISTA BLANCA, INCLUIDO EL SUPERADMIN. Antes el Superadmin
+ * quedaba exento por código, y el efecto práctico era que quien administra
+ * el sistema no podía comprobar nunca si el escudo funcionaba: probaba una
+ * captura en su propia sesión, no pasaba nada, y parecía que el escudo
+ * estaba roto. Ahora la regla es una sola para todos —sin fila en la lista
+ * blanca, escudo puesto— y el Superadmin se concede a sí mismo el permiso
+ * desde la Consola de Capturas cuando necesite documentar el sistema.
+ *
  * Un Cliente nunca entra aquí — la tienda pública jamás se escuda, que
- * sería hostil con quien viene a comprar.
+ * sería hostil con quien viene a comprar. Su chat sí, por `escudoDeChat`.
  */
 export function iniciarEscudoDlp(user: User): void {
   if (typeof window === 'undefined' || !user || !esStaff(user.role)) return;
   detenerEscudoDlp();
-  if (esSuperadmin(user.role)) return;
 
   usuario = user;
   void sincronizar();

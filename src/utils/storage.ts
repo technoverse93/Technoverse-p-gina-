@@ -1771,17 +1771,53 @@ function montarCanalDePurga() {
     .subscribe();
 }
 
+/** Avisa a TODAS las pantallas de que los chats se acaban de borrar. */
+export async function avisarPurgaDeChats(): Promise<void> {
+  try {
+    montarCanalDePurga();
+    await canalPurga!.send({ type: 'broadcast', event: 'wipe', payload: {} });
+  } catch { /* si no sale, la revisión periódica lo alcanza igual */ }
+  // El que purga también vacía lo suyo: el broadcast no vuelve al emisor.
+  vaciarChatLocal();
+}
+
+/**
+ * Borra archivos del chat por la API de Storage.
+ *
+ * NO se puede borrar desde SQL: Supabase lo prohíbe explícitamente
+ * ("Direct deletion from storage tables is not allowed"). Por eso las
+ * funciones del servidor solo DEVUELVEN las rutas y el borrado real
+ * ocurre aquí, donde el personal sí tiene permiso.
+ *
+ * Va en tandas porque `remove()` recibe un arreglo y una purga total
+ * puede traer cientos de archivos de una vez.
+ */
+async function borrarArchivos(rutas: string[] | null | undefined): Promise<number> {
+  const lista = (rutas || []).filter(Boolean);
+  if (lista.length === 0) return 0;
+  let borrados = 0;
+  for (let i = 0; i < lista.length; i += 100) {
+    const tanda = lista.slice(i, i + 100);
+    try {
+      const { error } = await supabase.storage.from('chat-images').remove(tanda);
+      if (!error) borrados += tanda.length;
+    } catch { /* un archivo huérfano no debe tumbar el borrado del chat */ }
+  }
+  return borrados;
+}
+
 /** Cierra y borra UNA conversación, y la quita de todas las pantallas. */
 export async function cerrarConversacion(convId: string): Promise<{ mensajes: number; archivos: number }> {
   const { data, error } = await supabase.rpc('purgar_conversacion', { p_id: convId });
   if (error) throw new Error(error.message);
   const fila = Array.isArray(data) ? data[0] : data;
+  const archivos = await borrarArchivos(fila?.rutas);
   try {
     montarCanalDePurga();
     await canalPurga!.send({ type: 'broadcast', event: 'conv', payload: { conv: convId } });
   } catch { /* el borrado ya ocurrió; el aviso es lo instantáneo */ }
   quitarConversacionLocal(convId);   // el broadcast no vuelve al emisor
-  return { mensajes: Number(fila?.mensajes ?? 0), archivos: Number(fila?.archivos ?? 0) };
+  return { mensajes: Number(fila?.mensajes ?? 0), archivos };
 }
 
 /** Borra UN mensaje para todos, sin que nadie recargue. */
@@ -1790,6 +1826,7 @@ export async function borrarMensajeParaTodos(msgId: string): Promise<void> {
   if (error) throw new Error(error.message);
   const fila = Array.isArray(data) ? data[0] : data;
   const convId = String(fila?.conversacion || '');
+  await borrarArchivos(fila?.rutas);
   try {
     montarCanalDePurga();
     await canalPurga!.send({ type: 'broadcast', event: 'msg', payload: { conv: convId, msg: msgId } });
@@ -1797,14 +1834,18 @@ export async function borrarMensajeParaTodos(msgId: string): Promise<void> {
   if (convId) quitarMensajeLocal(convId, msgId);
 }
 
-/** Avisa a TODAS las pantallas de que los chats se acaban de borrar. */
-export async function avisarPurgaDeChats(): Promise<void> {
-  try {
-    montarCanalDePurga();
-    await canalPurga!.send({ type: 'broadcast', event: 'wipe', payload: {} });
-  } catch { /* si no sale, los borrados de la tabla igual limpian el panel */ }
-  // El que purga también vacía lo suyo: el broadcast no vuelve al emisor.
-  vaciarChatLocal();
+/** Purga TODOS los chats: filas y archivos. Solo el superadmin. */
+export async function purgarTodosLosChats(): Promise<{ mensajes: number; conversaciones: number; archivos: number }> {
+  const { data, error } = await supabase.rpc('purgar_chats');
+  if (error) throw new Error(error.message);
+  const fila = Array.isArray(data) ? data[0] : data;
+  const archivos = await borrarArchivos(fila?.rutas);
+  await avisarPurgaDeChats();
+  return {
+    mensajes: Number(fila?.mensajes ?? 0),
+    conversaciones: Number(fila?.conversaciones ?? 0),
+    archivos,
+  };
 }
 
 function montarCanal() {
