@@ -88,7 +88,7 @@ export default function ConsolaBloqueos() {
     const fila = Array.isArray(data) ? data[0] : data;
     setConfirmacion('');
     setResultadoPurga(
-      `Se borraron ${fila?.mensajes ?? 0} mensajes y ${fila?.conversaciones ?? 0} conversaciones.`
+      `Se borraron ${fila?.mensajes ?? 0} mensajes, ${fila?.conversaciones ?? 0} conversaciones y ${fila?.archivos ?? 0} archivos.`
     );
     // El golpe en las pantallas: se vacían en el acto, sin recargar.
     await avisarPurgaDeChats();

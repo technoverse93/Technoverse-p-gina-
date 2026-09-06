@@ -1772,7 +1772,7 @@ function montarCanalDePurga() {
 }
 
 /** Cierra y borra UNA conversación, y la quita de todas las pantallas. */
-export async function cerrarConversacion(convId: string): Promise<number> {
+export async function cerrarConversacion(convId: string): Promise<{ mensajes: number; archivos: number }> {
   const { data, error } = await supabase.rpc('purgar_conversacion', { p_id: convId });
   if (error) throw new Error(error.message);
   const fila = Array.isArray(data) ? data[0] : data;
@@ -1781,7 +1781,7 @@ export async function cerrarConversacion(convId: string): Promise<number> {
     await canalPurga!.send({ type: 'broadcast', event: 'conv', payload: { conv: convId } });
   } catch { /* el borrado ya ocurrió; el aviso es lo instantáneo */ }
   quitarConversacionLocal(convId);   // el broadcast no vuelve al emisor
-  return Number(fila?.mensajes ?? 0);
+  return { mensajes: Number(fila?.mensajes ?? 0), archivos: Number(fila?.archivos ?? 0) };
 }
 
 /** Borra UN mensaje para todos, sin que nadie recargue. */

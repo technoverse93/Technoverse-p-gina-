@@ -168,6 +168,42 @@ function alSoltarTecla(e: KeyboardEvent): void {
 // Poner / quitar
 // ---------------------------------------------------------------------
 
+/**
+ * Motivos por los que el escudo está puesto ahora mismo.
+ *
+ * Hay DOS fuentes independientes y no pueden pisarse: la lista blanca del
+ * personal ('dlp') y el chat abierto de un cliente ('chat'). Sin contarlos,
+ * cerrar el chat retiraría también el escudo de un empleado bloqueado, y
+ * sincronizar la lista blanca lo retiraría con el chat abierto. El escudo
+ * se pone si hay AL MENOS un motivo y se retira solo cuando no queda
+ * ninguno.
+ */
+const motivos = new Set<string>();
+
+function pedirEscudo(motivo: string): void {
+  motivos.add(motivo);
+  aplicarEscudo();
+}
+
+function soltarEscudo(motivo: string): void {
+  motivos.delete(motivo);
+  if (motivos.size === 0) quitarEscudo();
+}
+
+/**
+ * Escudo para el CLIENTE mientras tiene el chat abierto.
+ *
+ * No pasa por la lista blanca —un cliente no está en ella— porque protege
+ * otra cosa: la conversación que el administrador puede borrar. Se activa
+ * al abrir el chat y se retira al cerrarlo, para no dejar la tienda entera
+ * a oscuras cada vez que alguien cambia de aplicación.
+ */
+export function escudoDeChat(activo: boolean): void {
+  if (typeof window === 'undefined') return;
+  if (activo) pedirEscudo('chat');
+  else soltarEscudo('chat');
+}
+
 function aplicarEscudo(): void {
   if (puesto) return;
   puesto = true;
@@ -221,8 +257,8 @@ async function puedeCapturar(): Promise<boolean> {
 async function sincronizar(): Promise<void> {
   if (!usuario) return;
   const permitido = await puedeCapturar();
-  if (permitido) quitarEscudo();
-  else aplicarEscudo();
+  if (permitido) soltarEscudo('dlp');
+  else pedirEscudo('dlp');
   // El bloqueo nativo sigue la misma decisión (no-op fuera de la APK).
   void fijarFlagSecure(!permitido);
 }
@@ -265,7 +301,9 @@ export function iniciarEscudoDlp(user: User): void {
 export function detenerEscudoDlp(): void {
   if (reloj) { clearInterval(reloj); reloj = null; }
   if (canal) { try { supabase.removeChannel(canal); } catch { /* nada */ } canal = null; }
-  quitarEscudo();
+  // Solo se suelta el motivo del personal: si el cliente tiene el chat
+  // abierto, su escudo sigue en pie.
+  soltarEscudo('dlp');
   void fijarFlagSecure(false);
   usuario = null;
 }

@@ -4,6 +4,7 @@ import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo } from '../utils/storage';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 import { subirAdjuntoChat, ACEPTA_ADJUNTOS } from '../utils/adjuntosChat';
+import { escudoDeChat } from '../seguridad/escudoDlp';
 
 export const FAQ_DATA = [
   {
@@ -69,7 +70,15 @@ function yaEscribioElCliente(conv: ChatConversation | undefined): boolean {
 }
 
 export default function LiveChat() {
-  const [isOpen, setIsOpen] = useState(false);
+  const [isOpen, setIsOpen] = useState
+  // Escudo anti-captura MIENTRAS el chat está abierto.
+  //
+  // Va aquí y no en toda la tienda a propósito: lo que hay que proteger
+  // es la conversación —que el administrador puede borrar—, no el
+  // catálogo. Escudar la tienda entera dejaría la pantalla en negro cada
+  // vez que alguien cambia de aplicación mientras compra, y eso se lee
+  // como que la app se rompió.
+(false);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
@@ -136,6 +145,18 @@ export default function LiveChat() {
     // como si el chat se hubiera "trabado" a medio camino.
     container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
   }, [conversations, activeConvId, isOpen]);
+
+  // Escudo anti-captura MIENTRAS el chat está abierto.
+  //
+  // Va aquí y no en toda la tienda a propósito: lo que hay que proteger es
+  // la conversación —que el administrador puede borrar—, no el catálogo.
+  // Escudar la tienda entera dejaría la pantalla en negro cada vez que
+  // alguien cambia de aplicación mientras compra, y eso se lee como que la
+  // aplicación se rompió.
+  useEffect(() => {
+    escudoDeChat(isOpen);
+    return () => escudoDeChat(false);
+  }, [isOpen]);
 
   const persistNewConversation = async (name: string, email: string): Promise<boolean> => {
     const token = ensureCustomerChatToken();
