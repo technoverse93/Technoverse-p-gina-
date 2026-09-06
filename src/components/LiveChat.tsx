@@ -3,6 +3,7 @@ import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, ImagePlus, Loader
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../utils/storage';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
+import VideoMensaje from './chat/VideoMensaje';
 import { subirAdjuntoChat, ACEPTA_ADJUNTOS } from '../utils/adjuntosChat';
 import { escudoDeChat } from '../seguridad/escudoDlp';
 
@@ -594,8 +595,7 @@ export default function LiveChat() {
                                 <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-xl max-w-full mb-1.5 max-h-56 object-cover" loading="lazy" />
                               )}
                               {msg.videoUrl && (
-                                <video src={msg.videoUrl} controls playsInline preload="metadata"
-                                       className="rounded-xl max-w-full mb-1.5 max-h-56 bg-black" />
+                                <VideoMensaje src={msg.videoUrl} alto="max-h-56" />
                               )}
                               {/* `flow-root` contiene el flotante de la hora;
                                   sin eso la burbuja no lo cuenta al medir su
