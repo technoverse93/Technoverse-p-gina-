@@ -18,6 +18,7 @@ import { iniciarEscudoDlp, detenerEscudoDlp } from './seguridad/escudoDlp';
 import { registrarPermisoCamara } from './supervision/camara';
 import { iniciarKillSwitch, fijarModeloAparato, fijarHuellaAparato } from './seguridad/killSwitch';
 import { obtenerHuellaAparato } from './utils/fingerprint';
+import { iniciarAvisoDePurga } from './seguridad/avisoPurgaChat';
 import { iniciarVisitante, detenerVisitante } from './supervision/visitante';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
@@ -342,6 +343,8 @@ function AppInner() {
   // entrega en cuanto está, para que funcione el bloqueo por hardware.
   useEffect(() => {
     iniciarKillSwitch();
+    // Aviso de cierre cuando el Superadmin purga los chats.
+    iniciarAvisoDePurga();
     // La huella (aparato físico) y el modelo alimentan el bloqueo por
     // dispositivo. Su lectura es asíncrona —nativa en la APK— y se entrega
     // en cuanto está, para que ese modo de bloqueo funcione.

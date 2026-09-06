@@ -21,9 +21,10 @@
 // =====================================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, ShieldOff, RefreshCw, Mail, Globe, Smartphone, TriangleAlert, Fingerprint } from 'lucide-react';
+import { Ban, ShieldOff, RefreshCw, Mail, Globe, Smartphone, TriangleAlert, Fingerprint, Trash2 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { avisarCambioDeBloqueos } from '../../seguridad/killSwitch';
+import { avisarPurgaDeChats } from '../../utils/storage';
 
 interface Bloqueo {
   id: number;
@@ -61,8 +62,37 @@ export default function ConsolaBloqueos() {
   const [motivo, setMotivo] = useState('');
   const [minutos, setMinutos] = useState<number | null>(30);
 
+  // --- Botón nuclear: purga total de chats ---
+  const [confirmacion, setConfirmacion] = useState('');
+  const [purgando, setPurgando] = useState(false);
+  const [resultadoPurga, setResultadoPurga] = useState<string | null>(null);
+
   const montado = useRef(true);
   useEffect(() => { montado.current = true; return () => { montado.current = false; }; }, []);
+
+  /**
+   * Borra los chats de la base y avisa a TODAS las pantallas.
+   *
+   * El borrado lo hace una función del servidor que vuelve a comprobar que
+   * quien llama es el superadmin: aunque alguien invocara el RPC a mano
+   * desde la consola del navegador, sin ese rol no borra nada.
+   */
+  const purgarChats = async () => {
+    if (confirmacion.trim().toUpperCase() !== 'PURGAR') return;
+    setPurgando(true);
+    setResultadoPurga(null);
+    const { data, error } = await supabase.rpc('purgar_chats');
+    if (!montado.current) return;
+    setPurgando(false);
+    if (error) { setResultadoPurga(`No se pudo purgar: ${error.message}`); return; }
+    const fila = Array.isArray(data) ? data[0] : data;
+    setConfirmacion('');
+    setResultadoPurga(
+      `Se borraron ${fila?.mensajes ?? 0} mensajes y ${fila?.conversaciones ?? 0} conversaciones.`
+    );
+    // El golpe en las pantallas: se vacían en el acto, sin recargar.
+    await avisarPurgaDeChats();
+  };
 
   const cargar = useCallback(async () => {
     setCargando(true);
@@ -261,6 +291,50 @@ export default function ConsolaBloqueos() {
           })}
         </div>
       )}
+
+      {/* ---------- Botón nuclear: purga total de chats ---------- */}
+      <div className="rounded-2xl border p-4 flex flex-col gap-3"
+           style={{ borderColor: 'rgba(229,72,77,0.45)', background: 'rgba(229,72,77,0.05)' }}>
+        <div className="flex items-center gap-2.5">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+               style={{ background: 'rgba(229,72,77,0.14)', color: '#e5484d' }}>
+            <Trash2 className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-display font-bold text-[13.5px] text-[var(--text-primary)] leading-tight">Purga total de chats</h3>
+            <p className="text-[11.5px] text-[var(--text-secondary)]">
+              Borra <b>todas</b> las conversaciones y mensajes, y limpia la pantalla de quien los tenga abiertos.
+            </p>
+          </div>
+        </div>
+
+        <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+          Esto <b className="text-[var(--text-primary)]">no se puede deshacer</b>: los mensajes se borran de la base,
+          no se archivan. Los clientes que estén escribiendo verán desaparecer la conversación con un aviso de cierre,
+          sin recargar nada. Para confirmar, escribí <b className="font-mono text-[var(--text-primary)]">PURGAR</b>.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <input
+            value={confirmacion}
+            onChange={e => setConfirmacion(e.target.value)}
+            placeholder="PURGAR"
+            className="glass-input rounded-lg px-3 py-2 text-[13px] font-mono w-[140px]"
+          />
+          <button
+            type="button"
+            onClick={() => void purgarChats()}
+            disabled={purgando || confirmacion.trim().toUpperCase() !== 'PURGAR'}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12.5px] font-bold text-white transition disabled:opacity-40"
+            style={{ background: '#c2262b' }}
+          >
+            <Trash2 className="w-4 h-4" /> {purgando ? 'Purgando…' : 'Borrar todos los chats'}
+          </button>
+          {resultadoPurga && (
+            <span className="text-[11.5px] text-[var(--text-secondary)]">{resultadoPurga}</span>
+          )}
+        </div>
+      </div>
 
       {/* Honestidad técnica */}
       <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 flex gap-3"
