@@ -143,6 +143,34 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
     } catch { /* sin MutationObserver: se autocura en el checkout periódico */ }
   }
 
+  /**
+   * Manda el CSS COMPLETO de esta pantalla, como texto, una sola vez.
+   *
+   * FALLO QUE ESTO CORRIGE: la consola inyectaba en el espejo el CSS del
+   * SUPERADMIN. Pero la aplicación carga el estilo por trozos —cada módulo
+   * pesado trae el suyo cuando se abre—, así que si el Superadmin nunca
+   * había abierto Chat o Inventario, esas hojas NO existían en su
+   * documento… y en el espejo las cajas de chat y de productos salían sin
+   * estilo, es decir, invisibles. El resto de la pantalla sí se veía, que
+   * es exactamente el síntoma reportado.
+   *
+   * El empleado, en cambio, tiene por definición el CSS de lo que está
+   * mirando. Mandando el suyo, el espejo se pinta igual que su pantalla
+   * desde el primer fotograma, sin depender de por dónde anduvo el que
+   * observa. Va comprimido junto al resto de eventos.
+   */
+  function mandarCss(addCustomEvent: (tag: string, payload: any) => void): void {
+    try {
+      let texto = '';
+      for (const hoja of Array.from(document.styleSheets)) {
+        try {
+          for (const regla of Array.from(hoja.cssRules)) texto += regla.cssText + '\n';
+        } catch { /* hoja de otro origen (tipografías): se salta */ }
+      }
+      if (texto) addCustomEvent('css', { texto });
+    } catch { /* sin CSS propio, la consola cae al suyo */ }
+  }
+
   return {
     transmitiendo: () => activo,
 
@@ -196,13 +224,21 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
           maskAllInputs: false,
           // 'all' emite CADA tecla en vivo. El valor por defecto ('last')
           // solo manda el contenido del input al perder el foco.
-          sampling: { input: 'all' },
+          //
+          // Los otros tres son un FRENO deliberado: un mousemove sin límite
+          // dispara decenas de eventos por segundo y un scroll otro tanto.
+          // Esa metralla de deltas diminutos era lo que saturaba el canal y
+          // hacía sentir el espejo a tirones. A 50 ms el movimiento se sigue
+          // viendo fluido —es la cadencia de un vídeo— pero el canal
+          // transporta una fracción de los mensajes.
+          sampling: { input: 'all', mousemove: 50, scroll: 80, media: 400 },
           // Foto COMPLETA cada 12 s: si la consola se engancha tarde, se
           // autocura en el próximo checkout en vez de quedar en blanco.
           checkoutEveryNms: 12000,
         }) || null;
 
         vigilarTema(addCustomEvent);
+        mandarCss(addCustomEvent);
 
         // 100 ms: con el canal de broadcast el viaje ya no pasa por la
         // base, así que el único retraso que queda es este intervalo.

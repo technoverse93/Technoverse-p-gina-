@@ -110,6 +110,13 @@ export default function ConsolaSupervision() {
   const trozosRef = useRef<Map<string, { n: number; partes: string[] }>>(new Map());
   /** Último tema conocido del supervisado. Se reaplica tras cada foto. */
   const temaRef = useRef<{ clase: string; estilo: string; data: string } | null>(null);
+  /**
+   * CSS del SUPERVISADO. Manda sobre el del Superadmin: la app carga el
+   * estilo por trozos, y si el Superadmin nunca abrió Chat o Inventario,
+   * esas hojas no están en SU documento — por eso esas cajas salían
+   * invisibles en el espejo. El empleado sí tiene el CSS de lo que mira.
+   */
+  const cssRemotoRef = useRef<string | null>(null);
   const selRef = useRef<string | null>(null);
   selRef.current = sel;
 
@@ -188,7 +195,9 @@ export default function ConsolaSupervision() {
       if (doc.head.querySelector('[data-tv-css]')) return;
       const estilo = doc.createElement('style');
       estilo.setAttribute('data-tv-css', '');
-      estilo.textContent = cssDelDocumento();
+      // El CSS del supervisado manda; el propio es solo el respaldo para
+      // el instante anterior a que llegue el suyo.
+      estilo.textContent = cssRemotoRef.current || cssDelDocumento();
       // Primero en el <head>, para que gane sobre cualquier estilo que
       // rrweb hubiera dejado y para que esté aplicado antes del primer
       // pintado del contenido reconstruido.
@@ -226,6 +235,7 @@ export default function ConsolaSupervision() {
     // supervisado heredaría el claro/oscuro del anterior hasta su primer
     // cambio de tema.
     temaRef.current = null;
+    cssRemotoRef.current = null;
     // La cara es de quien se miraba: no debe quedar colgada al soltar ni
     // reaparecer sobre el espejo de otra persona.
     setCaraCuadro(null);
@@ -285,6 +295,22 @@ export default function ConsolaSupervision() {
       // que pintar. Ahora solo se anota el tema y se pinta la clase sobre
       // el <html> del iframe — es un atributo, no una reconstrucción, así
       // que el cambio es instantáneo y el contenido no se pierde nunca.
+      // El supervisado manda SU hoja de estilos. Se guarda y se reinyecta
+      // pisando la del Superadmin: es la única que tiene garantizado el
+      // estilo de los módulos que esa persona está mirando.
+      if (ev?.type === 5 && ev?.data?.tag === 'css') {
+        const texto = ev.data.payload?.texto;
+        if (typeof texto === 'string' && texto.length > 0) {
+          cssRemotoRef.current = texto;
+          try {
+            const doc = (replayerRef.current?.iframe as HTMLIFrameElement | undefined)?.contentDocument;
+            doc?.head?.querySelector('[data-tv-css]')?.remove();
+          } catch { /* nada */ }
+          inyectarEstilos();
+        }
+        continue;
+      }
+
       if (ev?.type === 5 && ev?.data?.tag === 'tema') {
         const p = ev.data.payload || {};
         temaRef.current = { clase: p.clase || '', estilo: p.estilo || '', data: p.data || '' };
@@ -303,7 +329,7 @@ export default function ConsolaSupervision() {
     }
 
     if (!replayerRef.current) void iniciarSiHayFoto();
-  }, [iniciarSiHayFoto, aplicarTema]);
+  }, [iniciarSiHayFoto, aplicarTema, inyectarEstilos]);
 
   /** Reensambla los trozos del canal rápido y descomprime los eventos. */
   const manejarTrozo = useCallback(async (p: any) => {

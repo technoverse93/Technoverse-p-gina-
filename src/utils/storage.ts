@@ -1074,6 +1074,49 @@ async function refreshTableFromSupabase(cfg: TableConfig<any>) {
   notifyUpdate();
 }
 
+/**
+ * Aplica UNA fila recibida por Realtime directamente sobre la caché local.
+ *
+ * Devuelve `true` si pudo aplicarla y `false` si hay que recurrir a la
+ * recarga completa. Se mantiene `lastSyncedDb` en paralelo porque es la
+ * base contra la que se compara cualquier guardado posterior: si solo se
+ * tocara `localCache`, el próximo `saveDB()` creería que la fila cambió y
+ * la volvería a escribir.
+ */
+function aplicarFilaEnCache(cfg: TableConfig<any>, payload: any): boolean {
+  try {
+    const lista = (localCache as any)[cfg.key];
+    if (!Array.isArray(lista)) return false;
+
+    const evento = payload?.eventType;
+    const fila = evento === 'DELETE' ? payload?.old : payload?.new;
+    const id = fila?.id;
+    if (!id) return false;
+
+    const idx = lista.findIndex((x: any) => String(x?.id) === String(id));
+
+    if (evento === 'DELETE') {
+      if (idx === -1) return true;          // ya no estaba: nada que hacer
+      lista.splice(idx, 1);
+    } else {
+      const item = cfg.fromRow(fila);
+      if (idx === -1) lista.push(item);
+      else lista[idx] = item;
+    }
+
+    (lastSyncedDb as any)[cfg.key] = structuredClone(lista);
+    if (TABLAS_CACHEABLES.has(cfg.key as string)) {
+      coalesce('cache-local', guardarCacheLocal, 500);
+    }
+    notifyUpdate();
+    return true;
+  } catch {
+    // Cualquier sorpresa (una fila con forma inesperada) cae a la recarga
+    // completa, que siempre deja los datos correctos.
+    return false;
+  }
+}
+
 function initTableRealtimeSync(cfg: TableConfig<any>) {
   refreshTableFromSupabase(cfg).then(() => {
     genericReady[cfg.key as string] = true;
@@ -1651,11 +1694,71 @@ function coalesce(key: string, fn: () => void, delay = 200) {
 // El canal abierto ahora mismo, para poder cerrarlo y volver a abrirlo.
 let canalActual: ReturnType<typeof supabase.channel> | null = null;
 
+/**
+ * PURGA GLOBAL DE CHATS — vaciado instantáneo, sin recargar.
+ *
+ * El Superadmin borra todos los chats de la base y, a la par, manda un
+ * aviso por el canal público `global_chat_wipe`. Aquí se recibe y se
+ * vacía el chat local EN EL ACTO, sin esperar a que lleguen los eventos
+ * de borrado fila por fila: una conversación con cien mensajes generaría
+ * cien eventos, y el cliente vería su chat desaparecer a pedazos.
+ *
+ * Un cliente anónimo de la tienda además puede no tener permiso para ver
+ * esos borrados, así que sin este aviso su pantalla se quedaría con la
+ * conversación colgada hasta recargar. Por eso el aviso va por broadcast
+ * público y no por los eventos de la tabla.
+ */
+function vaciarChatLocal(): void {
+  localCache.chat_conversations = [];
+  lastSyncedDb.chat_conversations = [];
+  try { coalesce('cache-local', guardarCacheLocal, 100); } catch { /* nada */ }
+  notifyUpdate();
+  // Para que la interfaz muestre el aviso de cierre (ver purgaChats.ts).
+  try { window.dispatchEvent(new CustomEvent('technoverse_chat_wipe')); } catch { /* nada */ }
+}
+
+/**
+ * Canal de la purga. Tema FIJO y compartido a propósito: el canal de
+ * sincronización lleva un `Date.now()` en el nombre —es único por cliente—
+ * y un broadcast ahí no llegaría a nadie más. Este, en cambio, lo escuchan
+ * todos por igual: personal, clientes con sesión y visitantes anónimos.
+ */
+let canalPurga: ReturnType<typeof supabase.channel> | null = null;
+
+function montarCanalDePurga() {
+  if (canalPurga) return;
+  canalPurga = supabase
+    .channel('global_chat_wipe')
+    .on('broadcast', { event: 'wipe' }, () => vaciarChatLocal())
+    .subscribe();
+}
+
+/** Avisa a TODAS las pantallas de que los chats se acaban de borrar. */
+export async function avisarPurgaDeChats(): Promise<void> {
+  try {
+    montarCanalDePurga();
+    await canalPurga!.send({ type: 'broadcast', event: 'wipe', payload: {} });
+  } catch { /* si no sale, los borrados de la tabla igual limpian el panel */ }
+  // El que purga también vacía lo suyo: el broadcast no vuelve al emisor.
+  vaciarChatLocal();
+}
+
 function montarCanal() {
+  montarCanalDePurga();
   const channel = supabase.channel(`technoverse-realtime-sync-${Date.now()}`);
 
   TABLE_CONFIGS.forEach((cfg) => {
-    channel.on('postgres_changes', { event: '*', schema: 'public', table: cfg.table }, () => {
+    channel.on('postgres_changes', { event: '*', schema: 'public', table: cfg.table }, (payload: any) => {
+      // Se aplica la fila QUE VINO EN EL EVENTO, en vez de volver a bajar la
+      // tabla entera. Ese `.select('*')` por cada cambio era la lentitud del
+      // inventario: tocar el precio de UN producto obligaba a descargar y
+      // parsear el catálogo completo antes de que se viera el cambio, en
+      // todos los dispositivos a la vez. Ahora la interfaz muta al instante.
+      //
+      // Si por lo que sea no se puede ubicar la fila (evento sin id, caché
+      // aún sin cargar), se cae a la recarga completa de siempre: es más
+      // lenta pero nunca deja los datos desincronizados.
+      if (aplicarFilaEnCache(cfg, payload)) return;
       coalesce(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg));
     });
   });
