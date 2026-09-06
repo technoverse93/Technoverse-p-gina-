@@ -1768,7 +1768,49 @@ function montarCanalDePurga() {
       const { conv, msg } = m?.payload || {};
       if (conv && msg) quitarMensajeLocal(String(conv), String(msg));
     })
-    .subscribe();
+    .subscribe((estado) => {
+      // Al (re)conectar se relee el chat del servidor. Un broadcast es de
+      // usar y tirar: no queda encolado para quien no estaba escuchando.
+      // Si el aviso de borrado salió mientras este aparato tenía el canal
+      // caído —pestaña dormida, cambio de red, túnel a otra antena—, esa
+      // orden se perdió para siempre. La relectura al reconectar cierra
+      // justo ese hueco.
+      if (estado === 'SUBSCRIBED') void recargarChatDelServidor();
+    });
+}
+
+/**
+ * Relee el chat DESDE EL SERVIDOR y publica lo que venga, tal cual.
+ *
+ * EL AGUJERO QUE ESTO TAPA
+ * ---------------------------------------------------------------------
+ * El cliente anónimo no lee `chat_conversations` directamente —lo hace por
+ * `get_customer_chat` con su token, para que nadie lea chats ajenos—, y esa
+ * es justamente la razón por la que la RLS NO le entrega los eventos
+ * `postgres_changes` de esa tabla. Traducido: cuando el administrador
+ * borraba una conversación, el cliente no se enteraba por la vía normal.
+ * El único aviso que le llegaba era el broadcast, y un broadcast que sale
+ * mientras el aparato está desconectado no se recupera nunca.
+ *
+ * Resultado: el historial viejo se le quedaba en pantalla indefinidamente,
+ * aunque en el servidor ya no existiera.
+ *
+ * Esta función no depende de haber cazado ningún evento: pregunta. Como la
+ * recarga REEMPLAZA la copia local por lo que hay en el servidor, todo lo
+ * que el administrador borró desaparece en el acto.
+ *
+ * Se estrangula porque se la llama desde varios sitios a la vez (abrir el
+ * chat, volver a la aplicación, reconectar el canal) y no tiene sentido
+ * repetir la consulta tres veces en el mismo segundo.
+ */
+let ultimaRelectura = 0;
+const MIN_ENTRE_RELECTURAS_MS = 1500;
+
+export async function recargarChatDelServidor(forzar = false): Promise<void> {
+  const ahora = Date.now();
+  if (!forzar && ahora - ultimaRelectura < MIN_ENTRE_RELECTURAS_MS) return;
+  ultimaRelectura = ahora;
+  try { await refreshChatFromSupabase(); } catch { /* sin red: se reintenta al siguiente disparo */ }
 }
 
 /** Avisa a TODAS las pantallas de que los chats se acaban de borrar. */
