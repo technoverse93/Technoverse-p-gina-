@@ -1,8 +1,9 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Bot, Menu, Plus, Check, CheckCheck } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Menu, Plus, Check, CheckCheck, ImagePlus, Loader2 } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo } from '../utils/storage';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
+import { subirAdjuntoChat, ACEPTA_ADJUNTOS } from '../utils/adjuntosChat';
 
 export const FAQ_DATA = [
   {
@@ -77,6 +78,8 @@ export default function LiveChat() {
   const [isRegistered, setIsRegistered] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [subiendo, setSubiendo] = useState(false);
+  const fileRef = useRef<HTMLInputElement>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
   // Mensajes que ya se ven en pantalla (optimistic UI) pero todavía no
   // confirma Supabase. Es solo para el "check" tenue del recibo — la
@@ -245,6 +248,51 @@ export default function LiveChat() {
       ? { ...c, messages: c.messages.filter(m => !ids.includes(m.id)) }
       : c));
     clearPending(ids);
+  };
+
+  /**
+   * El CLIENTE adjunta una foto o un video.
+   *
+   * Antes esto no existía —y la política del bucket exigía `is_staff()`,
+   * así que ni forzándolo habría funcionado—. Ahora sube por el mismo
+   * camino que el panel y el mensaje aparece de una en su pantalla
+   * (optimista), igual que un mensaje de texto.
+   */
+  const handleAdjuntar = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = '';
+    if (!file || !activeConvId || subiendo) return;
+    setChatError(null);
+    setSubiendo(true);
+
+    const convId = activeConvId;
+    try {
+      const adjunto = await subirAdjuntoChat(convId, file);
+      const newMsg: ChatMessage = {
+        id: newId('MSG'), sender: 'customer', text: '',
+        timestamp: new Date().toISOString(), ...adjunto,
+      };
+      appendOptimistic(convId, [newMsg], 1);
+
+      const db = getDB();
+      const idx = db.chat_conversations.findIndex(c => c.id === convId);
+      if (idx === -1) { rollbackOptimistic(convId, [newMsg.id]); return; }
+      db.chat_conversations[idx].messages.push(newMsg);
+      db.chat_conversations[idx].unreadCount += 1;
+
+      try {
+        await saveDB(db);
+        clearPending([newMsg.id]);
+      } catch {
+        setChatError('No se pudo enviar el archivo. Verifica tu conexión e intenta de nuevo.');
+        rollbackOptimistic(convId, [newMsg.id]);
+        loadConversations();
+      }
+    } catch (err: any) {
+      setChatError(err?.message || 'No se pudo enviar el archivo.');
+    } finally {
+      setSubiendo(false);
+    }
   };
 
   const handleSendMessage = async (e: React.FormEvent) => {
@@ -505,6 +553,10 @@ export default function LiveChat() {
                               {msg.imageUrl && (
                                 <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-xl max-w-full mb-1.5 max-h-56 object-cover" loading="lazy" />
                               )}
+                              {msg.videoUrl && (
+                                <video src={msg.videoUrl} controls playsInline preload="metadata"
+                                       className="rounded-xl max-w-full mb-1.5 max-h-56 bg-black" />
+                              )}
                               {/* `flow-root` contiene el flotante de la hora;
                                   sin eso la burbuja no lo cuenta al medir su
                                   alto y la hora se sale por abajo. */}
@@ -570,6 +622,17 @@ export default function LiveChat() {
                     )}
 
                     <form onSubmit={handleSendMessage} className="p-3 bg-[var(--bg-surface)] border-t border-[var(--border-color)] flex gap-2 shrink-0">
+                      <input ref={fileRef} type="file" accept={ACEPTA_ADJUNTOS} className="hidden" onChange={handleAdjuntar} />
+                      <button
+                        type="button"
+                        onClick={() => fileRef.current?.click()}
+                        disabled={subiendo}
+                        aria-label="Adjuntar foto o video"
+                        title="Adjuntar foto o video"
+                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[var(--bg-sunken)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition disabled:opacity-50"
+                      >
+                        {subiendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
+                      </button>
                       <input
                         type="text"
                         value={inputText}

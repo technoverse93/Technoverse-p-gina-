@@ -1314,7 +1314,7 @@ async function refreshChatFromSupabase() {
       customerToken: token,
       messages: ((r.messages as any[]) || []).map((m: any): ChatMessage => ({
         id: m.id, sender: m.sender, text: m.text, timestamp: m.created_at,
-        imageUrl: m.image_url || undefined, isInternalNote: !!m.is_internal_note
+        imageUrl: m.image_url || undefined, videoUrl: m.video_url || undefined, isInternalNote: !!m.is_internal_note
       }))
     }));
     reinyectarMensajesEnVuelo(conversations);
@@ -1330,7 +1330,7 @@ async function refreshChatFromSupabase() {
     notifySyncError(`No se pudo leer chat_conversations: ${convError.message}`);
     return;
   }
-  const { data: msgRows, error: msgError } = await supabase.from('chat_messages').select('id,conversation_id,sender,text,created_at,image_url,is_internal_note').order('created_at', { ascending: true });
+  const { data: msgRows, error: msgError } = await supabase.from('chat_messages').select('id,conversation_id,sender,text,created_at,image_url,video_url,is_internal_note').order('created_at', { ascending: true });
   if (msgError) {
     notifySyncError(`No se pudo leer chat_messages: ${msgError.message}`);
     return;
@@ -1341,7 +1341,7 @@ async function refreshChatFromSupabase() {
     if (!messagesByConv[m.conversation_id]) messagesByConv[m.conversation_id] = [];
     messagesByConv[m.conversation_id].push({
       id: m.id, sender: m.sender, text: m.text, timestamp: m.created_at,
-      imageUrl: m.image_url || undefined, isInternalNote: !!m.is_internal_note
+      imageUrl: m.image_url || undefined, videoUrl: m.video_url || undefined, isInternalNote: !!m.is_internal_note
     });
   });
 
@@ -1387,7 +1387,7 @@ function aplicarMensajeEntrante(row: any): void {
   if (!row?.id || !row?.conversation_id) return;
   agregarMensajeAConversacion(row.conversation_id, {
     id: row.id, sender: row.sender, text: row.text, timestamp: row.created_at,
-    imageUrl: row.image_url || undefined, isInternalNote: !!row.is_internal_note,
+    imageUrl: row.image_url || undefined, videoUrl: row.video_url || undefined, isInternalNote: !!row.is_internal_note,
   });
 }
 
@@ -1575,7 +1575,7 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
     for (const msg of conv.messages || []) {
       const msgErr = await insertChatRow('chat_messages', {
         id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp,
-        image_url: msg.imageUrl || null, is_internal_note: !!msg.isInternalNote
+        image_url: msg.imageUrl || null, video_url: msg.videoUrl || null, is_internal_note: !!msg.isInternalNote
       });
       if (msgErr) {
         errors.push(`crear mensaje ${msg.id}: ${msgErr}`);
@@ -1598,7 +1598,7 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
     for (const msg of newMessages) {
       const msgErr = await insertChatRow('chat_messages', {
         id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp,
-        image_url: msg.imageUrl || null, is_internal_note: !!msg.isInternalNote
+        image_url: msg.imageUrl || null, video_url: msg.videoUrl || null, is_internal_note: !!msg.isInternalNote
       });
       if (msgErr) {
         errors.push(`crear mensaje ${msg.id}: ${msgErr}`);
@@ -1725,12 +1725,76 @@ function vaciarChatLocal(): void {
  */
 let canalPurga: ReturnType<typeof supabase.channel> | null = null;
 
+/**
+ * Quita UN mensaje de la copia local, sin recargar nada.
+ *
+ * Hace falta un aviso propio —y no basta con el DELETE de la tabla—
+ * porque el cliente anónimo lee su chat por RPC con su token y no recibe
+ * los eventos de borrado de `chat_messages`. Sin esto, el mensaje seguiría
+ * en su pantalla hasta que recargara.
+ */
+function quitarMensajeLocal(convId: string, msgId: string): void {
+  const conv = (localCache.chat_conversations || []).find(c => c.id === convId);
+  if (!conv) return;
+  const antes = conv.messages?.length || 0;
+  conv.messages = (conv.messages || []).filter(m => m.id !== msgId);
+  if ((conv.messages.length || 0) === antes) return;
+  lastSyncedDb.chat_conversations = structuredClone(localCache.chat_conversations);
+  try { coalesce('cache-local', guardarCacheLocal, 100); } catch { /* nada */ }
+  notifyUpdate();
+}
+
+/** Quita UNA conversación entera de la copia local. */
+function quitarConversacionLocal(convId: string): void {
+  const antes = (localCache.chat_conversations || []).length;
+  localCache.chat_conversations = (localCache.chat_conversations || []).filter(c => c.id !== convId);
+  if (localCache.chat_conversations.length === antes) return;
+  lastSyncedDb.chat_conversations = structuredClone(localCache.chat_conversations);
+  try { coalesce('cache-local', guardarCacheLocal, 100); } catch { /* nada */ }
+  notifyUpdate();
+  try { window.dispatchEvent(new CustomEvent('technoverse_chat_wipe')); } catch { /* nada */ }
+}
+
 function montarCanalDePurga() {
   if (canalPurga) return;
   canalPurga = supabase
     .channel('global_chat_wipe')
     .on('broadcast', { event: 'wipe' }, () => vaciarChatLocal())
+    .on('broadcast', { event: 'conv' }, (m: any) => {
+      const id = m?.payload?.conv;
+      if (id) quitarConversacionLocal(String(id));
+    })
+    .on('broadcast', { event: 'msg' }, (m: any) => {
+      const { conv, msg } = m?.payload || {};
+      if (conv && msg) quitarMensajeLocal(String(conv), String(msg));
+    })
     .subscribe();
+}
+
+/** Cierra y borra UNA conversación, y la quita de todas las pantallas. */
+export async function cerrarConversacion(convId: string): Promise<number> {
+  const { data, error } = await supabase.rpc('purgar_conversacion', { p_id: convId });
+  if (error) throw new Error(error.message);
+  const fila = Array.isArray(data) ? data[0] : data;
+  try {
+    montarCanalDePurga();
+    await canalPurga!.send({ type: 'broadcast', event: 'conv', payload: { conv: convId } });
+  } catch { /* el borrado ya ocurrió; el aviso es lo instantáneo */ }
+  quitarConversacionLocal(convId);   // el broadcast no vuelve al emisor
+  return Number(fila?.mensajes ?? 0);
+}
+
+/** Borra UN mensaje para todos, sin que nadie recargue. */
+export async function borrarMensajeParaTodos(msgId: string): Promise<void> {
+  const { data, error } = await supabase.rpc('borrar_mensaje_chat', { p_id: msgId });
+  if (error) throw new Error(error.message);
+  const fila = Array.isArray(data) ? data[0] : data;
+  const convId = String(fila?.conversacion || '');
+  try {
+    montarCanalDePurga();
+    await canalPurga!.send({ type: 'broadcast', event: 'msg', payload: { conv: convId, msg: msgId } });
+  } catch { /* idem */ }
+  if (convId) quitarMensajeLocal(convId, msgId);
 }
 
 /** Avisa a TODAS las pantallas de que los chats se acaban de borrar. */

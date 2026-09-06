@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { UserCog, CheckCircle2, AlertTriangle, RotateCcw } from 'lucide-react';
+import { UserCog, CheckCircle2, AlertTriangle, RotateCcw, Trash2 } from 'lucide-react';
 import { ChatConversation } from '../../types';
 
 interface ChatActionsMenuProps {
@@ -9,9 +9,12 @@ interface ChatActionsMenuProps {
   onAssign: (email: string) => void;
   onChangeStatus: (status: 'nuevo' | 'pendiente') => void;
   onResolve: () => void;
+  /** Cierra y BORRA esta conversación, para todos y al instante. */
+  onCerrarYBorrar: () => void;
 }
 
-export default function ChatActionsMenu({ conversation, staffEmails, onClose, onAssign, onChangeStatus, onResolve }: ChatActionsMenuProps) {
+export default function ChatActionsMenu({ conversation, staffEmails, onClose, onAssign, onChangeStatus, onResolve, onCerrarYBorrar }: ChatActionsMenuProps) {
+  const [confirmando, setConfirmando] = useState(false);
   const isResolved = conversation.status === 'resuelto';
   const rootRef = useRef<HTMLDivElement>(null);
   const [showAssignList, setShowAssignList] = useState(false);
@@ -92,6 +95,44 @@ export default function ChatActionsMenu({ conversation, staffEmails, onClose, on
               <AlertTriangle className="w-3 h-3 shrink-0 mt-px" /> No se elimina; el cliente conserva su historial. Quedará en "Resueltos" según su fecha.
             </p>
           </>
+        )}
+      </div>
+      {/* Cerrar y borrar ESTA conversación — la versión fina del botón
+          nuclear. Pide un segundo toque a propósito: borra los mensajes de
+          verdad y no hay vuelta atrás. */}
+      <div className="p-2 border-t border-[var(--border-color)]/50">
+        {!confirmando ? (
+          <button
+            type="button"
+            onClick={() => setConfirmando(true)}
+            className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[var(--bg-surface)] font-medium"
+            style={{ color: '#e5484d' }}
+          >
+            <Trash2 className="w-4 h-4" /> Cerrar y borrar conversación
+          </button>
+        ) : (
+          <div className="px-2 py-1.5">
+            <p className="text-[10.5px] text-[var(--text-secondary)] leading-snug mb-2">
+              Se borran todos los mensajes de esta conversación, también en la pantalla del cliente. No se puede deshacer.
+            </p>
+            <div className="flex gap-1.5">
+              <button
+                type="button"
+                onClick={() => { setConfirmando(false); onCerrarYBorrar(); }}
+                className="flex-1 px-2 py-1.5 rounded-lg text-[11px] font-bold text-white"
+                style={{ background: '#c2262b' }}
+              >
+                Sí, borrar
+              </button>
+              <button
+                type="button"
+                onClick={() => setConfirmando(false)}
+                className="flex-1 px-2 py-1.5 rounded-lg text-[11px] font-semibold border border-[var(--border-color)] text-[var(--text-secondary)]"
+              >
+                Cancelar
+              </button>
+            </div>
+          </div>
         )}
       </div>
     </div>
