@@ -87,8 +87,8 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   const cerrarYBorrar = async () => {
     setShowMenu(false);
     try {
-      const n = await cerrarConversacion(conversation.id);
-      toast.success(`Conversación cerrada. Se borraron ${n} mensajes.`);
+      const r = await cerrarConversacion(conversation.id);
+      toast.success(`Conversación cerrada: ${r.mensajes} mensajes y ${r.archivos} archivos borrados.`);
       onBack();
     } catch (err: any) {
       toast.error('No se pudo cerrar. ' + (err?.message || err));
