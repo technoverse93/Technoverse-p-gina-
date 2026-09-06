@@ -24,7 +24,7 @@ import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { Ban, ShieldOff, RefreshCw, Mail, Globe, Smartphone, TriangleAlert, Fingerprint, Trash2 } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { avisarCambioDeBloqueos } from '../../seguridad/killSwitch';
-import { avisarPurgaDeChats } from '../../utils/storage';
+import { purgarTodosLosChats } from '../../utils/storage';
 
 interface Bloqueo {
   id: number;
@@ -81,17 +81,18 @@ export default function ConsolaBloqueos() {
     if (confirmacion.trim().toUpperCase() !== 'PURGAR') return;
     setPurgando(true);
     setResultadoPurga(null);
-    const { data, error } = await supabase.rpc('purgar_chats');
-    if (!montado.current) return;
-    setPurgando(false);
-    if (error) { setResultadoPurga(`No se pudo purgar: ${error.message}`); return; }
-    const fila = Array.isArray(data) ? data[0] : data;
-    setConfirmacion('');
-    setResultadoPurga(
-      `Se borraron ${fila?.mensajes ?? 0} mensajes, ${fila?.conversaciones ?? 0} conversaciones y ${fila?.archivos ?? 0} archivos.`
-    );
-    // El golpe en las pantallas: se vacían en el acto, sin recargar.
-    await avisarPurgaDeChats();
+    try {
+      const r = await purgarTodosLosChats();
+      if (!montado.current) return;
+      setConfirmacion('');
+      setResultadoPurga(
+        `Se borraron ${r.mensajes} mensajes, ${r.conversaciones} conversaciones y ${r.archivos} archivos.`
+      );
+    } catch (err: any) {
+      if (montado.current) setResultadoPurga(`No se pudo purgar: ${err?.message || err}`);
+    } finally {
+      if (montado.current) setPurgando(false);
+    }
   };
 
   const cargar = useCallback(async () => {
