@@ -30,11 +30,48 @@ export interface Adjunto {
 /** Lo que aceptan los selectores de archivo, en los dos lados. */
 export const ACEPTA_ADJUNTOS = 'image/*,video/mp4,video/webm,video/quicktime';
 
+/**
+ * Formatos de video que el bucket acepta del lado del servidor.
+ *
+ * Tiene que ser LA MISMA lista que `allowed_mime_types` del bucket. Si no
+ * coincide, el archivo sale del teléfono, viaja entero y el servidor lo
+ * rechaza al final con un error técnico ("mime type ... is not supported")
+ * que a la persona no le dice nada. Comprobándolo aquí, el aviso sale al
+ * instante y en español.
+ */
+const VIDEOS_ACEPTADOS = new Set(['video/mp4', 'video/webm', 'video/quicktime']);
+
+/** `video/quicktime` no es una extensión: es el nombre del formato. */
+const EXTENSION_POR_TIPO: Record<string, string> = {
+  'video/mp4': 'mp4',
+  'video/webm': 'webm',
+  'video/quicktime': 'mov',
+  'image/jpeg': 'jpg',
+  'image/png': 'png',
+  'image/webp': 'webp',
+  'image/gif': 'gif',
+  'image/heic': 'heic',
+};
+
+/**
+ * Extensión SEGURA para la ruta del archivo.
+ *
+ * La política de subida del bucket exige que la ruta case con
+ * `^[^/]+/[0-9]+\.[A-Za-z0-9]{1,5}$`. Aquí estaba el fallo del video: si el
+ * archivo venía sin extensión en el nombre —cosa normal cuando se elige
+ * desde la galería de Android, que entrega un `content://`— se caía al tipo
+ * MIME y se armaba la ruta con "quicktime", nueve letras. La ruta dejaba de
+ * casar con la política, el servidor rechazaba la subida y desde fuera se
+ * veía como que "no hace nada". Ahora la extensión sale de una tabla y, en
+ * el peor caso, se recorta a algo que la política sí admite.
+ */
 function extensionDe(file: File): string {
-  const porNombre = (file.name.split('.').pop() || '').toLowerCase();
+  const porTipo = EXTENSION_POR_TIPO[file.type.toLowerCase()];
+  if (porTipo) return porTipo;
+  const porNombre = (file.name.split('.').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   if (porNombre && porNombre.length <= 5) return porNombre;
-  const porTipo = (file.type.split('/').pop() || '').toLowerCase();
-  return porTipo || 'bin';
+  const cola = (file.type.split('/').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  return cola.slice(0, 5) || 'bin';
 }
 
 /**
@@ -51,6 +88,12 @@ export async function subirAdjuntoChat(convId: string, file: File): Promise<Adju
   }
 
   if (esVideo) {
+    if (!VIDEOS_ACEPTADOS.has(file.type.toLowerCase())) {
+      throw new Error(
+        'Ese formato de video no se admite. Se pueden enviar MP4, WEBM o MOV. ' +
+        'Si lo grabaste con la cámara, mandalo desde la galería.'
+      );
+    }
     if (file.size > TOPE_ADJUNTO_BYTES) {
       const mb = Math.round(file.size / (1024 * 1024));
       throw new Error(`Ese video pesa ${mb} MB y el máximo es 25 MB. Grabá uno más corto o bajale la calidad.`);
