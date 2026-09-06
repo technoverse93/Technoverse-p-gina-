@@ -70,15 +70,7 @@ function yaEscribioElCliente(conv: ChatConversation | undefined): boolean {
 }
 
 export default function LiveChat() {
-  const [isOpen, setIsOpen] = useState
-  // Escudo anti-captura MIENTRAS el chat está abierto.
-  //
-  // Va aquí y no en toda la tienda a propósito: lo que hay que proteger
-  // es la conversación —que el administrador puede borrar—, no el
-  // catálogo. Escudar la tienda entera dejaría la pantalla en negro cada
-  // vez que alguien cambia de aplicación mientras compra, y eso se lee
-  // como que la app se rompió.
-(false);
+  const [isOpen, setIsOpen] = useState(false);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');
@@ -146,13 +138,6 @@ export default function LiveChat() {
     container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
   }, [conversations, activeConvId, isOpen]);
 
-  // Escudo anti-captura MIENTRAS el chat está abierto.
-  //
-  // Va aquí y no en toda la tienda a propósito: lo que hay que proteger es
-  // la conversación —que el administrador puede borrar—, no el catálogo.
-  // Escudar la tienda entera dejaría la pantalla en negro cada vez que
-  // alguien cambia de aplicación mientras compra, y eso se lee como que la
-  // aplicación se rompió.
   // RELECTURA DESDE EL SERVIDOR: el historial borrado tiene que irse.
   //
   // El cliente no recibe los eventos de borrado de `chat_conversations`
@@ -186,6 +171,12 @@ export default function LiveChat() {
     };
   }, [isOpen]);
 
+  // Escudo anti-captura MIENTRAS el chat está abierto.
+  //
+  // El escudo general ya cubre toda la aplicación, pero este motivo se
+  // mantiene aparte a propósito: protege la conversación —lo que el
+  // administrador puede borrar— y seguiría en pie aunque algún día se
+  // decidiera quitarle el escudo a la tienda.
   useEffect(() => {
     escudoDeChat(isOpen);
     return () => escudoDeChat(false);
