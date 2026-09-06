@@ -41,8 +41,28 @@
 
 import { esNativo } from './flagSecure';
 
-/** Interruptor único. En `false`, este módulo deja de estorbar. */
-const SOLO_APP_EN_ANDROID = true;
+/**
+ * Interruptor único. En `false`, este módulo deja de estorbar.
+ *
+ * ESTÁ APAGADO, Y ES DELIBERADO.
+ * ---------------------------------------------------------------------
+ * Se encendió un rato y el efecto fue el que estaba anunciado: la tienda
+ * dejaba de existir para quien llegara desde el navegador de un Android
+ * —incluido el navegador interno de Instagram y WhatsApp, que es por donde
+ * entra la mayoría—. Eso no es un detalle de experiencia: es la venta.
+ *
+ * Y lo que se compraba a cambio era poco. El catálogo YA es público: los
+ * mismos precios y las mismas fotos están en las redes de la tienda. Una
+ * captura de la vitrina no revela nada que no esté ya publicado.
+ *
+ * Lo que sí valía proteger —la conversación del chat— se protege donde
+ * corresponde y sin cerrarle la puerta a nadie: ver `LiveChat.tsx`, que en
+ * el navegador deja ESCRIBIR pero no pinta el historial.
+ *
+ * El interruptor se conserva porque la decisión puede cambiar y el módulo
+ * está probado. Ponerlo en `true` vuelve a cerrar Android fuera de la APK.
+ */
+const SOLO_APP_EN_ANDROID = false;
 
 /**
  * ¿Es un Android FUERA de la APK?
