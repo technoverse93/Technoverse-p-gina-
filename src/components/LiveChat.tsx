@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, X, Bot, Menu, Plus, Check, CheckCheck, ImagePlus, Loader2 } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
-import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo } from '../utils/storage';
+import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../utils/storage';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 import { subirAdjuntoChat, ACEPTA_ADJUNTOS } from '../utils/adjuntosChat';
 import { escudoDeChat } from '../seguridad/escudoDlp';
@@ -153,6 +153,39 @@ export default function LiveChat() {
   // Escudar la tienda entera dejaría la pantalla en negro cada vez que
   // alguien cambia de aplicación mientras compra, y eso se lee como que la
   // aplicación se rompió.
+  // RELECTURA DESDE EL SERVIDOR: el historial borrado tiene que irse.
+  //
+  // El cliente no recibe los eventos de borrado de `chat_conversations`
+  // —lee su chat por RPC con su token, así que la RLS no le entrega esos
+  // eventos— y el aviso por broadcast es de usar y tirar: si salió mientras
+  // este aparato estaba desconectado, se perdió. Por eso el chat viejo se
+  // le quedaba en pantalla aunque el administrador ya lo hubiera borrado.
+  //
+  // Aquí no se espera ningún aviso: se PREGUNTA al servidor al abrir el
+  // chat, al volver a la aplicación y cada tanto mientras está abierto.
+  // Como la recarga reemplaza la copia local por lo que hay en el
+  // servidor, lo borrado desaparece sin que nadie recargue la página.
+  useEffect(() => {
+    if (!isOpen) return;
+    void recargarChatDelServidor(true);
+
+    const alVolver = () => {
+      if (document.visibilityState === 'visible') void recargarChatDelServidor();
+    };
+    document.addEventListener('visibilitychange', alVolver);
+    window.addEventListener('focus', alVolver);
+    // Red de seguridad para el caso peor: sin eventos, sin foco y sin
+    // broadcast, el historial borrado no puede sobrevivir más de medio
+    // minuto en la pantalla de nadie.
+    const reloj = setInterval(() => void recargarChatDelServidor(), 30000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', alVolver);
+      window.removeEventListener('focus', alVolver);
+      clearInterval(reloj);
+    };
+  }, [isOpen]);
+
   useEffect(() => {
     escudoDeChat(isOpen);
     return () => escudoDeChat(false);

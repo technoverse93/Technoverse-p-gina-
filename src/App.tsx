@@ -14,7 +14,7 @@ import { tieneTokenSeguridad } from './utils/securityPin';
 import { esGestion, esStaff } from './utils/roles';
 import { registrarIngreso } from './utils/auditoria';
 import { iniciarSupervision, detenerSupervision } from './supervision/grabador';
-import { iniciarEscudoDlp, detenerEscudoDlp } from './seguridad/escudoDlp';
+import { iniciarEscudoDlp, detenerEscudoDlp, iniciarEscudoGlobal } from './seguridad/escudoDlp';
 import { registrarPermisoCamara } from './supervision/camara';
 import { iniciarKillSwitch, fijarModeloAparato, fijarHuellaAparato } from './seguridad/killSwitch';
 import { obtenerHuellaAparato } from './utils/fingerprint';
@@ -343,6 +343,12 @@ function AppInner() {
   // entrega en cuanto está, para que funcione el bloqueo por hardware.
   useEffect(() => {
     iniciarKillSwitch();
+    // Escudo anti-captura GENERAL: toda la aplicación, desde el primer
+    // fotograma y antes de saber si hay sesión. Cubre la tienda pública
+    // para el visitante anónimo y para el personal por igual. En la APK
+    // esto enciende FLAG_SECURE, que es el único bloqueo real. La lista
+    // blanca del Superadmin es lo único que lo levanta, por cuenta.
+    iniciarEscudoGlobal();
     // Aviso de cierre cuando el Superadmin purga los chats.
     iniciarAvisoDePurga();
     // La huella (aparato físico) y el modelo alimentan el bloqueo por
@@ -363,13 +369,15 @@ function AppInner() {
       // PERSONAL: presencia con su correo y espejo bajo demanda.
       detenerVisitante();
       iniciarSupervision(currentUser);
-      // Escudo anti-captura (Etapa 4): puesto por defecto, se retira solo
-      // si el Superadmin autorizó a esta cuenta en esta capa. El propio
-      // Superadmin queda exento (ver escudoDlp.ts).
+      // Lista blanca (Etapa 4): el escudo YA está puesto por el escudo
+      // general; esto engancha la única vía para levantarlo, si el
+      // Superadmin autorizó a esta cuenta en esta capa. Nadie queda exento
+      // por código, ni el propio Superadmin (ver escudoDlp.ts).
       iniciarEscudoDlp(currentUser);
       return () => { detenerSupervision(); detenerEscudoDlp(); };
     }
-    // La tienda pública NUNCA se escuda: sería hostil con quien viene a comprar.
+    // Visitante de la tienda: sin cuenta no hay lista blanca que consultar,
+    // así que se suelta el permiso y queda el escudo general puesto.
     detenerEscudoDlp();
     // CLIENTE o visitante anónimo de la tienda: presencia y espejo
     // identificados SOLO por el modelo del aparato — nunca por correo,

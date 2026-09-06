@@ -1,9 +1,16 @@
 // =====================================================================
-// ESCUDO DLP — anti-captura del lado del personal (Zero Trust · Etapa 4)
+// ESCUDO DLP — anti-captura de TODA la aplicación (Zero Trust · Etapa 4)
 // =====================================================================
-// Regla base: NADIE captura. El Superadmin habilita excepciones por cuenta
-// y por capa (web / APK) desde la Consola de Capturas. Este módulo es el
-// que obedece esa lista en el aparato de cada quien.
+// Regla base: NADIE captura. Ni el personal, ni el visitante anónimo de la
+// tienda pública. El Superadmin habilita excepciones por cuenta y por capa
+// (web / APK) desde la Consola de Capturas; este módulo obedece esa lista
+// en el aparato de cada quien.
+//
+// La tienda pública estuvo fuera del escudo un tiempo, y era deliberado:
+// tapar el catálogo cada vez que alguien cambia de aplicación se lee como
+// que la app se rompió. El dueño pidió cubrirla igualmente, así que la
+// regla es una sola para todos. Para revertirlo basta con no llamar a
+// `iniciarEscudoGlobal()` desde App.tsx.
 //
 // Tres defensas, más la nativa:
 //
@@ -109,11 +116,19 @@ function velo(): HTMLElement {
   return el;
 }
 
-/** Enciende o apaga el velo ya montado. Sin recalcular layout. */
+/**
+ * Enciende o apaga el velo ya montado. Sin recalcular layout.
+ *
+ * NUNCA captura el puntero, ni encendido. El velo es un tapón visual, no
+ * una barrera: si por un fallo de foco se quedara puesto, con
+ * `pointer-events:auto` la tienda quedaría inservible —pantalla negra que
+ * no responde— y eso es mucho peor que una captura. Dejándolo transparente
+ * al puntero, en el peor caso se sigue pudiendo comprar a ciegas, y el
+ * primer toque lo retira (ver `alTocar`).
+ */
 function pintarVelo(el: HTMLElement, encendido: boolean): void {
   el.style.visibility = encendido ? 'visible' : 'hidden';
   el.style.opacity = encendido ? '1' : '0';
-  el.style.pointerEvents = encendido ? 'auto' : 'none';
 }
 
 /** Cuánto se sostiene el negro tras un intento de captura. */
@@ -220,37 +235,84 @@ function alSoltarTecla(e: KeyboardEvent): void {
 /**
  * Motivos por los que el escudo está puesto ahora mismo.
  *
- * Hay DOS fuentes independientes y no pueden pisarse: la lista blanca del
- * personal ('dlp') y el chat abierto de un cliente ('chat'). Sin contarlos,
- * cerrar el chat retiraría también el escudo de un empleado bloqueado, y
- * sincronizar la lista blanca lo retiraría con el chat abierto. El escudo
- * se pone si hay AL MENOS un motivo y se retira solo cuando no queda
- * ninguno.
+ * Varias partes de la aplicación lo piden por su cuenta ('global' desde el
+ * arranque, 'chat' mientras el cliente tiene la conversación abierta) y no
+ * pueden pisarse entre ellas: sin contarlos, cerrar el chat retiraría
+ * también el escudo general. Se pone si hay AL MENOS un motivo.
  */
 const motivos = new Set<string>();
 
+/**
+ * La lista blanca autorizó a ESTA cuenta en ESTA capa (web o APK).
+ *
+ * Es un permiso, no un motivo: MANDA sobre todos los motivos juntos. Sin
+ * esto, quien el Superadmin autoriza expresamente a capturar seguiria con
+ * la pantalla en negro por el motivo 'global', y el permiso no serviria
+ * para nada.
+ */
+let exento = false;
+
+function recalcular(): void {
+  const debeEscudar = motivos.size > 0 && !exento;
+  if (debeEscudar) aplicarEscudo();
+  else quitarEscudo();
+  // El bloqueo nativo sigue exactamente la misma decisión. En la APK esto
+  // es lo ÚNICO que impide de verdad la captura, y ahora tambien lo lleva
+  // puesto el visitante anónimo de la tienda.
+  void fijarFlagSecure(debeEscudar);
+}
+
 function pedirEscudo(motivo: string): void {
   motivos.add(motivo);
-  aplicarEscudo();
+  recalcular();
 }
 
 function soltarEscudo(motivo: string): void {
   motivos.delete(motivo);
-  if (motivos.size === 0) quitarEscudo();
+  recalcular();
+}
+
+/**
+ * Escudo GENERAL: toda la aplicación, para todo el mundo.
+ *
+ * Se llama una vez al arrancar, antes de saber siquiera si hay sesión. La
+ * tienda pública estaba fuera del escudo a propósito —tapar el catálogo en
+ * cada cambio de aplicación se lee como que la app se rompió—, pero el
+ * dueño pidió expresamente que tambien quedara cubierta, para anónimos y
+ * para personal por igual, asi que la regla ahora es una sola.
+ *
+ * Para volver a dejar la tienda pública sin escudo basta con no llamar a
+ * esta función desde App.tsx: los motivos 'chat' y el permiso de la lista
+ * blanca siguen funcionando solos.
+ */
+export function iniciarEscudoGlobal(): void {
+  if (typeof window === 'undefined') return;
+  pedirEscudo('global');
 }
 
 /**
  * Escudo para el CLIENTE mientras tiene el chat abierto.
  *
- * No pasa por la lista blanca —un cliente no está en ella— porque protege
- * otra cosa: la conversación que el administrador puede borrar. Se activa
- * al abrir el chat y se retira al cerrarlo, para no dejar la tienda entera
- * a oscuras cada vez que alguien cambia de aplicación.
+ * Queda por debajo del escudo general, pero se mantiene aparte a propósito:
+ * protege otra cosa —la conversación que el administrador puede borrar— y
+ * sigue en pie aunque algún día se retire el escudo de la tienda.
  */
 export function escudoDeChat(activo: boolean): void {
   if (typeof window === 'undefined') return;
   if (activo) pedirEscudo('chat');
   else soltarEscudo('chat');
+}
+
+/**
+ * Válvula de seguridad: cualquier toque con la ventana al frente retira el
+ * velo. Si alguna combinación rara de foco lo dejara puesto, la persona lo
+ * quita tocando la pantalla en vez de quedarse con la tienda en negro.
+ */
+function alTocar(): void {
+  if (!puesto) return;
+  if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
+  if (destelloTimer) { clearTimeout(destelloTimer); destelloTimer = null; }
+  pintarVelo(velo(), false);
 }
 
 function aplicarEscudo(): void {
@@ -263,6 +325,7 @@ function aplicarEscudo(): void {
   document.addEventListener('visibilitychange', alCambiarVisibilidad);
   window.addEventListener('keydown', alTeclear, true);
   window.addEventListener('keyup', alSoltarTecla, true);
+  window.addEventListener('pointerdown', alTocar, true);
 }
 
 function quitarEscudo(): void {
@@ -274,6 +337,7 @@ function quitarEscudo(): void {
   document.removeEventListener('visibilitychange', alCambiarVisibilidad);
   window.removeEventListener('keydown', alTeclear, true);
   window.removeEventListener('keyup', alSoltarTecla, true);
+  window.removeEventListener('pointerdown', alTocar, true);
   document.getElementById(ID_ESTILO)?.remove();
   document.getElementById(ID_VELO)?.remove();
 }
@@ -305,11 +369,10 @@ async function puedeCapturar(): Promise<boolean> {
 
 async function sincronizar(): Promise<void> {
   if (!usuario) return;
-  const permitido = await puedeCapturar();
-  if (permitido) soltarEscudo('dlp');
-  else pedirEscudo('dlp');
-  // El bloqueo nativo sigue la misma decisión (no-op fuera de la APK).
-  void fijarFlagSecure(!permitido);
+  // El permiso de la lista blanca es lo único que levanta el escudo, y lo
+  // levanta entero: escudo web y FLAG_SECURE nativo a la vez.
+  exento = await puedeCapturar();
+  recalcular();
 }
 
 // ---------------------------------------------------------------------
@@ -327,8 +390,10 @@ async function sincronizar(): Promise<void> {
  * blanca, escudo puesto— y el Superadmin se concede a sí mismo el permiso
  * desde la Consola de Capturas cuando necesite documentar el sistema.
  *
- * Un Cliente nunca entra aquí — la tienda pública jamás se escuda, que
- * sería hostil con quien viene a comprar. Su chat sí, por `escudoDeChat`.
+ * Un Cliente no entra aquí, pero YA VA ESCUDADO: el escudo general de
+ * `iniciarEscudoGlobal()` cubre la tienda pública desde el arranque, para
+ * anónimos y personal por igual. Lo que esta función añade es la única vía
+ * para LEVANTARLO: la lista blanca.
  */
 export function iniciarEscudoDlp(user: User): void {
   if (typeof window === 'undefined' || !user || !esStaff(user.role)) return;
@@ -351,13 +416,17 @@ export function iniciarEscudoDlp(user: User): void {
   reloj = setInterval(() => void sincronizar(), RESINCRONIZAR_MS);
 }
 
-/** Retira el escudo por completo. Llamar al cerrar sesión. */
+/**
+ * Suelta la vigilancia de la lista blanca. Llamar al cerrar sesión.
+ *
+ * NO retira el escudo: retira el PERMISO. Al salir de una cuenta
+ * autorizada, la exención se pierde y el escudo general vuelve a caer solo
+ * —que es lo correcto: el permiso era de esa cuenta, no del aparato.
+ */
 export function detenerEscudoDlp(): void {
   if (reloj) { clearInterval(reloj); reloj = null; }
   if (canal) { try { supabase.removeChannel(canal); } catch { /* nada */ } canal = null; }
-  // Solo se suelta el motivo del personal: si el cliente tiene el chat
-  // abierto, su escudo sigue en pie.
-  soltarEscudo('dlp');
-  void fijarFlagSecure(false);
   usuario = null;
+  exento = false;
+  recalcular();
 }
