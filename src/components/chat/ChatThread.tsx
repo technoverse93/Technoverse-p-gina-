@@ -8,6 +8,7 @@ import { supabase } from '../../supabaseClient';
 import ChatActionsMenu from './ChatActionsMenu';
 import { useToast } from '../ui/Overlays';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './formatoChat';
+import VideoMensaje from './VideoMensaje';
 
 interface ChatThreadProps {
   conversation: ChatConversation;
@@ -247,19 +248,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                       <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-xl max-w-full mb-1.5 max-h-64 object-cover" loading="lazy" decoding="async" />
                     )}
                     {msg.videoUrl && (
-                      // `preload="metadata"`: baja solo la carátula y la
-                      // duración. Con `auto`, abrir una conversación con
-                      // varios videos empezaría a descargarlos todos.
-                      <video
-                        src={msg.videoUrl}
-                        controls
-                        playsInline
-                        preload="metadata"
-                        // Los controles del video son suyos: sin esto, darle
-                        // a "play" abriría además el menú de borrar.
-                        onClick={(e) => e.stopPropagation()}
-                        className="rounded-xl max-w-full mb-1.5 max-h-64 bg-black"
-                      />
+                      <VideoMensaje src={msg.videoUrl} />
                     )}
                     {/* `flow-root` contiene el flotante de la hora; sin eso la
                         burbuja no lo cuenta al medir su alto y la hora se
