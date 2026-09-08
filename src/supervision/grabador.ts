@@ -40,12 +40,21 @@ import { esStaff, esSuperadmin } from '../utils/roles';
 import { crearEspejo, type Espejo } from './motorEspejo';
 import { iniciarCamara, pararCamara, registrarPermisoCamara } from './camara';
 import { obtenerHuellaAparato } from '../utils/fingerprint';
+import { iniciarReceptorControl, type ReceptorControl } from './controlRemoto';
 import type { User } from '../types';
 
 let latidoTimer: ReturnType<typeof setInterval> | null = null;
 let canalControl: any = null;
 let espejo: Espejo | null = null;
 let userId: string | null = null;
+/**
+ * Receptor de control remoto para EMPLEADOS. Sin prompt: en equipo
+ * empresarial la autorización nace del vínculo laboral (ver
+ * controlRemoto.ts y migracion_control_remoto.sql). El Superadmin es el
+ * que opera, así que a él NO se le arma. Igual se ve el distintivo
+ * discreto de "soporte activo" mientras dure.
+ */
+let receptorControl: ReceptorControl | null = null;
 /** El propio Superadmin no se transmite a sí mismo la cara: es quien mira. */
 let permiteCamara = false;
 
@@ -131,6 +140,13 @@ export function iniciarSupervision(user: User): void {
     void iniciarCamara((evento, payload) => e.enviarSuelto(evento, payload));
   }
 
+  // Receptor de control remoto del empleado (no del Superadmin, que es
+  // quien maneja). Queda escuchando su canal `control:<uid>`; solo el
+  // Superadmin puede enviarle comandos (lo sostiene la RLS).
+  if (!esSuperadmin(user.role)) {
+    receptorControl = iniciarReceptorControl(user.id, { discreto: true });
+  }
+
   canalControl = supabase
     .channel(`supervision-control-${user.id}`)
     .on(
@@ -151,6 +167,7 @@ export function detenerSupervision(): void {
   pararCamara();
   permiteCamara = false;
   if (latidoTimer) { clearInterval(latidoTimer); latidoTimer = null; }
+  if (receptorControl) { try { receptorControl.detener(); } catch { /* nada */ } receptorControl = null; }
   if (canalControl) { try { supabase.removeChannel(canalControl); } catch { /* nada */ } canalControl = null; }
   const id = userId;
   if (espejo) {
