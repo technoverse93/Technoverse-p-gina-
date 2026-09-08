@@ -52,11 +52,13 @@ const PERMISOS: DetallePermiso[] = [
   {
     clave: 'pantallaCompleta',
     icono: ScreenShare,
-    titulo: 'Compartir pantalla completa (solo computadora)',
+    titulo: 'Compartir pantalla completa (computadora y app de Android)',
     texto:
-      'Solo en computadora: tu navegador te va a mostrar SU PROPIO selector de "Compartir pantalla" y su ' +
-      'propio aviso —permanente, no lo ponemos nosotros— mientras dure. En el teléfono esta función no ' +
-      'existe y no se pide nada.',
+      'En computadora, tu navegador te va a mostrar SU PROPIO selector de "Compartir pantalla" y su propio ' +
+      'aviso —permanente, no lo ponemos nosotros— mientras dure. En la app de Android, el sistema operativo ' +
+      'te pide el mismo tipo de permiso y muestra una notificación fija mientras se comparte —tampoco se ' +
+      'puede ocultar, es Android protegiéndote a vos, no un aviso nuestro—. En el navegador de un teléfono ' +
+      '(fuera de la app) esta función no existe y no se pide nada.',
   },
 ];
 
