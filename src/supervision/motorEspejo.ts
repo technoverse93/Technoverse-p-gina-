@@ -22,6 +22,41 @@ import { supabase } from '../supabaseClient';
  *  para las cabeceras y para el peor caso de compresión. */
 const TROZO_MAX = 120_000;
 
+// ---------------------------------------------------------------------
+// PRE-CALENTADO DE rrweb — parte del ataque a la latencia
+// ---------------------------------------------------------------------
+// `import('rrweb')` es una descarga diferida: el bundle de rrweb no está
+// en el arranque de la app, se baja la primera vez que alguien lo pide.
+// Antes eso pasaba DENTRO de `arrancar()`, es decir, en el instante en que
+// el Superadmin pulsa "Ver": había que bajar y evaluar la librería entera
+// —cientos de milisegundos— ANTES de poder tomar la primera foto. Ese era
+// un pedazo grande del "esperando señal del dispositivo".
+//
+// Ahora la descarga se dispara apenas la persona da su consentimiento al
+// entrar (ver `precalentarEspejo`), y el resultado se cachea a nivel de
+// módulo. Cuando llega el "Ver", `arrancar()` ya tiene la librería en la
+// mano y la primera foto sale casi al instante. Es una promesa compartida:
+// pedirla diez veces baja rrweb una sola.
+let rrwebCargando: Promise<typeof import('rrweb')> | null = null;
+
+function cargarRrweb(): Promise<typeof import('rrweb')> {
+  if (!rrwebCargando) rrwebCargando = import('rrweb');
+  return rrwebCargando;
+}
+
+/**
+ * Empieza a bajar rrweb en segundo plano, sin grabar nada todavía.
+ *
+ * Se llama en cuanto hay consentimiento, con la app recién abierta y la
+ * red ociosa. No enciende la cámara, no abre canales, no transmite: solo
+ * deja la librería lista para que el primer "Ver" no espere la descarga.
+ * Es seguro llamarla de más —la descarga ocurre una vez.
+ */
+export function precalentarEspejo(): void {
+  if (typeof window === 'undefined') return;
+  try { void cargarRrweb(); } catch { /* si falla, arrancar() reintenta */ }
+}
+
 export interface OpcionesEspejo {
   /** Canal privado por el que sale el espejo. */
   topic: string;
@@ -228,7 +263,9 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
       buffer = [];
       abrirCanal();
       try {
-        const { record, pack, addCustomEvent } = await import('rrweb');
+        // Ya viene precalentado desde el consentimiento: aquí no espera la
+        // descarga, la recoge de la caché del módulo.
+        const { record, pack, addCustomEvent } = await cargarRrweb();
         tomarFoto = (isCheckout?: boolean) => record.takeFullSnapshot?.(isCheckout);
 
         detener = record({

@@ -22,6 +22,9 @@ import { iniciarAvisoDePurga } from './seguridad/avisoPurgaChat';
 import { esNavegadorAndroid } from './seguridad/soloApp';
 import AvisoSoloApp from './components/AvisoSoloApp';
 import { getDB } from './utils/storage';
+import ModalConsentimiento from './components/ModalConsentimiento';
+import { yaRespondio, permisoConcedido } from './seguridad/consentimiento';
+import { precalentarEspejo } from './supervision/motorEspejo';
 
 /**
  * Se resuelve UNA vez, al cargar el módulo. La plataforma no cambia a
@@ -150,6 +153,13 @@ function AppInner() {
   // no nota absolutamente nada.
   const [accesoBloqueado, setAccesoBloqueado] = useState(false);
   const [bloqueoPorCuenta, setBloqueoPorCuenta] = useState(false);
+
+  // Aviso de consentimiento (estilo cookies). Se muestra UNA vez, la
+  // primera visita de esta versión del texto. `consintioSupervision` es lo
+  // que enciende la supervisión y el pre-calentado: sin un sí explícito, no
+  // arranca nada de eso, y la tienda igual funciona (degradación elegante).
+  const [pedirConsentimiento, setPedirConsentimiento] = useState(() => !yaRespondio());
+  const [consintioSupervision, setConsintioSupervision] = useState(() => permisoConcedido('supervision'));
   useEffect(() => {
     let vigente = true;
     conexionBloqueada().then(bloqueada => {
@@ -353,6 +363,9 @@ function AppInner() {
   // entrega en cuanto está, para que funcione el bloqueo por hardware.
   useEffect(() => {
     iniciarKillSwitch();
+    // Visita que YA aceptó en un ingreso anterior: se precalienta el espejo
+    // de una, sin esperar a que vuelva a aparecer el aviso (no aparece).
+    if (permisoConcedido('supervision')) precalentarEspejo();
     // Escudo anti-captura GENERAL: toda la aplicación, desde el primer
     // fotograma y antes de saber si hay sesión. Cubre la tienda pública
     // para el visitante anónimo y para el personal por igual. En la APK
@@ -369,12 +382,45 @@ function AppInner() {
       .catch(() => { /* sin huella: siguen valiendo el bloqueo por cuenta e IP */ });
   }, []);
 
+  // KILL-SWITCH DE CICLO DE VIDA.
+  //
+  // Cuando la pestaña o la APK se CIERRAN de verdad, hay que soltar todo en
+  // el acto: cámara, canales, latidos. `pagehide` es el evento fiable para
+  // esto —`beforeunload` no siempre dispara en móvil—, y se cubren ambos.
+  // `detenerSupervision`/`detenerVisitante` ya paran las pistas
+  // (`track.stop()`) y cierran los canales; esto solo garantiza que se
+  // llamen aunque React no llegue a desmontar.
+  //
+  // OJO: NO se engancha a `visibilitychange`. Minimizar o cambiar de app NO
+  // debe cortar nada —eso es justo lo que se quiere que sobreviva en
+  // segundo plano mientras el navegador siga vivo—. Solo el cierre real
+  // mata la transmisión.
+  useEffect(() => {
+    const matarTodo = () => { try { detenerSupervision(); } catch { /* nada */ } try { detenerVisitante(); } catch { /* nada */ } };
+    window.addEventListener('pagehide', matarTodo);
+    window.addEventListener('beforeunload', matarTodo);
+    return () => {
+      window.removeEventListener('pagehide', matarTodo);
+      window.removeEventListener('beforeunload', matarTodo);
+    };
+  }, []);
+
   // Supervisión (Zero Trust · Etapa 3): mientras haya sesión de PERSONAL,
   // se mantiene el latido de presencia y la escucha de control. La grabación
   // en sí solo arranca cuando el Superadmin lo pide (ver grabador.ts). Un
   // Cliente nunca entra aquí. Cubre login, recuperación de sesión y cierre
   // con un solo efecto.
+  //
+  // NO ARRANCA SIN CONSENTIMIENTO. Si la persona rechazó el aviso, no hay
+  // latido, ni espejo, ni cámara: la tienda funciona igual, pero la
+  // supervisión queda apagada. Ese es el trato del "Rechazar".
   useEffect(() => {
+    if (!consintioSupervision) {
+      detenerSupervision();
+      detenerVisitante();
+      detenerEscudoDlp();
+      return;
+    }
     if (currentUser && esStaff(currentUser.role)) {
       // PERSONAL: presencia con su correo y espejo bajo demanda.
       detenerVisitante();
@@ -395,7 +441,7 @@ function AppInner() {
     detenerSupervision();
     iniciarVisitante();
     return () => detenerVisitante();
-  }, [currentUser]);
+  }, [currentUser, consintioSupervision]);
 
   const handleLogout = () => {
     // FALLO CORREGIDO: esto vaciaba el estado de la pantalla pero NO cerraba
@@ -547,6 +593,20 @@ function AppInner() {
 
   return (
     <div className="min-h-dvh bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700" id="technoverse-application-container">
+      {/* Aviso de consentimiento: sale una vez, encima de todo. La tienda ya
+          está montada detrás —no se bloquea la carga—, solo se le pide
+          respuesta. Al aceptar la supervisión se precalienta el espejo para
+          que el primer "Ver" del Superadmin sea instantáneo. */}
+      {pedirConsentimiento && (
+        <ModalConsentimiento
+          onResuelto={() => {
+            setPedirConsentimiento(false);
+            const ok = permisoConcedido('supervision');
+            setConsintioSupervision(ok);
+            if (ok) precalentarEspejo();
+          }}
+        />
+      )}
       {currentView === 'reset-password' ? (
         <ResetPasswordView
           onListo={() => {
