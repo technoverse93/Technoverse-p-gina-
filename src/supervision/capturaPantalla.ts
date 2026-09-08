@@ -85,13 +85,7 @@ export function puedeCompartirPantalla(): boolean {
   }
 }
 
-/**
- * Exportada para que `capturaPantallaNativa.ts` (Android, MediaProjection)
- * hable el MISMO canal de señalización que esta pantalla completa de
- * escritorio — así la consola y el visor no necesitan saber si del otro
- * lado hay un navegador o un WebView nativo.
- */
-export function temaDePantalla(clave: string): string {
+function temaDePantalla(clave: string): string {
   return `pantalla:${clave}`;
 }
 
@@ -109,8 +103,7 @@ export function temaDePantalla(clave: string): string {
 const TEMA_PRESENCIA = 'pantalla-presencia';
 let canalPresenciaEmisor: any = null;
 
-/** También exportada — ver el comentario de `temaDePantalla`. */
-export function anunciarPantallaDisponible(clave: string): void {
+function anunciarPantallaDisponible(clave: string): void {
   try {
     canalPresenciaEmisor = supabase.channel(TEMA_PRESENCIA, { config: { presence: { key: clave } } });
     canalPresenciaEmisor.subscribe((estado: string) => {
@@ -119,7 +112,7 @@ export function anunciarPantallaDisponible(clave: string): void {
   } catch { /* nada */ }
 }
 
-export function retirarAnuncioPantalla(): void {
+function retirarAnuncioPantalla(): void {
   try { if (canalPresenciaEmisor) supabase.removeChannel(canalPresenciaEmisor); } catch { /* nada */ }
   canalPresenciaEmisor = null;
 }
