@@ -5,6 +5,8 @@ import {
   AuditLog, ClientProfile, LogisticsDelivery, MarketingCampaign,
   AppSettings, Banner, HistoricalSku, MarketingRequest
 } from '../types';
+import { permisoConcedido } from '../seguridad/consentimiento';
+import { notificarMensajeChat } from './alertas';
 
 // Toda la base de datos vive en Supabase (Postgres + Realtime). Firebase ya
 // no se usa: este módulo mantiene exactamente la misma API pública que antes
@@ -1413,12 +1415,18 @@ function agregarMensajeAConversacion(convId: string, msg: ChatMessage): void {
   }
   if (conv.messages.some(m => m.id === msg.id)) return; // ya lo teníamos
 
+  // Si estaba en `mensajesEnVuelo` es porque ESTE cliente lo mandó: no
+  // tiene sentido notificarle de su propio mensaje.
+  const eraPropio = mensajesEnVuelo.has(msg.id);
+
   conv.messages.push(msg);
   // Si era un mensaje propio que estaba esperando confirmación, ya no
   // hace falta protegerlo de las recargas: el servidor lo devolvió.
   confirmarMensajeEnVuelo(msg.id);
   lastSyncedDb.chat_conversations = structuredClone(localCache.chat_conversations);
   notifyUpdate();
+
+  if (!eraPropio && permisoConcedido('alertas')) notificarMensajeChat(msg.text || '');
 }
 
 // =====================================================================

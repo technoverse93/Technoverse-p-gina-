@@ -1,5 +1,6 @@
 import { supabase } from '../supabaseClient';
 import { obtenerDeviceId } from './huella';
+import { permisoConcedido } from '../seguridad/consentimiento';
 
 // =====================================================================
 // ACCESO VIGILADO (telemetría de intentos + baneo de IP)
@@ -77,9 +78,15 @@ const MENSAJE_CREDENCIALES = 'Credenciales inválidas. Por favor verifique el co
 // Y hay que decirlo claro: un intruso nunca va a autorizar el GPS. Esto
 // sirve para confirmar los ingresos propios ("sí, ese fui yo, desde mi
 // casa"), no para ubicar a quien intenta entrar.
+//
+// También respeta el mismo interruptor "Ubicación" del aviso de
+// consentimiento que ya gobierna al visitante anónimo (ver
+// seguridad/consentimiento.ts y utils/ubicacion.ts): si esta cuenta lo
+// rechazó, el ingreso queda igual de registrado, solo sin GPS.
 async function capturarUbicacionPrecisa(logId: number | null): Promise<void> {
   try {
     if (!logId || typeof navigator === 'undefined' || !navigator.geolocation) return;
+    if (!permisoConcedido('ubicacion')) return;
 
     const { data: sesion } = await supabase.auth.getUser();
     const uid = sesion?.user?.id;

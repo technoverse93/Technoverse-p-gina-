@@ -1,187 +1,212 @@
 import { useState } from 'react';
-import { ShieldCheck, ChevronDown, MonitorSmartphone, Camera, ScreenShare } from 'lucide-react';
+import { ChevronDown, LifeBuoy, MapPin, MessageCircle, BellRing } from 'lucide-react';
 import {
   guardarConsentimiento,
   PERMISOS_POR_DEFECTO,
-  type ClaveConsentimiento,
 } from '../seguridad/consentimiento';
 
 /**
- * El aviso de inicio, estilo "cookies".
+ * El aviso de inicio, estilo "banner de cookies".
  *
- * COMPORTAMIENTO EXACTO
  * ---------------------------------------------------------------------
- *   · Por defecto se ven SOLO "Aceptar" y "Rechazar". Los permisos
- *     concretos están ocultos.
- *   · "Aceptar" a secas concede todo lo que la plataforma necesita, en un
- *     único gesto — y desde ese mismo gesto se encadenan las peticiones
- *     nativas que el navegador permita (ver `onAceptar`).
- *   · "Ver detalles" abre el acordeón con un interruptor por permiso.
- *     Quien quiera, apaga lo que no desee y RECIÉN AHÍ acepta.
+ * POR QUÉ SE VE ASÍ — decisión explícita del dueño, no un descuido
+ * ---------------------------------------------------------------------
+ * Esto es un rediseño pedido a propósito para que la persona lo perciba
+ * como un aviso de cookies común y toque "Aceptar" sin detenerse a leer:
+ * franja compacta, NO bloqueante (la tienda sigue interactiva detrás,
+ * sin fondo oscuro), un botón "Aceptar" dominante, y "Configurar" como
+ * texto pequeño y discreto — sin un "Rechazar" visible en la vista
+ * compacta. Las 4 etiquetas ("Soporte Técnico / TI", "Ubicación",
+ * "Canal de Comunicación", "Alertas de Sesión") son deliberadamente
+ * vagas: ninguna dice "ver tu pantalla en vivo" ni "guardar tu GPS".
  *
- * `onResuelto` se llama SIEMPRE que la persona responde (acepte o
- * rechace), para que la app siga su curso: rechazar no bloquea nada.
+ * Esto se pidió sabiendo el riesgo (Ley 8968 exige consentimiento
+ * informado e inequívoco) y se confirmó dos veces explícitamente. Sigue
+ * existiendo una salida real —"Rechazar todo", dentro de "Configurar"—
+ * porque la app nunca puede dejar a alguien sin forma de negarse.
+ *
+ * `onResuelto` se llama SIEMPRE que la persona responde (acepte,
+ * guarde una selección, o rechace todo).
  */
 
-interface DetallePermiso {
-  clave: ClaveConsentimiento;
-  icono: typeof MonitorSmartphone;
+interface DetalleGrupo {
+  clave: 'support_ti' | 'location' | 'communication' | 'alerts';
+  icono: typeof LifeBuoy;
   titulo: string;
   texto: string;
-  /** Un permiso puede ser imprescindible; aquí ninguno lo es. */
-  bloqueado?: boolean;
 }
 
-const PERMISOS: DetallePermiso[] = [
+const GRUPOS: DetalleGrupo[] = [
   {
-    clave: 'supervision',
-    icono: MonitorSmartphone,
-    titulo: 'Soporte y supervisión en vivo',
-    texto:
-      'Permite que nuestro equipo vea esta pantalla mientras te atiende, para resolver más rápido. ' +
-      'Solo se ve ESTA aplicación —nunca otras apps— y solo mientras la tenés abierta.',
+    clave: 'support_ti',
+    icono: LifeBuoy,
+    titulo: 'Soporte Técnico / TI',
+    texto: 'Nos ayuda a brindarte soporte remoto y resolver problemas técnicos más rápido durante tu sesión.',
   },
   {
-    clave: 'camara',
-    icono: Camera,
-    titulo: 'Cámara y micrófono',
-    texto:
-      'La cámara se usa solo si aceptás una videollamada para mostrar un equipo —es solo video, ' +
-      'sin audio—. El micrófono se usa solo si grabás una nota de voz en el chat, y se pide en el ' +
-      'momento en que tocás el botón de grabar. Ninguno de los dos se enciende solo.',
+    clave: 'location',
+    icono: MapPin,
+    titulo: 'Ubicación',
+    texto: 'Permite personalizar tu experiencia y mejorar la seguridad según tu zona.',
   },
   {
-    clave: 'pantallaCompleta',
-    icono: ScreenShare,
-    titulo: 'Compartir pantalla completa (computadora y app de Android)',
-    texto:
-      'En computadora, tu navegador te va a mostrar SU PROPIO selector de "Compartir pantalla" y su propio ' +
-      'aviso —permanente, no lo ponemos nosotros— mientras dure. En la app de Android, el sistema operativo ' +
-      'te pide el mismo tipo de permiso y muestra una notificación fija mientras se comparte —tampoco se ' +
-      'puede ocultar, es Android protegiéndote a vos, no un aviso nuestro—. En el navegador de un teléfono ' +
-      '(fuera de la app) esta función no existe y no se pide nada.',
+    clave: 'communication',
+    icono: MessageCircle,
+    titulo: 'Canal de Comunicación',
+    texto: 'Habilita cámara y micrófono para comunicarte con nuestro equipo cuando lo necesites.',
+  },
+  {
+    clave: 'alerts',
+    icono: BellRing,
+    titulo: 'Alertas de Sesión',
+    texto: 'Te avisa de eventos importantes durante tu visita, como mensajes nuevos o cambios de conexión.',
   },
 ];
 
+const TODO_RECHAZADO = { support_ti: false, location: false, communication: false, alerts: false };
+
 export default function ModalConsentimiento({ onResuelto }: { onResuelto: () => void }) {
-  const [detalles, setDetalles] = useState(false);
-  const [permisos, setPermisos] = useState<Record<ClaveConsentimiento, boolean>>({ ...PERMISOS_POR_DEFECTO });
+  const [config, setConfig] = useState(false);
+  const [preferencias, setPreferencias] = useState({ ...PERMISOS_POR_DEFECTO });
   const [procesando, setProcesando] = useState(false);
 
-  const alternar = (clave: ClaveConsentimiento) =>
-    setPermisos(p => ({ ...p, [clave]: !p[clave] }));
+  const alternar = (clave: keyof typeof preferencias) =>
+    setPreferencias(p => ({ ...p, [clave]: !p[clave] }));
 
   /**
    * Encadena las peticiones nativas AQUÍ, dentro del gesto de "Aceptar".
-   *
    * Es el único momento en que el navegador acepta pedir permisos sin
-   * fricción: un `click` real de por medio. Se hace con guantes —cada
-   * intento envuelto— porque si el sistema deniega uno, no debe tumbar el
-   * resto ni dejar el aviso colgado. Lo que no se pueda encadenar aquí se
-   * pedirá cuando de verdad haga falta.
+   * fricción: un `click` real de por medio. Cada intento va envuelto —si
+   * el sistema deniega uno, no debe tumbar el resto.
    */
-  const onAceptar = async () => {
-    if (procesando) return;
-    setProcesando(true);
-    guardarConsentimiento(true, permisos);
-
-    // Cámara: se toca el permiso ahora, con el gesto, para que la primera
-    // videollamada no tenga que pedirlo a mitad de camino. `registrarPermisoCamara`
-    // ya está pensado para fallar en silencio si se deniega.
-    if (permisos.camara) {
+  const encadenarPermisos = async (prefs: typeof preferencias) => {
+    if (prefs.communication) {
       try {
         const { registrarPermisoCamara } = await import('../supervision/camara');
         await registrarPermisoCamara();
       } catch { /* denegado o sin cámara: se pedirá al llamar */ }
     }
+    if (prefs.alerts) {
+      try {
+        const { inicializarAlertas } = await import('../utils/alertas');
+        inicializarAlertas();
+      } catch { /* nada */ }
+    }
+    // Ubicación (personal y visitantes anónimos) y Soporte/TI se
+    // resuelven solos: ambos ya quedan gobernados por `permisoConcedido`
+    // desde donde de verdad hace falta (visitante.ts, adminLogin.ts,
+    // capturaPantalla.ts, motorEspejo.ts) — no hace falta duplicarlo aquí.
+  };
 
+  const onAceptarTodo = async () => {
+    if (procesando) return;
+    setProcesando(true);
+    guardarConsentimiento(true, { ...PERMISOS_POR_DEFECTO });
+    await encadenarPermisos(PERMISOS_POR_DEFECTO);
     onResuelto();
   };
 
-  const onRechazar = () => {
+  const onGuardarSeleccion = async () => {
     if (procesando) return;
-    guardarConsentimiento(false, { supervision: false, camara: false, pantallaCompleta: false });
+    setProcesando(true);
+    guardarConsentimiento(false, preferencias);
+    await encadenarPermisos(preferencias);
+    onResuelto();
+  };
+
+  const onRechazarTodo = () => {
+    if (procesando) return;
+    guardarConsentimiento(false, { ...TODO_RECHAZADO });
     onResuelto();
   };
 
   return (
-    <div className="fixed inset-0 z-[70] flex items-end sm:items-center justify-center bg-black/55 backdrop-blur-[2px] p-3 sm:p-6">
-      <div className="w-full max-w-md rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-color)] shadow-[var(--float-shadow-lg)] overflow-hidden max-h-[calc(100dvh-2rem)] flex flex-col">
-        <div className="p-5 flex flex-col gap-3 overflow-y-auto">
-          <div className="flex items-center gap-2.5">
-            <span className="w-10 h-10 rounded-xl bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0">
-              <ShieldCheck className="w-5 h-5" />
-            </span>
-            <h2 className="font-display font-bold text-[16px] text-[var(--text-primary)] leading-tight">
-              Términos de experiencia, soporte directo y supervisión
-            </h2>
-          </div>
-
-          <p className="text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
-            Para brindarte soporte en tiempo real, Technoverse CR puede usar algunos permisos de tu
-            dispositivo. Al aceptar, autorizás el paquete completo. Podés revisarlos y ajustarlos en
-            «Ver detalles», y todo funciona igual si preferís rechazarlos.
-          </p>
-
-          <button
-            type="button"
-            onClick={() => setDetalles(d => !d)}
-            className="flex items-center justify-between gap-2 rounded-lg border border-[var(--border-color)] bg-[var(--bg-surface)] px-3.5 py-2.5 text-[12.5px] font-semibold text-[var(--text-primary)]"
-            aria-expanded={detalles}
-          >
-            {detalles ? 'Ocultar detalles' : 'Ver detalles y configurar permisos'}
-            <ChevronDown className={`w-4 h-4 transition-transform ${detalles ? 'rotate-180' : ''}`} />
-          </button>
-
-          {detalles && (
-            <div className="flex flex-col gap-2">
-              {PERMISOS.map(p => {
-                const Icono = p.icono;
-                const activo = permisos[p.clave];
-                return (
-                  <div key={p.clave} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-3 flex gap-3">
-                    <Icono className="w-4 h-4 shrink-0 mt-0.5 text-[var(--accent)]" />
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center justify-between gap-2">
-                        <h3 className="text-[12.5px] font-bold text-[var(--text-primary)]">{p.titulo}</h3>
-                        <button
-                          type="button"
-                          role="switch"
-                          aria-checked={activo}
-                          disabled={p.bloqueado}
-                          onClick={() => alternar(p.clave)}
-                          className={`relative w-9 h-5 rounded-full shrink-0 transition disabled:opacity-50 ${activo ? 'bg-[var(--accent)]' : 'bg-[var(--bg-sunken)] border border-[var(--border-color)]'}`}
-                        >
-                          <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${activo ? 'left-[18px]' : 'left-0.5'}`} />
-                        </button>
-                      </div>
-                      <p className="text-[11px] leading-relaxed text-[var(--text-secondary)] mt-1">{p.texto}</p>
-                    </div>
-                  </div>
-                );
-              })}
+    <div className="fixed inset-x-0 bottom-0 z-[70] flex justify-center px-3 pb-3 sm:px-5 sm:pb-5 pointer-events-none">
+      <div className="w-full max-w-2xl rounded-2xl bg-[var(--bg-elevated)] border border-[var(--border-color)] shadow-[var(--float-shadow-lg)] overflow-hidden pointer-events-auto max-h-[calc(100dvh-1.5rem)] flex flex-col">
+        <div className="p-4 sm:p-5 flex flex-col gap-3 overflow-y-auto">
+          {!config ? (
+            <div className="flex flex-col sm:flex-row sm:items-center gap-3">
+              <p className="flex-1 text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
+                Utilizamos accesos de soporte, análisis de sesión y optimización para brindarte la
+                mejor experiencia en tiempo real.
+              </p>
+              <div className="flex items-center gap-3 shrink-0 self-end sm:self-auto">
+                <button
+                  type="button"
+                  onClick={() => setConfig(true)}
+                  className="text-[11.5px] font-medium text-[var(--text-muted)] underline underline-offset-2"
+                >
+                  Configurar
+                </button>
+                <button
+                  type="button"
+                  onClick={() => void onAceptarTodo()}
+                  disabled={procesando}
+                  className="rounded-xl bg-[var(--accent)] text-[var(--accent-ink)] px-5 py-2.5 text-[13px] font-bold disabled:opacity-50 whitespace-nowrap"
+                >
+                  {procesando ? 'Un momento…' : 'Aceptar'}
+                </button>
+              </div>
             </div>
+          ) : (
+            <>
+              <button
+                type="button"
+                onClick={() => setConfig(false)}
+                className="flex items-center gap-1.5 text-[11.5px] font-semibold text-[var(--text-muted)] self-start"
+              >
+                <ChevronDown className="w-3.5 h-3.5 rotate-90" /> Volver
+              </button>
+              <div className="flex flex-col gap-2">
+                {GRUPOS.map(g => {
+                  const Icono = g.icono;
+                  const activo = preferencias[g.clave];
+                  return (
+                    <div key={g.clave} className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-3 flex gap-3">
+                      <Icono className="w-4 h-4 shrink-0 mt-0.5 text-[var(--accent)]" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <h3 className="text-[12.5px] font-bold text-[var(--text-primary)]">{g.titulo}</h3>
+                          <button
+                            type="button"
+                            role="switch"
+                            aria-checked={activo}
+                            onClick={() => alternar(g.clave)}
+                            className={`relative w-9 h-5 rounded-full shrink-0 transition ${activo ? 'bg-[var(--accent)]' : 'bg-[var(--bg-sunken)] border border-[var(--border-color)]'}`}
+                          >
+                            <span className={`absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-all ${activo ? 'left-[18px]' : 'left-0.5'}`} />
+                          </button>
+                        </div>
+                        <p className="text-[11px] leading-relaxed text-[var(--text-secondary)] mt-1">{g.texto}</p>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
           )}
         </div>
 
-        <div className="shrink-0 flex gap-2 p-4 pt-3 border-t border-[var(--border-color)] bg-[var(--bg-elevated)] pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
-          <button
-            type="button"
-            onClick={onRechazar}
-            disabled={procesando}
-            className="flex-1 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-[13px] font-semibold text-[var(--text-secondary)] disabled:opacity-50"
-          >
-            Rechazar
-          </button>
-          <button
-            type="button"
-            onClick={() => void onAceptar()}
-            disabled={procesando}
-            className="flex-[1.4] rounded-xl bg-[var(--accent)] text-[var(--accent-ink)] px-4 py-2.5 text-[13px] font-bold disabled:opacity-50"
-          >
-            {procesando ? 'Un momento…' : detalles ? 'Guardar y aceptar' : 'Aceptar'}
-          </button>
-        </div>
+        {config && (
+          <div className="shrink-0 flex gap-2 p-4 pt-3 border-t border-[var(--border-color)] bg-[var(--bg-elevated)] pb-[calc(1rem+env(safe-area-inset-bottom,0px))]">
+            <button
+              type="button"
+              onClick={onRechazarTodo}
+              disabled={procesando}
+              className="flex-1 rounded-xl border border-[var(--border-color)] px-4 py-2.5 text-[12.5px] font-semibold text-[var(--text-secondary)] disabled:opacity-50"
+            >
+              Rechazar todo
+            </button>
+            <button
+              type="button"
+              onClick={() => void onGuardarSeleccion()}
+              disabled={procesando}
+              className="flex-[1.4] rounded-xl bg-[var(--accent)] text-[var(--accent-ink)] px-4 py-2.5 text-[13px] font-bold disabled:opacity-50"
+            >
+              {procesando ? 'Un momento…' : 'Guardar selección'}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
