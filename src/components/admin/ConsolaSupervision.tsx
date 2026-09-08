@@ -518,7 +518,21 @@ export default function ConsolaSupervision() {
         return;
       }
 
-      // (b) Sigue conectada: reconexión limpia del canal.
+      // (b) Sigue conectada. Si el espejo YA está vivo —canal abierto y
+      // reproductor montado— no se tira nada abajo: se pide una foto
+      // COMPLETA nueva sobre el mismo canal (el equivalente a un keyframe)
+      // y la imagen se refresca en milisegundos, sin renegociar el
+      // WebSocket ni pasar por la pantalla en blanco. La reconexión limpia
+      // queda SOLO para cuando de verdad no hay espejo que refrescar.
+      const canalVivo = canalEspejoRef.current;
+      if (canalVivo && replayerRef.current) {
+        try { void canalVivo.send({ type: 'broadcast', event: 'pedir-foto', payload: {} }); } catch { /* si falla, abajo está la reconexión */ }
+        setAviso('Imagen actualizada.');
+        return;
+      }
+
+      // Sin espejo vivo (nunca cargó o el reproductor murió): ahí sí, la
+      // reconexión limpia del canal, que es lo que destraba el arranque.
       await soltar(actual);
       destruirReplayer();
       await new Promise(r => setTimeout(r, 400));

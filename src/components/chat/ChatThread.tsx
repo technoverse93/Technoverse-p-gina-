@@ -422,7 +422,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           value={inputText}
           onChange={(e) => setInputText(e.target.value)}
           placeholder={noteMode ? 'Nota interna (solo visible para el equipo)...' : 'Escribe tu respuesta...'}
-          className="flex-1 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-full px-4 py-2.5 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 transition"
+          className="flex-1 min-w-0 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-full px-4 py-2.5 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 transition"
         />
         <button type="submit" className="w-9 h-9 rounded-full flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] hover:scale-105 active:scale-95 text-[var(--accent-ink)] transition shrink-0 shadow-[0_4px_10px_-4px_rgba(var(--accent-rgb),0.6)]" aria-label="Enviar">
           <Send className="w-3.5 h-3.5" />
