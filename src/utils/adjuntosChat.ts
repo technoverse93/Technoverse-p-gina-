@@ -25,6 +25,7 @@ export const TOPE_ADJUNTO_BYTES = 25 * 1024 * 1024;
 export interface Adjunto {
   imageUrl?: string;
   videoUrl?: string;
+  audioUrl?: string;
 }
 
 /** Lo que aceptan los selectores de archivo, en los dos lados. */
@@ -46,6 +47,11 @@ const EXTENSION_POR_TIPO: Record<string, string> = {
   'video/mp4': 'mp4',
   'video/webm': 'webm',
   'video/quicktime': 'mov',
+  'audio/webm': 'webm',
+  'audio/mp4': 'm4a',
+  'audio/mpeg': 'mp3',
+  'audio/ogg': 'ogg',
+  'audio/aac': 'aac',
   'image/jpeg': 'jpg',
   'image/png': 'png',
   'image/webp': 'webp',
@@ -72,6 +78,35 @@ function extensionDe(file: File): string {
   if (porNombre && porNombre.length <= 5) return porNombre;
   const cola = (file.type.split('/').pop() || '').toLowerCase().replace(/[^a-z0-9]/g, '');
   return cola.slice(0, 5) || 'bin';
+}
+
+/**
+ * Sube una NOTA DE VOZ ya grabada y devuelve su URL pública.
+ *
+ * Va aparte de `subirAdjuntoChat` a propósito: el audio no viene de un
+ * selector de archivos sino del micrófono (ver `grabadorVoz.ts`), llega
+ * como Blob sin nombre, y no hay nada que comprimir ni validar contra una
+ * galería. El único límite real es el mismo tope del bucket.
+ *
+ * El tipo del Blob se recorta a su parte base ("audio/webm;codecs=opus" →
+ * "audio/webm") porque el bucket compara contra la lista de MIME exactos
+ * de la migración: mandarle el `;codecs=...` pegado hace que el servidor
+ * rechace la subida.
+ */
+export async function subirNotaDeVoz(convId: string, blob: Blob): Promise<Adjunto> {
+  if (blob.size > TOPE_ADJUNTO_BYTES) {
+    const mb = Math.round(blob.size / (1024 * 1024));
+    throw new Error(`Esa nota de voz pesa ${mb} MB y el máximo es 25 MB. Grabá una más corta.`);
+  }
+  const tipo = (blob.type || 'audio/webm').split(';')[0].toLowerCase();
+  const extension = EXTENSION_POR_TIPO[tipo] || 'webm';
+  const ruta = `${convId}/${Date.now()}.${extension}`;
+  const { error } = await supabase.storage
+    .from('chat-images')
+    .upload(ruta, blob, { contentType: tipo });
+  if (error) throw error;
+  const { data } = supabase.storage.from('chat-images').getPublicUrl(ruta);
+  return { audioUrl: data.publicUrl };
 }
 
 /**

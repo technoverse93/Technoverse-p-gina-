@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, MoreVertical, Send, StickyNote, ImagePlus, RefreshCw, Bot, Trash2, Video } from 'lucide-react';
-import { subirAdjuntoChat, ACEPTA_ADJUNTOS } from '../../utils/adjuntosChat';
+import { ArrowLeft, MoreVertical, Send, StickyNote, ImagePlus, RefreshCw, Bot, Trash2, Video, Mic } from 'lucide-react';
+import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS } from '../../utils/adjuntosChat';
+import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../../utils/grabadorVoz';
 import { borrarMensajeParaTodos, cerrarConversacion } from '../../utils/storage';
 import { ChatConversation } from '../../types';
 import { compressImage } from '../../utils/storage';
@@ -9,6 +10,7 @@ import ChatActionsMenu from './ChatActionsMenu';
 import { useToast } from '../ui/Overlays';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './formatoChat';
 import VideoMensaje from './VideoMensaje';
+import AudioMensaje from './AudioMensaje';
 import PanelVideollamada from '../soporte/PanelVideollamada';
 import { timbrar } from '../../supervision/videollamada';
 
@@ -16,7 +18,7 @@ interface ChatThreadProps {
   conversation: ChatConversation;
   staffEmails: string[];
   onBack: () => void;
-  onSendMessage: (convId: string, payload: { text: string; imageUrl?: string; videoUrl?: string; isInternalNote?: boolean }) => Promise<void>;
+  onSendMessage: (convId: string, payload: { text: string; imageUrl?: string; videoUrl?: string; audioUrl?: string; isInternalNote?: boolean }) => Promise<void>;
   onAssign: (convId: string, email: string) => Promise<void>;
   onChangeStatus: (convId: string, status: 'nuevo' | 'pendiente') => Promise<void>;
   onResolve: (convId: string) => Promise<void>;
@@ -27,6 +29,8 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   const [inputText, setInputText] = useState('');
   const [noteMode, setNoteMode] = useState(false);
   const [uploading, setUploading] = useState(false);
+  /** Grabación de voz en curso, si la hay (ver `alternarGrabacion`). */
+  const [grabacion, setGrabacion] = useState<GrabacionEnCurso | null>(null);
   const [borrandoId, setBorrandoId] = useState<string | null>(null);
   /** Mensaje cuyo menú de acciones está abierto (se abre al tocarlo). */
   const [menuMsgId, setMenuMsgId] = useState<string | null>(null);
@@ -87,6 +91,40 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
       if (isMountedRef.current) toast.error('No se pudo enviar el adjunto. ' + (err?.message || err));
     } finally {
       if (isMountedRef.current) setUploading(false);
+    }
+  };
+
+  /**
+   * NOTA DE VOZ del personal: un toque empieza, otro manda.
+   *
+   * Mismo criterio que del lado del cliente (ver `LiveChat.tsx`): dos
+   * toques en vez de mantener presionado, porque "mantener" pelea con el
+   * desplazamiento en el teléfono y no tiene equivalente en escritorio.
+   * El micrófono se pide en el primer toque, que ya es un gesto real.
+   */
+  const alternarGrabacion = async () => {
+    if (uploading) return;
+
+    if (grabacion) {
+      const enCurso = grabacion;
+      setGrabacion(null);
+      setUploading(true);
+      try {
+        const blob = await enCurso.detener();
+        const adjunto = await subirNotaDeVoz(conversation.id, blob);
+        await onSendMessage(conversation.id, { text: '', ...adjunto });
+      } catch (err: any) {
+        if (isMountedRef.current) toast.error('No se pudo enviar la nota de voz. ' + (err?.message || err));
+      } finally {
+        if (isMountedRef.current) setUploading(false);
+      }
+      return;
+    }
+
+    try {
+      setGrabacion(await grabarNotaDeVoz());
+    } catch (err: any) {
+      toast.error(err?.message || 'No se pudo usar el micrófono.');
     }
   };
 
@@ -279,6 +317,9 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                     {msg.imageUrl && (
                       <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-xl max-w-full mb-1.5 max-h-64 object-cover" loading="lazy" decoding="async" />
                     )}
+                    {msg.audioUrl && (
+                      <AudioMensaje src={msg.audioUrl} />
+                    )}
                     {msg.videoUrl && (
                       <VideoMensaje src={msg.videoUrl} />
                     )}
@@ -360,6 +401,22 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
         >
           {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
         </button>
+        {puedeGrabarVoz() && (
+          <button
+            type="button"
+            onClick={() => void alternarGrabacion()}
+            disabled={uploading}
+            title={grabacion ? 'Tocá para enviar la nota de voz' : 'Grabar una nota de voz'}
+            aria-label={grabacion ? 'Enviar nota de voz' : 'Grabar nota de voz'}
+            className={`w-9 h-9 rounded-full flex items-center justify-center border transition shrink-0 disabled:opacity-40 ${
+              grabacion
+                ? 'bg-red-500 border-red-500 text-white animate-pulse'
+                : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
+            }`}
+          >
+            <Mic className="w-4 h-4" />
+          </button>
+        )}
         <input
           type="text"
           value={inputText}

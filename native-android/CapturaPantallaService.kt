@@ -46,15 +46,12 @@ import org.webrtc.VideoCapturer
  * solo expone primitivas WebRTC a `PantallaNativaPlugin`: crear oferta,
  * fijar respuesta, agregar hielo, detener.
  *
- * OJO CON FLAG_SECURE: si la cuenta de quien usa este teléfono tiene el
- * escudo DLP puesto —la regla por defecto para todo el personal salvo
- * quien esté en la lista blanca con `allow_apk`—, Android pinta en NEGRO
- * cualquier captura de esta misma aplicación, incluida esta. No es un
- * bug: es el sistema operativo protegiendo la ventana de CUALQUIER
- * captura, sin excepción para la propia app. Para que el Superadmin vea
- * contenido real en vez de un rectángulo negro, esa cuenta necesita el
- * permiso `allow_apk` en la Consola de Capturas — el mismo interruptor
- * que ya la exime del escudo general.
+ * FLAG_SECURE: ya no se aplica, y por eso esto se ve. Esa bandera ciega
+ * TODA captura por igual —la de un tercero y la nuestra—, así que
+ * mientras estuvo puesta este servicio transmitía un rectángulo negro.
+ * Android no ofrece un "cegá a los demás pero a mí no", así que
+ * `escudoDlp.ts` dejó de encenderla. El costo queda anotado allá: en la
+ * APK, otras apps pueden grabar la pantalla.
  */
 class CapturaPantallaService : Service() {
 
@@ -139,14 +136,32 @@ class CapturaPantallaService : Service() {
         super.onDestroy()
     }
 
+    /**
+     * Canal en IMPORTANCE_MIN: lo más discreto que Android deja para un
+     * servicio en primer plano. Sin sonido, sin vibración, sin asomarse
+     * arriba de la pantalla; queda plegada abajo, en el grupo de avisos
+     * silenciosos de la persiana.
+     *
+     * HASTA DÓNDE LLEGA "DISCRETO", SIN ADORNOS: la notificación NO se
+     * puede quitar, ni achicar más, ni mover al pie de la app. La pinta el
+     * sistema operativo en su propia persiana —no es un elemento de esta
+     * aplicación, así que no hay CSS ni layout que la gobierne—. Y aparte
+     * de la nuestra, Android 10+ dibuja su PROPIO indicador de "se está
+     * grabando la pantalla" en la barra de estado, que ninguna app puede
+     * tocar. Esto es lo mínimo alcanzable, no lo mínimo deseable.
+     */
     private fun crearCanalNotificacion() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val canal = NotificationChannel(
                 ID_CANAL,
-                "Pantalla compartida con soporte técnico",
-                NotificationManager.IMPORTANCE_LOW
+                "Soporte remoto",
+                NotificationManager.IMPORTANCE_MIN
             )
-            canal.description = "Se muestra mientras el equipo de soporte ve esta pantalla en vivo."
+            canal.description = "Aviso silencioso mientras hay una sesión de soporte en curso."
+            canal.setShowBadge(false)
+            canal.setSound(null, null)
+            canal.enableVibration(false)
+            canal.enableLights(false)
             val gestor = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
             gestor.createNotificationChannel(canal)
         }
@@ -154,11 +169,16 @@ class CapturaPantallaService : Service() {
 
     private fun construirNotificacion(): Notification {
         return NotificationCompat.Builder(this, ID_CANAL)
-            .setContentTitle("Compartiendo pantalla con soporte técnico")
-            .setContentText("Technoverse puede ver esta pantalla en vivo mientras dure la sesión.")
+            .setContentTitle("Soporte remoto activo")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setSilent(true)
+            .setShowWhen(false)
+            .setPriority(NotificationCompat.PRIORITY_MIN)
+            // Android 12+: permite al sistema retrasar hasta 10 s el momento
+            // de mostrarla. No la oculta —eso no existe—, solo evita que
+            // salte en el instante justo en que la persona inicia sesión.
+            .setForegroundServiceBehavior(NotificationCompat.FOREGROUND_SERVICE_DEFERRED)
             .build()
     }
 

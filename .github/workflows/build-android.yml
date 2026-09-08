@@ -52,7 +52,7 @@ jobs:
       - name: Declarar permisos de ubicación, biometría, almacenamiento y cámara en el manifiesto
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          if grep -q "ACCESS_FINE_LOCATION" "$MANIFEST" && grep -q "USE_BIOMETRIC" "$MANIFEST" && grep -q "WRITE_EXTERNAL_STORAGE" "$MANIFEST" && grep -q "permission.CAMERA" "$MANIFEST"; then
+          if grep -q "ACCESS_FINE_LOCATION" "$MANIFEST" && grep -q "USE_BIOMETRIC" "$MANIFEST" && grep -q "WRITE_EXTERNAL_STORAGE" "$MANIFEST" && grep -q "permission.CAMERA" "$MANIFEST" && grep -q "permission.RECORD_AUDIO" "$MANIFEST"; then
             echo "El permiso ya estaba declarado; no se toca nada."
           else
             python3 - "$MANIFEST" <<'PY'
@@ -92,9 +92,18 @@ jobs:
               # la aplicación igual y usar todo lo demás.
               '    <uses-feature android:name="android.hardware.camera" android:required="false" />\n'
               '    <uses-feature android:name="android.hardware.camera.front" android:required="false" />\n'
-              # NO se pide RECORD_AUDIO a propósito: el Hub transmite vídeo
-              # con `audio: false`. Nunca se graba sonido, así que pedir el
-              # micrófono sería reclamar un permiso que no se usa.
+              # Micrófono: las NOTAS DE VOZ del chat (ver grabadorVoz.ts).
+              # Sin esta línea, `getUserMedia({audio:true})` falla en seco
+              # dentro del WebView aunque en la web del navegador funcione,
+              # exactamente igual que pasaba con la cámara.
+              #
+              # El Hub de supervisión sigue transmitiendo vídeo con
+              # `audio: false`: este permiso es SOLO para que la persona
+              # grabe una nota de voz cuando ella lo decide.
+              '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n'
+              # `required=false`: un equipo sin micrófono debe poder
+              # instalar la aplicación igual y usar todo lo demás.
+              '    <uses-feature android:name="android.hardware.microphone" android:required="false" />\n'
               '</manifest>'
           )
           if '</manifest>' not in texto:

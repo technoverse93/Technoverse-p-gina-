@@ -113,7 +113,7 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
   //
   // No era el clonador del DOM ni las Blob URL: el espejo replicaba con
   // fidelidad un mensaje que de verdad venía vacío desde la base de datos.
-  const handleSendMessage = async (convId: string, payload: { text: string; imageUrl?: string; videoUrl?: string; isInternalNote?: boolean }) => {
+  const handleSendMessage = async (convId: string, payload: { text: string; imageUrl?: string; videoUrl?: string; audioUrl?: string; isInternalNote?: boolean }) => {
     const newMsg = {
       id: `MSG-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       sender: 'support' as const,
@@ -121,6 +121,7 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
       timestamp: new Date().toISOString(),
       imageUrl: payload.imageUrl,
       videoUrl: payload.videoUrl,
+      audioUrl: payload.audioUrl,
       isInternalNote: payload.isInternalNote
     };
 

@@ -26,18 +26,15 @@
 // una limitación de este código. Este módulo se activa SOLO en Android
 // nativo (`puedeCompartirPantallaNativa()`).
 //
-// FLAG_SECURE: LA ADVERTENCIA QUE HAY QUE LEER ANTES DE PROBARLO
+// POR QUÉ FLAG_SECURE YA NO SE APLICA EN LA APK
 // ---------------------------------------------------------------------
-// Si la cuenta de quien usa el teléfono tiene puesto el escudo DLP —la
-// regla por defecto para todo el personal, salvo quien esté en la lista
-// blanca con `allow_apk`—, Android pinta en NEGRO cualquier captura de
-// esta app, incluida esta misma pantalla completa: es el sistema
-// operativo protegiendo la ventana de CUALQUIER captura, sin excepción
-// para la propia app. Para que el Superadmin vea contenido real hace
-// falta el permiso `allow_apk` de esa cuenta en la Consola de Capturas —
-// el mismo interruptor que ya la exime del escudo general. Sin eso, esta
-// función pide el permiso, arranca el servicio y transmite… un rectángulo
-// negro. No es un bug de este archivo: es Android.
+// FLAG_SECURE ciega TODA captura por igual —la de un tercero y la
+// nuestra—, así que mientras estuvo puesto esto transmitía un rectángulo
+// negro. Android no ofrece un "cegá a los demás pero a mí no". El dueño
+// eligió ver el teléfono, así que `escudoDlp.ts` ya no enciende esa
+// bandera nunca. El costo, dicho claro, está anotado ahí: en la APK otras
+// apps pueden grabar la pantalla. Las defensas del navegador (impresión
+// en blanco y borrado del portapapeles) siguen intactas.
 // =====================================================================
 
 import { registerPlugin, Capacitor, type PluginListenerHandle } from '@capacitor/core';

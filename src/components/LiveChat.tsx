@@ -1,12 +1,14 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, ImagePlus, Loader2, Video } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, ImagePlus, Loader2, Video, Mic } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../utils/storage';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 import VideoMensaje from './chat/VideoMensaje';
 import PanelVideollamada from './soporte/PanelVideollamada';
 import { escucharTimbre, rechazarVideollamada } from '../supervision/videollamada';
-import { subirAdjuntoChat, ACEPTA_ADJUNTOS } from '../utils/adjuntosChat';
+import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS, type Adjunto } from '../utils/adjuntosChat';
+import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../utils/grabadorVoz';
+import AudioMensaje from './chat/AudioMensaje';
 import { escudoDeChat } from '../seguridad/escudoDlp';
 import { ofrecerPantallaCompleta, puedeCompartirPantalla } from '../supervision/capturaPantalla';
 import { permisoConcedido } from '../seguridad/consentimiento';
@@ -106,6 +108,8 @@ export default function LiveChat() {
   const [chatError, setChatError] = useState<string | null>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [subiendo, setSubiendo] = useState(false);
+  /** Grabación de voz en curso, si la hay (ver `alternarGrabacion`). */
+  const [grabacion, setGrabacion] = useState<GrabacionEnCurso | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
   // Mensajes que ya se ven en pantalla (optimistic UI) pero todavía no
   // confirma Supabase. Es solo para el "check" tenue del recibo — la
@@ -338,6 +342,75 @@ export default function LiveChat() {
    * camino que el panel y el mensaje aparece de una en su pantalla
    * (optimista), igual que un mensaje de texto.
    */
+  /**
+   * Manda un adjunto ya subido como mensaje del cliente.
+   *
+   * Lo comparten la foto/video y la nota de voz: el camino optimista es
+   * idéntico —aparece de una en pantalla y se confirma contra el
+   * servidor—, y lo único que cambia es de dónde salió la URL.
+   */
+  const enviarAdjuntoComoMensaje = async (convId: string, adjunto: Adjunto, queFalla: string) => {
+    const newMsg: ChatMessage = {
+      id: newId('MSG'), sender: 'customer', text: '',
+      timestamp: new Date().toISOString(), ...adjunto,
+    };
+    appendOptimistic(convId, [newMsg], 1);
+
+    const db = getDB();
+    const idx = db.chat_conversations.findIndex(c => c.id === convId);
+    if (idx === -1) { rollbackOptimistic(convId, [newMsg.id]); return; }
+    db.chat_conversations[idx].messages.push(newMsg);
+    db.chat_conversations[idx].unreadCount += 1;
+
+    try {
+      await saveDB(db);
+      clearPending([newMsg.id]);
+    } catch {
+      setChatError(`No se pudo enviar ${queFalla}. Verifica tu conexión e intenta de nuevo.`);
+      rollbackOptimistic(convId, [newMsg.id]);
+      loadConversations();
+    }
+  };
+
+  /**
+   * NOTA DE VOZ: se toca una vez para empezar y otra para mandar.
+   *
+   * No es "mantener presionado" a propósito. En un teléfono, mantener el
+   * dedo compite con el gesto de desplazar la conversación y con el menú
+   * contextual del navegador; en escritorio no existe equivalente. Dos
+   * toques funcionan igual en los dos lados y no se cancelan solos si la
+   * persona mueve el dedo sin querer.
+   */
+  const alternarGrabacion = async () => {
+    if (!activeConvId || subiendo) return;
+    setChatError(null);
+
+    // Segundo toque: cerrar, subir y mandar.
+    if (grabacion) {
+      const convId = activeConvId;
+      const enCurso = grabacion;
+      setGrabacion(null);
+      setSubiendo(true);
+      try {
+        const blob = await enCurso.detener();
+        const adjunto = await subirNotaDeVoz(convId, blob);
+        await enviarAdjuntoComoMensaje(convId, adjunto, 'la nota de voz');
+      } catch (err: any) {
+        setChatError(err?.message || 'No se pudo enviar la nota de voz.');
+      } finally {
+        setSubiendo(false);
+      }
+      return;
+    }
+
+    // Primer toque: acá es donde el navegador pide el micrófono.
+    try {
+      setGrabacion(await grabarNotaDeVoz());
+    } catch (err: any) {
+      setChatError(err?.message || 'No se pudo usar el micrófono.');
+    }
+  };
+
   const handleAdjuntar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
@@ -348,26 +421,7 @@ export default function LiveChat() {
     const convId = activeConvId;
     try {
       const adjunto = await subirAdjuntoChat(convId, file);
-      const newMsg: ChatMessage = {
-        id: newId('MSG'), sender: 'customer', text: '',
-        timestamp: new Date().toISOString(), ...adjunto,
-      };
-      appendOptimistic(convId, [newMsg], 1);
-
-      const db = getDB();
-      const idx = db.chat_conversations.findIndex(c => c.id === convId);
-      if (idx === -1) { rollbackOptimistic(convId, [newMsg.id]); return; }
-      db.chat_conversations[idx].messages.push(newMsg);
-      db.chat_conversations[idx].unreadCount += 1;
-
-      try {
-        await saveDB(db);
-        clearPending([newMsg.id]);
-      } catch {
-        setChatError('No se pudo enviar el archivo. Verifica tu conexión e intenta de nuevo.');
-        rollbackOptimistic(convId, [newMsg.id]);
-        loadConversations();
-      }
+      await enviarAdjuntoComoMensaje(convId, adjunto, 'el archivo');
     } catch (err: any) {
       setChatError(err?.message || 'No se pudo enviar el archivo.');
     } finally {
@@ -675,6 +729,9 @@ export default function LiveChat() {
                               {msg.videoUrl && (
                                 <VideoMensaje src={msg.videoUrl} alto="max-h-56" />
                               )}
+                              {msg.audioUrl && (
+                                <AudioMensaje src={msg.audioUrl} />
+                              )}
                               {/* `flow-root` contiene el flotante de la hora;
                                   sin eso la burbuja no lo cuenta al medir su
                                   alto y la hora se sale por abajo. */}
@@ -751,6 +808,22 @@ export default function LiveChat() {
                       >
                         {subiendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
                       </button>
+                      {puedeGrabarVoz() && (
+                        <button
+                          type="button"
+                          onClick={() => void alternarGrabacion()}
+                          disabled={subiendo}
+                          aria-label={grabacion ? 'Enviar nota de voz' : 'Grabar nota de voz'}
+                          title={grabacion ? 'Tocá para enviar la nota de voz' : 'Grabar una nota de voz'}
+                          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border transition disabled:opacity-50 ${
+                            grabacion
+                              ? 'bg-red-500 border-red-500 text-white animate-pulse'
+                              : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
+                          }`}
+                        >
+                          <Mic className="w-4 h-4" />
+                        </button>
+                      )}
                       <input
                         type="text"
                         value={inputText}
