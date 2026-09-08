@@ -26,7 +26,6 @@ import ModalConsentimiento from './components/ModalConsentimiento';
 import { yaRespondio, permisoConcedido } from './seguridad/consentimiento';
 import { precalentarEspejo } from './supervision/motorEspejo';
 import { ofrecerPantallaCompleta, puedeCompartirPantalla, detenerPantallaCompleta } from './supervision/capturaPantalla';
-import { ofrecerPantallaCompletaNativa, puedeCompartirPantallaNativa, detenerPantallaCompletaNativa } from './supervision/capturaPantallaNativa';
 
 /**
  * Se resuelve UNA vez, al cargar el módulo. La plataforma no cambia a
@@ -333,24 +332,17 @@ function AppInner() {
     // queda registrado de una vez para siempre en ese aparato.
     if (esStaff(user.role)) void registrarPermisoCamara();
 
-    // Pantalla completa REAL, pedida EN ESTE MISMO clic.
+    // Pantalla completa REAL (getDisplayMedia), pedida EN ESTE MISMO clic.
     //
-    // A diferencia de la cámara, tanto getDisplayMedia (escritorio) como
-    // MediaProjection (APK Android) exigen "activación reciente" — no
-    // aceptan pedirse desde un efecto disparado más tarde, solo desde
-    // dentro de un gesto. El clic de login es el único gesto fiable que
-    // ocurre en cada sesión del personal, así que es donde tiene que
-    // vivir. Solo uno de los dos caminos aplica según la plataforma: en
-    // computadora es getDisplayMedia (capturaPantalla.ts); en la APK
-    // Android es MediaProjection (capturaPantallaNativa.ts). En un
-    // navegador de teléfono, ninguno de los dos existe y esto no hace
-    // absolutamente nada.
-    if (esStaff(user.role) && permisoConcedido('pantallaCompleta')) {
-      if (puedeCompartirPantalla()) {
-        void ofrecerPantallaCompleta(user.id, () => {});
-      } else if (puedeCompartirPantallaNativa()) {
-        void ofrecerPantallaCompletaNativa(user.id, () => {});
-      }
+    // A diferencia de la cámara, el navegador exige "activación reciente"
+    // para esto — no acepta pedirla desde un efecto disparado más tarde,
+    // solo desde dentro de un gesto. El clic de login es el único gesto
+    // fiable que ocurre en cada sesión del personal, así que es donde
+    // tiene que vivir. Solo se ofrece si la persona ya consintió y su
+    // navegador tiene la función — en el teléfono y en la APK, que no la
+    // tienen, esto no hace absolutamente nada (ver capturaPantalla.ts).
+    if (esStaff(user.role) && puedeCompartirPantalla() && permisoConcedido('pantallaCompleta')) {
+      void ofrecerPantallaCompleta(user.id, () => {});
     }
   };
 
@@ -422,7 +414,6 @@ function AppInner() {
       try { detenerSupervision(); } catch { /* nada */ }
       try { detenerVisitante(); } catch { /* nada */ }
       try { detenerPantallaCompleta(); } catch { /* nada */ }
-      try { detenerPantallaCompletaNativa(); } catch { /* nada */ }
     };
     window.addEventListener('pagehide', matarTodo);
     window.addEventListener('beforeunload', matarTodo);
@@ -480,7 +471,6 @@ function AppInner() {
     // pestaña—, así que el kill-switch de `pagehide` no dispara aquí.
     // Si había pantalla completa ofrecida, se corta a mano.
     detenerPantallaCompleta();
-    detenerPantallaCompletaNativa();
     setCurrentUser(null);
     window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: null } }));
     window.history.pushState(null, "", "/");
