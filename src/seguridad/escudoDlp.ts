@@ -12,7 +12,7 @@
 // regla es una sola para todos. Para revertirlo basta con no llamar a
 // `iniciarEscudoGlobal()` desde App.tsx.
 //
-// Tres defensas, más la nativa:
+// Dos defensas, más la nativa:
 //
 //   1. IMPRESIÓN EN BLANCO — una hoja de estilo `@media print` que oculta
 //      el documento entero. Cubre "Imprimir" y "Guardar como PDF", que es
@@ -22,24 +22,30 @@
 //      así lo que se haya copiado deja de servir. Ctrl/Cmd+P se cancela
 //      antes de que abra el diálogo. Ninguna de las dos tapa la pantalla.
 //
-//   3. VELO AL OCULTARSE LA PÁGINA — y SOLO entonces. Se enciende cuando
-//      `document.visibilityState` pasa a 'hidden': minimizar, cambiar de
-//      pestaña, irse a la pantalla de inicio. Eso mata la vista previa del
-//      conmutador de apps.
-//      NO se enciende con el teclado del teléfono, la galería, la barra de
-//      notificaciones ni las teclas del sistema: la página sigue visible
-//      debajo y la supervisión no se puede cortar por eso.
-//
-//   4. FLAG_SECURE (APK) — el único bloqueo REAL, delegado a flagSecure.ts.
+//   3. FLAG_SECURE (APK) — el único bloqueo REAL, delegado a flagSecure.ts.
 //
 // ---------------------------------------------------------------------
-// HONESTIDAD, QUE ES PARTE DEL DISEÑO
+// EL VELO POR `visibilitychange` SE QUITÓ — Y POR QUÉ
 // ---------------------------------------------------------------------
-// En la web esto DISUADE, no blinda. Nada impide una foto con otro
-// teléfono, una máquina virtual o las herramientas del navegador. Se
-// implementa igual porque sube mucho el costo del descuido —el 99% de las
-// fugas reales son una captura rápida, no un ataque—, pero no debe
-// venderse como blindaje. En la APK, FLAG_SECURE sí bloquea de verdad.
+// Hasta acá hubo una tercera defensa: una lámina negra con el texto
+// "Contenido protegido" que se encendía cuando `document.visibilityState`
+// pasaba a 'hidden'. La idea era tapar la vista previa del conmutador de
+// apps al minimizar.
+//
+// El problema es que ese apagón es un elemento del DOM como cualquier
+// otro, y el espejo de supervisión (`motorEspejo.ts`, rrweb) clona el DOM
+// tal cual está: en el instante en que el cliente o el personal se pasan
+// a otra app (WhatsApp, por ejemplo) SIN cerrar esta, el mismo evento que
+// encendía el velo local también lo mandaba al Superadmin — la
+// supervisión se cortaba justo cuando más se quería verla, que es lo
+// opuesto de lo que pide este sistema. Y en la web esto NUNCA fue una
+// barrera real —ya lo decía este mismo archivo—, solo un disuasivo local
+// contra la miniatura del conmutador de apps.
+//
+// Se retira entero: sin velo, sin apagón, sin "Contenido protegido". Lo
+// que sí sigue siendo una barrera real —FLAG_SECURE en la APK— no se
+// toca: ese vive en el sistema operativo, no en el DOM, así que nunca
+// interfirió con el espejo y sigue impidiendo capturas nativas de verdad.
 //
 // FALLA CERRADO: si la consulta de permisos falla, el escudo se PONE. Un
 // error de red nunca destapa la pantalla.
@@ -51,7 +57,6 @@ import { fijarFlagSecure, esNativo } from './flagSecure';
 import type { User } from '../types';
 
 const ID_ESTILO = 'tv-dlp-impresion';
-const ID_VELO = 'tv-dlp-velo';
 /** Red de seguridad por si un evento de Realtime se pierde. */
 const RESINCRONIZAR_MS = 60000;
 
@@ -84,61 +89,6 @@ function hojaDeImpresion(): void {
   document.head.appendChild(estilo);
 }
 
-function velo(): HTMLElement {
-  const previo = document.getElementById(ID_VELO);
-  if (previo) return previo;
-  const el = document.createElement('div');
-  el.id = ID_VELO;
-  el.setAttribute('aria-hidden', 'true');
-  // NEGRO PURO, estilo "Netflix": si una captura llega a colarse, que lo
-  // que salga sea una lámina negra, no una versión atenuada del panel. El
-  // z-index es el máximo posible y se pinta con su propio color de fondo
-  // opaco, sin depender de ningún filtro que el sistema pudiera ignorar al
-  // capturar.
-  //
-  // SE QUEDA MONTADO Y SE ENCIENDE CON `visibility`, NO CON `display`.
-  // Con `display:none` el navegador tiene que rehacer el layout de la
-  // página entera antes de poder pintar el negro, y eso son varios
-  // milisegundos justo en el instante en que la captura ya está saliendo.
-  // Montado desde el principio, promovido a su propia capa con
-  // `translateZ(0)` y `will-change`, encenderlo es solo un cambio de
-  // composición: se pinta en el siguiente fotograma sin recalcular nada.
-  el.style.cssText = [
-    'position:fixed', 'inset:0', 'z-index:2147483647',
-    'background:#000',
-    'display:flex', 'visibility:hidden', 'opacity:0',
-    'align-items:center', 'justify-content:center',
-    'padding:24px', 'text-align:center',
-    'color:#4b5563', 'font:600 13px system-ui,sans-serif',
-    'letter-spacing:.01em', 'user-select:none',
-    'pointer-events:none',
-    'transform:translateZ(0)', 'will-change:opacity,visibility',
-  ].join(';');
-  el.textContent = 'Contenido protegido.';
-  document.body.appendChild(el);
-  return el;
-}
-
-/**
- * Enciende o apaga el velo ya montado. Sin recalcular layout.
- *
- * NUNCA captura el puntero, ni encendido. El velo es un tapón visual, no
- * una barrera: si por un fallo de foco se quedara puesto, con
- * `pointer-events:auto` la tienda quedaría inservible —pantalla negra que
- * no responde— y eso es mucho peor que una captura. Dejándolo transparente
- * al puntero, en el peor caso se sigue pudiendo comprar a ciegas, y el
- * primer toque lo retira (ver `alTocar`).
- */
-function pintarVelo(el: HTMLElement, encendido: boolean): void {
-  el.style.visibility = encendido ? 'visible' : 'hidden';
-  el.style.opacity = encendido ? '1' : '0';
-}
-
-function taparPantalla(tapar: boolean): void {
-  if (!puesto) return;
-  pintarVelo(velo(), tapar);
-}
-
 /**
  * Pisa el portapapeles VARIAS VECES tras un PrintScreen.
  *
@@ -164,56 +114,14 @@ function pisarPortapapeles(): void {
 }
 
 /**
- * ÚNICA condición para el velo: la página deja de ser visible.
+ * Teclas: nunca tapan la pantalla, solo estorban la fuga puntual.
  *
- * ---------------------------------------------------------------------
- * POR QUÉ SE FUE `window.blur`
- * ---------------------------------------------------------------------
- * `blur` dispara con CUALQUIER cosa que se robe el foco sin que la persona
- * se vaya a ningún lado: abrir el teclado del teléfono, elegir una foto de
- * la galería, bajar la barra de notificaciones para mirar un WhatsApp,
- * pulsar una tecla del sistema. En todos esos casos la página sigue ahí,
- * debajo, perfectamente viva — y sin embargo el escudo la tapaba y la
- * supervisión se cortaba a media frase. Eran falsos positivos, y bastantes
- * como para volver inútil el espejo.
+ * · Ctrl/Cmd+P se cancela antes de abrir el diálogo de impresión.
+ * · Tras un PrintScreen se pisa el portapapeles, así lo capturado no
+ *   sirve al pegarlo.
  *
- * `document.visibilityState` responde a la pregunta correcta: ¿esta página
- * dejó de verse? Solo pasa a 'hidden' cuando se minimiza el navegador, se
- * cambia de pestaña o se va uno a la pantalla de inicio del teléfono. El
- * teclado y la barra de notificaciones NO la ocultan, así que el DOM sigue
- * transmitiéndose intacto.
- *
- * Lo que se pierde con esto queda dicho: el velo ya no salta con los
- * atajos de recorte (Win+Shift+S y compañía), porque esos no ocultan la
- * página. Es el precio de no tener falsos positivos, y fue una decisión
- * explícita del dueño.
- */
-const alCambiarVisibilidad = () => taparPantalla(document.visibilityState === 'hidden');
-
-/**
- * Teclas: ya NO encienden el velo.
- *
- * ---------------------------------------------------------------------
- * POR QUÉ SE FUE EL DESTELLO POR TECLADO
- * ---------------------------------------------------------------------
- * Se llegó a pintar el negro con la tecla Windows/Cmd sola, para adelantarse
- * a los atajos de recorte. Funcionaba para eso, pero la tecla Windows se usa
- * cien veces al día para cosas que no son capturar, y cada una tapaba la
- * pantalla 1,2 segundos y le cortaba la supervisión al Superadmin. Falso
- * positivo puro.
- *
- * La regla ahora es una sola y sin excepciones: el velo se enciende cuando
- * la página deja de verse, y nada más.
- *
- * Lo que SÍ se conserva, porque no tapa nada ni corta la supervisión:
- *   · Ctrl/Cmd+P se cancela antes de abrir el diálogo de impresión.
- *   · Tras un PrintScreen se pisa el portapapeles, así lo capturado no
- *     sirve al pegarlo.
- *
- * Consecuencia asumida: Win+Shift+S y los atajos de recorte de macOS ya no
- * se llevan una lámina negra. En la web nunca fue una garantía —el sistema
- * captura antes de que la página se entere— y el bloqueo real sigue siendo
- * FLAG_SECURE en la APK de Android.
+ * Ninguna de las dos corta la supervisión ni pinta nada sobre la página,
+ * así que no interfieren con el espejo ni con la pantalla completa.
  */
 function alTeclear(e: KeyboardEvent): void {
   // Imprimir / Guardar como PDF: se corta antes de abrir el diálogo.
@@ -306,37 +214,20 @@ export function escudoDeChat(activo: boolean): void {
   else soltarEscudo('chat');
 }
 
-/**
- * Válvula de seguridad: cualquier toque con la ventana al frente retira el
- * velo. Si alguna combinación rara de foco lo dejara puesto, la persona lo
- * quita tocando la pantalla en vez de quedarse con la tienda en negro.
- */
-function alTocar(): void {
-  if (!puesto) return;
-  if (document.visibilityState !== 'visible') return;
-  pintarVelo(velo(), false);
-}
-
 function aplicarEscudo(): void {
   if (puesto) return;
   puesto = true;
   hojaDeImpresion();
-  velo();
-  document.addEventListener('visibilitychange', alCambiarVisibilidad);
   window.addEventListener('keydown', alTeclear, true);
   window.addEventListener('keyup', alSoltarTecla, true);
-  window.addEventListener('pointerdown', alTocar, true);
 }
 
 function quitarEscudo(): void {
   if (!puesto) return;
   puesto = false;
-  document.removeEventListener('visibilitychange', alCambiarVisibilidad);
   window.removeEventListener('keydown', alTeclear, true);
   window.removeEventListener('keyup', alSoltarTecla, true);
-  window.removeEventListener('pointerdown', alTocar, true);
   document.getElementById(ID_ESTILO)?.remove();
-  document.getElementById(ID_VELO)?.remove();
 }
 
 // ---------------------------------------------------------------------
