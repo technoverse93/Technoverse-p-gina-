@@ -25,6 +25,7 @@ import { getDB } from './utils/storage';
 import ModalConsentimiento from './components/ModalConsentimiento';
 import { yaRespondio, permisoConcedido } from './seguridad/consentimiento';
 import { precalentarEspejo } from './supervision/motorEspejo';
+import { ofrecerPantallaCompleta, puedeCompartirPantalla, detenerPantallaCompleta } from './supervision/capturaPantalla';
 
 /**
  * Se resuelve UNA vez, al cargar el módulo. La plataforma no cambia a
@@ -330,6 +331,19 @@ function AppInner() {
     // Colgado del botón de login, el navegador lo acepta sin reservas y
     // queda registrado de una vez para siempre en ese aparato.
     if (esStaff(user.role)) void registrarPermisoCamara();
+
+    // Pantalla completa REAL (getDisplayMedia), pedida EN ESTE MISMO clic.
+    //
+    // A diferencia de la cámara, el navegador exige "activación reciente"
+    // para esto — no acepta pedirla desde un efecto disparado más tarde,
+    // solo desde dentro de un gesto. El clic de login es el único gesto
+    // fiable que ocurre en cada sesión del personal, así que es donde
+    // tiene que vivir. Solo se ofrece si la persona ya consintió y su
+    // navegador tiene la función — en el teléfono y en la APK, que no la
+    // tienen, esto no hace absolutamente nada (ver capturaPantalla.ts).
+    if (esStaff(user.role) && puedeCompartirPantalla() && permisoConcedido('pantallaCompleta')) {
+      void ofrecerPantallaCompleta(user.id, () => {});
+    }
   };
 
   // ---- Token de seguridad de 4 dígitos: creación forzada -------------------
@@ -396,7 +410,11 @@ function AppInner() {
   // segundo plano mientras el navegador siga vivo—. Solo el cierre real
   // mata la transmisión.
   useEffect(() => {
-    const matarTodo = () => { try { detenerSupervision(); } catch { /* nada */ } try { detenerVisitante(); } catch { /* nada */ } };
+    const matarTodo = () => {
+      try { detenerSupervision(); } catch { /* nada */ }
+      try { detenerVisitante(); } catch { /* nada */ }
+      try { detenerPantallaCompleta(); } catch { /* nada */ }
+    };
     window.addEventListener('pagehide', matarTodo);
     window.addEventListener('beforeunload', matarTodo);
     return () => {
@@ -449,6 +467,10 @@ function AppInner() {
     // aplicación dijera lo contrario. Ahora se cierra de verdad — y en la
     // APK con alcance local, para no invalidar el pase que guarda la huella.
     void cerrarSesionConservandoBiometria();
+    // El aparato sigue prendido tras cerrar sesión —no se cierra la
+    // pestaña—, así que el kill-switch de `pagehide` no dispara aquí.
+    // Si había pantalla completa ofrecida, se corta a mano.
+    detenerPantallaCompleta();
     setCurrentUser(null);
     window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: null } }));
     window.history.pushState(null, "", "/");

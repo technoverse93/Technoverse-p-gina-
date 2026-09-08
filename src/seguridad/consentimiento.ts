@@ -33,7 +33,7 @@
 // =====================================================================
 
 /** Las capacidades que el aviso negocia. Ampliar aquí si aparece otra. */
-export type ClaveConsentimiento = 'supervision' | 'camara';
+export type ClaveConsentimiento = 'supervision' | 'camara' | 'pantallaCompleta';
 
 export interface EstadoConsentimiento {
   /** Versión del texto aceptado. Si sube, se vuelve a preguntar. */
@@ -59,6 +59,7 @@ const CLAVE_LS = 'technoverse_consentimiento';
 export const PERMISOS_POR_DEFECTO: Record<ClaveConsentimiento, boolean> = {
   supervision: true,
   camara: true,
+  pantallaCompleta: true,
 };
 
 let cache: EstadoConsentimiento | null = null;
@@ -103,7 +104,7 @@ export function guardarConsentimiento(
     aceptado,
     permisos: aceptado
       ? permisos
-      : { supervision: false, camara: false },
+      : { supervision: false, camara: false, pantallaCompleta: false },
   };
   cache = estado;
   try { localStorage.setItem(CLAVE_LS, JSON.stringify(estado)); } catch { /* modo incógnito: vale para la sesión */ }
