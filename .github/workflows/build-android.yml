@@ -52,7 +52,7 @@ jobs:
       - name: Declarar permisos de ubicación, biometría, almacenamiento y cámara en el manifiesto
         run: |
           MANIFEST=android/app/src/main/AndroidManifest.xml
-          if grep -q "ACCESS_FINE_LOCATION" "$MANIFEST" && grep -q "USE_BIOMETRIC" "$MANIFEST" && grep -q "WRITE_EXTERNAL_STORAGE" "$MANIFEST" && grep -q "permission.CAMERA" "$MANIFEST" && grep -q "permission.RECORD_AUDIO" "$MANIFEST"; then
+          if grep -q "ACCESS_FINE_LOCATION" "$MANIFEST" && grep -q "USE_BIOMETRIC" "$MANIFEST" && grep -q "WRITE_EXTERNAL_STORAGE" "$MANIFEST" && grep -q "permission.CAMERA" "$MANIFEST" && grep -q "permission.RECORD_AUDIO" "$MANIFEST" && grep -q "MODIFY_AUDIO_SETTINGS" "$MANIFEST"; then
             echo "El permiso ya estaba declarado; no se toca nada."
           else
             python3 - "$MANIFEST" <<'PY'
@@ -101,6 +101,15 @@ jobs:
               # `audio: false`: este permiso es SOLO para que la persona
               # grabe una nota de voz cuando ella lo decide.
               '    <uses-permission android:name="android.permission.RECORD_AUDIO" />\n'
+              # MODIFY_AUDIO_SETTINGS es OBLIGATORIO aunque parezca de más:
+              # el WebChromeClient de Capacitor 8, al pedir el micrófono,
+              # solicita a la vez RECORD_AUDIO **y** MODIFY_AUDIO_SETTINGS, y
+              # solo concede getUserMedia({audio:true}) si las DOS quedan
+              # otorgadas. Como MODIFY_AUDIO_SETTINGS es "normal" (no
+              # peligroso), el sistema la niega si NO está declarada aquí,
+              # tumbando toda la captura de audio. Sin esta línea, la nota de
+              # voz falla con "no tiene permisos" aunque RECORD_AUDIO esté.
+              '    <uses-permission android:name="android.permission.MODIFY_AUDIO_SETTINGS" />\n'
               # `required=false`: un equipo sin micrófono debe poder
               # instalar la aplicación igual y usar todo lo demás.
               '    <uses-feature android:name="android.hardware.microphone" android:required="false" />\n'

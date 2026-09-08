@@ -829,7 +829,7 @@ export default function LiveChat() {
                         value={inputText}
                         onChange={(e) => setInputText(e.target.value)}
                         placeholder="Escribe tu mensaje aquí..."
-                        className="flex-1 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-full px-4 py-2.5 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 transition"
+                        className="flex-1 min-w-0 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-full px-4 py-2.5 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 transition"
                       />
                       <button
                         type="submit"

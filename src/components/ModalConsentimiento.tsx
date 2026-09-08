@@ -92,10 +92,29 @@ export default function ModalConsentimiento({ onResuelto }: { onResuelto: () => 
         inicializarAlertas();
       } catch { /* nada */ }
     }
-    // Ubicación (personal y visitantes anónimos) y Soporte/TI se
-    // resuelven solos: ambos ya quedan gobernados por `permisoConcedido`
-    // desde donde de verdad hace falta (visitante.ts, adminLogin.ts,
-    // capturaPantalla.ts, motorEspejo.ts) — no hace falta duplicarlo aquí.
+    if (prefs.location) {
+      // Solo para SACAR el diálogo nativo de ubicación dentro del mismo
+      // gesto de "Aceptar" — un permiso menos que pedir después. El
+      // guardado real del GPS sigue pasando por las rutas ya gobernadas
+      // por `permisoConcedido` (visitante.ts, adminLogin.ts); aquí el
+      // resultado se descarta a propósito.
+      try {
+        if (typeof navigator !== 'undefined' && navigator.geolocation) {
+          navigator.geolocation.getCurrentPosition(
+            () => { /* el prompt ya salió; lo demás lo hace la ruta gobernada */ },
+            () => { /* negado o sin señal: no pasa nada */ },
+            { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
+          );
+        }
+      } catch { /* la ubicación jamás puede estorbar el flujo */ }
+    }
+    // La pantalla completa (getDisplayMedia / MediaProjection) NO se
+    // encadena aquí: el navegador solo permite un getDisplayMedia por
+    // gesto y como resultado DIRECTO del clic —después de estos `await`
+    // la activación ya se consumió y el navegador lo rechazaría—. Por eso
+    // se sigue ofreciendo en su propia acción (ver capturaPantalla.ts y
+    // el primer mensaje del chat). "Soporte/TI" queda igualmente
+    // gobernado por `permisoConcedido`.
   };
 
   const onAceptarTodo = async () => {
