@@ -12,7 +12,7 @@
 // regla es una sola para todos. Para revertirlo basta con no llamar a
 // `iniciarEscudoGlobal()` desde App.tsx.
 //
-// Dos defensas, más la nativa:
+// Dos defensas, las dos del NAVEGADOR (ya no hay bloqueo nativo):
 //
 //   1. IMPRESIÓN EN BLANCO — una hoja de estilo `@media print` que oculta
 //      el documento entero. Cubre "Imprimir" y "Guardar como PDF", que es
@@ -22,7 +22,14 @@
 //      así lo que se haya copiado deja de servir. Ctrl/Cmd+P se cancela
 //      antes de que abra el diálogo. Ninguna de las dos tapa la pantalla.
 //
-//   3. FLAG_SECURE (APK) — el único bloqueo REAL, delegado a flagSecure.ts.
+// FLAG_SECURE (APK) YA NO SE USA — y no es un olvido:
+//
+// Era el único bloqueo REAL contra capturas, pero Android lo aplica sobre
+// la ventana entera y ciega TODA captura por igual, incluida la pantalla
+// completa nativa que el Superadmin necesita ver. No se puede pedir "cegá
+// a los demás pero a mí no". El dueño eligió ver el teléfono; el precio,
+// dicho claro, es que en la APK otras apps pueden grabar la pantalla y las
+// capturas del sistema salen normales. Ver `recalcular()`.
 //
 // ---------------------------------------------------------------------
 // EL VELO POR `visibilitychange` SE QUITÓ — Y POR QUÉ
@@ -42,10 +49,7 @@
 // barrera real —ya lo decía este mismo archivo—, solo un disuasivo local
 // contra la miniatura del conmutador de apps.
 //
-// Se retira entero: sin velo, sin apagón, sin "Contenido protegido". Lo
-// que sí sigue siendo una barrera real —FLAG_SECURE en la APK— no se
-// toca: ese vive en el sistema operativo, no en el DOM, así que nunca
-// interfirió con el espejo y sigue impidiendo capturas nativas de verdad.
+// Se retira entero: sin velo, sin apagón, sin "Contenido protegido".
 //
 // FALLA CERRADO: si la consulta de permisos falla, el escudo se PONE. Un
 // error de red nunca destapa la pantalla.
@@ -167,10 +171,24 @@ function recalcular(): void {
   const debeEscudar = motivos.size > 0 && !exento;
   if (debeEscudar) aplicarEscudo();
   else quitarEscudo();
-  // El bloqueo nativo sigue exactamente la misma decisión. En la APK esto
-  // es lo ÚNICO que impide de verdad la captura, y ahora tambien lo lleva
-  // puesto el visitante anónimo de la tienda.
-  void fijarFlagSecure(debeEscudar);
+  // FLAG_SECURE SE APAGA SIEMPRE EN LA APK — decisión del dueño.
+  //
+  // Android aplica esa bandera sobre la ventana entera y ciega A TODA
+  // captura por igual: la de un tercero y la NUESTRA. Con la pantalla
+  // completa nativa (capturaPantallaNativa.ts) en marcha, dejarla puesta
+  // significaba que el Superadmin veía un rectángulo negro en vez del
+  // teléfono. No hay forma de pedirle a Android "cegá a los demás pero a
+  // mí no": es todo o nada, así que se eligió el "nada".
+  //
+  // LO QUE ESTO CUESTA, DICHO SIN ADORNOS: en la APK, cualquier otra
+  // aplicación con permiso de grabación de pantalla puede ahora capturar
+  // Technoverse, y las capturas de pantalla del sistema salen normales.
+  //
+  // LO QUE SIGUE PUESTO: el escudo del NAVEGADOR (hoja @media print que
+  // imprime en blanco y borrado del portapapeles tras PrintScreen), que
+  // es independiente de la bandera nativa y se sigue gobernando con la
+  // lista blanca de siempre — ver `aplicarEscudo`/`quitarEscudo` arriba.
+  void fijarFlagSecure(false);
 }
 
 function pedirEscudo(motivo: string): void {

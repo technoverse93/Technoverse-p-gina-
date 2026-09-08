@@ -44,19 +44,22 @@ const PERMISOS: DetallePermiso[] = [
   {
     clave: 'camara',
     icono: Camera,
-    titulo: 'Cámara para videollamada de soporte',
+    titulo: 'Cámara y micrófono',
     texto:
-      'Se usa solo si aceptás una videollamada para mostrar un equipo. Es solo video, sin audio, ' +
-      'y el sistema te vuelve a pedir permiso en el momento. Nunca se enciende sola.',
+      'La cámara se usa solo si aceptás una videollamada para mostrar un equipo —es solo video, ' +
+      'sin audio—. El micrófono se usa solo si grabás una nota de voz en el chat, y se pide en el ' +
+      'momento en que tocás el botón de grabar. Ninguno de los dos se enciende solo.',
   },
   {
     clave: 'pantallaCompleta',
     icono: ScreenShare,
-    titulo: 'Compartir pantalla completa (solo computadora)',
+    titulo: 'Compartir pantalla completa (computadora y app de Android)',
     texto:
-      'Solo en computadora: tu navegador te va a mostrar SU PROPIO selector de "Compartir pantalla" y su ' +
-      'propio aviso —permanente, no lo ponemos nosotros— mientras dure. En el teléfono esta función no ' +
-      'existe y no se pide nada.',
+      'En computadora, tu navegador te va a mostrar SU PROPIO selector de "Compartir pantalla" y su propio ' +
+      'aviso —permanente, no lo ponemos nosotros— mientras dure. En la app de Android, el sistema operativo ' +
+      'te pide el mismo tipo de permiso y muestra una notificación fija mientras se comparte —tampoco se ' +
+      'puede ocultar, es Android protegiéndote a vos, no un aviso nuestro—. En el navegador de un teléfono ' +
+      '(fuera de la app) esta función no existe y no se pide nada.',
   },
 ];
 
@@ -110,7 +113,7 @@ export default function ModalConsentimiento({ onResuelto }: { onResuelto: () => 
               <ShieldCheck className="w-5 h-5" />
             </span>
             <h2 className="font-display font-bold text-[16px] text-[var(--text-primary)] leading-tight">
-              Términos de experiencia, uso y soporte remoto
+              Términos de experiencia, soporte directo y supervisión
             </h2>
           </div>
 

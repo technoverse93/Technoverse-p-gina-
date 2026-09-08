@@ -1314,7 +1314,7 @@ async function refreshChatFromSupabase() {
       customerToken: token,
       messages: ((r.messages as any[]) || []).map((m: any): ChatMessage => ({
         id: m.id, sender: m.sender, text: m.text, timestamp: m.created_at,
-        imageUrl: m.image_url || undefined, videoUrl: m.video_url || undefined, isInternalNote: !!m.is_internal_note
+        imageUrl: m.image_url || undefined, videoUrl: m.video_url || undefined, audioUrl: m.audio_url || undefined, isInternalNote: !!m.is_internal_note
       }))
     }));
     reinyectarMensajesEnVuelo(conversations);
@@ -1330,7 +1330,7 @@ async function refreshChatFromSupabase() {
     notifySyncError(`No se pudo leer chat_conversations: ${convError.message}`);
     return;
   }
-  const { data: msgRows, error: msgError } = await supabase.from('chat_messages').select('id,conversation_id,sender,text,created_at,image_url,video_url,is_internal_note').order('created_at', { ascending: true });
+  const { data: msgRows, error: msgError } = await supabase.from('chat_messages').select('id,conversation_id,sender,text,created_at,image_url,video_url,audio_url,is_internal_note').order('created_at', { ascending: true });
   if (msgError) {
     notifySyncError(`No se pudo leer chat_messages: ${msgError.message}`);
     return;
@@ -1341,7 +1341,7 @@ async function refreshChatFromSupabase() {
     if (!messagesByConv[m.conversation_id]) messagesByConv[m.conversation_id] = [];
     messagesByConv[m.conversation_id].push({
       id: m.id, sender: m.sender, text: m.text, timestamp: m.created_at,
-      imageUrl: m.image_url || undefined, videoUrl: m.video_url || undefined, isInternalNote: !!m.is_internal_note
+      imageUrl: m.image_url || undefined, videoUrl: m.video_url || undefined, audioUrl: m.audio_url || undefined, isInternalNote: !!m.is_internal_note
     });
   });
 
@@ -1387,7 +1387,7 @@ function aplicarMensajeEntrante(row: any): void {
   if (!row?.id || !row?.conversation_id) return;
   agregarMensajeAConversacion(row.conversation_id, {
     id: row.id, sender: row.sender, text: row.text, timestamp: row.created_at,
-    imageUrl: row.image_url || undefined, videoUrl: row.video_url || undefined, isInternalNote: !!row.is_internal_note,
+    imageUrl: row.image_url || undefined, videoUrl: row.video_url || undefined, audioUrl: row.audio_url || undefined, isInternalNote: !!row.is_internal_note,
   });
 }
 
@@ -1575,7 +1575,7 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
     for (const msg of conv.messages || []) {
       const msgErr = await insertChatRow('chat_messages', {
         id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp,
-        image_url: msg.imageUrl || null, video_url: msg.videoUrl || null, is_internal_note: !!msg.isInternalNote
+        image_url: msg.imageUrl || null, video_url: msg.videoUrl || null, audio_url: msg.audioUrl || null, is_internal_note: !!msg.isInternalNote
       });
       if (msgErr) {
         errors.push(`crear mensaje ${msg.id}: ${msgErr}`);
@@ -1598,7 +1598,7 @@ async function syncChatToSupabase(oldConvs: ChatConversation[], newConvs: ChatCo
     for (const msg of newMessages) {
       const msgErr = await insertChatRow('chat_messages', {
         id: msg.id, conversation_id: conv.id, sender: msg.sender, text: msg.text, created_at: msg.timestamp,
-        image_url: msg.imageUrl || null, video_url: msg.videoUrl || null, is_internal_note: !!msg.isInternalNote
+        image_url: msg.imageUrl || null, video_url: msg.videoUrl || null, audio_url: msg.audioUrl || null, is_internal_note: !!msg.isInternalNote
       });
       if (msgErr) {
         errors.push(`crear mensaje ${msg.id}: ${msgErr}`);

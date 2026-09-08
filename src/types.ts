@@ -158,6 +158,8 @@ export interface ChatMessage {
   imageUrl?: string;
   /** Video adjunto. Se sube sin recomprimir (ver adjuntosChat.ts). */
   videoUrl?: string;
+  /** Nota de voz grabada desde el propio chat (ver grabadorVoz.ts). */
+  audioUrl?: string;
   isInternalNote?: boolean;
 }
 
