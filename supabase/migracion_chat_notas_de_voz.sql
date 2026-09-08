@@ -1,6 +1,9 @@
 -- =====================================================================
 -- CHAT: notas de voz (audio) además de foto y video
 -- =====================================================================
+-- APLICADA Y VERIFICADA en producción (2026-09-08): la columna existe,
+-- el bucket pasó de 8 a 13 tipos MIME y el RPC ya devuelve `audio_url`.
+--
 -- Tres piezas, y las tres hacen falta: si se aplica solo una, el audio
 -- viaja pero no se ve, o se ve pero el servidor lo rechaza.
 --
