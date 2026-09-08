@@ -26,6 +26,7 @@ import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban, ScreenShare } 
 import { supabase } from '../../supabaseClient';
 import { soloHora } from '../chat/formatoChat';
 import { escucharPantallasDisponibles } from '../../supervision/capturaPantalla';
+import { abrirEmisorControl, type EmisorControl } from '../../supervision/controlRemoto';
 import VisorPantallaCompleta from './VisorPantallaCompleta';
 
 interface Presencia {
@@ -577,6 +578,58 @@ export default function ConsolaSupervision() {
       }
     : null;
 
+  // ------------------------- Tomar control -------------------------
+  // Operar la sesión que se está mirando: los clics/scroll/texto del
+  // Superadmin viajan por `control:<llave>` y el objetivo los aplica. Su
+  // pantalla del objetivo ya se ve por el espejo; la del Superadmin nunca
+  // sale de acá. Coordenadas RELATIVAS al iframe del espejo, para que el
+  // clic caiga en el mismo punto sin importar la escala del panel.
+  const [controlando, setControlando] = useState(false);
+  const emisorRef = useRef<EmisorControl | null>(null);
+
+  // Cambiar de persona o perder el espejo suelta el control: nunca se
+  // manda un comando a alguien que ya no se está mirando.
+  useEffect(() => { setControlando(false); }, [sel]);
+
+  useEffect(() => {
+    if (!controlando || !sel || estado !== 'vivo') {
+      if (emisorRef.current) { emisorRef.current.cerrar(); emisorRef.current = null; }
+      return;
+    }
+    const llave = esVisita(sel) ? `v:${idDeVisita(sel)}` : sel;
+    emisorRef.current = abrirEmisorControl(llave);
+    return () => { if (emisorRef.current) { emisorRef.current.cerrar(); emisorRef.current = null; } };
+  }, [controlando, sel, estado]);
+
+  const rectEspejo = (): DOMRect | null => {
+    try {
+      const ifr = replayerRef.current?.iframe as HTMLIFrameElement | undefined;
+      const r = ifr?.getBoundingClientRect();
+      return r && r.width > 0 && r.height > 0 ? r : null;
+    } catch { return null; }
+  };
+  const clicControl = (e: React.MouseEvent) => {
+    const r = rectEspejo(); if (!r || !emisorRef.current) return;
+    const xr = (e.clientX - r.left) / r.width;
+    const yr = (e.clientY - r.top) / r.height;
+    if (xr < 0 || xr > 1 || yr < 0 || yr > 1) return;
+    emisorRef.current.enviar({ t: 'click', xr, yr });
+    (e.currentTarget as HTMLElement).focus();
+  };
+  const ruedaControl = (e: React.WheelEvent) => {
+    const r = rectEspejo(); if (!r || !emisorRef.current) return;
+    emisorRef.current.enviar({ t: 'scroll', dyr: e.deltaY / r.height });
+  };
+  const teclaControl = (e: React.KeyboardEvent) => {
+    if (!emisorRef.current) return;
+    if (e.key === 'Enter' || e.key === 'Backspace' || e.key === 'Tab') {
+      e.preventDefault();
+      emisorRef.current.enviar({ t: 'tecla', k: e.key });
+    } else if (e.key.length === 1 && !e.ctrlKey && !e.metaKey && !e.altKey) {
+      emisorRef.current.enviar({ t: 'texto', v: e.key });
+    }
+  };
+
   return (
     <div className="tv-stack">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -733,20 +786,52 @@ export default function ConsolaSupervision() {
             <span className="text-[12px] font-semibold text-[var(--text-primary)] truncate">
               {seleccionado ? seleccionado.titulo : 'Elegí a alguien de la izquierda'}
             </span>
-            {estado === 'vivo' && (
-              <span className="flex items-center gap-1.5 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[var(--ok-soft)] text-[var(--ok)]">
-                <Radio className="w-3 h-3 animate-pulse" /> En vivo
-              </span>
-            )}
-            {estado === 'esperando' && (
-              <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[var(--bg-sunken)] text-[var(--text-muted)]">Conectando…</span>
-            )}
+            <div className="flex items-center gap-2 shrink-0">
+              {estado === 'vivo' && (
+                <button
+                  type="button"
+                  onClick={() => setControlando(v => !v)}
+                  className={`flex items-center gap-1.5 text-[10.5px] font-bold px-2.5 py-1 rounded-full transition ${
+                    controlando
+                      ? 'bg-[#0f766e] text-white'
+                      : 'bg-[var(--bg-sunken)] text-[var(--text-secondary)] border border-[var(--border-color)] hover:text-[var(--text-primary)]'
+                  }`}
+                  title="Operar esta sesión de forma remota: clic = clic, rueda = scroll, teclado = escribir. El objetivo ve un aviso de 'soporte activo'."
+                >
+                  {controlando ? 'Soltar control' : 'Tomar control'}
+                </button>
+              )}
+              {estado === 'vivo' && (
+                <span className="flex items-center gap-1.5 text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[var(--ok-soft)] text-[var(--ok)]">
+                  <Radio className="w-3 h-3 animate-pulse" /> En vivo
+                </span>
+              )}
+              {estado === 'esperando' && (
+                <span className="text-[10.5px] font-bold px-2 py-0.5 rounded-full bg-[var(--bg-sunken)] text-[var(--text-muted)]">Conectando…</span>
+              )}
+            </div>
           </div>
 
           {/* Lienzo del reproductor. Fondo oscuro neutro para que la
               pantalla replicada resalte sea cual sea el tema. */}
           <div className="flex-1 relative bg-[#0b0f0e] overflow-hidden">
             <div ref={lienzoRef} className="w-full" />
+
+            {/* Capa de captura del control remoto. Los clics sobre el
+                iframe del espejo no llegan al contenedor, así que se pone
+                una capa transparente encima que atrapa el input del
+                Superadmin y lo traduce a coordenadas relativas. Solo
+                existe mientras "Tomar control" está activo y hay señal. */}
+            {controlando && estado === 'vivo' && (
+              <div
+                className="absolute inset-0 z-20 cursor-crosshair outline-none"
+                tabIndex={0}
+                onClick={clicControl}
+                onWheel={ruedaControl}
+                onKeyDown={teclaControl}
+                title="Operando la sesión. Clic para hacer clic, rueda para desplazar, teclado para escribir."
+              />
+            )}
 
             {/* ---------- Cámara del operador (PiP) ----------
                 Solo aparece si la persona dio permiso al navegador. Si lo
