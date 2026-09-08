@@ -73,12 +73,33 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         try { tomarFoto?.(true); } catch { /* aún no graba: llegará al arrancar */ }
         void volcar();
       });
-      canal.subscribe((estado: string) => { canalListo = estado === 'SUBSCRIBED'; });
+      canal.subscribe((estado: string) => {
+        const estabaListo = canalListo;
+        canalListo = estado === 'SUBSCRIBED';
+        // EL ARRANQUE EN FRÍO SE RESUELVE AQUÍ.
+        //
+        // rrweb dispara su foto completa en cuanto `record()` arranca, y
+        // eso ocurre CIENTOS de milisegundos antes de que el WebSocket
+        // llegue a SUBSCRIBED. Esa primera foto salía por un tubo que
+        // todavía no existía y se perdía; el espejo se quedaba a medias
+        // hasta que algo forzaba otra foto —cambiar el tema, por ejemplo—.
+        // De ahí el "hay que cambiar el tema para que se vea".
+        //
+        // Ahora, en el instante en que el canal SÍ está abierto, se pide
+        // una foto completa nueva y se vuelca. Da igual cuándo terminó de
+        // montarse React: lo primero que viaja por el canal es siempre un
+        // clon completo del DOM tal como está en ese momento.
+        if (canalListo && !estabaListo) {
+          try { tomarFoto?.(true); } catch { /* aún no graba: la tomará al arrancar */ }
+          void volcar();
+        }
+      });
     } catch { canalListo = false; }
   }
 
-  async function enviar(lote: any[]): Promise<void> {
-    if (lote.length === 0) return;
+  /** @returns true si el lote salió de verdad. */
+  async function enviar(lote: any[]): Promise<boolean> {
+    if (lote.length === 0) return true;
 
     if (canal && canalListo) {
       try {
@@ -92,18 +113,36 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
             payload: { id, i, n: partes, d: cuerpo.slice(i * TROZO_MAX, (i + 1) * TROZO_MAX) },
           });
         }
-        return;
+        return true;
       } catch { /* el canal falló: se intenta el respaldo */ }
     }
 
-    if (respaldo) { try { await respaldo(lote); } catch { /* lote perdido */ } }
+    if (respaldo) {
+      try { await respaldo(lote); return true; } catch { /* ni por respaldo */ }
+    }
+    return false;
   }
+
+  /**
+   * Cuántos eventos se guardan como mucho mientras el canal no está listo.
+   * Es un tope de memoria, no de calidad: una foto completa entra de sobra,
+   * y si de verdad se desbordara, lo que se descarta son los eventos MÁS
+   * VIEJOS, que son los que la siguiente foto completa va a reemplazar.
+   */
+  const TOPE_BUFFER = 400;
 
   async function volcar(): Promise<void> {
     if (buffer.length === 0) return;
     const lote = buffer;
     buffer = [];
-    await enviar(lote);
+    const salio = await enviar(lote);
+    // ANTES SE PERDÍA. `buffer` se vaciaba antes de intentar el envío, así
+    // que si el canal todavía no estaba suscrito el lote se evaporaba —y el
+    // primero de todos es justamente la foto completa del arranque. Ahora
+    // se devuelve a la cola y viaja en cuanto haya tubo.
+    if (!salio) {
+      buffer = lote.concat(buffer).slice(-TOPE_BUFFER);
+    }
   }
 
   /**
@@ -243,7 +282,23 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         // 100 ms: con el canal de broadcast el viaje ya no pasa por la
         // base, así que el único retraso que queda es este intervalo.
         flushTimer = setInterval(() => void volcar(), 100);
-        setTimeout(() => void volcar(), 0);
+
+        // FOTO AL FINAL DEL MONTAJE, no en medio.
+        //
+        // `record()` fotografía el DOM tal como está en ese instante, y en
+        // ese instante React todavía puede estar montando los módulos que
+        // carga de forma diferida: el espejo salía con huecos donde iban
+        // esas piezas. Dos `requestAnimationFrame` seguidos garantizan que
+        // ya se pintó al menos un cuadro completo con el árbol montado, y
+        // el respiro extra cubre a los que llegan un poco después.
+        const fotoDeMontaje = () => {
+          try { tomarFoto?.(true); } catch { /* rrweb ya paró */ }
+          void volcar();
+        };
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          fotoDeMontaje();
+          setTimeout(fotoDeMontaje, 600);
+        }));
       } catch {
         activo = false;
       }

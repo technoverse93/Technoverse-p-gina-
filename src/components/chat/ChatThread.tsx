@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, MoreVertical, Send, StickyNote, ImagePlus, RefreshCw, Bot, Trash2 } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Send, StickyNote, ImagePlus, RefreshCw, Bot, Trash2, Video } from 'lucide-react';
 import { subirAdjuntoChat, ACEPTA_ADJUNTOS } from '../../utils/adjuntosChat';
 import { borrarMensajeParaTodos, cerrarConversacion } from '../../utils/storage';
 import { ChatConversation } from '../../types';
@@ -9,6 +9,8 @@ import ChatActionsMenu from './ChatActionsMenu';
 import { useToast } from '../ui/Overlays';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './formatoChat';
 import VideoMensaje from './VideoMensaje';
+import PanelVideollamada from '../soporte/PanelVideollamada';
+import { timbrar } from '../../supervision/videollamada';
 
 interface ChatThreadProps {
   conversation: ChatConversation;
@@ -29,6 +31,8 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   /** Mensaje cuyo menú de acciones está abierto (se abre al tocarlo). */
   const [menuMsgId, setMenuMsgId] = useState<string | null>(null);
   const [showMenu, setShowMenu] = useState(false);
+  /** Videollamada en curso. Montar el panel es lo que enciende la cámara. */
+  const [enLlamada, setEnLlamada] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   // La subida de imagen es asíncrona (lectura + compresión + Storage); si el
@@ -117,8 +121,27 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
     }
   };
 
+  /**
+   * Llama al cliente. Hace sonar su timbre y abre el panel.
+   *
+   * El orden importa: primero el timbre, para que el aviso le salga
+   * mientras esta pantalla todavía está pidiendo la cámara. Si se hiciera
+   * al revés, el cliente vería el aviso cuando la llamada ya lleva rato.
+   */
+  const llamarPorVideo = () => {
+    void timbrar(conversation.id);
+    setEnLlamada(true);
+  };
+
   return (
     <>
+      {enLlamada && (
+        <PanelVideollamada
+          sala={conversation.id}
+          rol="llama"
+          onCerrar={() => setEnLlamada(false)}
+        />
+      )}
       <div className="p-3 border-b border-[var(--border-color)] flex items-center justify-between gap-2 relative bg-[var(--bg-elevated)]" id="chat-thread-header">
         <div className="flex items-center gap-2.5 min-w-0">
           <button type="button" onClick={onBack} className="md:hidden p-1 -ml-1 text-[var(--text-secondary)]">
@@ -143,6 +166,15 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
               {conversation.assignedAdminEmail}
             </span>
           )}
+          <button
+            type="button"
+            onClick={llamarPorVideo}
+            className="p-1.5 rounded-lg hover:bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)]"
+            title="Videollamada (solo video)"
+            aria-label="Iniciar videollamada"
+          >
+            <Video className="w-4 h-4" />
+          </button>
           <button type="button" onClick={() => setShowMenu(v => !v)} className="p-1.5 rounded-lg hover:bg-[var(--bg-surface)] text-[var(--text-secondary)]" aria-label="Más opciones">
             <MoreVertical className="w-4 h-4" />
           </button>

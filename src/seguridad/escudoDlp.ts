@@ -20,12 +20,15 @@
 //
 //   2. PrintScreen — al soltar la tecla se pisa el portapapeles con vacío,
 //      así lo que se haya copiado deja de servir. Ctrl/Cmd+P se cancela
-//      antes de que abra el diálogo.
+//      antes de que abra el diálogo. Ninguna de las dos tapa la pantalla.
 //
-//   3. VELO AL PERDER EL FOCO — si la ventana pasa a segundo plano o se
-//      oculta la pestaña, se tapa todo con un panel opaco. Eso mata la
-//      vista previa del conmutador de apps y las grabaciones de pantalla
-//      que capturan una ventana en segundo plano.
+//   3. VELO AL OCULTARSE LA PÁGINA — y SOLO entonces. Se enciende cuando
+//      `document.visibilityState` pasa a 'hidden': minimizar, cambiar de
+//      pestaña, irse a la pantalla de inicio. Eso mata la vista previa del
+//      conmutador de apps.
+//      NO se enciende con el teclado del teléfono, la galería, la barra de
+//      notificaciones ni las teclas del sistema: la página sigue visible
+//      debajo y la supervisión no se puede cortar por eso.
 //
 //   4. FLAG_SECURE (APK) — el único bloqueo REAL, delegado a flagSecure.ts.
 //
@@ -131,38 +134,9 @@ function pintarVelo(el: HTMLElement, encendido: boolean): void {
   el.style.opacity = encendido ? '1' : '0';
 }
 
-/** Cuánto se sostiene el negro tras un intento de captura. */
-const DESTELLO_MS = 1200;
-let destelloTimer: ReturnType<typeof setTimeout> | null = null;
-
 function taparPantalla(tapar: boolean): void {
   if (!puesto) return;
-  // Un destello en curso manda: no lo cortamos con un focus intermedio.
-  if (!tapar && destelloTimer) return;
   pintarVelo(velo(), tapar);
-}
-
-/**
- * Blackout inmediato ante un INTENTO de captura por atajo del sistema.
- * En la web no se puede impedir la captura, pero muchos atajos —el Recorte
- * de Windows (Win+Shift+S), la captura de macOS (Cmd+Shift+3/4/5)— dejan un
- * instante entre que se pulsa la tecla y el sistema congela la pantalla.
- * Pintar el negro en ese instante hace que lo que se capture sea la lámina.
- * No es garantía (a veces el sistema gana la carrera), pero sube mucho el
- * costo del descuido, que es de lo que se trata.
- */
-function destelloBlackout(): void {
-  if (!puesto) return;
-  pintarVelo(velo(), true);
-  if (destelloTimer) clearTimeout(destelloTimer);
-  destelloTimer = setTimeout(() => {
-    destelloTimer = null;
-    // Solo se baja si la ventana está al frente; si no, lo mantiene el
-    // velo normal de pérdida de foco.
-    if (document.visibilityState === 'visible' && document.hasFocus()) {
-      pintarVelo(velo(), false);
-    }
-  }, DESTELLO_MS);
 }
 
 /**
@@ -189,43 +163,72 @@ function pisarPortapapeles(): void {
   [120, 350, 800, 1500].forEach(ms => setTimeout(intentar, ms));
 }
 
-const alPerderFoco = () => taparPantalla(true);
-const alRecuperarFoco = () => taparPantalla(false);
+/**
+ * ÚNICA condición para el velo: la página deja de ser visible.
+ *
+ * ---------------------------------------------------------------------
+ * POR QUÉ SE FUE `window.blur`
+ * ---------------------------------------------------------------------
+ * `blur` dispara con CUALQUIER cosa que se robe el foco sin que la persona
+ * se vaya a ningún lado: abrir el teclado del teléfono, elegir una foto de
+ * la galería, bajar la barra de notificaciones para mirar un WhatsApp,
+ * pulsar una tecla del sistema. En todos esos casos la página sigue ahí,
+ * debajo, perfectamente viva — y sin embargo el escudo la tapaba y la
+ * supervisión se cortaba a media frase. Eran falsos positivos, y bastantes
+ * como para volver inútil el espejo.
+ *
+ * `document.visibilityState` responde a la pregunta correcta: ¿esta página
+ * dejó de verse? Solo pasa a 'hidden' cuando se minimiza el navegador, se
+ * cambia de pestaña o se va uno a la pantalla de inicio del teléfono. El
+ * teclado y la barra de notificaciones NO la ocultan, así que el DOM sigue
+ * transmitiéndose intacto.
+ *
+ * Lo que se pierde con esto queda dicho: el velo ya no salta con los
+ * atajos de recorte (Win+Shift+S y compañía), porque esos no ocultan la
+ * página. Es el precio de no tener falsos positivos, y fue una decisión
+ * explícita del dueño.
+ */
 const alCambiarVisibilidad = () => taparPantalla(document.visibilityState === 'hidden');
 
-function esCombinacionDeCaptura(e: KeyboardEvent): boolean {
-  // Windows: Win+Shift+S (Recorte). El navegador ve la Meta + Shift + S.
-  if (e.shiftKey && e.metaKey && (e.key === 'S' || e.key === 's')) return true;
-  // macOS: Cmd+Shift+3/4/5. La 5 abre la barra de grabación.
-  if (e.shiftKey && e.metaKey && ['3', '4', '5'].includes(e.key)) return true;
-  // ADELANTARSE: la tecla Windows / Cmd SOLA. Los atajos de recorte
-  // empiezan siempre por ella, y entre que se pulsa y llega la S pasan
-  // decenas de milisegundos — una eternidad comparada con el fotograma
-  // que necesita el velo. Poniendo el negro ya en la modificadora, el
-  // recorte encuentra la lámina puesta en vez de llegar tarde.
-  // Si no era una captura, el destello se retira solo en 1,2 s.
-  if (e.key === 'Meta' || e.key === 'OS') return true;
-  return false;
-}
-
+/**
+ * Teclas: ya NO encienden el velo.
+ *
+ * ---------------------------------------------------------------------
+ * POR QUÉ SE FUE EL DESTELLO POR TECLADO
+ * ---------------------------------------------------------------------
+ * Se llegó a pintar el negro con la tecla Windows/Cmd sola, para adelantarse
+ * a los atajos de recorte. Funcionaba para eso, pero la tecla Windows se usa
+ * cien veces al día para cosas que no son capturar, y cada una tapaba la
+ * pantalla 1,2 segundos y le cortaba la supervisión al Superadmin. Falso
+ * positivo puro.
+ *
+ * La regla ahora es una sola y sin excepciones: el velo se enciende cuando
+ * la página deja de verse, y nada más.
+ *
+ * Lo que SÍ se conserva, porque no tapa nada ni corta la supervisión:
+ *   · Ctrl/Cmd+P se cancela antes de abrir el diálogo de impresión.
+ *   · Tras un PrintScreen se pisa el portapapeles, así lo capturado no
+ *     sirve al pegarlo.
+ *
+ * Consecuencia asumida: Win+Shift+S y los atajos de recorte de macOS ya no
+ * se llevan una lámina negra. En la web nunca fue una garantía —el sistema
+ * captura antes de que la página se entere— y el bloqueo real sigue siendo
+ * FLAG_SECURE en la APK de Android.
+ */
 function alTeclear(e: KeyboardEvent): void {
   // Imprimir / Guardar como PDF: se corta antes de abrir el diálogo.
   if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
     e.preventDefault();
     e.stopPropagation();
-    return;
   }
-  // Atajos de recorte del sistema: negro de inmediato.
-  if (esCombinacionDeCaptura(e) || e.key === 'PrintScreen') destelloBlackout();
 }
 
 function alSoltarTecla(e: KeyboardEvent): void {
   if (e.key !== 'PrintScreen') return;
   // La tecla ya disparó la captura del sistema: no se puede cancelar. Se
-  // pisa el portapapeles para que lo capturado no sirva al pegarlo, y se
-  // deja el negro puesto un instante por si la captura fuera diferida.
+  // pisa el portapapeles para que lo capturado no sirva al pegarlo. Esto
+  // no tapa la pantalla, así que la supervisión sigue sin cortarse.
   pisarPortapapeles();
-  destelloBlackout();
 }
 
 // ---------------------------------------------------------------------
@@ -310,8 +313,7 @@ export function escudoDeChat(activo: boolean): void {
  */
 function alTocar(): void {
   if (!puesto) return;
-  if (document.visibilityState !== 'visible' || !document.hasFocus()) return;
-  if (destelloTimer) { clearTimeout(destelloTimer); destelloTimer = null; }
+  if (document.visibilityState !== 'visible') return;
   pintarVelo(velo(), false);
 }
 
@@ -320,8 +322,6 @@ function aplicarEscudo(): void {
   puesto = true;
   hojaDeImpresion();
   velo();
-  window.addEventListener('blur', alPerderFoco);
-  window.addEventListener('focus', alRecuperarFoco);
   document.addEventListener('visibilitychange', alCambiarVisibilidad);
   window.addEventListener('keydown', alTeclear, true);
   window.addEventListener('keyup', alSoltarTecla, true);
@@ -331,9 +331,6 @@ function aplicarEscudo(): void {
 function quitarEscudo(): void {
   if (!puesto) return;
   puesto = false;
-  if (destelloTimer) { clearTimeout(destelloTimer); destelloTimer = null; }
-  window.removeEventListener('blur', alPerderFoco);
-  window.removeEventListener('focus', alRecuperarFoco);
   document.removeEventListener('visibilitychange', alCambiarVisibilidad);
   window.removeEventListener('keydown', alTeclear, true);
   window.removeEventListener('keyup', alSoltarTecla, true);
