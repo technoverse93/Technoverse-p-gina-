@@ -36,6 +36,8 @@ import { supabase } from '../supabaseClient';
 import { obtenerDeviceId } from '../utils/dispositivo';
 import { leerDatosDelAparato } from '../utils/huella';
 import { crearEspejo, type Espejo } from './motorEspejo';
+import { capturarUbicacionVisitante } from '../utils/ubicacion';
+import { permisoConcedido } from '../seguridad/consentimiento';
 
 let latidoTimer: ReturnType<typeof setInterval> | null = null;
 let espejo: Espejo | null = null;
@@ -60,6 +62,14 @@ function rutaActual(): string {
   try { return (location.pathname || '/') + (location.hash || ''); } catch { return '/'; }
 }
 
+/**
+ * Se pide UNA sola vez por sesión de visita, y solo DESPUÉS del primer
+ * latido: el RPC de ubicación hace `update`, no `insert` — si la fila
+ * todavía no existe (llegó antes que el primer latido), no guardaría
+ * nada. `visitante_latido` es quien crea la fila.
+ */
+let ubicacionPedida = false;
+
 async function latir(): Promise<void> {
   if (!visita) return;
   try {
@@ -71,6 +81,11 @@ async function latir(): Promise<void> {
       p_ruta: rutaActual(),
     });
     if (error) return;
+
+    if (!ubicacionPedida && permisoConcedido('ubicacion')) {
+      ubicacionPedida = true;
+      capturarUbicacionVisitante(visita);
+    }
 
     const quierenVerme = data === true;
     if (quierenVerme && espejo && !espejo.transmitiendo()) await espejo.arrancar();
@@ -119,4 +134,5 @@ export function detenerVisitante(): void {
     void e.parar().finally(() => e.cerrar());
   }
   visita = null;
+  ubicacionPedida = false;
 }

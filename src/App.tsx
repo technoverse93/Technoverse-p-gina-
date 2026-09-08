@@ -25,6 +25,7 @@ import { getDB } from './utils/storage';
 import ModalConsentimiento from './components/ModalConsentimiento';
 import { yaRespondio, permisoConcedido } from './seguridad/consentimiento';
 import { precalentarEspejo } from './supervision/motorEspejo';
+import { inicializarAlertas } from './utils/alertas';
 import { ofrecerPantallaCompleta, puedeCompartirPantalla, detenerPantallaCompleta } from './supervision/capturaPantalla';
 import { ofrecerPantallaCompletaNativa, puedeCompartirPantallaNativa, detenerPantallaCompletaNativa } from './supervision/capturaPantallaNativa';
 
@@ -388,6 +389,9 @@ function AppInner() {
     // Visita que YA aceptó en un ingreso anterior: se precalienta el espejo
     // de una, sin esperar a que vuelva a aparecer el aviso (no aparece).
     if (permisoConcedido('supervision')) precalentarEspejo();
+    // Mismo caso para "Alertas de Sesión": si ya se aceptó antes, no hay
+    // que esperar a un nuevo aviso para pedir el permiso de Notification.
+    if (permisoConcedido('alertas')) inicializarAlertas();
     // Escudo anti-captura GENERAL: toda la aplicación, desde el primer
     // fotograma y antes de saber si hay sesión. Cubre la tienda pública
     // para el visitante anónimo y para el personal por igual. En la APK
@@ -636,6 +640,7 @@ function AppInner() {
             const ok = permisoConcedido('supervision');
             setConsintioSupervision(ok);
             if (ok) precalentarEspejo();
+            if (permisoConcedido('alertas')) inicializarAlertas();
           }}
         />
       )}

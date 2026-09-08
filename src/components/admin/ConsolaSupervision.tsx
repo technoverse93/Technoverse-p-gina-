@@ -40,10 +40,12 @@ interface Presencia {
 }
 
 /**
- * Un cliente navegando la tienda. A propósito NO tiene correo, nombre, IP
- * ni user_id: lo único que identifica a un cliente es el MODELO de su
- * aparato. La tabla del servidor está hecha igual, para que la regla no
- * dependa de que alguien se acuerde de no mostrarlo.
+ * Un cliente navegando la tienda. Sigue sin tener correo, nombre, IP ni
+ * user_id — eso no cambió. Lo que sí cambió, por decisión explícita del
+ * dueño (ver seguridad/consentimiento.ts y utils/ubicacion.ts): si esta
+ * visita aceptó el interruptor "Ubicación" del aviso de consentimiento,
+ * `lat`/`lon` traen su posición GPS real, atada al aparato aunque nunca
+ * se sepa quién es.
  */
 interface Visitante {
   visita: string;
@@ -53,6 +55,9 @@ interface Visitante {
   ruta: string | null;
   last_seen: string;
   watch: boolean;
+  lat: number | null;
+  lon: number | null;
+  precision_m: number | null;
 }
 
 const ONLINE_MS = 40000;
@@ -145,7 +150,7 @@ export default function ConsolaSupervision() {
         .limit(50),
       supabase
         .from('supervision_visitantes')
-        .select('visita, modelo, tipo, entorno, ruta, last_seen, watch')
+        .select('visita, modelo, tipo, entorno, ruta, last_seen, watch, lat, lon, precision_m')
         .gte('last_seen', desde)
         .order('last_seen', { ascending: false })
         .limit(50),
@@ -775,6 +780,16 @@ export default function ConsolaSupervision() {
                 {personaSel?.modelo ? <span className="text-[var(--text-muted)]"> · {personaSel.modelo}</span> : null}
               </span>
               <div className="flex items-center gap-2 shrink-0">
+                {visitaSel?.lat != null && visitaSel?.lon != null && (
+                  <a
+                    href={`https://www.google.com/maps?q=${visitaSel.lat},${visitaSel.lon}`}
+                    target="_blank" rel="noopener noreferrer"
+                    className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-bold text-[var(--text-secondary)] border border-[var(--border-color)] transition hover:text-[var(--text-primary)]"
+                    title={visitaSel.precision_m != null ? `Precisión aproximada: ${Math.round(visitaSel.precision_m)} m` : 'Ubicación aproximada'}
+                  >
+                    Ver ubicación
+                  </a>
+                )}
                 {personaSel?.device && (
                   <button
                     type="button" onClick={() => void bloquearAparato()} disabled={bloqueandoAparato}
