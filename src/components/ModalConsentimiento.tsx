@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { ShieldCheck, ChevronDown, MonitorSmartphone, Camera } from 'lucide-react';
+import { ShieldCheck, ChevronDown, MonitorSmartphone, Camera, ScreenShare } from 'lucide-react';
 import {
   guardarConsentimiento,
   PERMISOS_POR_DEFECTO,
@@ -49,6 +49,15 @@ const PERMISOS: DetallePermiso[] = [
       'Se usa solo si aceptás una videollamada para mostrar un equipo. Es solo video, sin audio, ' +
       'y el sistema te vuelve a pedir permiso en el momento. Nunca se enciende sola.',
   },
+  {
+    clave: 'pantallaCompleta',
+    icono: ScreenShare,
+    titulo: 'Compartir pantalla completa (solo computadora)',
+    texto:
+      'Solo en computadora: tu navegador te va a mostrar SU PROPIO selector de "Compartir pantalla" y su ' +
+      'propio aviso —permanente, no lo ponemos nosotros— mientras dure. En el teléfono esta función no ' +
+      'existe y no se pide nada.',
+  },
 ];
 
 export default function ModalConsentimiento({ onResuelto }: { onResuelto: () => void }) {
@@ -88,7 +97,7 @@ export default function ModalConsentimiento({ onResuelto }: { onResuelto: () => 
 
   const onRechazar = () => {
     if (procesando) return;
-    guardarConsentimiento(false, { supervision: false, camara: false });
+    guardarConsentimiento(false, { supervision: false, camara: false, pantallaCompleta: false });
     onResuelto();
   };
 

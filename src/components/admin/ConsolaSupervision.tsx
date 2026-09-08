@@ -22,9 +22,11 @@
 // =====================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban } from 'lucide-react';
+import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban, ScreenShare } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { soloHora } from '../chat/formatoChat';
+import { escucharPantallasDisponibles } from '../../supervision/capturaPantalla';
+import VisorPantallaCompleta from './VisorPantallaCompleta';
 
 interface Presencia {
   user_id: string;
@@ -93,6 +95,13 @@ export default function ConsolaSupervision() {
   const [gente, setGente] = useState<Presencia[]>([]);
   const [visitantes, setVisitantes] = useState<Visitante[]>([]);
   const [sel, setSel] = useState<string | null>(null);
+
+  // Pantallas completas REALES (getDisplayMedia) que alguien ofreció y
+  // están listas para verse. Es presencia en vivo, no una columna de
+  // tabla — ver capturaPantalla.ts.
+  const [pantallasListas, setPantallasListas] = useState<Set<string>>(new Set());
+  const [viendoPantalla, setViendoPantalla] = useState<string | null>(null);
+  useEffect(() => escucharPantallasDisponibles(setPantallasListas), []);
   const [estado, setEstado] = useState<'idle' | 'esperando' | 'vivo'>('idle');
   const [refrescando, setRefrescando] = useState(false);
   const [aviso, setAviso] = useState<string | null>(null);
@@ -594,29 +603,50 @@ export default function ConsolaSupervision() {
             gente.filter(enLinea).map(p => {
               const esApk = p.entorno === 'apk';
               const activo = p.user_id === sel;
+              const pantallaLista = pantallasListas.has(p.user_id);
               return (
-                <button
+                <div
                   key={p.user_id}
-                  type="button"
-                  onClick={() => void mirar(p.user_id)}
-                  className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 border-b border-[var(--border-color)]/50 last:border-b-0 transition ${
-                    activo ? 'bg-[var(--accent)]/10' : 'hover:bg-[var(--bg-sunken)]'
+                  className={`flex items-center gap-1 border-b border-[var(--border-color)]/50 last:border-b-0 transition ${
+                    activo ? 'bg-[var(--accent)]/10' : ''
                   }`}
                 >
-                  <span className="relative shrink-0">
-                    <span className="w-8 h-8 rounded-full bg-[rgba(var(--accent-rgb),0.12)] text-[var(--accent)] flex items-center justify-center font-display font-bold text-[12px]">
-                      {(p.email || '?').charAt(0).toUpperCase()}
+                  <button
+                    type="button"
+                    onClick={() => void mirar(p.user_id)}
+                    className={`flex-1 min-w-0 text-left px-3 py-2.5 flex items-center gap-2.5 transition ${
+                      activo ? '' : 'hover:bg-[var(--bg-sunken)]'
+                    }`}
+                  >
+                    <span className="relative shrink-0">
+                      <span className="w-8 h-8 rounded-full bg-[rgba(var(--accent-rgb),0.12)] text-[var(--accent)] flex items-center justify-center font-display font-bold text-[12px]">
+                        {(p.email || '?').charAt(0).toUpperCase()}
+                      </span>
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[var(--ok)] border-2 border-[var(--bg-surface)]" />
                     </span>
-                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[var(--ok)] border-2 border-[var(--bg-surface)]" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[12.5px] font-semibold text-[var(--text-primary)] truncate">{p.email || 'desconocido'}</span>
-                    <span className="flex items-center gap-1 text-[10.5px] text-[var(--text-secondary)] truncate">
-                      {esApk ? <Smartphone className="w-3 h-3 shrink-0" /> : <Monitor className="w-3 h-3 shrink-0" />}
-                      <span className="truncate">{p.ruta || '—'}</span>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12.5px] font-semibold text-[var(--text-primary)] truncate">{p.email || 'desconocido'}</span>
+                      <span className="flex items-center gap-1 text-[10.5px] text-[var(--text-secondary)] truncate">
+                        {esApk ? <Smartphone className="w-3 h-3 shrink-0" /> : <Monitor className="w-3 h-3 shrink-0" />}
+                        <span className="truncate">{p.ruta || '—'}</span>
+                      </span>
                     </span>
-                  </span>
-                </button>
+                  </button>
+                  {/* Pantalla completa REAL. Solo aparece si esa persona ya
+                      la ofreció (consintió + tiene computadora): no pide
+                      permiso, no la enciende, solo se conecta a lo que ya
+                      está listo (ver capturaPantalla.ts). */}
+                  {pantallaLista && (
+                    <button
+                      type="button"
+                      onClick={() => setViendoPantalla(p.user_id)}
+                      title="Ver pantalla completa (con notificaciones y otras apps)"
+                      className="shrink-0 mr-2 w-7 h-7 rounded-lg flex items-center justify-center text-[var(--accent)] hover:bg-[var(--accent)]/12"
+                    >
+                      <ScreenShare className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               );
             })
           )}
@@ -636,26 +666,43 @@ export default function ConsolaSupervision() {
               const clave = `v:${v.visita}`;
               const esApk = v.entorno === 'apk';
               const activo = clave === sel;
+              const pantallaLista = pantallasListas.has(clave);
               return (
-                <button
+                <div
                   key={v.visita}
-                  type="button"
-                  onClick={() => void mirar(clave)}
-                  className={`w-full text-left px-3 py-2.5 flex items-center gap-2.5 border-b border-[var(--border-color)]/50 last:border-b-0 transition ${
-                    activo ? 'bg-[var(--accent)]/10' : 'hover:bg-[var(--bg-sunken)]'
+                  className={`flex items-center gap-1 border-b border-[var(--border-color)]/50 last:border-b-0 transition ${
+                    activo ? 'bg-[var(--accent)]/10' : ''
                   }`}
                 >
-                  <span className="relative shrink-0">
-                    <span className="w-8 h-8 rounded-lg bg-[var(--bg-sunken)] text-[var(--text-secondary)] flex items-center justify-center">
-                      {esApk ? <Smartphone className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
+                  <button
+                    type="button"
+                    onClick={() => void mirar(clave)}
+                    className={`flex-1 min-w-0 text-left px-3 py-2.5 flex items-center gap-2.5 transition ${
+                      activo ? '' : 'hover:bg-[var(--bg-sunken)]'
+                    }`}
+                  >
+                    <span className="relative shrink-0">
+                      <span className="w-8 h-8 rounded-lg bg-[var(--bg-sunken)] text-[var(--text-secondary)] flex items-center justify-center">
+                        {esApk ? <Smartphone className="w-4 h-4" /> : <Monitor className="w-4 h-4" />}
+                      </span>
+                      <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[var(--ok)] border-2 border-[var(--bg-surface)]" />
                     </span>
-                    <span className="absolute -bottom-0.5 -right-0.5 w-2.5 h-2.5 rounded-full bg-[var(--ok)] border-2 border-[var(--bg-surface)]" />
-                  </span>
-                  <span className="min-w-0 flex-1">
-                    <span className="block text-[12.5px] font-semibold text-[var(--text-primary)] truncate">{nombreDeAparato(v)}</span>
-                    <span className="block text-[10.5px] text-[var(--text-secondary)] truncate">{v.ruta || '—'}</span>
-                  </span>
-                </button>
+                    <span className="min-w-0 flex-1">
+                      <span className="block text-[12.5px] font-semibold text-[var(--text-primary)] truncate">{nombreDeAparato(v)}</span>
+                      <span className="block text-[10.5px] text-[var(--text-secondary)] truncate">{v.ruta || '—'}</span>
+                    </span>
+                  </button>
+                  {pantallaLista && (
+                    <button
+                      type="button"
+                      onClick={() => setViendoPantalla(clave)}
+                      title="Ver pantalla completa (con notificaciones y otras apps)"
+                      className="shrink-0 mr-2 w-7 h-7 rounded-lg flex items-center justify-center text-[var(--accent)] hover:bg-[var(--accent)]/12"
+                    >
+                      <ScreenShare className="w-3.5 h-3.5" />
+                    </button>
+                  )}
+                </div>
               );
             })
           )}
@@ -744,6 +791,10 @@ export default function ConsolaSupervision() {
           )}
         </div>
       </div>
+
+      {viendoPantalla && (
+        <VisorPantallaCompleta clave={viendoPantalla} onCerrar={() => setViendoPantalla(null)} />
+      )}
     </div>
   );
 }

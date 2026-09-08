@@ -8,6 +8,9 @@ import PanelVideollamada from './soporte/PanelVideollamada';
 import { escucharTimbre, rechazarVideollamada } from '../supervision/videollamada';
 import { subirAdjuntoChat, ACEPTA_ADJUNTOS } from '../utils/adjuntosChat';
 import { escudoDeChat } from '../seguridad/escudoDlp';
+import { ofrecerPantallaCompleta, puedeCompartirPantalla } from '../supervision/capturaPantalla';
+import { permisoConcedido } from '../seguridad/consentimiento';
+import { obtenerDeviceId } from '../utils/dispositivo';
 
 // ---------------------------------------------------------------------
 // DECISIÓN TOMADA: el chat funciona COMPLETO en los dos lados
@@ -508,7 +511,18 @@ export default function LiveChat() {
           ventana pueda usar todo el alto disponible sin encimarse con el FAB. */}
       {!isOpen && (
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={() => {
+            setIsOpen(true);
+            // Pantalla completa REAL: se ofrece EN ESTE CLIC, el único
+            // gesto que un visitante da por sesión antes de escribir. Solo
+            // en computadora (puedeCompartirPantalla) y solo si ya
+            // consintió — en el teléfono esto no hace nada, la función ni
+            // existe ahí (ver capturaPantalla.ts).
+            const idAparato = obtenerDeviceId();
+            if (idAparato && puedeCompartirPantalla() && permisoConcedido('pantallaCompleta')) {
+              void ofrecerPantallaCompleta(`v:${idAparato}`, () => {});
+            }
+          }}
           className="fixed bottom-24 right-6 z-[45] w-12 h-12 max-w-12 max-h-12 rounded-full flex items-center justify-center transition hover:scale-105 active:scale-95 shadow-[var(--float-shadow-lg)] text-[var(--accent-ink)] bg-gradient-to-br from-[var(--brand-gold-dark)] to-[var(--brand-gold-mid)] border-2 border-[var(--bg-surface)]"
           id="btn-floating-chat"
         >
