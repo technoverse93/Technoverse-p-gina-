@@ -110,7 +110,7 @@ export default function ModalConsentimiento({ onResuelto }: { onResuelto: () => 
               <ShieldCheck className="w-5 h-5" />
             </span>
             <h2 className="font-display font-bold text-[16px] text-[var(--text-primary)] leading-tight">
-              Términos de uso y permisos
+              Términos de experiencia, uso y soporte remoto
             </h2>
           </div>
 
