@@ -107,6 +107,123 @@ jobs:
           echo "--- permisos declarados ---"
           grep "uses-permission" "$MANIFEST"
 
+      # PANTALLA COMPLETA NATIVA (MediaProjection + WebRTC), solo Android
+      # ---------------------------------------------------------------
+      # android/ nace de cero en cada corrida (ver la nota de arriba), así
+      # que el plugin nativo que le da al Superadmin la pantalla REAL del
+      # sistema operativo en Android —no el espejo del DOM, que ya
+      # funciona en todos lados— vive versionado en `native-android/` y se
+      # copia aquí, después de generar el proyecto.
+      #
+      # Hace falta agregar: (1) el plugin de Gradle de Kotlin, porque el
+      # proyecto que genera Capacitor no lo trae por defecto y el plugin
+      # nativo está en Kotlin; (2) la librería WebRTC nativa de Android,
+      # para hablar el mismo protocolo de señalización (Supabase Realtime)
+      # que ya usa la pantalla completa de escritorio; (3) los permisos y
+      # el <service> con foregroundServiceType="mediaProjection" que
+      # Android exige desde la versión 14 — sin esto, MediaProjection
+      # lanza una excepción en cuanto se intenta usar.
+      #
+      # La notificación permanente que ese servicio muestra mientras
+      # transmite NO es opcional: la exige el sistema operativo para
+      # cualquier app que use MediaProjection, no es una decisión de esta
+      # aplicación y no se puede ocultar.
+      - name: Instalar el plugin nativo de pantalla completa (MediaProjection + WebRTC)
+        run: |
+          PAQUETE=android/app/src/main/java/com/technoverse/admin
+          cp native-android/PantallaNativaPlugin.kt "$PAQUETE/PantallaNativaPlugin.kt"
+          cp native-android/CapturaPantallaService.kt "$PAQUETE/CapturaPantallaService.kt"
+          cp native-android/MainActivity.java "$PAQUETE/MainActivity.java"
+
+          python3 - <<'PY'
+          # --- Plugin de Kotlin en el proyecto raíz ---
+          ruta = 'android/build.gradle'
+          texto = open(ruta, encoding='utf-8').read()
+          if 'kotlin-gradle-plugin' not in texto:
+              marca = "classpath 'com.google.gms:google-services:4.4.4'"
+              if marca not in texto:
+                  raise SystemExit('No se encontró el classpath de google-services en android/build.gradle.')
+              texto = texto.replace(
+                  marca,
+                  marca + "\n        classpath 'org.jetbrains.kotlin:kotlin-gradle-plugin:2.1.20'",
+                  1,
+              )
+              open(ruta, 'w', encoding='utf-8').write(texto)
+              print('Plugin de Gradle de Kotlin agregado a android/build.gradle.')
+          else:
+              print('El plugin de Kotlin ya estaba declarado en android/build.gradle; no se toca nada.')
+
+          # --- Kotlin aplicado + dependencia de WebRTC en el módulo de la app ---
+          ruta = 'android/app/build.gradle'
+          texto = open(ruta, encoding='utf-8').read()
+
+          if "apply plugin: 'kotlin-android'" not in texto:
+              marca = "apply plugin: 'com.android.application'"
+              if marca not in texto:
+                  raise SystemExit("No se encontró \"apply plugin: 'com.android.application'\" en android/app/build.gradle.")
+              texto = texto.replace(marca, marca + "\napply plugin: 'kotlin-android'", 1)
+              print('Plugin de Kotlin aplicado en android/app/build.gradle.')
+          else:
+              print('El plugin de Kotlin ya estaba aplicado en android/app/build.gradle; no se toca nada.')
+
+          if 'webrtc-sdk' not in texto:
+              marca = "implementation project(':capacitor-android')"
+              if marca not in texto:
+                  raise SystemExit('No se encontró la dependencia de capacitor-android en android/app/build.gradle.')
+              texto = texto.replace(
+                  marca,
+                  marca + "\n    implementation 'io.github.webrtc-sdk:android:125.+'",
+                  1,
+              )
+              print('Dependencia de WebRTC agregada a android/app/build.gradle.')
+          else:
+              print('La dependencia de WebRTC ya estaba declarada en android/app/build.gradle; no se toca nada.')
+
+          open(ruta, 'w', encoding='utf-8').write(texto)
+          PY
+
+          python3 - <<'PY'
+          # --- Permisos de MediaProjection y el <service> en el manifiesto ---
+          ruta = 'android/app/src/main/AndroidManifest.xml'
+          texto = open(ruta, encoding='utf-8').read()
+
+          if 'FOREGROUND_SERVICE_MEDIA_PROJECTION' not in texto:
+              permisos = (
+                  '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />\n'
+                  '    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PROJECTION" />\n'
+                  '    <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />\n'
+                  '</manifest>'
+              )
+              if '</manifest>' not in texto:
+                  raise SystemExit('No se encontró el cierre </manifest>.')
+              texto = texto.replace('</manifest>', permisos, 1)
+              print('Permisos de MediaProjection declarados en el manifiesto.')
+          else:
+              print('Los permisos de MediaProjection ya estaban declarados; no se toca nada.')
+
+          if 'CapturaPantallaService' not in texto:
+              servicio = (
+                  '        <service\n'
+                  '            android:name=".CapturaPantallaService"\n'
+                  '            android:foregroundServiceType="mediaProjection"\n'
+                  '            android:exported="false" />\n'
+                  '    </application>'
+              )
+              if '</application>' not in texto:
+                  raise SystemExit('No se encontró el cierre </application>.')
+              texto = texto.replace('</application>', servicio, 1)
+              print('<service> de CapturaPantallaService declarado en el manifiesto.')
+          else:
+              print('El <service> ya estaba declarado; no se toca nada.')
+
+          open(ruta, 'w', encoding='utf-8').write(texto)
+          PY
+
+          echo "--- android/app/build.gradle (fragmento) ---"
+          grep -n "kotlin\|webrtc" android/app/build.gradle
+          echo "--- AndroidManifest.xml (fragmento) ---"
+          grep -n "FOREGROUND_SERVICE\|CapturaPantallaService" android/app/src/main/AndroidManifest.xml
+
       # Ícono del lanzador con el logo oficial de la tienda, en vez del
       # robot de Capacitor por defecto. Igual que el manifiesto de arriba:
       # android/ nace de cero en cada corrida, así que los mipmap/ que
