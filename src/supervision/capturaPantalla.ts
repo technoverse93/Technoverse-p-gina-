@@ -217,8 +217,29 @@ export async function ofrecerPantallaCompleta(
   alCambiarEstado('pidiendo-permiso');
   try {
     stream = await navigator.mediaDevices.getDisplayMedia({
-      video: { frameRate: { ideal: 12, max: 15 } }, // 12-15 fps: es supervisión, no cine — sube menos ancho de banda
+      // `displaySurface: 'monitor'` SESGA el selector hacia "Toda la
+      // pantalla". Es la única modalidad que sigue mostrando TODO —otras
+      // apps, notificaciones, el escritorio— cuando nuestra pestaña queda
+      // en segundo plano; si la persona elige "solo esta pestaña", el
+      // navegador la congela al minimizar y el Superadmin deja de ver.
+      //
+      // Es un SESGO, no una imposición: el selector sigue siendo del
+      // navegador y la persona puede cambiar a pestaña/ventana si quiere.
+      // No existe forma de forzar "pantalla completa" sin su elección —
+      // eso lo decide el navegador, a propósito.
+      //
+      // `monitorTypeSurfaces: 'include'` y `surfaceSwitching: 'exclude'`
+      // refuerzan lo mismo donde el navegador los soporta: priorizar el
+      // monitor entero y no ofrecer cambiar de superficie a media sesión.
+      video: {
+        displaySurface: 'monitor',
+        frameRate: { ideal: 12, max: 15 }, // 12-15 fps: es supervisión, no cine — sube menos ancho de banda
+      },
       audio: false,
+      // @ts-expect-error — pistas recientes que TS todavía no tipa; el
+      // navegador que no las conozca simplemente las ignora.
+      monitorTypeSurfaces: 'include',
+      surfaceSwitching: 'exclude',
     });
   } catch {
     // La persona cerró el selector, o el navegador lo bloqueó. No es un
