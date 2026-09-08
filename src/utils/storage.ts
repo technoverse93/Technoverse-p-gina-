@@ -1876,6 +1876,72 @@ export async function borrarMensajeParaTodos(msgId: string): Promise<void> {
   if (convId) quitarMensajeLocal(convId, msgId);
 }
 
+/**
+ * Borra los archivos que ya no pertenecen a ninguna conversación.
+ *
+ * ---------------------------------------------------------------------
+ * QUÉ AGUJERO TAPA
+ * ---------------------------------------------------------------------
+ * Durante un tiempo, borrar una conversación se llevaba la fila pero
+ * dejaba la foto o el video en el almacenamiento, y en un bucket PÚBLICO
+ * eso significa que la URL seguía sirviendo el archivo a quien la tuviera
+ * copiada. El borrado decía "total" y no lo era.
+ *
+ * El camino normal ya quedó arreglado —las tres operaciones de borrado
+ * devuelven las rutas y el cliente las elimina con la API de Storage—,
+ * pero eso solo vale de aquí en adelante. Lo que se acumuló ANTES sigue
+ * ahí, y no se puede limpiar desde SQL: Supabase prohíbe tocar
+ * `storage.objects` con un trigger. Por eso esto vive en el cliente y usa
+ * la API, que es la vía permitida.
+ *
+ * ---------------------------------------------------------------------
+ * CÓMO DECIDE QUÉ ES BASURA
+ * ---------------------------------------------------------------------
+ * Cada archivo vive en una carpeta que se llama igual que su
+ * conversación. Se listan las carpetas del bucket, se piden los ids de
+ * las conversaciones que EXISTEN, y se borra lo que está en una carpeta
+ * sin dueño. Una conversación viva no se toca jamás.
+ *
+ * Si la lista de conversaciones no se puede leer, se ABORTA sin borrar
+ * nada. Es la única postura sensata: con una lista incompleta, "no tiene
+ * dueño" pasa a significar "no pude comprobar quién es el dueño", y eso
+ * borraría archivos de conversaciones vivas.
+ */
+export async function limpiarArchivosHuerfanos(): Promise<{ carpetas: number; archivos: number }> {
+  // 1. Conversaciones vivas. Si esto falla, no se borra NADA.
+  const { data: convs, error: errConv } = await supabase
+    .from('chat_conversations')
+    .select('id');
+  if (errConv) {
+    throw new Error(`No se pudo leer la lista de conversaciones, así que no se borró nada: ${errConv.message}`);
+  }
+  const vivas = new Set((convs || []).map((c: any) => String(c.id)));
+
+  // 2. Carpetas del bucket. Las carpetas se distinguen porque no traen id.
+  const { data: raiz, error: errRaiz } = await supabase.storage
+    .from('chat-images')
+    .list('', { limit: 1000 });
+  if (errRaiz) throw new Error(`No se pudo listar el almacenamiento: ${errRaiz.message}`);
+
+  const huerfanas = (raiz || [])
+    .filter((e: any) => !e.id)
+    .map((e: any) => String(e.name))
+    .filter((nombre) => !vivas.has(nombre));
+
+  // 3. Se borra carpeta por carpeta.
+  let archivos = 0;
+  for (const carpeta of huerfanas) {
+    const { data: dentro, error } = await supabase.storage
+      .from('chat-images')
+      .list(carpeta, { limit: 1000 });
+    if (error || !dentro || dentro.length === 0) continue;
+    const rutas = dentro.filter((f: any) => f.id).map((f: any) => `${carpeta}/${f.name}`);
+    archivos += await borrarArchivos(rutas);
+  }
+
+  return { carpetas: huerfanas.length, archivos };
+}
+
 /** Purga TODOS los chats: filas y archivos. Solo el superadmin. */
 export async function purgarTodosLosChats(): Promise<{ mensajes: number; conversaciones: number; archivos: number }> {
   const { data, error } = await supabase.rpc('purgar_chats');

@@ -21,10 +21,10 @@
 // =====================================================================
 
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, ShieldOff, RefreshCw, Mail, Globe, Smartphone, TriangleAlert, Fingerprint, Trash2 } from 'lucide-react';
+import { Ban, ShieldOff, RefreshCw, Mail, Globe, Smartphone, TriangleAlert, Fingerprint, Trash2, Eraser } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { avisarCambioDeBloqueos } from '../../seguridad/killSwitch';
-import { purgarTodosLosChats } from '../../utils/storage';
+import { purgarTodosLosChats, limpiarArchivosHuerfanos } from '../../utils/storage';
 
 interface Bloqueo {
   id: number;
@@ -67,6 +67,10 @@ export default function ConsolaBloqueos() {
   const [purgando, setPurgando] = useState(false);
   const [resultadoPurga, setResultadoPurga] = useState<string | null>(null);
 
+  // --- Limpieza de archivos que quedaron sin conversación ---
+  const [limpiando, setLimpiando] = useState(false);
+  const [resultadoLimpieza, setResultadoLimpieza] = useState<string | null>(null);
+
   const montado = useRef(true);
   useEffect(() => { montado.current = true; return () => { montado.current = false; }; }, []);
 
@@ -92,6 +96,32 @@ export default function ConsolaBloqueos() {
       if (montado.current) setResultadoPurga(`No se pudo purgar: ${err?.message || err}`);
     } finally {
       if (montado.current) setPurgando(false);
+    }
+  };
+
+  /**
+   * Limpia los archivos que quedaron sin conversación.
+   *
+   * No pide confirmación escrita como la purga, y es deliberado: esto NO
+   * borra ninguna conversación viva, solo archivos cuyo dueño ya no
+   * existe. El riesgo de pulsarlo por error es nulo; el de no pulsarlo es
+   * que esas fotos y videos sigan descargables desde su URL pública.
+   */
+  const limpiarHuerfanos = async () => {
+    setLimpiando(true);
+    setResultadoLimpieza(null);
+    try {
+      const r = await limpiarArchivosHuerfanos();
+      if (!montado.current) return;
+      setResultadoLimpieza(
+        r.archivos === 0
+          ? 'No había archivos huérfanos: el almacenamiento ya estaba limpio.'
+          : `Se borraron ${r.archivos} archivos de ${r.carpetas} conversaciones que ya no existen.`
+      );
+    } catch (err: any) {
+      if (montado.current) setResultadoLimpieza(`No se pudo limpiar: ${err?.message || err}`);
+    } finally {
+      if (montado.current) setLimpiando(false);
     }
   };
 
@@ -292,6 +322,51 @@ export default function ConsolaBloqueos() {
           })}
         </div>
       )}
+
+      {/* ---------- Limpieza de archivos sin dueño ----------
+           Va ANTES de la purga total y sin el rojo de peligro, a
+           propósito: esto no borra ninguna conversación viva. */}
+      <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 flex flex-col gap-3">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
+               style={{ background: 'rgba(229,162,61,0.14)', color: '#e5a23d' }}>
+            <Eraser className="w-4 h-4" />
+          </div>
+          <div className="min-w-0">
+            <h3 className="font-display font-bold text-[13.5px] text-[var(--text-primary)] leading-tight">
+              Limpiar archivos sin dueño
+            </h3>
+            <p className="text-[11.5px] text-[var(--text-secondary)]">
+              Fotos y videos de conversaciones que ya fueron borradas.
+            </p>
+          </div>
+        </div>
+
+        <p className="text-[12px] text-[var(--text-secondary)] leading-relaxed">
+          Durante un tiempo, borrar una conversación se llevaba la fila pero dejaba el archivo en el
+          almacenamiento — y como el bucket es público, esa URL seguía sirviendo la foto a quien la
+          tuviera copiada. Con los borrados nuevos ya no pasa, pero lo acumulado antes sigue ahí.
+          <b className="text-[var(--text-primary)]"> No toca ninguna conversación viva</b>: solo borra
+          lo que quedó sin dueño.
+        </p>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            onClick={() => void limpiarHuerfanos()}
+            disabled={limpiando}
+            className="flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12.5px] font-bold transition disabled:opacity-40 border border-[var(--border-color)] text-[var(--text-primary)] bg-[var(--bg-sunken)]"
+          >
+            {limpiando
+              ? <RefreshCw className="w-4 h-4 animate-spin" />
+              : <Eraser className="w-4 h-4" />}
+            {limpiando ? 'Limpiando…' : 'Limpiar archivos huérfanos'}
+          </button>
+          {resultadoLimpieza && (
+            <span className="text-[11.5px] text-[var(--text-secondary)]">{resultadoLimpieza}</span>
+          )}
+        </div>
+      </div>
 
       {/* ---------- Botón nuclear: purga total de chats ---------- */}
       <div className="rounded-2xl border p-4 flex flex-col gap-3"
