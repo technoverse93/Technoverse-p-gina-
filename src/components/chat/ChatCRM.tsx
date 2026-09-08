@@ -104,13 +104,23 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
     return true;
   };
 
-  const handleSendMessage = async (convId: string, payload: { text: string; imageUrl?: string; isInternalNote?: boolean }) => {
+  // `videoUrl` NO estaba en esta firma ni se copiaba al mensaje.
+  //
+  // ESTE era el recuadro vacío. El adjunto del administrador se subía bien
+  // al bucket y devolvía su URL, ChatThread la mandaba en el payload… y
+  // aquí se caía al suelo: el mensaje se guardaba con texto vacío y las dos
+  // URLs en null. De ahí la burbuja verde sin nada dentro.
+  //
+  // No era el clonador del DOM ni las Blob URL: el espejo replicaba con
+  // fidelidad un mensaje que de verdad venía vacío desde la base de datos.
+  const handleSendMessage = async (convId: string, payload: { text: string; imageUrl?: string; videoUrl?: string; isInternalNote?: boolean }) => {
     const newMsg = {
       id: `MSG-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       sender: 'support' as const,
       text: payload.text,
       timestamp: new Date().toISOString(),
       imageUrl: payload.imageUrl,
+      videoUrl: payload.videoUrl,
       isInternalNote: payload.isInternalNote
     };
 
