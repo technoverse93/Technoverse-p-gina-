@@ -37,10 +37,11 @@ function tema(llave: string): string {
 // ---------------------------------------------------------------------
 export type ComandoControl =
   | { t: 'click'; xr: number; yr: number }
-  | { t: 'clic-derecho'; xr: number; yr: number }
-  | { t: 'scroll'; dyr: number }
+  | { t: 'scroll'; dxr: number; dyr: number }
   | { t: 'texto'; v: string }
   | { t: 'tecla'; k: string }
+  | { t: 'atras' }
+  | { t: 'inicio' }
   | { t: 'fin' };
 
 // =====================================================================
@@ -125,7 +126,7 @@ function aplicarComando(cmd: ComandoControl | undefined): void {
   if (!cmd || typeof window === 'undefined') return;
 
   if (cmd.t === 'scroll') {
-    window.scrollBy({ top: cmd.dyr * window.innerHeight, behavior: 'auto' });
+    window.scrollBy({ left: cmd.dxr * window.innerWidth, top: cmd.dyr * window.innerHeight, behavior: 'auto' });
     return;
   }
 
@@ -144,17 +145,13 @@ function aplicarComando(cmd: ComandoControl | undefined): void {
     return;
   }
 
-  if (cmd.t === 'clic-derecho') {
-    // Pensado para el "modo trackpad" del control desde un celular: el
-    // gesto que en una laptop es un dos-dedos-toque, acá es un botón
-    // aparte que manda esto en vez de 'click'. Solo dispara `contextmenu`
-    // —lo que abre los menús contextuales de la web—, nunca `click`.
-    const x = Math.round(cmd.xr * window.innerWidth);
-    const y = Math.round(cmd.yr * window.innerHeight);
-    const el = document.elementFromPoint(x, y) as HTMLElement | null;
-    if (!el) return;
-    const comun = { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window, button: 2 };
-    el.dispatchEvent(new MouseEvent('contextmenu', comun));
+  if (cmd.t === 'atras') {
+    try { window.history.back(); } catch { /* nada que retroceder */ }
+    return;
+  }
+
+  if (cmd.t === 'inicio') {
+    try { window.location.assign(window.location.origin + '/'); } catch { /* nada */ }
     return;
   }
 
