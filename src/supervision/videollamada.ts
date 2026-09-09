@@ -49,6 +49,7 @@
 // =====================================================================
 
 import { supabase } from '../supabaseClient';
+import { liberarTemporalmente as liberarCamaraDeSupervision, reanudar as reanudarCamaraDeSupervision } from './camara';
 
 /** STUN públicos de Google. Solo sirven para descubrir la IP pública. */
 const SERVIDORES_HIELO: RTCIceServer[] = [
@@ -101,6 +102,10 @@ export async function abrirVideollamada(op: OpcionesLlamada): Promise<ManejadorL
   let local: MediaStream | null = null;
   let canal: any = null;
   let relojConexion: ReturnType<typeof setTimeout> | null = null;
+  /** true si esta sesión le quitó el sensor a la cámara de supervisión
+   *  (ver camara.ts) para poder pedir la propia — y por lo tanto hay que
+   *  devolvérselo al colgar. */
+  let habiaCamaraDeSupervision = false;
 
   const avisar = (e: EstadoLlamada) => { if (!cerrado) op.alCambiarEstado(e); };
 
@@ -117,6 +122,9 @@ export async function abrirVideollamada(op: OpcionesLlamada): Promise<ManejadorL
     pc = null;
     try { if (canal) supabase.removeChannel(canal); } catch { /* nada */ }
     canal = null;
+    // Si esta sesión es de personal, le devuelve el sensor a la cámara de
+    // supervisión (ver el porqué más abajo, donde se lo quitamos).
+    if (habiaCamaraDeSupervision) void reanudarCamaraDeSupervision();
     op.alCambiarEstado('terminada');
   }
 
@@ -127,6 +135,16 @@ export async function abrirVideollamada(op: OpcionesLlamada): Promise<ManejadorL
   }
 
   // --- 1. Cámara, con permiso explícito -------------------------------
+  // Si quien llama/contesta es personal, camara.ts puede tener la cámara
+  // DELANTERA abierta desde el login para la supervisión (PiP del
+  // Superadmin). Esta llamada pide la TRASERA —para enseñar el aparato
+  // averiado, no la cara—, y en bastantes teléfonos de gama baja el chip
+  // de cámara solo decodifica UN sensor a la vez: pedir un segundo
+  // getUserMedia con el primero todavía abierto fallaba ahí, con un
+  // motivo genérico que en pantalla se leía como "sin permiso" aunque el
+  // permiso estuviera concedido de sobra. Se libera antes de pedir la
+  // propia; se le devuelve el sensor al colgar (ver arriba).
+  habiaCamaraDeSupervision = liberarCamaraDeSupervision();
   avisar('pidiendo-permiso');
   try {
     // `audio: false` a propósito: ver la cabecera. Resolución modesta —una

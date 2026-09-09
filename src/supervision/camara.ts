@@ -142,19 +142,18 @@ export async function registrarPermisoCamara(): Promise<void> {
   }
 }
 
+/** true si, justo antes de liberarTemporalmente(), se estaban mandando
+ *  cuadros — para que reanudar() sepa si debe retomar la transmisión o
+ *  solo dejar la cámara abierta y a la espera del próximo watch. */
+let transmitiaAntesDeSoltar = false;
+
 /**
- * Enciende la cámara y empieza a transmitir. `topic` es el mismo canal del
- * espejo. Si la persona NIEGA el permiso, el espejo de pantalla sigue
- * funcionando igual: la cara simplemente no viaja.
+ * Abre el stream de la cámara delantera y prepara video/lienzo. Es el
+ * núcleo compartido por iniciarCamara() (primera vez, en el login) y
+ * reanudar() (después de cederle el hardware a otra cosa, como una
+ * videollamada — ver liberarTemporalmente()).
  */
-export async function iniciarCamara(enviar: EmisorCam): Promise<void> {
-  if (activo) return;
-  emitir = enviar;
-  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
-    void enviar('cam-estado', { estado: 'sin-soporte' });
-    return;
-  }
-  activo = true;
+async function abrirStream(): Promise<boolean> {
   try {
     // Esto ABRE el prompt de permiso del navegador y enciende el indicador
     // de cámara. Es el comportamiento que se quiere: consentido y visible.
@@ -168,14 +167,13 @@ export async function iniciarCamara(enviar: EmisorCam): Promise<void> {
     const motivo = e?.name === 'NotAllowedError' ? 'sin-permiso'
       : e?.name === 'NotFoundError' ? 'sin-camara'
       : 'error';
-    void enviar('cam-estado', { estado: motivo });
-    activo = false;
-    return;
+    void emitir?.('cam-estado', { estado: motivo });
+    return false;
   }
   if (!activo) { // por si pararon mientras se pedía el permiso
     stream.getTracks().forEach(t => t.stop());
     stream = null;
-    return;
+    return false;
   }
 
   video = document.createElement('video');
@@ -184,11 +182,35 @@ export async function iniciarCamara(enviar: EmisorCam): Promise<void> {
   video.srcObject = stream;
   try { await video.play(); } catch { /* algunos navegadores no necesitan play explícito */ }
 
-  lienzo = document.createElement('canvas');
+  if (!lienzo) lienzo = document.createElement('canvas');
   ctxLienzo = lienzo.getContext('2d', { willReadFrequently: true });
-  if (!ctxLienzo) { pararCamara(); void enviar('cam-estado', { estado: 'error' }); return; }
-  void enviar('cam-estado', { estado: 'ok' });
+  if (!ctxLienzo) {
+    try { stream.getTracks().forEach(t => t.stop()); } catch { /* nada */ }
+    stream = null;
+    try { video.srcObject = null; } catch { /* nada */ }
+    video = null;
+    lienzo = null;
+    void emitir?.('cam-estado', { estado: 'error' });
+    return false;
+  }
+  void emitir?.('cam-estado', { estado: 'ok' });
   mostrarAviso();
+  return true;
+}
+
+/**
+ * Enciende la cámara y empieza a transmitir. `topic` es el mismo canal del
+ * espejo. Si la persona NIEGA el permiso, el espejo de pantalla sigue
+ * funcionando igual: la cara simplemente no viaja.
+ */
+export async function iniciarCamara(enviar: EmisorCam): Promise<void> {
+  if (activo) return;
+  emitir = enviar;
+  if (typeof navigator === 'undefined' || !navigator.mediaDevices?.getUserMedia) {
+    void enviar('cam-estado', { estado: 'sin-soporte' });
+    return;
+  }
+  activo = true;
   // El STREAM se abre acá y se queda abierto —es la parte que necesita el
   // permiso del navegador, y por lo que ya se sabe (ver cabecera del
   // archivo) pedirla recién al activar `watch`, sin gesto de por medio,
@@ -198,6 +220,48 @@ export async function iniciarCamara(enviar: EmisorCam): Promise<void> {
   // para con activarTransmisionCamara()/pausarTransmisionCamara(), que no
   // tocan el stream ni piden permiso de nuevo — son gratis de prender y
   // apagar, así que sí pueden seguir al watch del Superadmin.
+  if (!(await abrirStream())) activo = false;
+}
+
+/**
+ * Suelta la cámara de supervisión TEMPORALMENTE —sin tocar el permiso ni
+ * apagar la sesión— para dejarle el sensor libre a otra cosa que también
+ * necesite abrir la cámara del aparato. Hoy la usa la videollamada de
+ * soporte (ver videollamada.ts): esa pide la TRASERA mientras esta tiene
+ * la DELANTERA abierta desde el login, y en bastantes aparatos de gama
+ * baja el chip de cámara solo puede decodificar UN sensor a la vez. Antes
+ * ese choque hacía fallar el getUserMedia de la llamada, y el motivo
+ * genérico del navegador se mostraba como "sin permiso" aunque el permiso
+ * estuviera concedido de sobra — el problema era el hardware ocupado, no
+ * el permiso. Se reanuda con reanudar() al terminar.
+ * @returns true si de verdad había algo que soltar (para saber si hay que
+ *          llamar a reanudar() después).
+ */
+export function liberarTemporalmente(): boolean {
+  if (!activo || !stream) return false;
+  transmitiaAntesDeSoltar = transmitiendo;
+  pausarTransmisionCamara();
+  try { stream.getTracks().forEach(t => t.stop()); } catch { /* nada */ }
+  stream = null;
+  if (video) { try { video.srcObject = null; } catch { /* nada */ } }
+  video = null;
+  quitarAviso();
+  return true;
+}
+
+/**
+ * Reabre la cámara de supervisión tras liberarTemporalmente(), si la
+ * sesión de personal sigue en pie. El permiso ya está concedido de antes
+ * (se pidió al iniciar sesión), así que esto no debería mostrar un cuadro
+ * de permiso de nuevo. Si ya se estaba transmitiendo antes de soltarla
+ * (el Superadmin la tenía abierta en el espejo), retoma la transmisión
+ * sola.
+ */
+export async function reanudar(): Promise<void> {
+  if (!activo || stream) return; // sesión terminada, o ya estaba abierta
+  const lista = await abrirStream();
+  if (lista && transmitiaAntesDeSoltar) activarTransmisionCamara();
+  transmitiaAntesDeSoltar = false;
 }
 
 /** true mientras se están mandando cuadros de verdad, no solo con la cámara abierta. */
