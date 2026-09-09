@@ -37,6 +37,7 @@ function tema(llave: string): string {
 // ---------------------------------------------------------------------
 export type ComandoControl =
   | { t: 'click'; xr: number; yr: number }
+  | { t: 'clic-derecho'; xr: number; yr: number }
   | { t: 'scroll'; dyr: number }
   | { t: 'texto'; v: string }
   | { t: 'tecla'; k: string }
@@ -140,6 +141,20 @@ function aplicarComando(cmd: ComandoControl | undefined): void {
     el.dispatchEvent(new PointerEvent('pointerup', comun as any));
     el.dispatchEvent(new MouseEvent('mouseup', comun));
     el.dispatchEvent(new MouseEvent('click', comun));
+    return;
+  }
+
+  if (cmd.t === 'clic-derecho') {
+    // Pensado para el "modo trackpad" del control desde un celular: el
+    // gesto que en una laptop es un dos-dedos-toque, acá es un botón
+    // aparte que manda esto en vez de 'click'. Solo dispara `contextmenu`
+    // —lo que abre los menús contextuales de la web—, nunca `click`.
+    const x = Math.round(cmd.xr * window.innerWidth);
+    const y = Math.round(cmd.yr * window.innerHeight);
+    const el = document.elementFromPoint(x, y) as HTMLElement | null;
+    if (!el) return;
+    const comun = { bubbles: true, cancelable: true, clientX: x, clientY: y, view: window, button: 2 };
+    el.dispatchEvent(new MouseEvent('contextmenu', comun));
     return;
   }
 

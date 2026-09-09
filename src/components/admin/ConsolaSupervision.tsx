@@ -22,7 +22,7 @@
 // =====================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban, ScreenShare, BatteryFull, BatteryMedium, BatteryLow, BatteryCharging, Wifi } from 'lucide-react';
+import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban, ScreenShare, BatteryFull, BatteryMedium, BatteryLow, BatteryCharging, Wifi, RotateCw, MousePointer2, Keyboard } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { soloHora } from '../chat/formatoChat';
 import { escucharPantallasDisponibles } from '../../supervision/capturaPantalla';
@@ -645,6 +645,202 @@ export default function ConsolaSupervision() {
     }
   };
 
+  // --------------- Controlar desde el celular una sesión de escritorio ---------------
+  // El "Tomar control" de arriba ya sirve tal cual en computadora (clic
+  // directo). Lo de acá es SOLO para cuando quien mira es un dedo en una
+  // pantalla chica y lo que mira es ancho: zoom/paneo táctil, un modo
+  // trackpad para apuntar con precisión sin que el dedo tape el punto, y
+  // una barra de acciones con botones grandes. Las coordenadas relativas
+  // que ya usa `clicControl` no cambian con el zoom —se calculan del
+  // rectángulo REAL en pantalla en el momento del toque—, así que hacer
+  // zoom con un `transform: scale()` es seguro: no hace falta ningún
+  // ajuste extra al mandar el clic.
+  const esTactil = typeof window !== 'undefined' && (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
+  const [zoom, setZoom] = useState(1);
+  const [pan, setPan] = useState({ x: 0, y: 0 });
+  const [modoTrackpad, setModoTrackpad] = useState(false);
+  const [clicDerechoArmado, setClicDerechoArmado] = useState(false);
+  const [cursorTrackpad, setCursorTrackpad] = useState({ xr: 0.5, yr: 0.5 });
+  const [sugerirHorizontal, setSugerirHorizontal] = useState(false);
+  const tocandoRef = useRef<{
+    inicio: { x: number; y: number } | null;
+    distanciaInicial: number | null;
+    zoomInicial: number;
+    panInicial: { x: number; y: number };
+    movio: boolean;
+  }>({ inicio: null, distanciaInicial: null, zoomInicial: 1, panInicial: { x: 0, y: 0 }, movio: false });
+
+  const restablecerZoom = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
+
+  // Reinicia todo lo táctil al soltar el control o cambiar de persona:
+  // nada de esto debe sobrevivir a la siguiente sesión de control.
+  useEffect(() => {
+    if (!controlando) {
+      restablecerZoom();
+      setModoTrackpad(false);
+      setClicDerechoArmado(false);
+    }
+  }, [controlando]);
+
+  // Sugerencia de horizontal: solo tiene sentido en un aparato táctil,
+  // controlando de verdad, y en vertical. `matchMedia` reacciona sola si
+  // gira el teléfono mientras el aviso está puesto.
+  useEffect(() => {
+    if (!esTactil || !controlando || estado !== 'vivo' || typeof window === 'undefined') { setSugerirHorizontal(false); return; }
+    const mq = window.matchMedia('(orientation: portrait)');
+    const actualizar = () => setSugerirHorizontal(mq.matches);
+    actualizar();
+    mq.addEventListener?.('change', actualizar);
+    return () => mq.removeEventListener?.('change', actualizar);
+  }, [esTactil, controlando, estado]);
+
+  function distanciaEntre(a: Touch, b: Touch): number {
+    return Math.hypot(a.clientX - b.clientX, a.clientY - b.clientY);
+  }
+
+  // React marca `onTouchStart`/`onTouchMove` como PASIVOS por defecto (para
+  // no trabarle el scroll a cualquier página): un `e.preventDefault()`
+  // adentro de esos props JSX no frena el pinch-zoom ni el scroll nativos
+  // del navegador, aunque el código se vea normal. Por eso los listeners
+  // van a mano, con `{ passive: false }` explícito, sobre el nodo real.
+  //
+  // `vivo` guarda lo último de cada estado que cambia seguido (zoom, pan,
+  // modo trackpad...) para que estas funciones —creadas UNA vez— siempre
+  // lean el valor actual sin tener que reconectar los listeners en cada
+  // repintado, que sería carísimo en un gesto de arrastre.
+  const vivoRef = useRef({ zoom, pan, modoTrackpad, clicDerechoArmado, cursorTrackpad });
+  vivoRef.current = { zoom, pan, modoTrackpad, clicDerechoArmado, cursorTrackpad };
+
+  const overlayControlRef = useRef<HTMLDivElement | null>(null);
+
+  useEffect(() => {
+    const el = overlayControlRef.current;
+    if (!el || !esTactil) return;
+
+    const tocarInicio = (e: TouchEvent) => {
+      const t = tocandoRef.current;
+      t.movio = false;
+      if (e.touches.length === 2) {
+        t.distanciaInicial = distanciaEntre(e.touches[0], e.touches[1]);
+        t.zoomInicial = vivoRef.current.zoom;
+        t.panInicial = vivoRef.current.pan;
+        t.inicio = null;
+      } else if (e.touches.length === 1) {
+        t.inicio = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        t.distanciaInicial = null;
+      }
+    };
+
+    const tocarMover = (e: TouchEvent) => {
+      const t = tocandoRef.current;
+      const { zoom: z, modoTrackpad: trackpad } = vivoRef.current;
+      if (e.touches.length === 2 && t.distanciaInicial) {
+        e.preventDefault();
+        t.movio = true;
+        const dist = distanciaEntre(e.touches[0], e.touches[1]);
+        const nuevoZoom = Math.min(4, Math.max(1, t.zoomInicial * (dist / t.distanciaInicial)));
+        setZoom(nuevoZoom);
+        return;
+      }
+      if (e.touches.length === 1 && t.inicio) {
+        const dx = e.touches[0].clientX - t.inicio.x;
+        const dy = e.touches[0].clientY - t.inicio.y;
+        if (Math.hypot(dx, dy) > 8) t.movio = true;
+
+        if (trackpad && z <= 1.01) {
+          // Trackpad: el dedo mueve un CURSOR virtual por delta, no por
+          // posición absoluta —así el dedo nunca tapa el punto exacto—.
+          e.preventDefault();
+          const r = rectEspejo();
+          if (r) {
+            setCursorTrackpad(c => ({
+              xr: Math.min(1, Math.max(0, c.xr + dx / r.width)),
+              yr: Math.min(1, Math.max(0, c.yr + dy / r.height)),
+            }));
+          }
+          t.inicio = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else if (z > 1.01) {
+          // Con zoom aplicado, un dedo pasea la ventana (paneo), no controla.
+          e.preventDefault();
+          setPan(p => ({ x: p.x + dx, y: p.y + dy }));
+          t.inicio = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        }
+      }
+    };
+
+    const tocarFin = (e: TouchEvent) => {
+      const t = tocandoRef.current;
+      const { modoTrackpad: trackpad, clicDerechoArmado: armado, cursorTrackpad: cursor } = vivoRef.current;
+      // Toque corto sin arrastre: es un TAP, no un gesto de zoom/paneo.
+      // `preventDefault` acá evita que el navegador dispare DESPUÉS un
+      // `click` sintético por su cuenta y el tap se mande dos veces.
+      if (!t.movio && t.inicio && e.touches.length === 0) {
+        e.preventDefault();
+        if (emisorRef.current) {
+          if (trackpad) {
+            // En trackpad el tap dispara sobre donde está el cursor
+            // virtual, no donde cayó el dedo —pudo levantarse lejos—.
+            emisorRef.current.enviar(armado ? { t: 'clic-derecho', ...cursor } : { t: 'click', ...cursor });
+          } else {
+            const r = rectEspejo();
+            if (r) {
+              const xr = (t.inicio.x - r.left) / r.width;
+              const yr = (t.inicio.y - r.top) / r.height;
+              if (xr >= 0 && xr <= 1 && yr >= 0 && yr <= 1) {
+                emisorRef.current.enviar(armado ? { t: 'clic-derecho', xr, yr } : { t: 'click', xr, yr });
+              }
+            }
+          }
+          if (armado) setClicDerechoArmado(false); // un solo disparo por armado
+        }
+      }
+      t.inicio = null;
+      t.distanciaInicial = null;
+    };
+
+    el.addEventListener('touchstart', tocarInicio, { passive: false });
+    el.addEventListener('touchmove', tocarMover, { passive: false });
+    el.addEventListener('touchend', tocarFin, { passive: false });
+    return () => {
+      el.removeEventListener('touchstart', tocarInicio);
+      el.removeEventListener('touchmove', tocarMover);
+      el.removeEventListener('touchend', tocarFin);
+    };
+  }, [controlando, estado, esTactil]);
+
+  // Teclado en pantalla: un input real, oculto, es la única forma
+  // confiable de sacar el teclado nativo del teléfono. Se compara el
+  // valor anterior contra el nuevo para saber si se agregó o se borró
+  // texto —los teclados móviles no mandan una tecla por evento como un
+  // teclado físico, mandan el valor ya compuesto (autocompletado,
+  // predicción, etc. incluidos)—.
+  const [tecladoAbierto, setTecladoAbierto] = useState(false);
+  const inputTecladoRef = useRef<HTMLInputElement>(null);
+  const valorTecladoRef = useRef('');
+  const abrirTecladoEnPantalla = () => {
+    setTecladoAbierto(true);
+    valorTecladoRef.current = '';
+    setTimeout(() => inputTecladoRef.current?.focus(), 50);
+  };
+  const cambioTeclado = (e: React.ChangeEvent<HTMLInputElement>) => {
+    if (!emisorRef.current) return;
+    const nuevo = e.target.value;
+    const anterior = valorTecladoRef.current;
+    if (nuevo.length > anterior.length && nuevo.startsWith(anterior)) {
+      emisorRef.current.enviar({ t: 'texto', v: nuevo.slice(anterior.length) });
+    } else if (nuevo.length < anterior.length) {
+      for (let i = 0; i < anterior.length - nuevo.length; i++) emisorRef.current.enviar({ t: 'tecla', k: 'Backspace' });
+    } else if (nuevo !== anterior) {
+      // Reemplazo grande (pegar, autocorrección): se manda entero de nuevo.
+      emisorRef.current.enviar({ t: 'texto', v: nuevo });
+    }
+    valorTecladoRef.current = nuevo;
+  };
+  const teclaEspecialTeclado = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!emisorRef.current) return;
+    if (e.key === 'Enter') { e.preventDefault(); emisorRef.current.enviar({ t: 'tecla', k: 'Enter' }); }
+  };
+
   return (
     <div className="tv-stack">
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -830,21 +1026,119 @@ export default function ConsolaSupervision() {
           {/* Lienzo del reproductor. Fondo oscuro neutro para que la
               pantalla replicada resalte sea cual sea el tema. */}
           <div className="flex-1 relative bg-[#0b0f0e] overflow-hidden">
-            <div ref={lienzoRef} className="w-full" />
+            {/* Envoltorio de zoom/paneo táctil: es una capa de transform
+                INDEPENDIENTE de la que ya usa `ajustarEscala` sobre
+                `.replayer-wrapper` (esa encoge la pantalla entera para que
+                quepa; esta es el pellizco del dedo). Se componen sin
+                pisarse porque están en dos elementos distintos. */}
+            <div
+              className="w-full h-full"
+              style={{ transform: `translate(${pan.x}px, ${pan.y}px) scale(${zoom})`, transformOrigin: '0 0', transition: zoom === 1 && pan.x === 0 && pan.y === 0 ? 'transform 200ms ease-out' : 'none' }}
+            >
+              <div ref={lienzoRef} className="w-full" />
+            </div>
 
             {/* Capa de captura del control remoto. Los clics sobre el
                 iframe del espejo no llegan al contenedor, así que se pone
                 una capa transparente encima que atrapa el input del
                 Superadmin y lo traduce a coordenadas relativas. Solo
-                existe mientras "Tomar control" está activo y hay señal. */}
+                existe mientras "Tomar control" está activo y hay señal.
+                En un aparato táctil, además atrapa pellizco (zoom), un
+                dedo (paneo o trackpad) y el tap (clic). */}
             {controlando && estado === 'vivo' && (
               <div
-                className="absolute inset-0 z-20 cursor-crosshair outline-none"
+                ref={overlayControlRef}
+                className="absolute inset-0 z-20 cursor-crosshair outline-none touch-none"
                 tabIndex={0}
-                onClick={clicControl}
+                onClick={esTactil ? undefined : clicControl}
                 onWheel={ruedaControl}
                 onKeyDown={teclaControl}
                 title="Operando la sesión. Clic para hacer clic, rueda para desplazar, teclado para escribir."
+              >
+                {esTactil && modoTrackpad && zoom <= 1.01 && (
+                  <span
+                    className="absolute w-5 h-5 rounded-full border-2 border-white bg-[var(--accent)]/70 shadow-lg -translate-x-1/2 -translate-y-1/2 pointer-events-none"
+                    style={{ left: `${cursorTrackpad.xr * 100}%`, top: `${cursorTrackpad.yr * 100}%` }}
+                  />
+                )}
+              </div>
+            )}
+
+            {/* Sugerencia de girar el teléfono: solo estorba mientras hace
+                falta, y desaparece sola en cuanto gira o suelta control. */}
+            {sugerirHorizontal && (
+              <div className="absolute inset-x-3 top-3 z-30 flex items-center gap-2 rounded-xl bg-black/80 px-3 py-2 text-[11px] text-white">
+                <RotateCw className="w-4 h-4 shrink-0" />
+                Girá el teléfono a horizontal para controlar mejor esta pantalla de escritorio.
+              </div>
+            )}
+
+            {/* Barra de acciones táctiles: solo en aparato táctil, solo
+                controlando de verdad. Botones grandes (44px) a propósito —
+                es lo que Apple/Google piden como área mínima de toque. */}
+            {esTactil && controlando && estado === 'vivo' && (
+              <div className="absolute inset-x-2 bottom-2 z-30 flex items-center justify-center gap-1.5 rounded-2xl bg-black/75 backdrop-blur-sm p-1.5">
+                <button
+                  type="button"
+                  onClick={() => setModoTrackpad(v => !v)}
+                  className={`flex flex-col items-center justify-center gap-0.5 w-11 h-11 rounded-xl text-white transition ${modoTrackpad ? 'bg-[var(--accent)]' : 'bg-white/10'}`}
+                  title="Modo trackpad: arrastrar mueve un cursor en vez de tocar directo"
+                >
+                  <MousePointer2 className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setClicDerechoArmado(v => !v)}
+                  className={`flex flex-col items-center justify-center gap-0.5 w-11 h-11 rounded-xl text-white transition ${clicDerechoArmado ? 'bg-[var(--accent)]' : 'bg-white/10'}`}
+                  title="Próximo toque = clic derecho"
+                >
+                  <span className="text-[9px] font-bold leading-none">CLIC</span>
+                  <span className="text-[7px] font-bold leading-none opacity-80">DER.</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={abrirTecladoEnPantalla}
+                  className="flex items-center justify-center w-11 h-11 rounded-xl bg-white/10 text-white"
+                  title="Teclado en pantalla"
+                >
+                  <Keyboard className="w-4 h-4" />
+                </button>
+                <button
+                  type="button"
+                  onClick={() => emisorRef.current?.enviar({ t: 'tecla', k: 'Escape' })}
+                  className="flex items-center justify-center w-11 h-11 rounded-xl bg-white/10 text-white text-[10px] font-bold"
+                  title="Cancelar (Esc)"
+                >
+                  Esc
+                </button>
+                {zoom > 1.01 && (
+                  <button
+                    type="button"
+                    onClick={restablecerZoom}
+                    className="flex items-center justify-center w-11 h-11 rounded-xl bg-white/10 text-white"
+                    title="Restablecer zoom 100%"
+                  >
+                    <span className="text-[9px] font-bold">100%</span>
+                  </button>
+                )}
+              </div>
+            )}
+
+            {/* Input real, oculto, solo para sacar el teclado nativo del
+                teléfono (ver abrirTecladoEnPantalla). No se muestra nunca:
+                lo que se ve en pantalla es el espejo, no este campo. */}
+            {tecladoAbierto && (
+              <input
+                ref={inputTecladoRef}
+                type="text"
+                inputMode="text"
+                autoCapitalize="off"
+                autoCorrect="off"
+                className="absolute opacity-0 pointer-events-none w-px h-px"
+                style={{ left: -9999 }}
+                onChange={cambioTeclado}
+                onKeyDown={teclaEspecialTeclado}
+                onBlur={() => setTecladoAbierto(false)}
               />
             )}
 
