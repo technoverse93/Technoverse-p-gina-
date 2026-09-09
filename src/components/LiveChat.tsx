@@ -4,6 +4,7 @@ import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../utils/storage';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 import VideoMensaje from './chat/VideoMensaje';
+import ImagenMensaje from './chat/ImagenMensaje';
 import PanelVideollamada from './soporte/PanelVideollamada';
 import { escucharTimbre, rechazarVideollamada } from '../supervision/videollamada';
 import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS, type Adjunto } from '../utils/adjuntosChat';
@@ -724,7 +725,7 @@ export default function LiveChat() {
                               }`}
                             >
                               {msg.imageUrl && (
-                                <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-xl max-w-full mb-1.5 max-h-56 object-cover" loading="lazy" />
+                                <ImagenMensaje src={msg.imageUrl} alto="max-h-56" />
                               )}
                               {msg.videoUrl && (
                                 <VideoMensaje src={msg.videoUrl} alto="max-h-56" />

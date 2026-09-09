@@ -11,6 +11,7 @@ import { useToast } from '../ui/Overlays';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './formatoChat';
 import VideoMensaje from './VideoMensaje';
 import AudioMensaje from './AudioMensaje';
+import ImagenMensaje from './ImagenMensaje';
 import PanelVideollamada from '../soporte/PanelVideollamada';
 import { timbrar } from '../../supervision/videollamada';
 
@@ -315,7 +316,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                       : 'rounded-bl-[4px] bg-[var(--bubble-in)] text-[var(--bubble-in-ink)] shadow-[0_1px_2px_rgba(15,21,18,0.06),0_6px_16px_-12px_rgba(15,21,18,0.3)]'
                   }`}>
                     {msg.imageUrl && (
-                      <img src={msg.imageUrl} alt="Imagen adjunta" className="rounded-xl max-w-full mb-1.5 max-h-64 object-cover" loading="lazy" decoding="async" />
+                      <ImagenMensaje src={msg.imageUrl} alto="max-h-64" />
                     )}
                     {msg.audioUrl && (
                       <AudioMensaje src={msg.audioUrl} />

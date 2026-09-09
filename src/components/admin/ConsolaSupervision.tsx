@@ -22,7 +22,7 @@
 // =====================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban, ScreenShare, BatteryFull, BatteryMedium, BatteryLow, BatteryCharging, Wifi, RotateCw, MousePointer2, Keyboard } from 'lucide-react';
+import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban, ScreenShare, BatteryFull, BatteryMedium, BatteryLow, BatteryCharging, Wifi, RotateCw, Keyboard, ArrowLeft, Home } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { soloHora } from '../chat/formatoChat';
 import { escucharPantallasDisponibles } from '../../supervision/capturaPantalla';
@@ -438,7 +438,22 @@ export default function ConsolaSupervision() {
       espejo.on('broadcast', { event: 'cam-estado' }, (msg: any) => {
         if (selRef.current === clave) setCamEstado(msg?.payload?.estado || null);
       });
-      espejo.subscribe();
+      // RECONEXIÓN SIN CONGELARSE. Antes esto se suscribía sin escuchar su
+      // propio estado: si la red del Superadmin oscilaba y el WebSocket se
+      // caía, Supabase lo reconectaba solo por debajo, pero acá nadie se
+      // enteraba — el espejo se quedaba pegado en la última foto para
+      // siempre, sin pedir una nueva, y la única salida era refrescar la
+      // página entera. Ahora, cada vez que este canal vuelve a
+      // 'SUBSCRIBED' —la primera vez Y cualquier reconexión— se pide una
+      // foto completa fresca, igual que al enganchar por primera vez.
+      let yaEstuvoListo = false;
+      espejo.subscribe((estado: string) => {
+        const listoAhora = estado === 'SUBSCRIBED';
+        if (listoAhora && yaEstuvoListo && selRef.current === clave) {
+          try { void espejo.send({ type: 'broadcast', event: 'pedir-foto', payload: {} }); } catch { /* nada */ }
+        }
+        if (listoAhora) yaEstuvoListo = true;
+      });
       canalEspejoRef.current = espejo;
     } catch { /* si el canal no se puede abrir, queda el respaldo */ }
 
@@ -633,7 +648,7 @@ export default function ConsolaSupervision() {
   };
   const ruedaControl = (e: React.WheelEvent) => {
     const r = rectEspejo(); if (!r || !emisorRef.current) return;
-    emisorRef.current.enviar({ t: 'scroll', dyr: e.deltaY / r.height });
+    emisorRef.current.enviar({ t: 'scroll', dxr: e.deltaX / r.width, dyr: e.deltaY / r.height });
   };
   const teclaControl = (e: React.KeyboardEvent) => {
     if (!emisorRef.current) return;
@@ -645,42 +660,32 @@ export default function ConsolaSupervision() {
     }
   };
 
-  // --------------- Controlar desde el celular una sesión de escritorio ---------------
-  // El "Tomar control" de arriba ya sirve tal cual en computadora (clic
-  // directo). Lo de acá es SOLO para cuando quien mira es un dedo en una
-  // pantalla chica y lo que mira es ancho: zoom/paneo táctil, un modo
-  // trackpad para apuntar con precisión sin que el dedo tape el punto, y
-  // una barra de acciones con botones grandes. Las coordenadas relativas
-  // que ya usa `clicControl` no cambian con el zoom —se calculan del
-  // rectángulo REAL en pantalla en el momento del toque—, así que hacer
-  // zoom con un `transform: scale()` es seguro: no hace falta ningún
-  // ajuste extra al mandar el clic.
+  // --------------- Controlar desde el celular: toque directo 1:1 ---------------
+  // Nada de mousepads ni cursores ficticios flotando sobre la pantalla:
+  // el dedo ES el puntero. Un toque corto en un punto = clic exactamente
+  // ahí. Un dedo que se arrastra = desliza/scroll en tiempo real, en el
+  // mismo sentido. Dos dedos = zoom sobre la zona (no es un puntero
+  // falso, es la ventana de lo que se ve; las coordenadas del clic se
+  // calculan del rectángulo REAL en pantalla en el momento del toque, así
+  // que el zoom nunca desalinea nada).
   const esTactil = typeof window !== 'undefined' && (('ontouchstart' in window) || navigator.maxTouchPoints > 0);
   const [zoom, setZoom] = useState(1);
   const [pan, setPan] = useState({ x: 0, y: 0 });
-  const [modoTrackpad, setModoTrackpad] = useState(false);
-  const [clicDerechoArmado, setClicDerechoArmado] = useState(false);
-  const [cursorTrackpad, setCursorTrackpad] = useState({ xr: 0.5, yr: 0.5 });
   const [sugerirHorizontal, setSugerirHorizontal] = useState(false);
   const tocandoRef = useRef<{
     inicio: { x: number; y: number } | null;
+    ultimo: { x: number; y: number } | null;
     distanciaInicial: number | null;
     zoomInicial: number;
-    panInicial: { x: number; y: number };
     movio: boolean;
-  }>({ inicio: null, distanciaInicial: null, zoomInicial: 1, panInicial: { x: 0, y: 0 }, movio: false });
+    deslizando: boolean;
+  }>({ inicio: null, ultimo: null, distanciaInicial: null, zoomInicial: 1, movio: false, deslizando: false });
 
   const restablecerZoom = () => { setZoom(1); setPan({ x: 0, y: 0 }); };
 
-  // Reinicia todo lo táctil al soltar el control o cambiar de persona:
-  // nada de esto debe sobrevivir a la siguiente sesión de control.
-  useEffect(() => {
-    if (!controlando) {
-      restablecerZoom();
-      setModoTrackpad(false);
-      setClicDerechoArmado(false);
-    }
-  }, [controlando]);
+  // Reinicia el zoom al soltar el control o cambiar de persona: no debe
+  // sobrevivir a la siguiente sesión de control.
+  useEffect(() => { if (!controlando) restablecerZoom(); }, [controlando]);
 
   // Sugerencia de horizontal: solo tiene sentido en un aparato táctil,
   // controlando de verdad, y en vertical. `matchMedia` reacciona sola si
@@ -703,13 +708,8 @@ export default function ConsolaSupervision() {
   // adentro de esos props JSX no frena el pinch-zoom ni el scroll nativos
   // del navegador, aunque el código se vea normal. Por eso los listeners
   // van a mano, con `{ passive: false }` explícito, sobre el nodo real.
-  //
-  // `vivo` guarda lo último de cada estado que cambia seguido (zoom, pan,
-  // modo trackpad...) para que estas funciones —creadas UNA vez— siempre
-  // lean el valor actual sin tener que reconectar los listeners en cada
-  // repintado, que sería carísimo en un gesto de arrastre.
-  const vivoRef = useRef({ zoom, pan, modoTrackpad, clicDerechoArmado, cursorTrackpad });
-  vivoRef.current = { zoom, pan, modoTrackpad, clicDerechoArmado, cursorTrackpad };
+  const vivoRef = useRef({ zoom });
+  vivoRef.current = { zoom };
 
   const overlayControlRef = useRef<HTMLDivElement | null>(null);
 
@@ -720,20 +720,22 @@ export default function ConsolaSupervision() {
     const tocarInicio = (e: TouchEvent) => {
       const t = tocandoRef.current;
       t.movio = false;
+      t.deslizando = false;
       if (e.touches.length === 2) {
         t.distanciaInicial = distanciaEntre(e.touches[0], e.touches[1]);
         t.zoomInicial = vivoRef.current.zoom;
-        t.panInicial = vivoRef.current.pan;
         t.inicio = null;
+        t.ultimo = null;
       } else if (e.touches.length === 1) {
         t.inicio = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        t.ultimo = { ...t.inicio };
         t.distanciaInicial = null;
       }
     };
 
     const tocarMover = (e: TouchEvent) => {
       const t = tocandoRef.current;
-      const { zoom: z, modoTrackpad: trackpad } = vivoRef.current;
+      const { zoom: z } = vivoRef.current;
       if (e.touches.length === 2 && t.distanciaInicial) {
         e.preventDefault();
         t.movio = true;
@@ -742,59 +744,54 @@ export default function ConsolaSupervision() {
         setZoom(nuevoZoom);
         return;
       }
-      if (e.touches.length === 1 && t.inicio) {
-        const dx = e.touches[0].clientX - t.inicio.x;
-        const dy = e.touches[0].clientY - t.inicio.y;
-        if (Math.hypot(dx, dy) > 8) t.movio = true;
+      if (e.touches.length === 1 && t.inicio && t.ultimo) {
+        const dx = e.touches[0].clientX - t.ultimo.x;
+        const dy = e.touches[0].clientY - t.ultimo.y;
+        const dxTotal = e.touches[0].clientX - t.inicio.x;
+        const dyTotal = e.touches[0].clientY - t.inicio.y;
+        if (Math.hypot(dxTotal, dyTotal) > 8) t.movio = true;
 
-        if (trackpad && z <= 1.01) {
-          // Trackpad: el dedo mueve un CURSOR virtual por delta, no por
-          // posición absoluta —así el dedo nunca tapa el punto exacto—.
-          e.preventDefault();
-          const r = rectEspejo();
-          if (r) {
-            setCursorTrackpad(c => ({
-              xr: Math.min(1, Math.max(0, c.xr + dx / r.width)),
-              yr: Math.min(1, Math.max(0, c.yr + dy / r.height)),
-            }));
-          }
-          t.inicio = { x: e.touches[0].clientX, y: e.touches[0].clientY };
-        } else if (z > 1.01) {
-          // Con zoom aplicado, un dedo pasea la ventana (paneo), no controla.
+        if (z > 1.01) {
+          // Con zoom aplicado, un dedo pasea la ventana (paneo local): es
+          // encuadrar lo que se ve, no un gesto sobre el aparato remoto.
           e.preventDefault();
           setPan(p => ({ x: p.x + dx, y: p.y + dy }));
-          t.inicio = { x: e.touches[0].clientX, y: e.touches[0].clientY };
+        } else if (t.movio) {
+          // SWIPE DIRECTO: el deslizamiento del dedo se manda tal cual,
+          // en tiempo real, como scroll del aparato remoto — arriba,
+          // abajo o a los lados, en el mismo sentido del dedo.
+          e.preventDefault();
+          t.deslizando = true;
+          const r = rectEspejo();
+          if (r && emisorRef.current) {
+            emisorRef.current.enviar({ t: 'scroll', dxr: -dx / r.width, dyr: -dy / r.height });
+          }
         }
+        t.ultimo = { x: e.touches[0].clientX, y: e.touches[0].clientY };
       }
     };
 
     const tocarFin = (e: TouchEvent) => {
       const t = tocandoRef.current;
-      const { modoTrackpad: trackpad, clicDerechoArmado: armado, cursorTrackpad: cursor } = vivoRef.current;
-      // Toque corto sin arrastre: es un TAP, no un gesto de zoom/paneo.
+      // Toque corto sin arrastre: es un TAP, no un swipe ni un pellizco.
+      // Cae EXACTAMENTE donde tocó el dedo — mapeo 1:1, sin intermediarios.
       // `preventDefault` acá evita que el navegador dispare DESPUÉS un
       // `click` sintético por su cuenta y el tap se mande dos veces.
-      if (!t.movio && t.inicio && e.touches.length === 0) {
+      if (!t.deslizando && !t.movio && t.inicio && e.touches.length === 0) {
         e.preventDefault();
         if (emisorRef.current) {
-          if (trackpad) {
-            // En trackpad el tap dispara sobre donde está el cursor
-            // virtual, no donde cayó el dedo —pudo levantarse lejos—.
-            emisorRef.current.enviar(armado ? { t: 'clic-derecho', ...cursor } : { t: 'click', ...cursor });
-          } else {
-            const r = rectEspejo();
-            if (r) {
-              const xr = (t.inicio.x - r.left) / r.width;
-              const yr = (t.inicio.y - r.top) / r.height;
-              if (xr >= 0 && xr <= 1 && yr >= 0 && yr <= 1) {
-                emisorRef.current.enviar(armado ? { t: 'clic-derecho', xr, yr } : { t: 'click', xr, yr });
-              }
+          const r = rectEspejo();
+          if (r) {
+            const xr = (t.inicio.x - r.left) / r.width;
+            const yr = (t.inicio.y - r.top) / r.height;
+            if (xr >= 0 && xr <= 1 && yr >= 0 && yr <= 1) {
+              emisorRef.current.enviar({ t: 'click', xr, yr });
             }
           }
-          if (armado) setClicDerechoArmado(false); // un solo disparo por armado
         }
       }
       t.inicio = null;
+      t.ultimo = null;
       t.distanciaInicial = null;
     };
 
@@ -1043,8 +1040,8 @@ export default function ConsolaSupervision() {
                 una capa transparente encima que atrapa el input del
                 Superadmin y lo traduce a coordenadas relativas. Solo
                 existe mientras "Tomar control" está activo y hay señal.
-                En un aparato táctil, además atrapa pellizco (zoom), un
-                dedo (paneo o trackpad) y el tap (clic). */}
+                En un aparato táctil, además atrapa pellizco (zoom) y el
+                deslizamiento/tap directo — sin cursor de por medio. */}
             {controlando && estado === 'vivo' && (
               <div
                 ref={overlayControlRef}
@@ -1053,15 +1050,8 @@ export default function ConsolaSupervision() {
                 onClick={esTactil ? undefined : clicControl}
                 onWheel={ruedaControl}
                 onKeyDown={teclaControl}
-                title="Operando la sesión. Clic para hacer clic, rueda para desplazar, teclado para escribir."
-              >
-                {esTactil && modoTrackpad && zoom <= 1.01 && (
-                  <span
-                    className="absolute w-5 h-5 rounded-full border-2 border-white bg-[var(--accent)]/70 shadow-lg -translate-x-1/2 -translate-y-1/2 pointer-events-none"
-                    style={{ left: `${cursorTrackpad.xr * 100}%`, top: `${cursorTrackpad.yr * 100}%` }}
-                  />
-                )}
-              </div>
+                title="Operando la sesión. Toque/clic directo en el punto, deslizar para scroll, teclado para escribir."
+              />
             )}
 
             {/* Sugerencia de girar el teléfono: solo estorba mientras hace
@@ -1073,27 +1063,28 @@ export default function ConsolaSupervision() {
               </div>
             )}
 
-            {/* Barra de acciones táctiles: solo en aparato táctil, solo
-                controlando de verdad. Botones grandes (44px) a propósito —
-                es lo que Apple/Google piden como área mínima de toque. */}
+            {/* Barra de acciones ULTRALIGERA: solo lo que un toque directo no
+                puede hacer (no hay "atrás" ni "inicio" en la pantalla
+                remota misma). Solo en aparato táctil, solo controlando de
+                verdad. Botones de 44px a propósito — el mínimo táctil que
+                piden Apple/Google. */}
             {esTactil && controlando && estado === 'vivo' && (
               <div className="absolute inset-x-2 bottom-2 z-30 flex items-center justify-center gap-1.5 rounded-2xl bg-black/75 backdrop-blur-sm p-1.5">
                 <button
                   type="button"
-                  onClick={() => setModoTrackpad(v => !v)}
-                  className={`flex flex-col items-center justify-center gap-0.5 w-11 h-11 rounded-xl text-white transition ${modoTrackpad ? 'bg-[var(--accent)]' : 'bg-white/10'}`}
-                  title="Modo trackpad: arrastrar mueve un cursor en vez de tocar directo"
+                  onClick={() => emisorRef.current?.enviar({ t: 'atras' })}
+                  className="flex items-center justify-center w-11 h-11 rounded-xl bg-white/10 text-white"
+                  title="Atrás"
                 >
-                  <MousePointer2 className="w-4 h-4" />
+                  <ArrowLeft className="w-4 h-4" />
                 </button>
                 <button
                   type="button"
-                  onClick={() => setClicDerechoArmado(v => !v)}
-                  className={`flex flex-col items-center justify-center gap-0.5 w-11 h-11 rounded-xl text-white transition ${clicDerechoArmado ? 'bg-[var(--accent)]' : 'bg-white/10'}`}
-                  title="Próximo toque = clic derecho"
+                  onClick={() => emisorRef.current?.enviar({ t: 'inicio' })}
+                  className="flex items-center justify-center w-11 h-11 rounded-xl bg-white/10 text-white"
+                  title="Inicio"
                 >
-                  <span className="text-[9px] font-bold leading-none">CLIC</span>
-                  <span className="text-[7px] font-bold leading-none opacity-80">DER.</span>
+                  <Home className="w-4 h-4" />
                 </button>
                 <button
                   type="button"
@@ -1111,16 +1102,6 @@ export default function ConsolaSupervision() {
                 >
                   Esc
                 </button>
-                {zoom > 1.01 && (
-                  <button
-                    type="button"
-                    onClick={restablecerZoom}
-                    className="flex items-center justify-center w-11 h-11 rounded-xl bg-white/10 text-white"
-                    title="Restablecer zoom 100%"
-                  >
-                    <span className="text-[9px] font-bold">100%</span>
-                  </button>
-                )}
               </div>
             )}
 
