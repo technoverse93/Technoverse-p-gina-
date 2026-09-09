@@ -38,7 +38,7 @@
 import { supabase } from '../supabaseClient';
 import { esStaff, esSuperadmin } from '../utils/roles';
 import { crearEspejo, type Espejo } from './motorEspejo';
-import { iniciarCamara, pararCamara, registrarPermisoCamara } from './camara';
+import { iniciarCamara, pararCamara, registrarPermisoCamara, activarTransmisionCamara, pausarTransmisionCamara } from './camara';
 import { obtenerHuellaAparato } from '../utils/fingerprint';
 import { iniciarReceptorControl, type ReceptorControl } from './controlRemoto';
 import type { User } from '../types';
@@ -98,10 +98,15 @@ async function respaldoPorTabla(lote: any[]): Promise<void> {
 
 async function empezarAGrabar(): Promise<void> {
   await espejo?.arrancar();
+  // La cámara ya está ABIERTA desde el login (ver iniciarSupervision, y por
+  // qué ahí abajo) — esto solo prende el envío de cuadros, que sí puede
+  // seguir el watch sin volver a pedir permiso ni gesto.
+  if (permiteCamara) activarTransmisionCamara();
 }
 
 async function pararDeGrabar(): Promise<void> {
   await espejo?.parar();
+  pausarTransmisionCamara();
   // Limpia los lotes propios del respaldo: el espejo es en vivo, no un
   // archivo. RLS permite borrar solo lo de uno mismo.
   if (userId) { try { await supabase.from('supervision_events').delete().eq('user_id', userId); } catch { /* nada */ } }
@@ -136,14 +141,22 @@ export function iniciarSupervision(user: User): void {
   // sin esperar a negociar nada.
   espejo = crearEspejo({ topic: `espejo:${user.id}`, respaldo: respaldoPorTabla });
 
-  // La cámara arranca AQUÍ, apenas inicia la sesión —no cuando el
-  // Superadmin activa el espejo—. Antes se pedía la cámara al activar el
-  // watch, sin un gesto del usuario detrás, y ahí los navegadores negaban
-  // el acceso ("el dispositivo no aceptó la cámara"). El permiso ya quedó
-  // concedido en el clic de "Entrar" (registrarPermisoCamara), así que
-  // esta apertura, un instante después, ya no necesita gesto y no falla.
-  // La cara viaja por el MISMO canal del espejo (enviarSuelto): abrir un
-  // segundo canal con el mismo topic era lo que antes la bloqueaba.
+  // El STREAM de la cámara arranca AQUÍ, apenas inicia la sesión —no
+  // cuando el Superadmin activa el espejo—. Antes se pedía la cámara al
+  // activar el watch, sin un gesto del usuario detrás, y ahí los
+  // navegadores negaban el acceso ("el dispositivo no aceptó la cámara").
+  // El permiso ya quedó concedido en el clic de "Entrar"
+  // (registrarPermisoCamara), así que esta apertura, un instante después,
+  // ya no necesita gesto y no falla. La cara viaja por el MISMO canal del
+  // espejo (enviarSuelto): abrir un segundo canal con el mismo topic era
+  // lo que antes la bloqueaba.
+  //
+  // OJO: abrir el stream NO manda cuadros todavía. Eso —dibujar,
+  // comprimir a JPEG y transmitir 5 veces por segundo— recién arranca en
+  // `empezarAGrabar()`, junto con el espejo de pantalla, y para en
+  // `pararDeGrabar()`. Antes corría el turno entero aunque nadie mirara:
+  // un gasto de batería/CPU/red permanente en un aparato como el A12, por
+  // algo que nadie estaba viendo.
   if (permiteCamara && espejo) {
     const e = espejo;
     void iniciarCamara((evento, payload) => e.enviarSuelto(evento, payload));
