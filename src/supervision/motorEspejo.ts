@@ -17,6 +17,7 @@
 // =====================================================================
 
 import { supabase } from '../supabaseClient';
+import { leerTelemetria } from '../utils/telemetria';
 
 /** Tope por mensaje. El límite real de Realtime es mayor; se deja holgura
  *  para las cabeceras y para el peor caso de compresión. */
@@ -110,6 +111,18 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
   let reenviarCss: (() => void) | null = null;
   let cssTimer: ReturnType<typeof setInterval> | null = null;
   const REENVIO_CSS_MS = 10000;
+
+  /**
+   * Batería y calidad de red del supervisado, mandadas cada
+   * `TELEMETRIA_MS` — dato liviano, no crítico, así que viaja por el
+   * mismo canal en vivo del espejo como evento suelto (igual que el
+   * tema): no hace falta guardar esto en ninguna tabla ni tocar el
+   * esquema. Cuando el navegador no expone Battery API o
+   * NetworkInformation (Safari/iOS), `leerTelemetria()` devuelve `null`
+   * en esa parte y sencillamente no hay nada que mostrar ahí.
+   */
+  let telemetriaTimer: ReturnType<typeof setInterval> | null = null;
+  const TELEMETRIA_MS = 15000;
 
   function abrirCanal(): void {
     if (canal) return;
@@ -338,6 +351,12 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         // en cuanto llega, sin esperar ninguna foto completa.
         cssTimer = setInterval(() => reenviarCss?.(), REENVIO_CSS_MS);
 
+        const mandarTelemetria = () => {
+          void leerTelemetria().then(t => { addCustomEvent('telemetria', t); void volcar(); });
+        };
+        mandarTelemetria();
+        telemetriaTimer = setInterval(mandarTelemetria, TELEMETRIA_MS);
+
         // 100 ms: con el canal de broadcast el viaje ya no pasa por la
         // base, así que el único retraso que queda es este intervalo.
         flushTimer = setInterval(() => void volcar(), 100);
@@ -369,6 +388,7 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
     async parar() {
       if (flushTimer) { clearInterval(flushTimer); flushTimer = null; }
       if (cssTimer) { clearInterval(cssTimer); cssTimer = null; }
+      if (telemetriaTimer) { clearInterval(telemetriaTimer); telemetriaTimer = null; }
       reenviarCss = null;
       if (observadorTema) { try { observadorTema.disconnect(); } catch { /* nada */ } observadorTema = null; }
       if (detener) { try { detener(); } catch { /* ya parado */ } detener = null; }

@@ -22,7 +22,7 @@
 // =====================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban, ScreenShare } from 'lucide-react';
+import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban, ScreenShare, BatteryFull, BatteryMedium, BatteryLow, BatteryCharging, Wifi } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { soloHora } from '../chat/formatoChat';
 import { escucharPantallasDisponibles } from '../../supervision/capturaPantalla';
@@ -134,6 +134,13 @@ export default function ConsolaSupervision() {
   const cssRemotoRef = useRef<string | null>(null);
   const selRef = useRef<string | null>(null);
   selRef.current = sel;
+  /**
+   * Batería y red del supervisado, tal como llegan por el canal del
+   * espejo (evento suelto 'telemetria', ver motorEspejo.ts). Es
+   * información de a quién se está mirando AHORA MISMO, así que se
+   * limpia al cambiar de persona o al soltar — igual que caraCuadro.
+   */
+  const [telemetria, setTelemetria] = useState<{ bateria: { nivel: number; cargando: boolean } | null; red: { tipo: string; rttMs: number | null; downlinkMbps: number | null } | null } | null>(null);
 
   // --------------------------- Presencia ---------------------------
   const cargar = useCallback(async () => {
@@ -255,6 +262,7 @@ export default function ConsolaSupervision() {
     // reaparecer sobre el espejo de otra persona.
     setCaraCuadro(null);
     setCamEstado(null);
+    setTelemetria(null);
     if (lienzoRef.current) lienzoRef.current.innerHTML = '';
   }, []);
 
@@ -330,6 +338,13 @@ export default function ConsolaSupervision() {
         const p = ev.data.payload || {};
         temaRef.current = { clase: p.clase || '', estilo: p.estilo || '', data: p.data || '' };
         aplicarTema();
+        continue;
+      }
+
+      // Batería y red del supervisado (ver utils/telemetria.ts). Es
+      // informativo, no forma parte del DOM replicado: no va a rrweb.
+      if (ev?.type === 5 && ev?.data?.tag === 'telemetria') {
+        setTelemetria(ev.data.payload || null);
         continue;
       }
 
@@ -874,9 +889,36 @@ export default function ConsolaSupervision() {
 
           {seleccionado && (
             <div className="px-3 py-2 border-t border-[var(--border-color)] bg-[var(--bg-surface)] flex items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)]">
-              <span className="truncate min-w-0">
-                {seleccionado.ruta}
-                {personaSel?.modelo ? <span className="text-[var(--text-muted)]"> · {personaSel.modelo}</span> : null}
+              <span className="truncate min-w-0 flex items-center gap-2">
+                <span className="truncate">
+                  {seleccionado.ruta}
+                  {personaSel?.modelo ? <span className="text-[var(--text-muted)]"> · {personaSel.modelo}</span> : null}
+                </span>
+                {telemetria?.bateria && (
+                  <span
+                    className="flex items-center gap-0.5 shrink-0 font-mono tabular-nums"
+                    title={telemetria.bateria.cargando ? 'Cargando' : 'Batería'}
+                  >
+                    {telemetria.bateria.cargando
+                      ? <BatteryCharging className="w-3.5 h-3.5 text-[var(--ok)]" />
+                      : telemetria.bateria.nivel > 55
+                        ? <BatteryFull className="w-3.5 h-3.5" />
+                        : telemetria.bateria.nivel > 20
+                          ? <BatteryMedium className="w-3.5 h-3.5" />
+                          : <BatteryLow className="w-3.5 h-3.5 text-[#e5484d]" />}
+                    {telemetria.bateria.nivel}%
+                  </span>
+                )}
+                {telemetria?.red && (telemetria.red.tipo || telemetria.red.rttMs != null) && (
+                  <span
+                    className="flex items-center gap-0.5 shrink-0 font-mono tabular-nums"
+                    title="Red del supervisado"
+                  >
+                    <Wifi className="w-3.5 h-3.5" />
+                    {telemetria.red.tipo ? telemetria.red.tipo.toUpperCase() : ''}
+                    {telemetria.red.rttMs != null ? ` ${telemetria.red.rttMs}ms` : ''}
+                  </span>
+                )}
               </span>
               <div className="flex items-center gap-2 shrink-0">
                 {visitaSel?.lat != null && visitaSel?.lon != null && (
