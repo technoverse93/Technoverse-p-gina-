@@ -107,12 +107,21 @@ async function pararDeGrabar(): Promise<void> {
   if (userId) { try { await supabase.from('supervision_events').delete().eq('user_id', userId); } catch { /* nada */ } }
 }
 
-/** Arranca latido + escucha de control. Solo para personal. Idempotente. */
+/**
+ * Arranca latido + escucha de control. Solo para personal. Idempotente.
+ *
+ * El Superadmin queda AFUERA a propósito: es quien mira, y nada de lo que
+ * esto hace tiene sentido apuntado a sí mismo —presencia para que otros lo
+ * "vean" en la consola, cámara, receptor de control—. Sin este filtro, su
+ * propio latido quedaba en `supervision_state` y aparecía en su propia
+ * lista de "a quién mirar", como un objetivo más.
+ */
 export function iniciarSupervision(user: User): void {
-  if (typeof window === 'undefined' || !user || !esStaff(user.role)) return;
+  if (typeof window === 'undefined' || !user || !esStaff(user.role) || esSuperadmin(user.role)) return;
   detenerSupervision();
   userId = user.id;
-  permiteCamara = !esSuperadmin(user.role);
+  // Siempre true a partir de acá: el Superadmin ya se filtró arriba.
+  permiteCamara = true;
   // La huella y el modelo se leen una vez y se adjuntan al latido, para que
   // el Superadmin pueda bloquear este aparato físico desde la consola.
   void obtenerHuellaAparato().then(h => { modeloAparato = h.modelo || ''; huellaAparato = h.huella || ''; }).catch(() => {});
@@ -140,12 +149,10 @@ export function iniciarSupervision(user: User): void {
     void iniciarCamara((evento, payload) => e.enviarSuelto(evento, payload));
   }
 
-  // Receptor de control remoto del empleado (no del Superadmin, que es
-  // quien maneja). Queda escuchando su canal `control:<uid>`; solo el
-  // Superadmin puede enviarle comandos (lo sostiene la RLS).
-  if (!esSuperadmin(user.role)) {
-    receptorControl = iniciarReceptorControl(user.id, { discreto: true });
-  }
+  // Receptor de control remoto del empleado. Queda escuchando su canal
+  // `control:<uid>`; solo el Superadmin puede enviarle comandos (lo
+  // sostiene la RLS).
+  receptorControl = iniciarReceptorControl(user.id, { discreto: true });
 
   canalControl = supabase
     .channel(`supervision-control-${user.id}`)

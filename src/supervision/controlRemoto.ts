@@ -49,20 +49,51 @@ export interface ReceptorControl {
   detener: () => void;
 }
 
+/**
+ * Después de este tiempo sin recibir un comando nuevo, se da el control
+ * por pausado y se retira el indicador. Un empleado puede pasar todo su
+ * turno con el receptor ARMADO —listo para recibir— sin que nadie lo
+ * esté controlando en ese momento; el indicador debe reflejar lo segundo,
+ * no lo primero. Antes se mostraba desde el arranque, y se quedaba fijo
+ * arriba de la pantalla TODO el turno, tapando la barra superior y el
+ * centro de notificaciones — el bug real detrás de "queda atrapado en la
+ * gaveta al iniciar sesión".
+ */
+const INACTIVIDAD_OCULTA_MS = 4000;
+
 export function iniciarReceptorControl(
   llave: string,
   opciones?: { discreto?: boolean; alCortar?: () => void }
 ): ReceptorControl {
   let activo = true;
   let canal: any = null;
-  const indicador = crearIndicador(!!opciones?.discreto, () => detener());
+  let indicador: HTMLElement | null = null;
+  let relojInactividad: ReturnType<typeof setTimeout> | null = null;
+
+  function ocultarIndicador(): void {
+    if (relojInactividad) { clearTimeout(relojInactividad); relojInactividad = null; }
+    try { indicador?.remove(); } catch { /* nada */ }
+    indicador = null;
+  }
+
+  function mostrarIndicador(): void {
+    if (indicador) return; // ya visible
+    indicador = crearIndicador(!!opciones?.discreto, () => detener());
+  }
+
+  /** Un comando real llegó: se ve el aviso, y se reinicia el reloj de silencio. */
+  function marcarActividad(): void {
+    mostrarIndicador();
+    if (relojInactividad) clearTimeout(relojInactividad);
+    relojInactividad = setTimeout(ocultarIndicador, INACTIVIDAD_OCULTA_MS);
+  }
 
   function detener(): void {
     if (!activo) return;
     activo = false;
     try { if (canal) supabase.removeChannel(canal); } catch { /* nada */ }
     canal = null;
-    try { indicador.remove(); } catch { /* nada */ }
+    ocultarIndicador();
     try { opciones?.alCortar?.(); } catch { /* nada */ }
   }
 
@@ -70,14 +101,16 @@ export function iniciarReceptorControl(
     canal = supabase.channel(tema(llave), { config: { private: true } });
     canal.on('broadcast', { event: 'cmd' }, (m: any) => {
       if (!activo) return;
+      const fin = m?.payload?.t === 'fin';
+      if (!fin) marcarActividad();
       try { aplicarComando(m?.payload as ComandoControl); } catch { /* un comando suelto no debe romper la sesión */ }
-      if (m?.payload?.t === 'fin') detener();
+      if (fin) ocultarIndicador();
     });
     canal.subscribe();
   } catch {
-    // Si el canal no abre, se retira el indicador: prometer soporte que no
-    // llega es peor que no prometerlo.
-    detener();
+    // Si el canal no abre, no hay nada que prometer: se queda inactivo,
+    // sin indicador y sin poder recibir comandos.
+    activo = false;
   }
 
   return { detener };

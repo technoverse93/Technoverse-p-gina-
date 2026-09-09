@@ -79,10 +79,21 @@ export default function SoporteRemoto() {
                 </button>
               </>
             ) : (
-              <p className="text-[12.5px] leading-relaxed" style={{ color: '#6EE7B7' }}>
-                Soporte remoto activo. Podés cortarlo cuando quieras desde el aviso de arriba
-                («Cortar»).
-              </p>
+              <>
+                <p className="mb-3 text-[12.5px] leading-relaxed" style={{ color: '#6EE7B7' }}>
+                  Soporte remoto autorizado. Cuando un técnico esté guiando tu pantalla vas a ver
+                  un aviso arriba, con su propio botón «Cortar». Si querés retirar el permiso ahora
+                  mismo, sin esperar nada, usá este botón.
+                </p>
+                <button
+                  type="button"
+                  onClick={() => { try { receptorRef.current?.detener(); } catch { /* nada */ } receptorRef.current = null; setActivo(false); }}
+                  className="inline-flex items-center gap-2 rounded-lg border px-4 py-2.5 text-[12.5px] font-bold transition-colors"
+                  style={{ borderColor: 'rgba(255,255,255,0.2)', color: '#E9ECF1' }}
+                >
+                  Retirar autorización
+                </button>
+              </>
             )}
           </div>
         </div>

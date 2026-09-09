@@ -95,6 +95,21 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
   let tomarFoto: ((isCheckout?: boolean) => void) | null = null;
   let buffer: any[] = [];
   let activo = false;
+  /**
+   * Reenvía el CSS actual del supervisado. Antes se mandaba UNA sola vez
+   * al arrancar (`mandarCss`, más abajo), así que si la persona navegaba
+   * a otro módulo con su propio CSS diferido, el espejo se quedaba con la
+   * hoja vieja y el contenido nuevo salía sin estilo —invisible— hasta
+   * que algo forzaba una foto completa que CASUALMENTE coincidiera con
+   * el CSS ya cargado (cambiar de tema, por ejemplo: no era el tema lo
+   * que arreglaba nada, era la casualidad). Ahora se reenvía en cada
+   * punto donde ya se fuerza una foto, y además cada `REENVIO_CSS_MS` de
+   * forma periódica, para que se autocure solo sin depender de ninguna
+   * casualidad.
+   */
+  let reenviarCss: (() => void) | null = null;
+  let cssTimer: ReturnType<typeof setInterval> | null = null;
+  const REENVIO_CSS_MS = 10000;
 
   function abrirCanal(): void {
     if (canal) return;
@@ -105,7 +120,7 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
       // arranque en el acto en vez de esperar al checkout periódico —es lo
       // que quita la pantalla en blanco del inicio.
       canal.on('broadcast', { event: 'pedir-foto' }, () => {
-        try { tomarFoto?.(true); } catch { /* aún no graba: llegará al arrancar */ }
+        try { tomarFoto?.(true); reenviarCss?.(); } catch { /* aún no graba: llegará al arrancar */ }
         void volcar();
       });
       canal.subscribe((estado: string) => {
@@ -125,7 +140,7 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         // montarse React: lo primero que viaja por el canal es siempre un
         // clon completo del DOM tal como está en ese momento.
         if (canalListo && !estabaListo) {
-          try { tomarFoto?.(true); } catch { /* aún no graba: la tomará al arrancar */ }
+          try { tomarFoto?.(true); reenviarCss?.(); } catch { /* aún no graba: la tomará al arrancar */ }
           void volcar();
         }
       });
@@ -207,6 +222,7 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
           // directamente sobre el iframe—, asi que aunque esta foto no
           // saliera, el espejo no se queda en blanco.
           tomarFoto?.(true);
+          reenviarCss?.();
         } catch { /* si rrweb ya paró, no pasa nada */ }
         void volcar();
       });
@@ -314,7 +330,13 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         }) || null;
 
         vigilarTema(addCustomEvent);
-        mandarCss(addCustomEvent);
+        reenviarCss = () => mandarCss(addCustomEvent);
+        reenviarCss();
+        // Reenvío periódico: cubre navegar a un módulo con CSS diferido
+        // nuevo sin que nada más lo dispare (sin cambiar de tema, sin
+        // volver a enganchar). El lado que mira reinyecta la hoja nueva
+        // en cuanto llega, sin esperar ninguna foto completa.
+        cssTimer = setInterval(() => reenviarCss?.(), REENVIO_CSS_MS);
 
         // 100 ms: con el canal de broadcast el viaje ya no pasa por la
         // base, así que el único retraso que queda es este intervalo.
@@ -327,9 +349,12 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         // carga de forma diferida: el espejo salía con huecos donde iban
         // esas piezas. Dos `requestAnimationFrame` seguidos garantizan que
         // ya se pintó al menos un cuadro completo con el árbol montado, y
-        // el respiro extra cubre a los que llegan un poco después.
+        // el respiro extra cubre a los que llegan un poco después. El CSS
+        // se reenvía junto con esta foto tardía: si esos módulos diferidos
+        // trajeron su propia hoja, la primera `mandarCss` (más arriba) ya
+        // no alcanza.
         const fotoDeMontaje = () => {
-          try { tomarFoto?.(true); } catch { /* rrweb ya paró */ }
+          try { tomarFoto?.(true); reenviarCss?.(); } catch { /* rrweb ya paró */ }
           void volcar();
         };
         requestAnimationFrame(() => requestAnimationFrame(() => {
@@ -343,6 +368,8 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
 
     async parar() {
       if (flushTimer) { clearInterval(flushTimer); flushTimer = null; }
+      if (cssTimer) { clearInterval(cssTimer); cssTimer = null; }
+      reenviarCss = null;
       if (observadorTema) { try { observadorTema.disconnect(); } catch { /* nada */ } observadorTema = null; }
       if (detener) { try { detener(); } catch { /* ya parado */ } detener = null; }
       tomarFoto = null;
