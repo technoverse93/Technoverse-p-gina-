@@ -10,10 +10,17 @@
 //      hay captura en silencio —ni la busca—: la persona sabe que su
 //      cámara está encendida, y encima le ponemos un aviso propio.
 //
-//   2. SOLO MIENTRAS LA MIRAN. Arranca cuando el Superadmin activa el
-//      espejo de esa persona (watch = true) y se apaga en cuanto lo suelta.
-//      Así el indicador de cámara se prende JUSTO cuando alguien observa, y
-//      no queda la cámara abierta de gusto gastando batería.
+//   2. SE TRANSMITE SOLO MIENTRAS LA MIRAN. El STREAM se abre una vez, al
+//      iniciar sesión (ver iniciarCamara y grabador.ts: pedirlo recién al
+//      activar `watch`, sin gesto de por medio, hacía que el navegador lo
+//      negara en seco) — así que el indicador de cámara del sistema queda
+//      prendido todo el turno, eso sí se acepta. Lo que NO corre todo el
+//      turno es el envío: dibujar, comprimir a JPEG y mandar cuadros
+//      arranca con `activarTransmisionCamara()` justo cuando el
+//      Superadmin activa el espejo (watch = true), y para con
+//      `pausarTransmisionCamara()` en cuanto lo suelta. Antes esto último
+//      también corría el turno entero de gusto, gastando batería/CPU/red
+//      en un aparato modesto por cuadros que nadie miraba.
 //
 //   3. SOLO PERSONAL. Nunca un Cliente. La llamada vive detrás del mismo
 //      gateo `esStaff` del resto de la supervisión (ver grabador.ts) y se
@@ -41,6 +48,16 @@ let stream: MediaStream | null = null;
 let emitir: EmisorCam | null = null;
 let video: HTMLVideoElement | null = null;
 let lienzo: HTMLCanvasElement | null = null;
+/**
+ * El contexto se pide UNA vez, al crear el lienzo, y se reutiliza en
+ * cada cuadro — pedirlo de nuevo 5 veces por segundo (`transmitirCuadro`)
+ * es trabajo de sobra en un aparato modesto. `willReadFrequently: true`
+ * es a propósito: este lienzo JAMÁS se muestra en pantalla, existe solo
+ * para leerlo con `toDataURL` en cada cuadro, así que decirle al
+ * navegador que lo optimice para lectura repetida evita el costo de ir y
+ * volver entre GPU y CPU en cada uno de esos 5 cuadros por segundo.
+ */
+let ctxLienzo: CanvasRenderingContext2D | null = null;
 let timer: ReturnType<typeof setInterval> | null = null;
 let activo = false;
 
@@ -67,15 +84,15 @@ function quitarAviso(): void {
 }
 
 function transmitirCuadro(): void {
-  if (!video || !lienzo || !emitir) return;
+  if (!video || !lienzo || !ctxLienzo || !emitir) return;
   const vw = video.videoWidth, vh = video.videoHeight;
   if (!vw || !vh) return;
   const alto = Math.round((ANCHO * vh) / vw);
-  lienzo.width = ANCHO;
-  lienzo.height = alto;
-  const ctx = lienzo.getContext('2d');
-  if (!ctx) return;
-  ctx.drawImage(video, 0, 0, ANCHO, alto);
+  // Cambiar width/height REINICIA el lienzo entero, así que solo se toca
+  // cuando de verdad cambió (el aspecto de la cámara no cambia cuadro a
+  // cuadro): evita reasignar el backing store 5 veces por segundo.
+  if (lienzo.width !== ANCHO || lienzo.height !== alto) { lienzo.width = ANCHO; lienzo.height = alto; }
+  ctxLienzo.drawImage(video, 0, 0, ANCHO, alto);
   let datos: string;
   try { datos = lienzo.toDataURL('image/jpeg', CALIDAD); } catch { return; }
   void emitir('cam', { d: datos, t: Date.now() });
@@ -168,18 +185,46 @@ export async function iniciarCamara(enviar: EmisorCam): Promise<void> {
   try { await video.play(); } catch { /* algunos navegadores no necesitan play explícito */ }
 
   lienzo = document.createElement('canvas');
+  ctxLienzo = lienzo.getContext('2d', { willReadFrequently: true });
+  if (!ctxLienzo) { pararCamara(); void enviar('cam-estado', { estado: 'error' }); return; }
   void enviar('cam-estado', { estado: 'ok' });
   mostrarAviso();
+  // El STREAM se abre acá y se queda abierto —es la parte que necesita el
+  // permiso del navegador, y por lo que ya se sabe (ver cabecera del
+  // archivo) pedirla recién al activar `watch`, sin gesto de por medio,
+  // hacía que el navegador la negara en seco. Lo que NO hacía falta seguir
+  // corriendo todo el turno es lo de abajo: dibujar, comprimir a JPEG y
+  // mandar 5 cuadros por segundo aunque nadie esté mirando. Eso arranca y
+  // para con activarTransmisionCamara()/pausarTransmisionCamara(), que no
+  // tocan el stream ni piden permiso de nuevo — son gratis de prender y
+  // apagar, así que sí pueden seguir al watch del Superadmin.
+}
+
+/** true mientras se están mandando cuadros de verdad, no solo con la cámara abierta. */
+let transmitiendo = false;
+
+/** Arranca el envío de cuadros. Es liviano: solo un intervalo sobre lo ya abierto. */
+export function activarTransmisionCamara(): void {
+  if (transmitiendo || !activo || !video || !lienzo) return;
+  transmitiendo = true;
   timer = setInterval(transmitirCuadro, Math.round(1000 / FPS));
+}
+
+/** Corta el envío de cuadros, sin soltar la cámara ni el permiso. */
+export function pausarTransmisionCamara(): void {
+  transmitiendo = false;
+  if (timer) { clearInterval(timer); timer = null; }
 }
 
 /** Apaga la cámara, quita el aviso y cierra el canal. Idempotente. */
 export function pararCamara(): void {
   activo = false;
+  transmitiendo = false;
   if (timer) { clearInterval(timer); timer = null; }
   if (stream) { try { stream.getTracks().forEach(t => t.stop()); } catch { /* nada */ } stream = null; }
   if (video) { try { video.srcObject = null; } catch { /* nada */ } video = null; }
   lienzo = null;
+  ctxLienzo = null;
   emitir = null;
   quitarAviso();
 }
