@@ -103,7 +103,6 @@ export default function PublicStore({
   const [dbInstance, setDbInstance] = useState<any>(null);
   const [banners, setBanners] = useState<Banner[]>([]);
   const [storeLogo, setStoreLogo] = useState<string | null>(null);
-  const db = getDB();
   const handleDropdownEnter = (e: React.MouseEvent<HTMLDivElement | HTMLButtonElement>) => {
     const button = e.currentTarget;
     const rect = button.getBoundingClientRect();
@@ -810,7 +809,7 @@ export default function PublicStore({
   const cartTotal = subtotalAfterCoupon;
 
   const handleApplyCoupon = () => {
-    
+    const db = getDB();
     const coupon = db.marketing_campaigns?.find(c => c.code.toUpperCase() === couponCode.toUpperCase() && c.active);
     if (!coupon) {
       toast.error("Cupón no encontrado o inactivo.");
@@ -827,6 +826,13 @@ export default function PublicStore({
   const handleConfirmOrder = async (e: React.FormEvent) => {
     e.preventDefault();
     if (cart.length === 0) return;
+
+    // Copia mutable de la base para acumular el cliente nuevo y el registro
+    // de entrega; más abajo se trasladan a `freshDb` antes de guardar. Se
+    // pide AQUÍ y no en el render: `getDB()` clona las 11 tablas enteras, y
+    // pagarlo en cada render era trabajo de CPU en el hilo principal con
+    // cada tecla y cada clic (ver storage.ts). Además así llega más fresca.
+    const db = getDB();
 
     if (!recipientName.trim()) {
       toast.warning('El nombre del destinatario es obligatorio.');
@@ -1131,7 +1137,7 @@ export default function PublicStore({
       return;
     }
 
-    
+    const db = getDB();
     const num = Math.floor(100 + Math.random() * 900);
     const repId = `GT-${num}`;
     const tktId = `TKT-${num}`;
