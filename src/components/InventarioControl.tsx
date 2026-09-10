@@ -841,8 +841,17 @@ function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'produc
     }
   };
 
-  const currentDb = getDB();
-  const historicalSkus = (currentDb.historical_skus || []).filter(h => h && h.sku);
+  // `getDB()` clona las 11 tablas enteras (ver storage.ts). Llamarlo suelto
+  // en el cuerpo del componente lo pagaba en CADA render —con cada tecla del
+  // formulario de producto, cada filtro, cada clic—, que es justo lo que se
+  // siente como tirones en este módulo, el más pesado del panel. Con la
+  // versión de la base como dependencia, el clon se paga solo cuando los
+  // datos cambiaron de verdad.
+  const dbVersion = getDBVersion();
+  const historicalSkus = useMemo(
+    () => (getDB().historical_skus || []).filter(h => h && h.sku),
+    [dbVersion]
+  );
   const skuSuggestions = historicalSkus.filter(h => {
     if (!h) return false;
     const isSpare = h.category === 'Repuestos' || sparePartCategories.includes(h.category);
