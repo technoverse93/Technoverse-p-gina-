@@ -31,6 +31,7 @@ import {
   referenciaParaEntrega, type UbicacionCliente,
 } from '../utils/ubicacionCliente';
 import { registrarUbicacionEnServidor } from '../utils/ubicaciones';
+import { TextoEditable } from '../cms/TextoEditable';
 import BannerPrincipal from './store/BannerPrincipal';
 import { BannerDivisor, TarjetasBannerGrid, PopupPromocional } from './store/BannersTienda';
 import PieDePagina from './store/PieDePagina';
@@ -1719,7 +1720,9 @@ export default function PublicStore({
             {/* Products grid */}
             <div>
               <h3 className="font-extrabold text-base text-[var(--text-primary)] mb-6">
-                {selectedCategory ? `Explorando: ${selectedCategory}` : 'Nuestros Productos Disponibles'}
+                {selectedCategory
+                  ? `Explorando: ${selectedCategory}`
+                  : <TextoEditable clave="tienda.titulo_catalogo">Nuestros Productos Disponibles</TextoEditable>}
               </h3>
 
               {filteredProducts.length === 0 ? (
@@ -1730,12 +1733,14 @@ export default function PublicStore({
                 <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-3xl p-10 text-center max-w-md mx-auto space-y-4 shadow-sm animate-in fade-in">
                   <AlertCircle className="w-12 h-12 text-[var(--accent)] mx-auto opacity-70" />
                   <h4 className="font-bold text-sm text-[var(--text-primary)]">
-                    {selectedCategory ? `Todavía no hay nada en ${selectedCategory}` : 'Sin artículos disponibles'}
+                    {selectedCategory
+                      ? `Todavía no hay nada en ${selectedCategory}`
+                      : <TextoEditable clave="tienda.vacio_titulo">Sin artículos disponibles</TextoEditable>}
                   </h4>
                   <p className="text-sm text-[var(--text-muted)] leading-relaxed font-sans">
                     {selectedCategory
                       ? 'Estamos surtiendo esta categoría. Mientras tanto puede ver el resto del catálogo o escribirnos por el chat si busca algo puntual.'
-                      : 'Estamos renovando el inventario. Vuelva en un rato o escríbanos por el chat y le contamos qué va a entrar.'}
+                      : <TextoEditable clave="tienda.vacio_texto">Estamos renovando el inventario. Vuelva en un rato o escríbanos por el chat y le contamos qué va a entrar.</TextoEditable>}
                   </p>
                   {selectedCategory && (
                     <button

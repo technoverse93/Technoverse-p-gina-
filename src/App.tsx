@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useRef, Suspense, lazy } from 'react';
 import PublicStore from './components/PublicStore';
+import { ModoEdicionProvider } from './cms/ModoEdicion';
 import { User } from './types';
 import { initKeyboard } from './mobile/keyboard';
 import { initOtaUpdater } from './mobile/otaUpdater';
@@ -489,16 +490,20 @@ function AppInner() {
           }}
         />
       ) : currentView === 'store' ? (
-        <PublicStore
-          onNavigateToAdmin={() => { window.history.pushState(null, "", "/admin"); setCurrentView("admin"); }}
-          onRefreshTrigger={refreshTrigger}
-          currentUser={currentUser}
-          isAuthenticated={isAuthenticated}
-          onLogin={handleLogin}
-          onLogout={handleLogout}
-          autoOpenLogin={autoOpenLogin}
-          onClearAutoOpenLogin={() => setAutoOpenLogin(false)}
-        />
+        // Modo edición (lapicito): solo un admin de gestión (superadmin/admin)
+        // ve el lápiz y puede editar los textos de la tienda en su lugar.
+        <ModoEdicionProvider puedeEditar={esGestion(currentUser?.role)} quien={currentUser?.email}>
+          <PublicStore
+            onNavigateToAdmin={() => { window.history.pushState(null, "", "/admin"); setCurrentView("admin"); }}
+            onRefreshTrigger={refreshTrigger}
+            currentUser={currentUser}
+            isAuthenticated={isAuthenticated}
+            onLogin={handleLogin}
+            onLogout={handleLogout}
+            autoOpenLogin={autoOpenLogin}
+            onClearAutoOpenLogin={() => setAutoOpenLogin(false)}
+          />
+        </ModoEdicionProvider>
       ) : (
         <Suspense fallback={<AdminPanelFallback />}>
           <AdminPanel
