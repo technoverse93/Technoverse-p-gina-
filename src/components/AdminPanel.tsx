@@ -49,8 +49,6 @@ const ClienteFicha = lazy(() => import('./ClienteFicha'));
 const FacturacionPanel = lazy(() => import('./FacturacionPanel'));
 const GestionUsuariosPanel = lazy(() => import('./admin/GestionUsuariosPanel'));
 const ConsolaIngresos = lazy(() => import('./admin/ConsolaIngresos'));
-const ConsolaSupervision = lazy(() => import('./admin/ConsolaSupervision'));
-const ConsolaDlp = lazy(() => import('./admin/ConsolaDlp'));
 const ConsolaBloqueos = lazy(() => import('./admin/ConsolaBloqueos'));
 
 const TabLoadingFallback = () => (
@@ -1686,21 +1684,9 @@ export default function AdminPanel({
             frontend que de verdad bloquea el RENDERIZADO del panel — y aun
             así, cada función que el panel llama vuelve a comprobarlo en el
             servidor (ver GestionUsuariosPanel.tsx). */}
-        {tab === 'supervision' && esAdminSupremo(currentUser?.email) && (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <ConsolaSupervision />
-          </Suspense>
-        )}
-
         {tab === 'ingresos' && esAdminSupremo(currentUser?.email) && (
           <Suspense fallback={<TabLoadingFallback />}>
             <ConsolaIngresos />
-          </Suspense>
-        )}
-
-        {tab === 'dlp' && esAdminSupremo(currentUser?.email) && (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <ConsolaDlp />
           </Suspense>
         )}
 
