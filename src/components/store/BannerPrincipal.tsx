@@ -49,7 +49,7 @@ const INTERVALO_MS = 6000;
  * opcionales: un banner sin fechas se considera siempre vigente, que es
  * lo que espera quien solo quiere dejarlo puesto.
  */
-function estaVigente(b: Banner): boolean {
+export function estaVigente(b: Banner): boolean {
   if (!b || b.active === false) return false;
   const hoy = Date.now();
   if (b.startDate) {
@@ -67,7 +67,13 @@ function estaVigente(b: Banner): boolean {
 
 export default function BannerPrincipal({ banners }: Props) {
   const visibles = useMemo(
-    () => (banners || []).filter(estaVigente).filter(b => !!b.imageUrl),
+    // Solo los banners de formato "hero" (o los viejos sin formato, que se
+    // tratan como hero). Los de divisor / grid / popup se pintan en su
+    // propio lugar, no en este carrusel.
+    () => (banners || [])
+      .filter(estaVigente)
+      .filter(b => (b.formato || 'hero') === 'hero')
+      .filter(b => !!b.imageUrl),
     [banners]
   );
 
@@ -111,6 +117,14 @@ export default function BannerPrincipal({ banners }: Props) {
         loading="eager"
         decoding="async"
       />
+      {actual.oferta && (
+        <span
+          className="absolute top-3 left-3 sm:top-4 sm:left-4 rounded-full px-3 py-1 text-[11px] sm:text-[13px] font-black shadow-md"
+          style={{ background: 'var(--accent)', color: 'var(--accent-ink, #fff)' }}
+        >
+          {actual.oferta}
+        </span>
+      )}
       {/* Solo se dibuja el velo y el texto si hay texto que poner. Un
           cartel diseñado con su propia tipografía no necesita que se le
           encime nada. */}

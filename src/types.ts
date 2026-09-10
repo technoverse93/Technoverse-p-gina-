@@ -238,6 +238,18 @@ export interface Banner {
   imageUrl?: string;
   link?: string;
   type: 'Servicios' | 'Repuestos' | 'Soporte' | 'General';
+  /**
+   * DÓNDE se muestra el banner en la tienda. Es el formato, no la
+   * categoría (`type`):
+   *   · 'hero'    — carrusel principal arriba del catálogo.
+   *   · 'divisor' — franja ancha entre secciones del catálogo.
+   *   · 'grid'    — tarjeta que ocupa un espacio de la cuadrícula.
+   *   · 'popup'   — ventana emergente promocional (1 vez por sesión).
+   * Un banner viejo sin este campo se trata como 'hero'.
+   */
+  formato?: 'hero' | 'divisor' | 'grid' | 'popup';
+  /** Etiqueta de oferta, ej. "2x1", "-30%", "Envío gratis". Opcional. */
+  oferta?: string;
   active: boolean;
   startDate?: string;
   endDate?: string;

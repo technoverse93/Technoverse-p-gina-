@@ -32,6 +32,7 @@ import {
 } from '../utils/ubicacionCliente';
 import { registrarUbicacionEnServidor } from '../utils/ubicaciones';
 import BannerPrincipal from './store/BannerPrincipal';
+import { BannerDivisor, TarjetasBannerGrid, PopupPromocional } from './store/BannersTienda';
 import PieDePagina from './store/PieDePagina';
 
 const DEFAULT_CAABYS = '8399000000000';
@@ -1650,6 +1651,14 @@ export default function PublicStore({
                 en el componente. */}
             <BannerPrincipal banners={banners} />
 
+            {/* Franja divisora (formato 'divisor'): separador ancho entre
+                el cartel principal y el catálogo. Solo pinta si hay uno. */}
+            <BannerDivisor banners={banners} />
+
+            {/* Pop-up promocional (formato 'popup'): emergente una vez por
+                sesión. Es `fixed`, así que su lugar en el árbol da igual. */}
+            <PopupPromocional banners={banners} />
+
             {/* El carrusel de categorías se retiró: hacía exactamente lo
                 mismo que la barra de chips de abajo, así que la pantalla
                 tenía DOS selectores de categoría, uno encima del otro, que
@@ -1753,6 +1762,10 @@ export default function PublicStore({
                    propósito: con tres, en un teléfono de 360 px la tarjeta
                    baja de 100 px de ancho y el nombre deja de leerse. */
                 <div id="product-bento-grid" className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 sm:gap-3">
+                  {/* Tarjetas promocionales (formato 'grid'): se mezclan en
+                      la MISMA rejilla, así miden como un producto. Solo en la
+                      vista general, no cuando se está filtrando una categoría. */}
+                  {!selectedCategory && <TarjetasBannerGrid banners={banners} />}
                   {paginatedProducts.map(prod => prod && (
                     <ProductCard
                       key={prod.id}

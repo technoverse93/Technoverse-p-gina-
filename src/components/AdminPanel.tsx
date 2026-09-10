@@ -30,6 +30,7 @@ import { esGestion } from '../utils/roles';
 // tocar el menú obligaba a navegar por medio módulo de facturación.
 import AdminShell from './admin/AdminShell';
 import AdminDashboard from './admin/AdminDashboard';
+import GestorBanners from './admin/GestorBanners';
 import { PageHead, Card, Btn, Field, Chip, TableShell, Empty } from './admin/AdminKit';
 import { resolverModulo, PESTANA_NUEVA } from './admin/adminNav';
 import NuevaPestana from './admin/NuevaPestana';
@@ -1478,6 +1479,8 @@ export default function AdminPanel({
                 </TableShell>
               )}
             </Card>
+
+            <GestorBanners currentUser={currentUser} />
           </div>
         )}
 
