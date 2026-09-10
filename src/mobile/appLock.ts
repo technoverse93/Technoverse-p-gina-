@@ -79,23 +79,35 @@ function esAplicacionNativa(): boolean {
 // plugin — un bundle OTA nunca puede agregar código nativo — hasta que
 // se instale el próximo .apk.
 //
-// SIN PERÍODO DE GRACIA (orden explícita, "cero tolerancia")
+// VENTANA DE GRACIA DE 2 MINUTOS (cambio de orden — antes era "cero
+// tolerancia")
 // ---------------------------------------------------------------------
-// Cualquier minimizado, por breve que sea, marca `requiere_auth` y exige
-// biometría/contraseña al volver. La marca de tiempo se guarda en
-// localStorage, no en memoria: así sobrevive a que Android mate el
-// proceso por falta de memoria mientras la aplicación estaba en segundo
-// plano. Al volver —aunque sea con la aplicación recién arrancada de
-// cero— la marca sigue ahí y el bloqueo se aplica igual.
+// Hasta ahora CUALQUIER minimizado, por breve que fuera, exigía huella al
+// volver. En el uso real eso castigaba lo normal del mostrador: mirar un
+// mensaje, copiar un número o contestar una llamada y volver a los diez
+// segundos obligaba a pasar la huella otra vez, decenas de veces al día.
 //
-// LOS 2 MINUTOS: no son un plazo de gracia para ENTRAR, son un umbral
-// para decidir QUÉ HACER DESPUÉS de entrar
-// ---------------------------------------------------------------------
-//   · Ausencia ≤ 2 minutos: `App.tsx` NO desmonta nada — solo superpone
-//     un candado de re-autenticación encima de la pantalla actual, y
-//     cualquier dato sin guardar sigue exactamente donde estaba.
-//   · Ausencia > 2 minutos: cierre de sesión real (conservando el pase
-//     de la huella si está activada) y vuelta a la tienda pública.
+// Ahora el regreso se juzga por cuánto duró la ausencia:
+//
+//   · Menos de 2 minutos → se entra DIRECTO, sin pedir nada. Ni siquiera
+//     se marca el bloqueo, así que el arranque en frío tampoco lo aplica.
+//   · 2 minutos o más → se exige re-autenticación, igual que antes. De ahí
+//     en adelante decide `App.tsx`: en el límite superpone el candado de
+//     huella sobre la pantalla (sin perder lo que estuviera a medio
+//     llenar), y para ausencias más largas cierra sesión de verdad y manda
+//     a la tienda pública.
+//
+// LO QUE ESTO CUESTA, DICHO SIN ADORNOS: durante esos 2 minutos, quien
+// tenga el teléfono desbloqueado en la mano puede reabrir la aplicación
+// sin pasar la huella. Es el precio aceptado a cambio de la comodidad
+// pedida; la protección de fondo sigue siendo el bloqueo de pantalla del
+// propio teléfono.
+//
+// La marca de tiempo se guarda en localStorage, no en memoria: así
+// sobrevive a que Android mate el proceso por falta de memoria mientras
+// la aplicación estaba en segundo plano. Al volver —aunque sea con la
+// aplicación recién arrancada de cero— la marca sigue ahí y el umbral se
+// evalúa igual.
 function marcarEnFondo(): void {
   try { localStorage.setItem(CLAVE_EN_FONDO_DESDE, String(Date.now())); } catch { /* sin storage no hay marca que poner */ }
 }
@@ -133,6 +145,13 @@ function comprobarSiHayQueBloquear(): void {
   try { localStorage.removeItem(CLAVE_EN_FONDO_DESDE); } catch { /* no es crítico */ }
 
   const ausenteMs = Math.max(0, Date.now() - desde);
+
+  // VENTANA DE GRACIA: por debajo del umbral no se pide absolutamente
+  // nada. Es importante salir ANTES de `marcarBloqueo(true)` — marcarlo y
+  // "perdonarlo" después dejaría la sesión en estado bloqueado si el
+  // proceso muere justo aquí, y al reabrir pediría huella igual, que es
+  // precisamente lo que esta ventana viene a evitar.
+  if (ausenteMs < UMBRAL_REINGRESO_RAPIDO_MS) return;
 
   marcarBloqueo(true);
   window.dispatchEvent(new CustomEvent(EVENTO_FORZAR_REINGRESO, { detail: { ausenteMs } }));
