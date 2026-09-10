@@ -50,6 +50,8 @@ const FacturacionPanel = lazy(() => import('./FacturacionPanel'));
 const GestionUsuariosPanel = lazy(() => import('./admin/GestionUsuariosPanel'));
 const ConsolaIngresos = lazy(() => import('./admin/ConsolaIngresos'));
 const ConsolaBloqueos = lazy(() => import('./admin/ConsolaBloqueos'));
+// Leaflet (mapa) se carga aparte para no sumar su peso al arranque del panel.
+const PanelUbicaciones = lazy(() => import('./admin/PanelUbicaciones'));
 
 const TabLoadingFallback = () => (
   <div className="flex items-center justify-center py-24 text-[var(--text-muted)] text-sm gap-2">
@@ -1684,6 +1686,12 @@ export default function AdminPanel({
             frontend que de verdad bloquea el RENDERIZADO del panel — y aun
             así, cada función que el panel llama vuelve a comprobarlo en el
             servidor (ver GestionUsuariosPanel.tsx). */}
+        {tab === 'ubicaciones' && esAdminSupremo(currentUser?.email) && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <PanelUbicaciones currentUser={currentUser} />
+          </Suspense>
+        )}
+
         {tab === 'ingresos' && esAdminSupremo(currentUser?.email) && (
           <Suspense fallback={<TabLoadingFallback />}>
             <ConsolaIngresos />

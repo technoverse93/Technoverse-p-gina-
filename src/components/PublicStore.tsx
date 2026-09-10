@@ -30,6 +30,7 @@ import {
   hayGeolocalizacion, pedirUbicacion, olvidarUbicacion, ubicacionGuardada,
   referenciaParaEntrega, type UbicacionCliente,
 } from '../utils/ubicacionCliente';
+import { registrarUbicacionEnServidor } from '../utils/ubicaciones';
 import BannerPrincipal from './store/BannerPrincipal';
 import PieDePagina from './store/PieDePagina';
 
@@ -208,6 +209,15 @@ export default function PublicStore({
       setUbicacionEnvio(u);
       const referencia = referenciaParaEntrega(u);
       setShippingAddress(prev => (prev.includes('maps?q=') ? prev : (prev.trim() ? `${prev.trim()}\n${referencia}` : referencia)));
+      // Se registra en el servidor la MISMA ubicación ya consentida (no
+      // vuelve a pedir permiso), para que el administrador la vea en el
+      // panel de Ubicaciones. Best-effort: si falla, la compra sigue igual.
+      void registrarUbicacionEnServidor(u, {
+        rol: 'cliente',
+        contexto: 'checkout',
+        nombre: recipientName || null,
+        email: fiscalEmail || null,
+      });
     } finally {
       setBuscandoUbicacion(false);
     }

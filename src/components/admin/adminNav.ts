@@ -29,7 +29,7 @@ import {
   LayoutDashboard, Package, Wrench, ArrowRightLeft, FileSpreadsheet,
   Cpu, Boxes, LayoutGrid,
   MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
-  UserCog, ShieldCheck, Ban,
+  UserCog, ShieldCheck, Ban, MapPin,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -215,6 +215,15 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         icon: Settings,
         descripcion: 'Datos fiscales, logo de la tienda y creación de administradores.',
         buscar: ['configuracion', 'ajustes', 'logo', 'cedula', 'fiscal', 'usuarios', 'administradores'],
+      },
+      {
+        id: 'ubicaciones',
+        label: 'Ubicaciones',
+        short: 'Mapa',
+        icon: MapPin,
+        descripcion: 'Mapa interno con las ubicaciones que clientes y administradores compartieron a propósito.',
+        buscar: ['ubicaciones', 'ubicacion', 'mapa', 'localizacion', 'gps', 'entrega', 'reparto', 'zona', 'provincia', 'cliente', 'administrador'],
+        soloAdminSupremo: true,
       },
       {
         id: 'ingresos',
