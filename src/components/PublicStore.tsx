@@ -26,6 +26,10 @@ import {
 } from '../utils/invoicePdf';
 
 import { User } from '../types';
+import {
+  hayGeolocalizacion, pedirUbicacion, olvidarUbicacion, ubicacionGuardada,
+  referenciaParaEntrega, type UbicacionCliente,
+} from '../utils/ubicacionCliente';
 import BannerPrincipal from './store/BannerPrincipal';
 import PieDePagina from './store/PieDePagina';
 
@@ -182,7 +186,45 @@ export default function PublicStore({
   const [shippingAddress, setShippingAddress] = useState('');
   const [recipientName, setRecipientName] = useState('');
   const [recipientPhone, setRecipientPhone] = useState('');
-  
+
+  // Ubicación OPCIONAL para coordinar la entrega (ver ubicacionCliente.ts).
+  // Se arranca de lo ya guardado en ESTE aparato: quien la compartió una vez
+  // no tiene que volver a darla en la siguiente compra.
+  const [ubicacionEnvio, setUbicacionEnvio] = useState<UbicacionCliente | null>(() => ubicacionGuardada());
+  const [buscandoUbicacion, setBuscandoUbicacion] = useState(false);
+  const [ubicacionNegada, setUbicacionNegada] = useState(false);
+
+  /**
+   * Pide la ubicación DENTRO del clic y, si llega, adjunta el punto exacto
+   * a las notas de entrega — que es lo único que de verdad le sirve a quien
+   * va a entregar. Nunca pisa lo que la persona ya escribió: se agrega al
+   * final, y solo una vez.
+   */
+  const usarMiUbicacion = async () => {
+    setBuscandoUbicacion(true);
+    setUbicacionNegada(false);
+    try {
+      const u = await pedirUbicacion();
+      if (!u) { setUbicacionNegada(true); return; }
+      setUbicacionEnvio(u);
+      const referencia = referenciaParaEntrega(u);
+      setShippingAddress(prev => (prev.includes('maps?q=') ? prev : (prev.trim() ? `${prev.trim()}\n${referencia}` : referencia)));
+    } finally {
+      setBuscandoUbicacion(false);
+    }
+  };
+
+  /** La borra del aparato y quita la línea que se había adjuntado. */
+  const quitarUbicacionEnvio = () => {
+    olvidarUbicacion();
+    setUbicacionEnvio(null);
+    setUbicacionNegada(false);
+    setShippingAddress(prev =>
+      prev.split('\n').filter(l => !l.includes('maps?q=')).join('\n').trim()
+    );
+  };
+
+
   // Payment States
   // HALLAZGO DE AUDITORÍA CORREGIDO (prioridad Alta): el checkout ofrecía
   // "Tarjeta Crédito" con un tokenizador que el propio texto de la pantalla
@@ -938,11 +980,11 @@ export default function PublicStore({
         name: recipientName.trim(),
         email: `${recipientName.replace(/\s+/g, '').toLowerCase()}@correo.cr`,
         phone: recipientPhone.trim(),
-        // Sin provincia: la entrega se coordina manualmente. `province` es
-        // opcional (ver types.ts) precisamente para no tener que forzar un
-        // valor aquí — mandar '' violaba el CHECK de client_profiles y
-        // tumbaba el guardado de la factura aunque la venta ya se hubiera
-        // procesado (FAC-0014).
+        // La provincia SOLO se manda si la persona compartió su ubicación y
+        // se pudo deducir una de las 7 válidas. Si no, se OMITE el campo —
+        // mandar '' viola el CHECK de client_profiles y tumbaba el guardado
+        // de la factura aunque la venta ya se hubiera procesado (FAC-0014).
+        ...(ubicacionEnvio ? { province: ubicacionEnvio.provincia } : {}),
         addressDetail: shippingAddress.trim(),
         cardsTokenized: [],
         balance: 0,
@@ -958,7 +1000,9 @@ export default function PublicStore({
       type: 'Orden',
       recipientName: recipientName.trim(),
       recipientPhone: recipientPhone.trim(),
-      province: '',
+      // Zona aproximada, si la compartió: le ahorra al administrador tener
+      // que deducirla de la nota escrita para cotizar el envío.
+      province: ubicacionEnvio?.provincia || '',
       addressDetail: shippingAddress.trim(),
       status: 'Pendiente',
       incidences: []
@@ -1954,6 +1998,60 @@ export default function PublicStore({
                       className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none resize-none transition"
                     />
                   </div>
+
+                  {/* Ubicación OPCIONAL, al estilo de cualquier tienda en línea:
+                      se ofrece aquí —donde la razón es evidente— y solo se pide
+                      al navegador dentro de este clic. Si la niega, la compra
+                      sigue igual con la referencia escrita. Ver ubicacionCliente.ts. */}
+                  {hayGeolocalizacion() && (
+                    <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-3">
+                      {ubicacionEnvio ? (
+                        <div className="flex items-start gap-2.5">
+                          <MapPin className="w-4 h-4 text-[var(--ok)] shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[12px] font-semibold text-[var(--text-primary)] leading-tight">
+                              Zona detectada: {ubicacionEnvio.provincia}
+                            </p>
+                            <p className="text-[10.5px] text-[var(--text-secondary)] leading-relaxed mt-0.5">
+                              Se adjuntó el punto exacto a tus notas de entrega para coordinar el envío.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={quitarUbicacionEnvio}
+                              className="mt-1.5 text-[10.5px] font-bold text-[var(--text-secondary)] underline underline-offset-2"
+                            >
+                              Quitar mi ubicación
+                            </button>
+                          </div>
+                        </div>
+                      ) : (
+                        <div className="flex items-start gap-2.5">
+                          <MapPin className="w-4 h-4 text-[var(--text-secondary)] shrink-0 mt-0.5" />
+                          <div className="min-w-0 flex-1">
+                            <p className="text-[12px] font-semibold text-[var(--text-primary)] leading-tight">
+                              ¿Compartís tu ubicación? (opcional)
+                            </p>
+                            <p className="text-[10.5px] text-[var(--text-secondary)] leading-relaxed mt-0.5">
+                              Solo la usamos para saber tu zona y coordinar la entrega. Podés comprar sin darla.
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => void usarMiUbicacion()}
+                              disabled={buscandoUbicacion}
+                              className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-[var(--border-color)] px-3 py-1.5 text-[11.5px] font-bold text-[var(--text-primary)] disabled:opacity-60"
+                            >
+                              {buscandoUbicacion ? 'Buscando…' : 'Usar mi ubicación'}
+                            </button>
+                            {ubicacionNegada && (
+                              <p className="mt-1.5 text-[10.5px] text-[var(--text-secondary)]">
+                                No se pudo obtener. No pasa nada: seguí con la referencia escrita arriba.
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
                 </div>
               )}
 
