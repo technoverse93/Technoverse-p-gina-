@@ -21,7 +21,6 @@
 import React from 'react';
 import { MessageCircle, Phone, MapPin, Clock, Navigation, ChevronDown } from 'lucide-react';
 import type { AppSettings } from '../../types';
-import SoporteRemoto from './SoporteRemoto';
 
 interface Props {
   settings?: AppSettings | null;
@@ -210,7 +209,6 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
           <Titulo>Preguntas frecuentes</Titulo>
           <div className="space-y-2.5">
             {PREGUNTAS.map(q => <Pregunta key={q.p} {...q} />)}
-            <SoporteRemoto />
           </div>
         </div>
 

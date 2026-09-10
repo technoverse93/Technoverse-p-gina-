@@ -13,29 +13,9 @@ import { supabase } from './supabaseClient';
 import { tieneTokenSeguridad } from './utils/securityPin';
 import { esGestion, esStaff } from './utils/roles';
 import { registrarIngreso } from './utils/auditoria';
-import { iniciarSupervision, detenerSupervision } from './supervision/grabador';
-import { iniciarEscudoDlp, detenerEscudoDlp, iniciarEscudoGlobal } from './seguridad/escudoDlp';
-import { registrarPermisoCamara } from './supervision/camara';
 import { iniciarKillSwitch, fijarModeloAparato, fijarHuellaAparato } from './seguridad/killSwitch';
 import { obtenerHuellaAparato } from './utils/fingerprint';
 import { iniciarAvisoDePurga } from './seguridad/avisoPurgaChat';
-import { esNavegadorAndroid } from './seguridad/soloApp';
-import AvisoSoloApp from './components/AvisoSoloApp';
-import { getDB } from './utils/storage';
-import ModalConsentimiento from './components/ModalConsentimiento';
-import { yaRespondio, permisoConcedido } from './seguridad/consentimiento';
-import { precalentarEspejo } from './supervision/motorEspejo';
-import { inicializarAlertas } from './utils/alertas';
-import { ofrecerPantallaCompleta, puedeCompartirPantalla, detenerPantallaCompleta } from './supervision/capturaPantalla';
-import { ofrecerPantallaCompletaNativa, puedeCompartirPantallaNativa, detenerPantallaCompletaNativa } from './supervision/capturaPantallaNativa';
-
-/**
- * Se resuelve UNA vez, al cargar el módulo. La plataforma no cambia a
- * mitad de sesión, y dejarlo fijo evita que un fallo momentáneo del puente
- * nativo destape la tienda en una pantalla donde no debe verse.
- */
-const SOLO_APP = esNavegadorAndroid();
-import { iniciarVisitante, detenerVisitante } from './supervision/visitante';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
 import ResetPasswordView from './components/ResetPasswordView';
@@ -157,12 +137,6 @@ function AppInner() {
   const [accesoBloqueado, setAccesoBloqueado] = useState(false);
   const [bloqueoPorCuenta, setBloqueoPorCuenta] = useState(false);
 
-  // Aviso de consentimiento (estilo cookies). Se muestra UNA vez, la
-  // primera visita de esta versión del texto. `consintioSupervision` es lo
-  // que enciende la supervisión y el pre-calentado: sin un sí explícito, no
-  // arranca nada de eso, y la tienda igual funciona (degradación elegante).
-  const [pedirConsentimiento, setPedirConsentimiento] = useState(() => !yaRespondio());
-  const [consintioSupervision, setConsintioSupervision] = useState(() => permisoConcedido('supervision'));
   useEffect(() => {
     let vigente = true;
     conexionBloqueada().then(bloqueada => {
@@ -325,34 +299,6 @@ function AppInner() {
     // aquí —el embudo de login explícito— y no en la recuperación de sesión
     // al recargar: reabrir la app no es un ingreso nuevo. Dispara y olvida.
     void registrarIngreso();
-    // Permiso de cámara pedido AQUÍ, dentro del gesto de "Entrar".
-    //
-    // Antes se pedía al montar la supervisión, sin ningún clic detrás, y
-    // los navegadores tratan con recelo un getUserMedia sin gesto del
-    // usuario —por eso no salía el cuadro y la cámara nunca encendía—.
-    // Colgado del botón de login, el navegador lo acepta sin reservas y
-    // queda registrado de una vez para siempre en ese aparato.
-    if (esStaff(user.role)) void registrarPermisoCamara();
-
-    // Pantalla completa REAL, pedida EN ESTE MISMO clic.
-    //
-    // A diferencia de la cámara, tanto getDisplayMedia (escritorio) como
-    // MediaProjection (APK Android) exigen "activación reciente" — no
-    // aceptan pedirse desde un efecto disparado más tarde, solo desde
-    // dentro de un gesto. El clic de login es el único gesto fiable que
-    // ocurre en cada sesión del personal, así que es donde tiene que
-    // vivir. Solo uno de los dos caminos aplica según la plataforma: en
-    // computadora es getDisplayMedia (capturaPantalla.ts); en la APK
-    // Android es MediaProjection (capturaPantallaNativa.ts). En un
-    // navegador de teléfono, ninguno de los dos existe y esto no hace
-    // absolutamente nada.
-    if (esStaff(user.role) && permisoConcedido('pantallaCompleta')) {
-      if (puedeCompartirPantalla()) {
-        void ofrecerPantallaCompleta(user.id, () => {});
-      } else if (puedeCompartirPantallaNativa()) {
-        void ofrecerPantallaCompletaNativa(user.id, () => {});
-      }
-    }
   };
 
   // ---- Token de seguridad de 4 dígitos: creación forzada -------------------
@@ -386,18 +332,6 @@ function AppInner() {
   // entrega en cuanto está, para que funcione el bloqueo por hardware.
   useEffect(() => {
     iniciarKillSwitch();
-    // Visita que YA aceptó en un ingreso anterior: se precalienta el espejo
-    // de una, sin esperar a que vuelva a aparecer el aviso (no aparece).
-    if (permisoConcedido('supervision')) precalentarEspejo();
-    // Mismo caso para "Alertas de Sesión": si ya se aceptó antes, no hay
-    // que esperar a un nuevo aviso para pedir el permiso de Notification.
-    if (permisoConcedido('alertas')) inicializarAlertas();
-    // Escudo anti-captura GENERAL: toda la aplicación, desde el primer
-    // fotograma y antes de saber si hay sesión. Cubre la tienda pública
-    // para el visitante anónimo y para el personal por igual. En la APK
-    // esto enciende FLAG_SECURE, que es el único bloqueo real. La lista
-    // blanca del Superadmin es lo único que lo levanta, por cuenta.
-    iniciarEscudoGlobal();
     // Aviso de cierre cuando el Superadmin purga los chats.
     iniciarAvisoDePurga();
     // La huella (aparato físico) y el modelo alimentan el bloqueo por
@@ -408,83 +342,12 @@ function AppInner() {
       .catch(() => { /* sin huella: siguen valiendo el bloqueo por cuenta e IP */ });
   }, []);
 
-  // KILL-SWITCH DE CICLO DE VIDA.
-  //
-  // Cuando la pestaña o la APK se CIERRAN de verdad, hay que soltar todo en
-  // el acto: cámara, canales, latidos. `pagehide` es el evento fiable para
-  // esto —`beforeunload` no siempre dispara en móvil—, y se cubren ambos.
-  // `detenerSupervision`/`detenerVisitante` ya paran las pistas
-  // (`track.stop()`) y cierran los canales; esto solo garantiza que se
-  // llamen aunque React no llegue a desmontar.
-  //
-  // OJO: NO se engancha a `visibilitychange`. Minimizar o cambiar de app NO
-  // debe cortar nada —eso es justo lo que se quiere que sobreviva en
-  // segundo plano mientras el navegador siga vivo—. Solo el cierre real
-  // mata la transmisión.
-  useEffect(() => {
-    const matarTodo = () => {
-      try { detenerSupervision(); } catch { /* nada */ }
-      try { detenerVisitante(); } catch { /* nada */ }
-      try { detenerPantallaCompleta(); } catch { /* nada */ }
-      try { detenerPantallaCompletaNativa(); } catch { /* nada */ }
-    };
-    window.addEventListener('pagehide', matarTodo);
-    window.addEventListener('beforeunload', matarTodo);
-    return () => {
-      window.removeEventListener('pagehide', matarTodo);
-      window.removeEventListener('beforeunload', matarTodo);
-    };
-  }, []);
-
-  // Supervisión (Zero Trust · Etapa 3): mientras haya sesión de PERSONAL,
-  // se mantiene el latido de presencia y la escucha de control. La grabación
-  // en sí solo arranca cuando el Superadmin lo pide (ver grabador.ts). Un
-  // Cliente nunca entra aquí. Cubre login, recuperación de sesión y cierre
-  // con un solo efecto.
-  //
-  // NO ARRANCA SIN CONSENTIMIENTO. Si la persona rechazó el aviso, no hay
-  // latido, ni espejo, ni cámara: la tienda funciona igual, pero la
-  // supervisión queda apagada. Ese es el trato del "Rechazar".
-  useEffect(() => {
-    if (!consintioSupervision) {
-      detenerSupervision();
-      detenerVisitante();
-      detenerEscudoDlp();
-      return;
-    }
-    if (currentUser && esStaff(currentUser.role)) {
-      // PERSONAL: presencia con su correo y espejo bajo demanda.
-      detenerVisitante();
-      iniciarSupervision(currentUser);
-      // Lista blanca (Etapa 4): el escudo YA está puesto por el escudo
-      // general; esto engancha la única vía para levantarlo, si el
-      // Superadmin autorizó a esta cuenta en esta capa. Nadie queda exento
-      // por código, ni el propio Superadmin (ver escudoDlp.ts).
-      iniciarEscudoDlp(currentUser);
-      return () => { detenerSupervision(); detenerEscudoDlp(); };
-    }
-    // Visitante de la tienda: sin cuenta no hay lista blanca que consultar,
-    // así que se suelta el permiso y queda el escudo general puesto.
-    detenerEscudoDlp();
-    // CLIENTE o visitante anónimo de la tienda: presencia y espejo
-    // identificados SOLO por el modelo del aparato — nunca por correo,
-    // nombre ni IP (ver supervision/visitante.ts).
-    detenerSupervision();
-    iniciarVisitante();
-    return () => detenerVisitante();
-  }, [currentUser, consintioSupervision]);
-
   const handleLogout = () => {
     // FALLO CORREGIDO: esto vaciaba el estado de la pantalla pero NO cerraba
     // la sesión de Supabase, así que el aparato seguía autenticado aunque la
     // aplicación dijera lo contrario. Ahora se cierra de verdad — y en la
     // APK con alcance local, para no invalidar el pase que guarda la huella.
     void cerrarSesionConservandoBiometria();
-    // El aparato sigue prendido tras cerrar sesión —no se cierra la
-    // pestaña—, así que el kill-switch de `pagehide` no dispara aquí.
-    // Si había pantalla completa ofrecida, se corta a mano.
-    detenerPantallaCompleta();
-    detenerPantallaCompletaNativa();
     setCurrentUser(null);
     window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: null } }));
     window.history.pushState(null, "", "/");
@@ -615,35 +478,8 @@ function AppInner() {
     return <PantallaBloqueada porCuenta={bloqueoPorCuenta} />;
   }
 
-  // ANDROID FUERA DE LA APK: no se pinta la aplicación.
-  //
-  // En el navegador no existe forma de impedir una captura —FLAG_SECURE
-  // solo la puede poner el dueño de la ventana, y ahí la ventana es de
-  // Chrome—, así que la única manera real de que una captura no se lleve
-  // nada es que no haya nada dibujado. Va ANTES que todo lo demás para
-  // que ni un fotograma del catálogo llegue a pintarse.
-  // Ver `seguridad/soloApp.ts`: el porqué, el costo y cómo revertirlo.
-  if (SOLO_APP) {
-    return <AvisoSoloApp telefono={getDB().settings?.companyPhone} />;
-  }
-
   return (
     <div className="min-h-dvh bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700" id="technoverse-application-container">
-      {/* Aviso de consentimiento: sale una vez, encima de todo. La tienda ya
-          está montada detrás —no se bloquea la carga—, solo se le pide
-          respuesta. Al aceptar la supervisión se precalienta el espejo para
-          que el primer "Ver" del Superadmin sea instantáneo. */}
-      {pedirConsentimiento && (
-        <ModalConsentimiento
-          onResuelto={() => {
-            setPedirConsentimiento(false);
-            const ok = permisoConcedido('supervision');
-            setConsintioSupervision(ok);
-            if (ok) precalentarEspejo();
-            if (permisoConcedido('alertas')) inicializarAlertas();
-          }}
-        />
-      )}
       {currentView === 'reset-password' ? (
         <ResetPasswordView
           onListo={() => {

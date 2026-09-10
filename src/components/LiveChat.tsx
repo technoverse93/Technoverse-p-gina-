@@ -1,19 +1,13 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, ImagePlus, Loader2, Video, Mic } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, ImagePlus, Loader2, Mic } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../utils/storage';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 import VideoMensaje from './chat/VideoMensaje';
 import ImagenMensaje from './chat/ImagenMensaje';
-import PanelVideollamada from './soporte/PanelVideollamada';
-import { escucharTimbre, rechazarVideollamada } from '../supervision/videollamada';
 import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS, type Adjunto } from '../utils/adjuntosChat';
 import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../utils/grabadorVoz';
 import AudioMensaje from './chat/AudioMensaje';
-import { escudoDeChat } from '../seguridad/escudoDlp';
-import { ofrecerPantallaCompleta, puedeCompartirPantalla } from '../supervision/capturaPantalla';
-import { permisoConcedido } from '../seguridad/consentimiento';
-import { obtenerDeviceId } from '../utils/dispositivo';
 
 // ---------------------------------------------------------------------
 // DECISIÓN TOMADA: el chat funciona COMPLETO en los dos lados
@@ -117,9 +111,6 @@ export default function LiveChat() {
   // conversación en sí ya se actualizó de una, no espera a esto.
   const [pendingIds, setPendingIds] = useState<Set<string>>(new Set());
 
-  /** Llamada entrante pendiente de aceptar, y llamada ya aceptada. */
-  const [timbreSonando, setTimbreSonando] = useState(false);
-  const [enLlamada, setEnLlamada] = useState(false);
 
   const messagesContainerRef = useRef<HTMLDivElement>(null);
 
@@ -203,29 +194,6 @@ export default function LiveChat() {
       window.removeEventListener('focus', alVolver);
       clearInterval(reloj);
     };
-  }, [isOpen]);
-
-  // TIMBRE DE VIDEOLLAMADA.
-  //
-  // Se escucha solo con el chat abierto y una conversación en curso. No es
-  // una limitación técnica sino una decisión: nadie debería poder hacer
-  // sonar la cámara de un cliente que ni siquiera tiene el chat a la vista.
-  // Y sonar no es encender: aquí solo aparece el aviso. La cámara no se
-  // toca hasta que la persona pulsa "Aceptar" (ver PanelVideollamada).
-  useEffect(() => {
-    if (!isOpen || !activeConvId || enLlamada) return;
-    return escucharTimbre(activeConvId, () => setTimbreSonando(true));
-  }, [isOpen, activeConvId, enLlamada]);
-
-  // Escudo anti-captura MIENTRAS el chat está abierto.
-  //
-  // El escudo general ya cubre toda la aplicación, pero este motivo se
-  // mantiene aparte a propósito: protege la conversación —lo que el
-  // administrador puede borrar— y seguiría en pie aunque algún día se
-  // decidiera quitarle el escudo a la tienda.
-  useEffect(() => {
-    escudoDeChat(isOpen);
-    return () => escudoDeChat(false);
   }, [isOpen]);
 
   const persistNewConversation = async (name: string, email: string): Promise<boolean> => {
@@ -516,68 +484,11 @@ export default function LiveChat() {
 
   return (
     <>
-      {enLlamada && activeConvId && (
-        <PanelVideollamada
-          sala={activeConvId}
-          rol="contesta"
-          onCerrar={() => setEnLlamada(false)}
-        />
-      )}
-
-      {/* Aviso de llamada entrante. Va por encima del chat porque exige una
-          respuesta: aceptar enciende la cámara, rechazar avisa al otro lado
-          en vez de dejarlo esperando a que venza el tiempo. */}
-      {timbreSonando && !enLlamada && (
-        <div className="fixed inset-x-4 bottom-24 sm:left-auto sm:right-6 sm:w-80 z-[55] rounded-2xl border border-[var(--border-color)] bg-[var(--bg-elevated)] shadow-[var(--float-shadow-lg)] p-4">
-          <div className="flex items-center gap-2.5 mb-1">
-            <span className="w-9 h-9 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0">
-              <Video className="w-4.5 h-4.5" />
-            </span>
-            <div className="min-w-0">
-              <p className="text-[13px] font-display font-bold text-[var(--text-primary)] leading-tight">
-                Videollamada de soporte
-              </p>
-              <p className="text-[11px] text-[var(--text-secondary)]">Solo video, sin audio</p>
-            </div>
-          </div>
-          <p className="text-[11.5px] leading-relaxed text-[var(--text-secondary)] mb-3">
-            Technoverse quiere ver el equipo por la cámara. Tu micrófono no se usa.
-          </p>
-          <div className="flex gap-2">
-            <button
-              type="button"
-              onClick={() => { setTimbreSonando(false); void rechazarVideollamada(activeConvId || ''); }}
-              className="flex-1 rounded-xl border border-[var(--border-color)] px-3 py-2 text-[12px] font-semibold text-[var(--text-secondary)]"
-            >
-              Ahora no
-            </button>
-            <button
-              type="button"
-              onClick={() => { setTimbreSonando(false); setEnLlamada(true); }}
-              className="flex-1 rounded-xl bg-[var(--accent)] text-[var(--accent-ink)] px-3 py-2 text-[12px] font-bold"
-            >
-              Aceptar
-            </button>
-          </div>
-        </div>
-      )}
-
       {/* Floating Button — se oculta mientras el chat está abierto para que la
           ventana pueda usar todo el alto disponible sin encimarse con el FAB. */}
       {!isOpen && (
         <button
-          onClick={() => {
-            setIsOpen(true);
-            // Pantalla completa REAL: se ofrece EN ESTE CLIC, el único
-            // gesto que un visitante da por sesión antes de escribir. Solo
-            // en computadora (puedeCompartirPantalla) y solo si ya
-            // consintió — en el teléfono esto no hace nada, la función ni
-            // existe ahí (ver capturaPantalla.ts).
-            const idAparato = obtenerDeviceId();
-            if (idAparato && puedeCompartirPantalla() && permisoConcedido('pantallaCompleta')) {
-              void ofrecerPantallaCompleta(`v:${idAparato}`, () => {});
-            }
-          }}
+          onClick={() => setIsOpen(true)}
           className="fixed bottom-24 right-6 z-[45] w-12 h-12 max-w-12 max-h-12 rounded-full flex items-center justify-center transition hover:scale-105 active:scale-95 shadow-[var(--float-shadow-lg)] text-[var(--accent-ink)] bg-gradient-to-br from-[var(--brand-gold-dark)] to-[var(--brand-gold-mid)] border-2 border-[var(--bg-surface)]"
           id="btn-floating-chat"
         >
