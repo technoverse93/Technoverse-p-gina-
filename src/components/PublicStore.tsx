@@ -1971,7 +1971,7 @@ export default function PublicStore({
                       value={recipientName}
                       onChange={(e) => setRecipientName(e.target.value)}
                       placeholder="Ej. Juan Solís Quesada"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
                     />
                   </div>
 
@@ -1983,7 +1983,7 @@ export default function PublicStore({
                       value={recipientPhone}
                       onChange={(e) => setRecipientPhone(e.target.value)}
                       placeholder="Ej. +506 8800 1122"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
                     />
                   </div>
 
@@ -1995,7 +1995,7 @@ export default function PublicStore({
                       value={shippingAddress}
                       onChange={(e) => setShippingAddress(e.target.value)}
                       placeholder="Ej. Cartago centro, de la iglesia católica 200m oeste y 50m norte, portón verde."
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none resize-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none resize-none transition"
                     />
                   </div>
 
@@ -2083,7 +2083,7 @@ export default function PublicStore({
                         value={sinpePhone}
                         onChange={(e) => setSinpePhone(e.target.value)}
                         placeholder="Ej. 88123456"
-                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
+                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
                       />
                     </div>
                   </div>
@@ -2146,7 +2146,7 @@ export default function PublicStore({
                           value={fiscalIdValue}
                           onChange={(e) => setFiscalIdValue(e.target.value.replace(/\D/g, ''))}
                           placeholder="Solo números"
-                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
+                          className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
                         />
                       </div>
                     </div>
@@ -2162,7 +2162,7 @@ export default function PublicStore({
                         value={fiscalEmail}
                         onChange={(e) => setFiscalEmail(e.target.value)}
                         placeholder="correo@ejemplo.com"
-                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
+                        className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none"
                       />
                     </div>
 
@@ -2349,22 +2349,22 @@ export default function PublicStore({
       {/* Login / Register Unified Modal */}
       {isLoginModalOpen && (
         <div className="fixed inset-0 z-[100] flex items-start sm:items-center justify-center p-4 overflow-y-auto">
-          <div className="absolute inset-0 bg-slate-900/70 backdrop-blur-sm" onClick={() => setIsLoginModalOpen(false)} />
+          <div className="absolute inset-0 bg-black/60" onClick={() => setIsLoginModalOpen(false)} />
 
           {/* max-h + overflow-y-auto: en móvil, al abrir el teclado el formulario
               (sobre todo el de registro, que es alto) se desplaza dentro del modal
               sin empujar ni romper la barra inferior. my-auto lo mantiene centrado
               cuando cabe, y el scroll interno lo salva cuando no. */}
-          <div className="relative max-w-md w-full my-auto max-h-[92dvh] overflow-y-auto glass-panel-strong rounded-3xl p-6 sm:p-8 shadow-sm space-y-6 text-[var(--text-primary)] animate-in zoom-in-95 duration-200" id="login-register-modal">
+          <div className="relative max-w-md w-full my-auto max-h-[92dvh] overflow-y-auto rounded-3xl border border-[var(--border-color)] bg-[var(--bg-elevated)] p-6 sm:p-8 shadow-[var(--float-shadow-lg)] space-y-6 text-[var(--text-primary)] animate-in zoom-in-95 duration-200" id="login-register-modal">
             <div className="text-center space-y-2">
-              <div className="w-12 h-12 bg-gradient-to-tr from-[#3B82F6] to-blue-600 rounded-2xl flex items-center justify-center border border-white/40 shadow-sm mx-auto">
-                <span className="text-white text-lg">🔑</span>
+              <div className="w-12 h-12 rounded-2xl bg-[rgba(var(--accent-rgb),0.12)] text-[var(--accent)] flex items-center justify-center mx-auto">
+                <UserIcon className="w-5 h-5" />
               </div>
               <h2 className="text-lg font-extrabold tracking-tight font-display text-[var(--text-primary)]">
-                {isRegisterMode ? 'Crear Cuenta' : 'Iniciar Sesión'}
+                {isRegisterMode ? 'Crear cuenta' : 'Iniciar sesión'}
               </h2>
-              <p className="text-[10px] text-[var(--text-primary)] uppercase font-bold tracking-wider">
-                Technoverse - Portal Seguro de Cliente
+              <p className="text-[11px] text-[var(--text-secondary)]">
+                Technoverse Costa Rica
               </p>
             </div>
 
@@ -2378,7 +2378,7 @@ export default function PublicStore({
                     value={regName}
                     onChange={(e) => setRegName(e.target.value)}
                     placeholder="Ej. María Solano Brenes"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-2">
@@ -2390,7 +2390,7 @@ export default function PublicStore({
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
                       placeholder="maria@correo.cr"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition"
                     />
                   </div>
                   <div>
@@ -2401,7 +2401,7 @@ export default function PublicStore({
                       value={regPhone}
                       onChange={(e) => setRegPhone(e.target.value)}
                       placeholder="88884444"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition"
                     />
                   </div>
                 </div>
@@ -2421,7 +2421,7 @@ export default function PublicStore({
                     value={regAddress}
                     onChange={(e) => setRegAddress(e.target.value)}
                     placeholder="Calle, avenidas, señas particulares"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
                   />
                 </div>
                 <div>
@@ -2432,7 +2432,7 @@ export default function PublicStore({
                     value={regPassword}
                     onChange={(e) => setRegPassword(e.target.value)}
                     placeholder="••••••••••••"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none transition"
                   />
                 </div>
 
@@ -2453,7 +2453,7 @@ export default function PublicStore({
                     value={loginEmail}
                     onChange={(e) => setLoginEmail(e.target.value)}
                     placeholder="ejemplo@correo.com"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none transition font-mono"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none transition font-mono"
                   />
                 </div>
                 <div>
@@ -2464,7 +2464,7 @@ export default function PublicStore({
                     value={loginPassword}
                     onChange={(e) => setLoginPassword(e.target.value)}
                     placeholder="••••••••••••"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none transition"
                   />
                 </div>
 
@@ -2493,7 +2493,7 @@ export default function PublicStore({
             <div className="text-center pt-3 border-t border-[var(--border-color)]">
               <button
                 onClick={() => setIsRegisterMode(!isRegisterMode)}
-                className="text-sm text-blue-600 hover:text-blue-700 font-bold cursor-pointer"
+                className="text-sm text-[var(--accent)] font-bold cursor-pointer"
               >
                 {isRegisterMode ? '¿Ya tienes cuenta? Inicia Sesión' : '¿No tienes cuenta? Regístrate Aquí'}
               </button>
