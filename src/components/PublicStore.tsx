@@ -32,6 +32,8 @@ import {
 } from '../utils/ubicacionCliente';
 import { registrarUbicacionEnServidor } from '../utils/ubicaciones';
 import { TextoEditable } from '../cms/TextoEditable';
+import { ColorEditable } from '../cms/ColorEditable';
+import { IconoEditable } from '../cms/IconoEditable';
 import BannerPrincipal from './store/BannerPrincipal';
 import { BannerDivisor, TarjetasBannerGrid, PopupPromocional } from './store/BannersTienda';
 import PieDePagina from './store/PieDePagina';
@@ -1719,10 +1721,15 @@ export default function PublicStore({
 
             {/* Products grid */}
             <div>
-              <h3 className="font-extrabold text-base text-[var(--text-primary)] mb-6">
+              <h3 className="font-extrabold text-base text-[var(--text-primary)] mb-6 flex items-center gap-2">
                 {selectedCategory
                   ? `Explorando: ${selectedCategory}`
-                  : <TextoEditable clave="tienda.titulo_catalogo">Nuestros Productos Disponibles</TextoEditable>}
+                  : <>
+                      <IconoEditable clave="tienda.titulo_icono" defecto="Sparkles" className="w-5 h-5 text-[var(--accent)]" />
+                      <ColorEditable clave="tienda.titulo_color" defecto="#0E6B4F">
+                        <TextoEditable clave="tienda.titulo_catalogo">Nuestros Productos Disponibles</TextoEditable>
+                      </ColorEditable>
+                    </>}
               </h3>
 
               {filteredProducts.length === 0 ? (
