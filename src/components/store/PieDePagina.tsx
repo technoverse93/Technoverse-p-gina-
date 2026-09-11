@@ -177,13 +177,14 @@ function CompartirUbicacionFooter() {
             style={{ color: '#A7AFBD' }}
           >
             <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#6EE7B7' }} aria-hidden="true" />
-            Compartir mi ubicación para entregas
+            ¿Para qué usamos tu ubicación?
           </summary>
           <div className="mt-2 pl-5">
             <p className="leading-relaxed mb-2" style={{ color: '#8C97A8' }}>
-              Al tocar el botón, tu navegador te pedirá permiso de ubicación. Si aceptás, la
-              usamos solo para coordinar y cotizar tu entrega. Podés negarla: la compra sigue
-              igual.
+              Al entrar, tu navegador te pide permiso de ubicación. La usamos <strong style={{ color: '#A7AFBD' }}>solo</strong>{' '}
+              para coordinar y cotizar tu entrega; se guarda por aparato y no alimenta ninguna
+              otra cosa. Es opcional: si la rechazás, entrás y comprás igual. Si querés
+              habilitarla o actualizarla ahora, podés hacerlo aquí:
             </p>
             {estado === 'ok' ? (
               <div className="flex flex-wrap items-center gap-3">

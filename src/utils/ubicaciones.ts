@@ -77,6 +77,28 @@ export async function compartirUbicacion(opts: OpcionesRegistro): Promise<Ubicac
   return u;
 }
 
+// Se pregunta UNA sola vez por aparato al entrar. El navegador recuerda su
+// propia decisión igual, pero esta bandera evita volver a disparar el
+// pedido en cada recarga.
+const CLAVE_PEDIDA_INICIO = 'technoverse_ubicacion_inicio_v1';
+
+/**
+ * Al entrar a la tienda por primera vez, ofrece el permiso NATIVO de
+ * ubicación (el navegador/APK muestra aceptar o rechazar). Si acepta, se
+ * comparte con nosotros; si rechaza, no pasa nada y sigue comprando igual.
+ * No requiere un clic: la geolocalización sí puede pedirse al cargar.
+ */
+export async function pedirUbicacionAlEntrar(): Promise<void> {
+  try {
+    if (localStorage.getItem(CLAVE_PEDIDA_INICIO)) return;
+    localStorage.setItem(CLAVE_PEDIDA_INICIO, '1');
+  } catch {
+    /* incógnito: no se puede recordar, se pide igual esta vez */
+  }
+  const u = await pedirUbicacion();
+  if (u) await registrarUbicacionEnServidor(u, { rol: 'cliente', contexto: 'inicio' });
+}
+
 function desdeFila(r: any): UbicacionRegistro {
   return {
     id: String(r.id),
