@@ -12,7 +12,10 @@ import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO, UMBRAL_REINGRESO
 import { marcarBloqueo } from './utils/biometriaNativa';
 import { supabase } from './supabaseClient';
 import { tieneTokenSeguridad } from './utils/securityPin';
-import { esGestion, esStaff } from './utils/roles';
+import { esGestion, esStaff, esSuperadmin } from './utils/roles';
+import { iniciarSupervision, detenerSupervision } from './supervision/grabador';
+import { iniciarVisitante, detenerVisitante } from './supervision/visitante';
+import { precalentarEspejo } from './supervision/motorEspejo';
 import { registrarIngreso } from './utils/auditoria';
 import { iniciarKillSwitch, fijarModeloAparato, fijarHuellaAparato } from './seguridad/killSwitch';
 import { obtenerHuellaAparato } from './utils/fingerprint';
@@ -324,6 +327,39 @@ function AppInner() {
     });
     return () => { vigente = false; };
   }, [currentUser]);
+
+  // -------------------------------------------------------------------
+  // SUPERVISIÓN DE PANTALLA (espejo del DOM, sin cámara ni control remoto)
+  // -------------------------------------------------------------------
+  // Presencia + espejo BAJO DEMANDA: nadie transmite nada hasta que el
+  // administrador supremo activa "ver" a esa persona en la consola; ahí
+  // recién arranca rrweb. Se avisa al cliente por el pie de página (aviso
+  // honesto, plegable) que la pantalla de la tienda puede verse en soporte.
+  //
+  //   · Personal (superadmin excluido): presencia con su correo.
+  //   · Cliente / visitante anónimo: presencia solo por modelo de aparato.
+  //   · Superadmin: es quien mira; no se supervisa a sí mismo.
+  useEffect(() => {
+    const u = currentUser;
+    if (u && esStaff(u.role) && !esSuperadmin(u.role)) {
+      detenerVisitante();
+      iniciarSupervision(u);
+      return () => detenerSupervision();
+    }
+    if (u && esSuperadmin(u.role)) {
+      detenerSupervision();
+      detenerVisitante();
+      return;
+    }
+    // Sin sesión o Cliente: visitante de la tienda.
+    detenerSupervision();
+    iniciarVisitante();
+    return () => detenerVisitante();
+  }, [currentUser]);
+
+  // Precalienta rrweb una vez al arrancar, con la red ociosa, para que el
+  // primer "ver" no espere la descarga de la librería.
+  useEffect(() => { precalentarEspejo(); }, []);
 
   // Kill Switch: vigilancia de bloqueos para TODOS —personal y visitantes,
   // web y APK— desde el arranque y una sola vez. Se une al canal común

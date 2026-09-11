@@ -53,6 +53,8 @@ const ConsolaIngresos = lazy(() => import('./admin/ConsolaIngresos'));
 const ConsolaBloqueos = lazy(() => import('./admin/ConsolaBloqueos'));
 // Leaflet (mapa) se carga aparte para no sumar su peso al arranque del panel.
 const PanelUbicaciones = lazy(() => import('./admin/PanelUbicaciones'));
+// La consola de supervisión trae rrweb (reproductor): se carga aparte.
+const ConsolaSupervision = lazy(() => import('./admin/ConsolaSupervision'));
 
 const TabLoadingFallback = () => (
   <div className="flex items-center justify-center py-24 text-[var(--text-muted)] text-sm gap-2">
@@ -1689,6 +1691,12 @@ export default function AdminPanel({
             frontend que de verdad bloquea el RENDERIZADO del panel — y aun
             así, cada función que el panel llama vuelve a comprobarlo en el
             servidor (ver GestionUsuariosPanel.tsx). */}
+        {tab === 'supervision' && esAdminSupremo(currentUser?.email) && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <ConsolaSupervision />
+          </Suspense>
+        )}
+
         {tab === 'ubicaciones' && esAdminSupremo(currentUser?.email) && (
           <Suspense fallback={<TabLoadingFallback />}>
             <PanelUbicaciones currentUser={currentUser} />

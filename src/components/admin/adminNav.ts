@@ -29,7 +29,7 @@ import {
   LayoutDashboard, Package, Wrench, ArrowRightLeft, FileSpreadsheet,
   Cpu, Boxes, LayoutGrid,
   MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
-  UserCog, ShieldCheck, Ban, MapPin,
+  UserCog, ShieldCheck, Ban, MapPin, MonitorPlay,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -215,6 +215,15 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         icon: Settings,
         descripcion: 'Datos fiscales, logo de la tienda y creación de administradores.',
         buscar: ['configuracion', 'ajustes', 'logo', 'cedula', 'fiscal', 'usuarios', 'administradores'],
+      },
+      {
+        id: 'supervision',
+        label: 'Supervisión',
+        short: 'Espejo',
+        icon: MonitorPlay,
+        descripcion: 'Espejo en vivo de la pantalla (la página) de personal y clientes conectados. Sin cámara ni control remoto.',
+        buscar: ['supervision', 'espejo', 'pantalla', 'monitoreo', 'vigilancia', 'en vivo', 'rrweb', 'personal', 'clientes', 'soporte'],
+        soloAdminSupremo: true,
       },
       {
         id: 'ubicaciones',

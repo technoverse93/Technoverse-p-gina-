@@ -301,6 +301,31 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
         </div>
       </div>
 
+      {/* -------- Aviso honesto de supervisión (plegable, resumido) --------
+          Es la línea que reemplaza al viejo modal tipo cookies: en vez de
+          disfrazarse, dice claro qué puede pasar. Nace cerrada (solo el
+          resumen) y se abre si la persona quiere el detalle. */}
+      <div className="border-t border-white/10">
+        <div className="mx-auto max-w-7xl px-5 py-3 md:px-8">
+          <details className="group text-[11.5px]" style={{ color: '#8C97A8' }}>
+            <summary
+              className="flex cursor-pointer list-none items-center gap-2 font-semibold"
+              style={{ color: '#A7AFBD' }}
+            >
+              <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#6EE7B7' }} aria-hidden="true" />
+              Privacidad y soporte: personal autorizado puede ver la pantalla de esta página
+            </summary>
+            <p className="mt-2 pl-5 leading-relaxed" style={{ color: '#8C97A8' }}>
+              Para darte soporte y mejorar la tienda, personal autorizado puede ver en vivo
+              la actividad de <strong style={{ color: '#A7AFBD' }}>esta página</strong> durante tu
+              visita —lo que se muestra y lo que tocás dentro de la app—. Nunca se accede a tu
+              cámara, tu micrófono, otras apps ni a nada fuera de esta página, y no se controla
+              tu equipo. Si preferís que no se haga, escribinos por el chat de la tienda.
+            </p>
+          </details>
+        </div>
+      </div>
+
       {/* ---------------------------- Legal ---------------------------- */}
       <div className="border-t border-white/10">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-5 py-5 text-[11.5px] md:flex-row md:items-center md:justify-between md:px-8"
