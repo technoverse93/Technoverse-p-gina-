@@ -62,14 +62,42 @@ export async function guardarContenido(
  * pestaña u otro admin, Realtime, que recarga la caché). Devuelve la
  * función para dejar de escuchar.
  */
+// UN SOLO canal de Realtime para TODO el contenido, compartido por todos
+// los componentes editables.
+//
+// FALLO CORREGIDO (pantalla en blanco): antes cada componente abría su
+// propio canal `contenido-${Date.now()}`. Cuando dos montaban en el mismo
+// milisegundo el nombre colisionaba; supabase-js devuelve el MISMO canal
+// para un nombre repetido, y llamar `.on()` sobre uno ya suscrito lanza
+// "cannot add postgres_changes after subscribe()". Esa excepción tumbaba
+// el render entero. Con un único canal de nombre fijo eso no puede pasar.
+let canalRealtime: any = null;
+let suscriptores = 0;
+
+function abrirCanalRealtime(): void {
+  if (canalRealtime) return;
+  try {
+    canalRealtime = supabase
+      .channel('contenido_sitio_global')
+      .on('postgres_changes', { event: '*', schema: 'public', table: 'contenido_sitio' }, () => { void cargarContenido(); })
+      .subscribe();
+  } catch {
+    // Si el canal no se pudo abrir, el contenido igual funciona: solo se
+    // pierde el reflejo en vivo. NUNCA debe tumbar la app.
+    canalRealtime = null;
+  }
+}
+
 export function suscribirContenido(alCambiar: () => void): () => void {
   window.addEventListener(EVENTO, alCambiar);
-  const canal = supabase
-    .channel(`contenido-${Date.now()}`)
-    .on('postgres_changes', { event: '*', schema: 'public', table: 'contenido_sitio' }, () => { void cargarContenido(); })
-    .subscribe();
+  suscriptores++;
+  abrirCanalRealtime();
   return () => {
     window.removeEventListener(EVENTO, alCambiar);
-    try { supabase.removeChannel(canal); } catch { /* nada */ }
+    suscriptores = Math.max(0, suscriptores - 1);
+    if (suscriptores === 0 && canalRealtime) {
+      try { supabase.removeChannel(canalRealtime); } catch { /* nada */ }
+      canalRealtime = null;
+    }
   };
 }
