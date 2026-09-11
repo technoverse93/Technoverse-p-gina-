@@ -30,7 +30,7 @@ import {
   hayGeolocalizacion, pedirUbicacion, olvidarUbicacion, ubicacionGuardada,
   referenciaParaEntrega, type UbicacionCliente,
 } from '../utils/ubicacionCliente';
-import { registrarUbicacionEnServidor } from '../utils/ubicaciones';
+import { registrarUbicacionEnServidor, pedirUbicacionAlEntrar } from '../utils/ubicaciones';
 import { TextoEditable } from '../cms/TextoEditable';
 import { ColorEditable } from '../cms/ColorEditable';
 import { IconoEditable } from '../cms/IconoEditable';
@@ -339,6 +339,15 @@ export default function PublicStore({
       return () => clearTimeout(timer);
     }
   }, [cart]);
+
+  // Al entrar a la tienda por primera vez se ofrece el permiso nativo de
+  // ubicación (aceptar/rechazar). Solo a quien compra —cliente o visitante
+  // anónimo—, no al personal. Si rechaza, no comparte nada y compra igual.
+  useEffect(() => {
+    if (!currentUser || currentUser.role === 'Cliente') {
+      void pedirUbicacionAlEntrar();
+    }
+  }, [currentUser]);
 
   useEffect(() => {
     if (autoOpenLogin) {
