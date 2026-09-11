@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
 import { Product, InventoryMovement, MarketingRequest } from '../types';
 import { getDB, getDBVersion, saveDB, addAuditLog, compressImage } from '../utils/storage';
+import { generarBannerDeProducto } from '../utils/bannerAuto';
 import { supabase } from '../supabaseClient';
 import VinculacionComponentes from './admin/VinculacionComponentes';
 import { CATEGORIAS_INSUMO, esInsumo, CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, coincideCategoria, MARCAS_REPUESTO, adivinarMarca, nivelGamaRepuesto } from '../utils/categorias';
@@ -139,6 +140,7 @@ function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'produc
 
   // Publicación promocional en Instagram al guardar el producto.
   const [prodCreateIgPost, setProdCreateIgPost] = useState(false);
+  const [prodGenerarBanner, setProdGenerarBanner] = useState(false);
   const [igScheduleMode, setIgScheduleMode] = useState<'manana' | 'tarde' | 'personalizado'>('manana');
   const [igScheduleDate, setIgScheduleDate] = useState('');
   const [igScheduleTime, setIgScheduleTime] = useState('');
@@ -1132,12 +1134,21 @@ function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'produc
         });
       }
 
+      // Banner automático para la tienda: arma una tarjeta de cuadrícula
+      // con la foto, el nombre y el precio del producto recién guardado.
+      if (prodGenerarBanner && savedProduct) {
+        if (!db.banners) db.banners = [];
+        db.banners.push(generarBannerDeProducto(savedProduct as Product, 'grid'));
+        addAuditLog(currentUser?.email || 'technoverse.admin@gmail.com', 'Marketing', 'Banner automático', `Banner de tienda generado desde ${(savedProduct as Product).name}`, db);
+      }
+
       await saveDB(db);
       loadData();
       onDataChanged();
       setShowProductForm(false);
       setFormError(null);
       setProdCreateIgPost(false);
+      setProdGenerarBanner(false);
       setIgScheduleMode('manana');
       setIgScheduleDate('');
       setIgScheduleTime('');
@@ -2258,6 +2269,16 @@ if (!m) return null;
                           />
                         </div>
                       )}
+                    </div>
+
+                    {/* Banner automático para la tienda. Toma la foto, el
+                        nombre y el precio del producto y arma una tarjeta de
+                        cuadrícula lista para la vitrina, sin diseñar nada. */}
+                    <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 p-4 rounded-xl">
+                      <div className="flex items-center gap-2">
+                        <input type="checkbox" id="generarBanner" checked={prodGenerarBanner} onChange={e => setProdGenerarBanner(e.target.checked)} className="rounded border-white/20 bg-[var(--bg-surface)]" />
+                        <label htmlFor="generarBanner" className="text-xs text-[var(--text-secondary)]">¿Generar banner automático para la tienda? (usa la foto, el nombre y el precio del producto)</label>
+                      </div>
                     </div>
 
                     {/* Publicación promocional en Instagram.

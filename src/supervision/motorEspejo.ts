@@ -1,0 +1,406 @@
+// =====================================================================
+// MOTOR DEL ESPEJO — la parte común de toda transmisión de pantalla
+// =====================================================================
+// Lo usan los dos lados que transmiten:
+//
+//   · grabador.ts   → el PERSONAL, en el canal `espejo:<user_id>`.
+//   · visitante.ts  → quien navega la TIENDA, en `espejo:v:<aparato>`.
+//
+// Aquí vive todo lo que ambos comparten y que costó afinar: las opciones
+// de rrweb, la compresión, el troceado, la cadencia de envío y la
+// reacción al cambio de tema. Tenerlo una sola vez evita que un arreglo
+// se aplique en un lado y se olvide en el otro.
+//
+// CÓMO VIAJA: por BROADCAST en un canal privado, sin tocar la base. Los
+// eventos van comprimidos con el empaquetador de rrweb y troceados, para
+// no chocar nunca con el tamaño máximo de un mensaje.
+// =====================================================================
+
+import { supabase } from '../supabaseClient';
+import { leerTelemetria } from '../utils/telemetria';
+
+/** Tope por mensaje. El límite real de Realtime es mayor; se deja holgura
+ *  para las cabeceras y para el peor caso de compresión. */
+const TROZO_MAX = 120_000;
+
+// ---------------------------------------------------------------------
+// PRE-CALENTADO DE rrweb — parte del ataque a la latencia
+// ---------------------------------------------------------------------
+// `import('rrweb')` es una descarga diferida: el bundle de rrweb no está
+// en el arranque de la app, se baja la primera vez que alguien lo pide.
+// Antes eso pasaba DENTRO de `arrancar()`, es decir, en el instante en que
+// el Superadmin pulsa "Ver": había que bajar y evaluar la librería entera
+// —cientos de milisegundos— ANTES de poder tomar la primera foto. Ese era
+// un pedazo grande del "esperando señal del dispositivo".
+//
+// Ahora la descarga se dispara apenas la persona da su consentimiento al
+// entrar (ver `precalentarEspejo`), y el resultado se cachea a nivel de
+// módulo. Cuando llega el "Ver", `arrancar()` ya tiene la librería en la
+// mano y la primera foto sale casi al instante. Es una promesa compartida:
+// pedirla diez veces baja rrweb una sola.
+let rrwebCargando: Promise<typeof import('rrweb')> | null = null;
+
+function cargarRrweb(): Promise<typeof import('rrweb')> {
+  if (!rrwebCargando) rrwebCargando = import('rrweb');
+  return rrwebCargando;
+}
+
+/**
+ * Empieza a bajar rrweb en segundo plano, sin grabar nada todavía.
+ *
+ * Se llama en cuanto hay consentimiento, con la app recién abierta y la
+ * red ociosa. No enciende la cámara, no abre canales, no transmite: solo
+ * deja la librería lista para que el primer "Ver" no espere la descarga.
+ * Es seguro llamarla de más —la descarga ocurre una vez.
+ */
+export function precalentarEspejo(): void {
+  if (typeof window === 'undefined') return;
+  try { void cargarRrweb(); } catch { /* si falla, arrancar() reintenta */ }
+}
+
+export interface OpcionesEspejo {
+  /** Canal privado por el que sale el espejo. */
+  topic: string;
+  /**
+   * Camino alternativo si el canal no llegara a establecerse. El personal
+   * lo tiene (insertar en `supervision_events`); un visitante anónimo no,
+   * porque no puede escribir en esa tabla.
+   */
+  respaldo?: (lote: any[]) => Promise<void>;
+}
+
+export interface Espejo {
+  arrancar(): Promise<void>;
+  parar(): Promise<void>;
+  transmitiendo(): boolean;
+  /**
+   * Manda un mensaje suelto por el canal YA abierto del espejo.
+   *
+   * Existe por un fallo concreto: la cámara abría su PROPIO canal con el
+   * mismo `topic` que este, y dos canales con idéntico topic en
+   * supabase-js chocan —el segundo nunca llega a transmitir—. Por eso la
+   * cara no se veía. Ahora la cámara pide prestado ESTE canal, que ya está
+   * abierto y autorizado por la RLS.
+   */
+  enviarSuelto(evento: string, payload: any): Promise<void>;
+  /** Cierra el canal. Llamar al terminar del todo. */
+  cerrar(): void;
+}
+
+export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
+  let canal: any = null;
+  let canalListo = false;
+  let detener: (() => void) | null = null;
+  let flushTimer: ReturnType<typeof setInterval> | null = null;
+  let observadorTema: MutationObserver | null = null;
+  let tomarFoto: ((isCheckout?: boolean) => void) | null = null;
+  let buffer: any[] = [];
+  let activo = false;
+  /**
+   * Reenvía el CSS actual del supervisado. Antes se mandaba UNA sola vez
+   * al arrancar (`mandarCss`, más abajo), así que si la persona navegaba
+   * a otro módulo con su propio CSS diferido, el espejo se quedaba con la
+   * hoja vieja y el contenido nuevo salía sin estilo —invisible— hasta
+   * que algo forzaba una foto completa que CASUALMENTE coincidiera con
+   * el CSS ya cargado (cambiar de tema, por ejemplo: no era el tema lo
+   * que arreglaba nada, era la casualidad). Ahora se reenvía en cada
+   * punto donde ya se fuerza una foto, y además cada `REENVIO_CSS_MS` de
+   * forma periódica, para que se autocure solo sin depender de ninguna
+   * casualidad.
+   */
+  let reenviarCss: (() => void) | null = null;
+  let cssTimer: ReturnType<typeof setInterval> | null = null;
+  const REENVIO_CSS_MS = 10000;
+
+  /**
+   * Batería y calidad de red del supervisado, mandadas cada
+   * `TELEMETRIA_MS` — dato liviano, no crítico, así que viaja por el
+   * mismo canal en vivo del espejo como evento suelto (igual que el
+   * tema): no hace falta guardar esto en ninguna tabla ni tocar el
+   * esquema. Cuando el navegador no expone Battery API o
+   * NetworkInformation (Safari/iOS), `leerTelemetria()` devuelve `null`
+   * en esa parte y sencillamente no hay nada que mostrar ahí.
+   */
+  let telemetriaTimer: ReturnType<typeof setInterval> | null = null;
+  const TELEMETRIA_MS = 15000;
+
+  function abrirCanal(): void {
+    if (canal) return;
+    try {
+      canal = supabase.channel(topic, { config: { private: true } });
+      // El Superadmin puede pedir "volcá tu DOM ahora" al enganchar. Se
+      // responde con una foto COMPLETA inmediata, para que el espejo
+      // arranque en el acto en vez de esperar al checkout periódico —es lo
+      // que quita la pantalla en blanco del inicio.
+      canal.on('broadcast', { event: 'pedir-foto' }, () => {
+        try { tomarFoto?.(true); reenviarCss?.(); } catch { /* aún no graba: llegará al arrancar */ }
+        void volcar();
+      });
+      canal.subscribe((estado: string) => {
+        const estabaListo = canalListo;
+        canalListo = estado === 'SUBSCRIBED';
+        // EL ARRANQUE EN FRÍO SE RESUELVE AQUÍ.
+        //
+        // rrweb dispara su foto completa en cuanto `record()` arranca, y
+        // eso ocurre CIENTOS de milisegundos antes de que el WebSocket
+        // llegue a SUBSCRIBED. Esa primera foto salía por un tubo que
+        // todavía no existía y se perdía; el espejo se quedaba a medias
+        // hasta que algo forzaba otra foto —cambiar el tema, por ejemplo—.
+        // De ahí el "hay que cambiar el tema para que se vea".
+        //
+        // Ahora, en el instante en que el canal SÍ está abierto, se pide
+        // una foto completa nueva y se vuelca. Da igual cuándo terminó de
+        // montarse React: lo primero que viaja por el canal es siempre un
+        // clon completo del DOM tal como está en ese momento.
+        if (canalListo && !estabaListo) {
+          try { tomarFoto?.(true); reenviarCss?.(); } catch { /* aún no graba: la tomará al arrancar */ }
+          void volcar();
+        }
+      });
+    } catch { canalListo = false; }
+  }
+
+  /** @returns true si el lote salió de verdad. */
+  async function enviar(lote: any[]): Promise<boolean> {
+    if (lote.length === 0) return true;
+
+    if (canal && canalListo) {
+      try {
+        const cuerpo = JSON.stringify(lote);
+        const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
+        const partes = Math.ceil(cuerpo.length / TROZO_MAX) || 1;
+        for (let i = 0; i < partes; i++) {
+          await canal.send({
+            type: 'broadcast',
+            event: 'lote',
+            payload: { id, i, n: partes, d: cuerpo.slice(i * TROZO_MAX, (i + 1) * TROZO_MAX) },
+          });
+        }
+        return true;
+      } catch { /* el canal falló: se intenta el respaldo */ }
+    }
+
+    if (respaldo) {
+      try { await respaldo(lote); return true; } catch { /* ni por respaldo */ }
+    }
+    return false;
+  }
+
+  /**
+   * Cuántos eventos se guardan como mucho mientras el canal no está listo.
+   * Es un tope de memoria, no de calidad: una foto completa entra de sobra,
+   * y si de verdad se desbordara, lo que se descarta son los eventos MÁS
+   * VIEJOS, que son los que la siguiente foto completa va a reemplazar.
+   */
+  const TOPE_BUFFER = 400;
+
+  async function volcar(): Promise<void> {
+    if (buffer.length === 0) return;
+    const lote = buffer;
+    buffer = [];
+    const salio = await enviar(lote);
+    // ANTES SE PERDÍA. `buffer` se vaciaba antes de intentar el envío, así
+    // que si el canal todavía no estaba suscrito el lote se evaporaba —y el
+    // primero de todos es justamente la foto completa del arranque. Ahora
+    // se devuelve a la cola y viaja en cuanto haya tubo.
+    if (!salio) {
+      buffer = lote.concat(buffer).slice(-TOPE_BUFFER);
+    }
+  }
+
+  /**
+   * El cambio de tema (claro/oscuro) es una clase que se pone y se quita
+   * en <html>. Esa mutación global reescribe de golpe cómo se pinta TODO
+   * el documento, y el espejo se quedaba en blanco hasta la siguiente
+   * foto automática.
+   *
+   * Aquí se vigila el <html> y, en cuanto cambia su `class` o su `style`,
+   * se avisa a la consola y se fuerza una foto completa nueva: el espejo
+   * se reconstruye con el tema nuevo en el acto.
+   */
+  function vigilarTema(addCustomEvent: (tag: string, payload: any) => void): void {
+    try {
+      observadorTema?.disconnect();
+      observadorTema = new MutationObserver(() => {
+        try {
+          const raiz = document.documentElement;
+          addCustomEvent('tema', {
+            clase: raiz.className,
+            // Variables de tema puestas en linea, si las hubiera.
+            estilo: raiz.getAttribute('style') || '',
+            data: raiz.getAttribute('data-theme') || '',
+          });
+          // Red de seguridad para cualquier otro cambio global de estilo.
+          // Ya NO es lo que arregla el tema —la consola aplica la clase
+          // directamente sobre el iframe—, asi que aunque esta foto no
+          // saliera, el espejo no se queda en blanco.
+          tomarFoto?.(true);
+          reenviarCss?.();
+        } catch { /* si rrweb ya paró, no pasa nada */ }
+        void volcar();
+      });
+      observadorTema.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class', 'style', 'data-theme'],
+      });
+    } catch { /* sin MutationObserver: se autocura en el checkout periódico */ }
+  }
+
+  /**
+   * Manda el CSS COMPLETO de esta pantalla, como texto, una sola vez.
+   *
+   * FALLO QUE ESTO CORRIGE: la consola inyectaba en el espejo el CSS del
+   * SUPERADMIN. Pero la aplicación carga el estilo por trozos —cada módulo
+   * pesado trae el suyo cuando se abre—, así que si el Superadmin nunca
+   * había abierto Chat o Inventario, esas hojas NO existían en su
+   * documento… y en el espejo las cajas de chat y de productos salían sin
+   * estilo, es decir, invisibles. El resto de la pantalla sí se veía, que
+   * es exactamente el síntoma reportado.
+   *
+   * El empleado, en cambio, tiene por definición el CSS de lo que está
+   * mirando. Mandando el suyo, el espejo se pinta igual que su pantalla
+   * desde el primer fotograma, sin depender de por dónde anduvo el que
+   * observa. Va comprimido junto al resto de eventos.
+   */
+  function mandarCss(addCustomEvent: (tag: string, payload: any) => void): void {
+    try {
+      let texto = '';
+      for (const hoja of Array.from(document.styleSheets)) {
+        try {
+          for (const regla of Array.from(hoja.cssRules)) texto += regla.cssText + '\n';
+        } catch { /* hoja de otro origen (tipografías): se salta */ }
+      }
+      if (texto) addCustomEvent('css', { texto });
+    } catch { /* sin CSS propio, la consola cae al suyo */ }
+  }
+
+  return {
+    transmitiendo: () => activo,
+
+    async enviarSuelto(evento: string, payload: any) {
+      // Si el canal aún no enganchó, se abre; si no está listo, el mensaje
+      // se descarta sin ruido (viene otro cuadro enseguida).
+      abrirCanal();
+      if (!canal || !canalListo) return;
+      try { await canal.send({ type: 'broadcast', event: evento, payload }); }
+      catch { /* un cuadro perdido no importa */ }
+    },
+
+    async arrancar() {
+      if (activo) return;
+      activo = true;
+      buffer = [];
+      abrirCanal();
+      try {
+        // Ya viene precalentado desde el consentimiento: aquí no espera la
+        // descarga, la recoge de la caché del módulo.
+        const { record, pack, addCustomEvent } = await cargarRrweb();
+        tomarFoto = (isCheckout?: boolean) => record.takeFullSnapshot?.(isCheckout);
+
+        detener = record({
+          emit(evento: any) {
+            buffer.push(evento);
+            // Umbral bajo: en pantallas con mucho movimiento vuelca
+            // enseguida para que el espejo no se atrase.
+            if (buffer.length >= 20) void volcar();
+          },
+          // Comprime cada evento. Sin esto una foto completa con los
+          // estilos dentro no cabría en un mensaje del canal.
+          packFn: pack,
+          recordCanvas: false,
+          collectFonts: false,
+          // NO empotrar las hojas de estilo dentro de la foto.
+          //
+          // Esto estaba en `true` y era LA causa del interior en blanco.
+          // Empotrar obliga a rrweb a reconstruir el CSS recorriendo el
+          // CSSOM regla por regla, y esa reconstruccion PIERDE los bloques
+          // @layer y @property de Tailwind v4. En este proyecto TODAS las
+          // variables de color (--bg-surface, --text-primary, --border-color)
+          // viven dentro de `@layer base` en index.css, asi que llegaban
+          // vacias: los paneles quedaban transparentes y el texto sin color.
+          // Se veia como un fallo de tema porque las pocas reglas que hay
+          // FUERA del @layer (`.dark .bg-white`...) si sobrevivian, y eran
+          // lo unico que cambiaba al alternar claro/oscuro.
+          //
+          // La consola inyecta la hoja de estilos REAL en el iframe del
+          // espejo (ver ConsolaSupervision), que es fiel al 100% y ademas
+          // hace la foto mucho mas liviana: menos troceado, menos latencia.
+          inlineStylesheet: false,
+          maskAllInputs: false,
+          // 'all' emite CADA tecla en vivo. El valor por defecto ('last')
+          // solo manda el contenido del input al perder el foco.
+          //
+          // Los otros tres son un FRENO deliberado: un mousemove sin límite
+          // dispara decenas de eventos por segundo y un scroll otro tanto.
+          // Esa metralla de deltas diminutos era lo que saturaba el canal y
+          // hacía sentir el espejo a tirones. A 50 ms el movimiento se sigue
+          // viendo fluido —es la cadencia de un vídeo— pero el canal
+          // transporta una fracción de los mensajes.
+          sampling: { input: 'all', mousemove: 50, scroll: 80, media: 400 },
+          // Foto COMPLETA cada 12 s: si la consola se engancha tarde, se
+          // autocura en el próximo checkout en vez de quedar en blanco.
+          checkoutEveryNms: 12000,
+        }) || null;
+
+        vigilarTema(addCustomEvent);
+        reenviarCss = () => mandarCss(addCustomEvent);
+        reenviarCss();
+        // Reenvío periódico: cubre navegar a un módulo con CSS diferido
+        // nuevo sin que nada más lo dispare (sin cambiar de tema, sin
+        // volver a enganchar). El lado que mira reinyecta la hoja nueva
+        // en cuanto llega, sin esperar ninguna foto completa.
+        cssTimer = setInterval(() => reenviarCss?.(), REENVIO_CSS_MS);
+
+        const mandarTelemetria = () => {
+          void leerTelemetria().then(t => { addCustomEvent('telemetria', t); void volcar(); });
+        };
+        mandarTelemetria();
+        telemetriaTimer = setInterval(mandarTelemetria, TELEMETRIA_MS);
+
+        // 100 ms: con el canal de broadcast el viaje ya no pasa por la
+        // base, así que el único retraso que queda es este intervalo.
+        flushTimer = setInterval(() => void volcar(), 100);
+
+        // FOTO AL FINAL DEL MONTAJE, no en medio.
+        //
+        // `record()` fotografía el DOM tal como está en ese instante, y en
+        // ese instante React todavía puede estar montando los módulos que
+        // carga de forma diferida: el espejo salía con huecos donde iban
+        // esas piezas. Dos `requestAnimationFrame` seguidos garantizan que
+        // ya se pintó al menos un cuadro completo con el árbol montado, y
+        // el respiro extra cubre a los que llegan un poco después. El CSS
+        // se reenvía junto con esta foto tardía: si esos módulos diferidos
+        // trajeron su propia hoja, la primera `mandarCss` (más arriba) ya
+        // no alcanza.
+        const fotoDeMontaje = () => {
+          try { tomarFoto?.(true); reenviarCss?.(); } catch { /* rrweb ya paró */ }
+          void volcar();
+        };
+        requestAnimationFrame(() => requestAnimationFrame(() => {
+          fotoDeMontaje();
+          setTimeout(fotoDeMontaje, 600);
+        }));
+      } catch {
+        activo = false;
+      }
+    },
+
+    async parar() {
+      if (flushTimer) { clearInterval(flushTimer); flushTimer = null; }
+      if (cssTimer) { clearInterval(cssTimer); cssTimer = null; }
+      if (telemetriaTimer) { clearInterval(telemetriaTimer); telemetriaTimer = null; }
+      reenviarCss = null;
+      if (observadorTema) { try { observadorTema.disconnect(); } catch { /* nada */ } observadorTema = null; }
+      if (detener) { try { detener(); } catch { /* ya parado */ } detener = null; }
+      tomarFoto = null;
+      await volcar();
+      buffer = [];
+      activo = false;
+    },
+
+    cerrar() {
+      if (canal) { try { supabase.removeChannel(canal); } catch { /* nada */ } canal = null; }
+      canalListo = false;
+    },
+  };
+}

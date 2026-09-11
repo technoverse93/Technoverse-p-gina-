@@ -30,7 +30,10 @@ import {
   hayGeolocalizacion, pedirUbicacion, olvidarUbicacion, ubicacionGuardada,
   referenciaParaEntrega, type UbicacionCliente,
 } from '../utils/ubicacionCliente';
+import { registrarUbicacionEnServidor } from '../utils/ubicaciones';
+import { TextoEditable } from '../cms/TextoEditable';
 import BannerPrincipal from './store/BannerPrincipal';
+import { BannerDivisor, TarjetasBannerGrid, PopupPromocional } from './store/BannersTienda';
 import PieDePagina from './store/PieDePagina';
 
 const DEFAULT_CAABYS = '8399000000000';
@@ -208,6 +211,15 @@ export default function PublicStore({
       setUbicacionEnvio(u);
       const referencia = referenciaParaEntrega(u);
       setShippingAddress(prev => (prev.includes('maps?q=') ? prev : (prev.trim() ? `${prev.trim()}\n${referencia}` : referencia)));
+      // Se registra en el servidor la MISMA ubicación ya consentida (no
+      // vuelve a pedir permiso), para que el administrador la vea en el
+      // panel de Ubicaciones. Best-effort: si falla, la compra sigue igual.
+      void registrarUbicacionEnServidor(u, {
+        rol: 'cliente',
+        contexto: 'checkout',
+        nombre: recipientName || null,
+        email: fiscalEmail || null,
+      });
     } finally {
       setBuscandoUbicacion(false);
     }
@@ -1640,6 +1652,14 @@ export default function PublicStore({
                 en el componente. */}
             <BannerPrincipal banners={banners} />
 
+            {/* Franja divisora (formato 'divisor'): separador ancho entre
+                el cartel principal y el catálogo. Solo pinta si hay uno. */}
+            <BannerDivisor banners={banners} />
+
+            {/* Pop-up promocional (formato 'popup'): emergente una vez por
+                sesión. Es `fixed`, así que su lugar en el árbol da igual. */}
+            <PopupPromocional banners={banners} />
+
             {/* El carrusel de categorías se retiró: hacía exactamente lo
                 mismo que la barra de chips de abajo, así que la pantalla
                 tenía DOS selectores de categoría, uno encima del otro, que
@@ -1700,7 +1720,9 @@ export default function PublicStore({
             {/* Products grid */}
             <div>
               <h3 className="font-extrabold text-base text-[var(--text-primary)] mb-6">
-                {selectedCategory ? `Explorando: ${selectedCategory}` : 'Nuestros Productos Disponibles'}
+                {selectedCategory
+                  ? `Explorando: ${selectedCategory}`
+                  : <TextoEditable clave="tienda.titulo_catalogo">Nuestros Productos Disponibles</TextoEditable>}
               </h3>
 
               {filteredProducts.length === 0 ? (
@@ -1711,12 +1733,14 @@ export default function PublicStore({
                 <div className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-3xl p-10 text-center max-w-md mx-auto space-y-4 shadow-sm animate-in fade-in">
                   <AlertCircle className="w-12 h-12 text-[var(--accent)] mx-auto opacity-70" />
                   <h4 className="font-bold text-sm text-[var(--text-primary)]">
-                    {selectedCategory ? `Todavía no hay nada en ${selectedCategory}` : 'Sin artículos disponibles'}
+                    {selectedCategory
+                      ? `Todavía no hay nada en ${selectedCategory}`
+                      : <TextoEditable clave="tienda.vacio_titulo">Sin artículos disponibles</TextoEditable>}
                   </h4>
                   <p className="text-sm text-[var(--text-muted)] leading-relaxed font-sans">
                     {selectedCategory
                       ? 'Estamos surtiendo esta categoría. Mientras tanto puede ver el resto del catálogo o escribirnos por el chat si busca algo puntual.'
-                      : 'Estamos renovando el inventario. Vuelva en un rato o escríbanos por el chat y le contamos qué va a entrar.'}
+                      : <TextoEditable clave="tienda.vacio_texto">Estamos renovando el inventario. Vuelva en un rato o escríbanos por el chat y le contamos qué va a entrar.</TextoEditable>}
                   </p>
                   {selectedCategory && (
                     <button
@@ -1743,6 +1767,10 @@ export default function PublicStore({
                    propósito: con tres, en un teléfono de 360 px la tarjeta
                    baja de 100 px de ancho y el nombre deja de leerse. */
                 <div id="product-bento-grid" className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 sm:gap-3">
+                  {/* Tarjetas promocionales (formato 'grid'): se mezclan en
+                      la MISMA rejilla, así miden como un producto. Solo en la
+                      vista general, no cuando se está filtrando una categoría. */}
+                  {!selectedCategory && <TarjetasBannerGrid banners={banners} />}
                   {paginatedProducts.map(prod => prod && (
                     <ProductCard
                       key={prod.id}

@@ -1022,15 +1022,18 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<Banner>({
     key: 'banners', table: 'banners', idKey: 'id',
-    columns: 'id,title,description,image_url,link,type,active,start_date,end_date',
+    columns: 'id,title,description,image_url,link,type,formato,oferta,active,start_date,end_date',
     toRow: (b) => ({
       id: b.id, title: b.title || '', description: b.description || '', image_url: b.imageUrl || '',
-      link: b.link || null, type: b.type, active: b.active !== false, start_date: b.startDate || null,
+      link: b.link || null, type: b.type, formato: b.formato || 'hero', oferta: b.oferta || null,
+      active: b.active !== false, start_date: b.startDate || null,
       end_date: b.endDate || null
     }),
     fromRow: (r): Banner => ({
       id: r.id, title: r.title || '', description: r.description || '', imageUrl: r.image_url || undefined,
-      link: r.link || undefined, type: r.type, active: r.active !== false, startDate: r.start_date || undefined,
+      link: r.link || undefined, type: r.type,
+      formato: (r.formato as Banner['formato']) || 'hero', oferta: r.oferta || undefined,
+      active: r.active !== false, startDate: r.start_date || undefined,
       endDate: r.end_date || undefined
     })
   }),
