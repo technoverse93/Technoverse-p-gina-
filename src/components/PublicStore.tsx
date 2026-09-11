@@ -342,7 +342,10 @@ export default function PublicStore({
 
   useEffect(() => {
     if (autoOpenLogin) {
-      setIsLoginModalOpen(true);
+      // El inicio de sesión vive en el desplegable del ícono de cuenta (el
+      // patrón convencional). El modal de login quedó obsoleto, así que
+      // aquí se abre el desplegable, no aquel.
+      setIsAccountDropdownOpen(true);
       setIsRegisterMode(false);
       if (onClearAutoOpenLogin) {
         onClearAutoOpenLogin();
@@ -2402,14 +2405,14 @@ export default function PublicStore({
                 <UserIcon className="w-5 h-5" />
               </div>
               <h2 className="text-lg font-extrabold tracking-tight font-display text-[var(--text-primary)]">
-                {isRegisterMode ? 'Crear cuenta' : 'Iniciar sesión'}
+                Crear cuenta
               </h2>
               <p className="text-[11px] text-[var(--text-secondary)]">
                 Technoverse Costa Rica
               </p>
             </div>
 
-            {isRegisterMode ? (
+            {isRegisterMode && (
               <form onSubmit={handleClientRegisterSubmit} className="space-y-3.5">
                 <div>
                   <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Nombre Completo</label>
@@ -2484,59 +2487,22 @@ export default function PublicStore({
                   Registrarse y Entrar
                 </button>
               </form>
-            ) : (
-              <form onSubmit={handleClientLoginSubmit} className="space-y-4">
-                <div>
-                  <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Correo Electrónico</label>
-                  <input
-                    type="email"
-                    required
-                    value={loginEmail}
-                    onChange={(e) => setLoginEmail(e.target.value)}
-                    placeholder="ejemplo@correo.com"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none transition font-mono"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[9px] uppercase font-bold text-[var(--text-secondary)] mb-1 tracking-wider">Contraseña</label>
-                  <input
-                    type="password"
-                    required
-                    value={loginPassword}
-                    onChange={(e) => setLoginPassword(e.target.value)}
-                    placeholder="••••••••••••"
-                    className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none transition"
-                  />
-                </div>
-
-                <button
-                  type="submit"
-                  disabled={entrandoSesion}
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[var(--accent-ink)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer disabled:opacity-60 disabled:cursor-wait"
-                >
-                  {entrandoSesion ? 'Verificando acceso…' : 'Iniciar Sesión'}
-                </button>
-
-                {(hayBiometria || biometriaLista) && (
-                  <button
-                    type="button"
-                    onClick={accederConBiometria}
-                    disabled={entrandoBiometria || entrandoSesion}
-                    className="w-full border border-[var(--border-color)] text-[var(--text-primary)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition hover:bg-[var(--bg-surface)] disabled:opacity-60 flex items-center justify-center gap-2"
-                  >
-                    <Fingerprint className="w-4 h-4" />
-                    {entrandoBiometria ? 'Verificando…' : 'Face ID o huella'}
-                  </button>
-                )}
-              </form>
             )}
 
             <div className="text-center pt-3 border-t border-[var(--border-color)]">
               <button
-                onClick={() => setIsRegisterMode(!isRegisterMode)}
+                type="button"
+                onClick={() => {
+                  // El inicio de sesión vive en el desplegable del ícono de
+                  // cuenta (el patrón convencional), no en este modal, que
+                  // ahora es solo para crear cuenta.
+                  setIsLoginModalOpen(false);
+                  setIsRegisterMode(false);
+                  setIsAccountDropdownOpen(true);
+                }}
                 className="text-sm text-[var(--accent)] font-bold cursor-pointer"
               >
-                {isRegisterMode ? '¿Ya tienes cuenta? Inicia Sesión' : '¿No tienes cuenta? Regístrate Aquí'}
+                ¿Ya tienes cuenta? Inicia sesión
               </button>
             </div>
           </div>
