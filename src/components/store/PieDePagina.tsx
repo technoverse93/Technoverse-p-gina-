@@ -19,8 +19,10 @@
 // =====================================================================
 
 import React from 'react';
-import { MessageCircle, Phone, MapPin, Clock, Navigation, ChevronDown } from 'lucide-react';
+import { MessageCircle, Phone, MapPin, Clock, Navigation, ChevronDown, Check, LocateFixed } from 'lucide-react';
 import type { AppSettings } from '../../types';
+import { compartirUbicacion } from '../../utils/ubicaciones';
+import { ubicacionGuardada, hayGeolocalizacion } from '../../utils/ubicacionCliente';
 
 interface Props {
   settings?: AppSettings | null;
@@ -140,6 +142,84 @@ function Pregunta({ p, r }: PreguntaProps): React.ReactElement {
             {r}
           </p>
         </div>
+      </div>
+    </div>
+  );
+}
+
+/**
+ * Compartir ubicación desde el footer, plegable y consentido.
+ *
+ * Es la misma regla del checkout, pero disponible desde cualquier página:
+ * el botón pide el permiso NATIVO del navegador/APK; si la persona acepta,
+ * su ubicación queda registrada para coordinar entregas y aparece en el
+ * panel de Ubicaciones. Si niega o no la usa, no pasa nada.
+ */
+function CompartirUbicacionFooter() {
+  const [estado, setEstado] = React.useState<'idle' | 'pidiendo' | 'ok' | 'negada'>(
+    () => (ubicacionGuardada() ? 'ok' : 'idle')
+  );
+
+  if (!hayGeolocalizacion()) return null;
+
+  const compartir = async () => {
+    setEstado('pidiendo');
+    const u = await compartirUbicacion({ rol: 'cliente', contexto: 'footer' });
+    setEstado(u ? 'ok' : 'negada');
+  };
+
+  return (
+    <div className="border-t border-white/10">
+      <div className="mx-auto max-w-7xl px-5 py-3 md:px-8">
+        <details className="group text-[11.5px]" style={{ color: '#8C97A8' }}>
+          <summary
+            className="flex cursor-pointer list-none items-center gap-2 font-semibold"
+            style={{ color: '#A7AFBD' }}
+          >
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#6EE7B7' }} aria-hidden="true" />
+            Compartir mi ubicación para entregas
+          </summary>
+          <div className="mt-2 pl-5">
+            <p className="leading-relaxed mb-2" style={{ color: '#8C97A8' }}>
+              Al tocar el botón, tu navegador te pedirá permiso de ubicación. Si aceptás, la
+              usamos solo para coordinar y cotizar tu entrega. Podés negarla: la compra sigue
+              igual.
+            </p>
+            {estado === 'ok' ? (
+              <div className="flex flex-wrap items-center gap-3">
+                <span className="inline-flex items-center gap-1.5 font-semibold" style={{ color: '#6EE7B7' }}>
+                  <Check className="h-4 w-4" aria-hidden="true" /> Ubicación compartida. ¡Gracias!
+                </span>
+                <button
+                  type="button"
+                  onClick={compartir}
+                  className="underline underline-offset-2 opacity-70 hover:opacity-100"
+                  style={{ color: '#A7AFBD' }}
+                >
+                  Actualizarla
+                </button>
+              </div>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={compartir}
+                  disabled={estado === 'pidiendo'}
+                  className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-bold transition-colors disabled:opacity-60"
+                  style={{ background: '#0F766E', color: '#FFFFFF' }}
+                >
+                  <LocateFixed className="h-4 w-4" aria-hidden="true" />
+                  {estado === 'pidiendo' ? 'Esperando permiso…' : 'Compartir mi ubicación'}
+                </button>
+                {estado === 'negada' && (
+                  <span style={{ color: '#8C97A8' }}>
+                    No se compartió (permiso negado o sin señal). Podés intentarlo de nuevo.
+                  </span>
+                )}
+              </div>
+            )}
+          </div>
+        </details>
       </div>
     </div>
   );
@@ -325,6 +405,9 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
           </details>
         </div>
       </div>
+
+      {/* Compartir ubicación (consentido, plegable). */}
+      <CompartirUbicacionFooter />
 
       {/* ---------------------------- Legal ---------------------------- */}
       <div className="border-t border-white/10">
