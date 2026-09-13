@@ -357,9 +357,13 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         mandarTelemetria();
         telemetriaTimer = setInterval(mandarTelemetria, TELEMETRIA_MS);
 
-        // 100 ms: con el canal de broadcast el viaje ya no pasa por la
-        // base, así que el único retraso que queda es este intervalo.
-        flushTimer = setInterval(() => void volcar(), 100);
+        // 60 ms: con el canal de broadcast el viaje ya no pasa por la base,
+        // así que el único retraso que queda es este intervalo. Se baja de
+        // 100 a 60 ms para recortar la latencia de fondo sin subir el pico
+        // de mensajes: el volcado por umbral (>=20 eventos) ya saca las
+        // ráfagas al momento, y un volcado vacío no cuesta nada, así que
+        // acortar el intervalo solo adelanta los cambios sueltos.
+        flushTimer = setInterval(() => void volcar(), 60);
 
         // FOTO AL FINAL DEL MONTAJE, no en medio.
         //

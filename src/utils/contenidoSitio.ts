@@ -49,8 +49,13 @@ export async function guardarContenido(
   tipo: 'texto' | 'color' | 'icono' = 'texto',
   porQuien?: string | null
 ): Promise<void> {
+  // 1. UI local a 0 ms (caché + evento).
   cache.set(clave, valor);
   avisar();
+  // 2. Aviso instantáneo a las OTRAS pestañas/administradores por broadcast
+  //    (<50 ms), sin esperar a la base ni recargar toda la tabla.
+  enviarBroadcast(clave, valor);
+  // 3. Persistencia en segundo plano.
   const { error } = await supabase
     .from('contenido_sitio')
     .upsert({ clave, valor, tipo, updated_at: new Date().toISOString(), updated_by: porQuien || null });
@@ -78,13 +83,36 @@ function abrirCanalRealtime(): void {
   if (canalRealtime) return;
   try {
     canalRealtime = supabase
-      .channel('contenido_sitio_global')
+      // `self: false`: quien edita ya aplicó el cambio local; no necesita
+      // recibir su propio broadcast de vuelta.
+      .channel('contenido_sitio_global', { config: { broadcast: { self: false } } })
+      // CAMINO RÁPIDO (<50 ms): el que edita difunde el cambio y las demás
+      // pestañas lo aplican directo a la caché, sin recargar la tabla.
+      .on('broadcast', { event: 'set' }, ({ payload }: any) => {
+        if (payload && typeof payload.clave === 'string') {
+          cache.set(payload.clave, payload.valor == null ? '' : String(payload.valor));
+          avisar();
+        }
+      })
+      // CAMINO DE RESPALDO: reconciliación por si un cambio no llegó por
+      // broadcast (o vino de fuera de la app). Llega más tarde y solo
+      // confirma lo que el broadcast ya pintó.
       .on('postgres_changes', { event: '*', schema: 'public', table: 'contenido_sitio' }, () => { void cargarContenido(); })
       .subscribe();
   } catch {
     // Si el canal no se pudo abrir, el contenido igual funciona: solo se
     // pierde el reflejo en vivo. NUNCA debe tumbar la app.
     canalRealtime = null;
+  }
+}
+
+/** Difunde un cambio a las otras pestañas por el canal compartido. */
+function enviarBroadcast(clave: string, valor: string): void {
+  try {
+    abrirCanalRealtime();
+    canalRealtime?.send({ type: 'broadcast', event: 'set', payload: { clave, valor } });
+  } catch {
+    /* si el canal no está listo, la reconciliación por postgres_changes cubre */
   }
 }
 
