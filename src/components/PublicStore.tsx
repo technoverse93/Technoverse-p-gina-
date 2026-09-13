@@ -1,5 +1,5 @@
 import { motion, AnimatePresence } from "motion/react";
-import React, { useState, useEffect, useRef, useLayoutEffect, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { PaginatedGrid } from './PaginationHelper';
 import {
   ShoppingBag, Trash2, ArrowRight,
@@ -740,9 +740,18 @@ export default function PublicStore({
     setProducts((freshDb.products || []).filter(p => p && p.active !== false && Number(p.stock) > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
   };
 
-  const getProductDiscountedPrice = (prod: Product) => prod.price;
+  // Estables entre renders (useCallback) para que <ProductCard> memoizada no
+  // se repinte cuando cambia estado ajeno (escribir en el login, buscar,
+  // etc.). `handleAddToCart` solo cambia cuando cambia el carrito, que es
+  // una acción puntual del usuario, no algo que ocurra en cada tecla.
+  const getProductDiscountedPrice = useCallback((prod: Product) => prod.price, []);
 
-  const handleAddToCart = (prod: Product) => {
+  const handleAbrirFicha = useCallback((prod: Product) => {
+    setSelectedProductDetail(prod);
+    setDetailQuantity(1);
+  }, []);
+
+  const handleAddToCart = useCallback((prod: Product) => {
     if (prod.stock <= 0) {
       toast.warning('¡Disculpe! Este producto se encuentra agotado.');
       return;
@@ -759,7 +768,7 @@ export default function PublicStore({
       setCart([...cart, { product: prod, quantity: 1 }]);
     }
     setIsCartOpen(true);
-  };
+  }, [cart, toast]);
 
   const handleAddToCartWithQty = (prod: Product, qty: number) => {
     if (prod.stock <= 0) {
@@ -1693,7 +1702,7 @@ export default function PublicStore({
                 className="hidden md:block"
                 title="Tendencias" 
                 products={filteredProducts.slice(0, 8)} // Passed top items, row will slice to 4
-                onProductClick={(prod) => { setSelectedProductDetail(prod); setDetailQuantity(1); }}
+                onProductClick={handleAbrirFicha}
                 onAddToCart={handleAddToCart}
                 getProductDiscountedPrice={getProductDiscountedPrice}
               />
@@ -1794,7 +1803,7 @@ export default function PublicStore({
                     <ProductCard
                       key={prod.id}
                       prod={prod}
-                      onClick={() => { setSelectedProductDetail(prod); setDetailQuantity(1); }}
+                      onClick={handleAbrirFicha}
                       onAddToCart={handleAddToCart}
                       getProductDiscountedPrice={getProductDiscountedPrice}
                     />
