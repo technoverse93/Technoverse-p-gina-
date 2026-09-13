@@ -38,7 +38,7 @@ export function MarketingRow({ title, products, onProductClick, onAddToCart, get
           <ProductCard 
             key={prod.id} 
             prod={prod} 
-            onClick={() => onProductClick(prod)}
+            onClick={onProductClick}
             onAddToCart={onAddToCart}
             getProductDiscountedPrice={getProductDiscountedPrice}
           />

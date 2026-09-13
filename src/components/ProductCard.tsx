@@ -5,7 +5,10 @@ import { Product } from '../types';
 interface ProductCardProps {
   key?: any;
   prod: Product;
-  onClick: () => void;
+  /** Recibe el producto para que el padre pase UN callback estable a todas
+   *  las tarjetas (si fuera `() => void` inline por tarjeta, la memoización
+   *  no serviría de nada). */
+  onClick: (prod: Product) => void;
   onAddToCart: (prod: Product) => void;
   getProductDiscountedPrice: (prod: Product) => number;
 }
@@ -45,7 +48,7 @@ interface ProductCardProps {
  * correcta en claro y en oscuro sin lógica extra. No cambia ninguna prop:
  * mismas entradas y misma lógica de precios que antes.
  */
-export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPrice }: ProductCardProps) {
+export const ProductCard = React.memo(function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPrice }: ProductCardProps) {
   // Sin esto, una imageUrl rota (archivo borrado del Storage, dominio
   // caído) dejaba el ícono de imagen partida del navegador en la tarjeta,
   // en vez de caer al estado "Sin imagen".
@@ -61,13 +64,13 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
 
   return (
     <article
-      onClick={onClick}
+      onClick={() => onClick(prod)}
       role="button"
       tabIndex={0}
       onKeyDown={(e) => {
         if (e.key === 'Enter' || e.key === ' ') {
           e.preventDefault();
-          onClick();
+          onClick(prod);
         }
       }}
       aria-label={prod.name}
@@ -175,4 +178,4 @@ export function ProductCard({ prod, onClick, onAddToCart, getProductDiscountedPr
       </div>
     </article>
   );
-}
+});
