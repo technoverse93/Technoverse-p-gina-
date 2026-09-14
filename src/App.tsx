@@ -18,6 +18,8 @@ import { iniciarVisitante, detenerVisitante } from './supervision/visitante';
 import { precalentarEspejo } from './supervision/motorEspejo';
 import { registrarIngreso } from './utils/auditoria';
 import { iniciarKillSwitch, fijarModeloAparato, fijarHuellaAparato } from './seguridad/killSwitch';
+import { activarFlagSecure } from './seguridad/flagSecure';
+import { iniciarAntiCaptura } from './seguridad/antiCaptura';
 import { obtenerHuellaAparato } from './utils/fingerprint';
 import { iniciarAvisoDePurga } from './seguridad/avisoPurgaChat';
 import CrearTokenModal from './components/security/CrearTokenModal';
@@ -371,6 +373,12 @@ function AppInner() {
     iniciarKillSwitch();
     // Aviso de cierre cuando el Superadmin purga los chats.
     iniciarAvisoDePurga();
+    // Anti-captura: para TODOS, sin excepción, desde el arranque — tienda
+    // pública y panel por igual, con o sin sesión. En la APK, el bloqueo
+    // nativo real (FLAG_SECURE); en la web, el escudo de impresión y
+    // portapapeles (ver los archivos para sus límites reales).
+    void activarFlagSecure();
+    iniciarAntiCaptura();
     // La huella (aparato físico) y el modelo alimentan el bloqueo por
     // dispositivo. Su lectura es asíncrona —nativa en la APK— y se entrega
     // en cuanto está, para que ese modo de bloqueo funcione.
