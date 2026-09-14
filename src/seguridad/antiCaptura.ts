@@ -1,34 +1,85 @@
 // =====================================================================
-// ANTI-CAPTURA WEB — lo poco que un navegador SÍ puede hacer
+// ANTI-CAPTURA WEB — lo que un navegador SÍ puede hacer
 // =====================================================================
 // Regla: NADIE captura, para todos por igual. Sin lista blanca, sin
-// excepciones, sin consola de administración: se activa una vez al
-// arrancar y queda así siempre.
+// excepciones, sin consola: se activa una vez al arrancar y queda así.
+//
+// Tres defensas, todas del NAVEGADOR (el bloqueo REAL de Android está en
+// flagSecure.ts, que lo aplica el sistema operativo):
+//
+//   1. LÁMINA "NO SE PERMITEN CAPTURAS" — una capa que tapa TODA la
+//      pantalla, en negro y con el aviso, en cuanto la ventana pierde el
+//      foco o se cambia de app (`blur` / `visibilitychange`). Es lo que
+//      hace VISIBLE el bloqueo también en la web: la mayoría de las
+//      herramientas de captura y de grabación sacan el foco de la página
+//      o la mandan a segundo plano un instante, y en ese instante lo que
+//      hay para capturar es la lámina, no el contenido. También tapa la
+//      miniatura del conmutador de apps al minimizar.
+//
+//   2. IMPRESIÓN EN BLANCO — `@media print` oculta el documento al
+//      imprimir o "Guardar como PDF".
+//
+//   3. PrintScreen — al soltar la tecla se pisa el portapapeles, así una
+//      captura recién tomada no sirve al pegarla.
 //
 // ---------------------------------------------------------------------
-// HONESTIDAD TÉCNICA, PORQUE IMPORTA
+// HONESTIDAD TÉCNICA
 // ---------------------------------------------------------------------
-// Un sitio web NO PUEDE bloquear una captura de pantalla de verdad. Es una
-// limitación del navegador y del sistema operativo, no de este código:
-// cualquier herramienta del sistema (Recorte, PrtScn, otro teléfono
-// fotografiando la pantalla) siempre puede capturar lo que se ve. Nada de
-// lo que sigue cambia eso — son dos molestias puntuales, no una barrera:
-//
-//   1. IMPRESIÓN EN BLANCO — una hoja `@media print` oculta el documento
-//      al imprimir o "Guardar como PDF", que es la fuga más fácil y la
-//      que nadie vigila a simple vista.
-//
-//   2. PrintScreen — al soltar la tecla se pisa el portapapeles con
-//      vacío, así una captura reciente no sirve al pegarla. La captura ya
-//      se tomó igual: esto no la evita, solo estorba reusarla al toque.
-//
-// El bloqueo REAL en la APK (Android) es otro archivo, flagSecure.ts, que
-// sí impide la captura de verdad porque lo aplica el sistema operativo.
+// Un sitio web NO puede frenar un PrtScn de hardware instantáneo que NO
+// saca el foco de la página (ni la foto de otro teléfono a la pantalla):
+// eso es límite del navegador y del sistema, no de este código. La lámina
+// cubre los caminos que sí pasan por perder foco/visibilidad, que son la
+// mayoría de las apps de captura y de grabación de pantalla.
 // =====================================================================
 
 const ID_ESTILO = 'tv-anti-captura-impresion';
+const ID_VELO = 'tv-anti-captura-velo';
 let puesto = false;
 
+// ---------------------------------------------------------------------
+// 1. Lámina "no se permiten capturas"
+// ---------------------------------------------------------------------
+function crearVelo(): HTMLElement | null {
+  if (typeof document === 'undefined' || !document.body) return null;
+  let velo = document.getElementById(ID_VELO);
+  if (velo) return velo;
+  velo = document.createElement('div');
+  velo.id = ID_VELO;
+  velo.setAttribute('aria-hidden', 'true');
+  velo.style.cssText = [
+    'position:fixed', 'inset:0', 'z-index:2147483647',
+    'display:none', 'flex-direction:column', 'align-items:center',
+    'justify-content:center', 'gap:10px', 'text-align:center', 'padding:24px',
+    'background:#0b0f0e', 'color:#e6ede9',
+    'font:600 15px system-ui,-apple-system,sans-serif',
+    'pointer-events:none', 'user-select:none', '-webkit-user-select:none',
+  ].join(';');
+  velo.innerHTML =
+    '<div style="font-size:34px" aria-hidden="true">🔒</div>' +
+    '<div>No se permiten capturas de pantalla</div>' +
+    '<div style="font-size:12px;opacity:.7;font-weight:500">Contenido protegido de Technoverse</div>';
+  document.body.appendChild(velo);
+  return velo;
+}
+
+function mostrarVelo(): void {
+  const v = crearVelo();
+  if (v) v.style.display = 'flex';
+}
+
+function ocultarVelo(): void {
+  const v = document.getElementById(ID_VELO);
+  if (v) v.style.display = 'none';
+}
+
+function alCambiarVisibilidad(): void {
+  if (document.visibilityState === 'hidden') mostrarVelo();
+  else ocultarVelo();
+}
+
+// ---------------------------------------------------------------------
+// 2. Impresión en blanco
+// ---------------------------------------------------------------------
 function hojaDeImpresion(): void {
   if (document.getElementById(ID_ESTILO)) return;
   const estilo = document.createElement('style');
@@ -49,15 +100,9 @@ function hojaDeImpresion(): void {
   document.head.appendChild(estilo);
 }
 
-/**
- * Pisa el portapapeles VARIAS VECES tras un PrintScreen.
- *
- * Windows no copia la imagen en el mismo instante en que se suelta la
- * tecla: la escribe un poco después. Pisarlo una sola vez, de inmediato,
- * llegaba ANTES que el sistema — se borraba el portapapeles vacío y el
- * sistema escribía la captura encima, tan tranquilo. Repitiéndolo durante
- * el segundo siguiente, el último en escribir somos nosotros.
- */
+// ---------------------------------------------------------------------
+// 3. PrintScreen → pisar el portapapeles
+// ---------------------------------------------------------------------
 function pisarPortapapeles(): void {
   const intentar = () => {
     try {
@@ -82,6 +127,9 @@ function alSoltarTecla(e: KeyboardEvent): void {
   pisarPortapapeles();
 }
 
+// ---------------------------------------------------------------------
+// Arranque
+// ---------------------------------------------------------------------
 /**
  * Activa el escudo web, una sola vez, para toda la aplicación (tienda y
  * panel, con y sin sesión). Idempotente.
@@ -89,7 +137,11 @@ function alSoltarTecla(e: KeyboardEvent): void {
 export function iniciarAntiCaptura(): void {
   if (typeof window === 'undefined' || puesto) return;
   puesto = true;
+  crearVelo();
   hojaDeImpresion();
+  document.addEventListener('visibilitychange', alCambiarVisibilidad);
+  window.addEventListener('blur', mostrarVelo);
+  window.addEventListener('focus', ocultarVelo);
   window.addEventListener('keydown', alTeclear, true);
   window.addEventListener('keyup', alSoltarTecla, true);
 }
