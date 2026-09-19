@@ -8,6 +8,7 @@ import ImagenMensaje from './chat/ImagenMensaje';
 import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS, type Adjunto } from '../utils/adjuntosChat';
 import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../utils/grabadorVoz';
 import AudioMensaje from './chat/AudioMensaje';
+import { iniciarNotificaciones, pedirPermisoNotificaciones, notificarMensajeChat, EVENTO_ABRIR_CHAT } from '../mobile/notificaciones';
 
 // ---------------------------------------------------------------------
 // DECISIÓN TOMADA: el chat funciona COMPLETO en los dos lados
@@ -106,6 +107,11 @@ export default function LiveChat() {
   /** Grabación de voz en curso, si la hay (ver `alternarGrabacion`). */
   const [grabacion, setGrabacion] = useState<GrabacionEnCurso | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Notificaciones: ids de mensajes entrantes ya "vistos" (para no avisar
+  // dos veces), y una bandera para no notificar la PRIMERA carga (el
+  // historial que ya existía no es un mensaje nuevo).
+  const vistosRef = useRef<Set<string>>(new Set());
+  const sembradoRef = useRef(false);
   // Mensajes que ya se ven en pantalla (optimistic UI) pero todavía no
   // confirma Supabase. Es solo para el "check" tenue del recibo — la
   // conversación en sí ya se actualizó de una, no espera a esto.
@@ -127,9 +133,17 @@ export default function LiveChat() {
     }
     loadConversations(savedEmail);
 
+    iniciarNotificaciones();
+
     const handleUpdate = () => loadConversations(readLS(EMAIL_KEY));
     window.addEventListener('technoverse_db_updated', handleUpdate);
-    return () => window.removeEventListener('technoverse_db_updated', handleUpdate);
+    // Al tocar una notificación del sistema, se abre el chat.
+    const abrirChat = () => setIsOpen(true);
+    window.addEventListener(EVENTO_ABRIR_CHAT, abrirChat);
+    return () => {
+      window.removeEventListener('technoverse_db_updated', handleUpdate);
+      window.removeEventListener(EVENTO_ABRIR_CHAT, abrirChat);
+    };
   }, []);
 
   const loadConversations = (email?: string) => {
@@ -146,6 +160,35 @@ export default function LiveChat() {
       if (prev && mine.some(c => c.id === prev)) return prev;
       return mine.length > 0 ? mine[0].id : null;
     });
+    detectarMensajesNuevos(mine);
+  };
+
+  /**
+   * Avisa por notificación del sistema cuando entra un mensaje de soporte
+   * (o del bot) y el cliente NO está mirando. Los mensajes propios
+   * ('customer') no cuentan. La primera carga solo SIEMBRA lo ya visto,
+   * sin avisar del historial.
+   */
+  const detectarMensajesNuevos = (convs: ChatConversation[]) => {
+    const entrantes = convs.flatMap(c => c.messages.filter(m => m && m.sender !== 'customer'));
+
+    if (!sembradoRef.current) {
+      entrantes.forEach(m => vistosRef.current.add(m.id));
+      sembradoRef.current = true;
+      return;
+    }
+
+    const nuevos = entrantes.filter(m => !vistosRef.current.has(m.id));
+    nuevos.forEach(m => vistosRef.current.add(m.id));
+    if (nuevos.length === 0) return;
+
+    // `notificarMensajeChat` decide si dispara: si la persona está en
+    // primer plano (pestaña visible / app activa), NO hace nada del
+    // sistema y de avisar se encarga la propia UI del chat.
+    const ultimo = nuevos[nuevos.length - 1];
+    const cuerpo = (ultimo.text || '').trim()
+      || (ultimo.imageUrl ? '📷 Imagen' : ultimo.audioUrl ? '🎤 Nota de voz' : ultimo.videoUrl ? '🎬 Video' : 'Tenés un mensaje nuevo');
+    void notificarMensajeChat('Nuevo mensaje de Technoverse', cuerpo);
   };
 
   useEffect(() => {
@@ -488,7 +531,7 @@ export default function LiveChat() {
           ventana pueda usar todo el alto disponible sin encimarse con el FAB. */}
       {!isOpen && (
         <button
-          onClick={() => setIsOpen(true)}
+          onClick={() => { setIsOpen(true); void pedirPermisoNotificaciones(); }}
           className="fixed bottom-24 right-6 z-[45] w-12 h-12 max-w-12 max-h-12 rounded-full flex items-center justify-center transition hover:scale-105 active:scale-95 shadow-[var(--float-shadow-lg)] text-[var(--accent-ink)] bg-gradient-to-br from-[var(--brand-gold-dark)] to-[var(--brand-gold-mid)] border-2 border-[var(--bg-surface)]"
           id="btn-floating-chat"
         >
