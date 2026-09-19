@@ -24,6 +24,15 @@ jobs:
 
       - name: Setup Android SDK
         uses: android-actions/setup-android@v3
+        with:
+          # `packages: platform-tools` a propósito: el valor por defecto de
+          # la acción es "tools platform-tools", y Google RETIRÓ el paquete
+          # legacy `tools` del repositorio del SDK. Con el default, la acción
+          # falla con "Failed to find package 'tools'" antes de compilar
+          # (rompía TODO build de Android, no solo este). Se pide solo
+          # platform-tools; el resto (build-tools/platform) lo auto-descarga
+          # Gradle al compilar.
+          packages: 'platform-tools'
 
       - name: Install dependencies
         run: npm install
