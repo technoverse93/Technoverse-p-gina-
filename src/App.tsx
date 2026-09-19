@@ -9,7 +9,7 @@ import { conexionBloqueada, detalleDeBloqueo, conTope } from './utils/adminLogin
 import { registrarVisita } from './utils/huella';
 import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada } from './utils/biometria';
 import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO, UMBRAL_REINGRESO_RAPIDO_MS } from './mobile/appLock';
-import { marcarBloqueo } from './utils/biometriaNativa';
+import { marcarBloqueo, esAplicacionNativa } from './utils/biometriaNativa';
 import { supabase } from './supabaseClient';
 import { tieneTokenSeguridad } from './utils/securityPin';
 import { esGestion, esStaff, esSuperadmin } from './utils/roles';
@@ -414,25 +414,36 @@ function AppInner() {
 
   // Reacciona al bloqueo por inactividad (src/mobile/appLock.ts).
   //
-  // Dos caminos según cuánto duró la ausencia (`ausenteMs`, calculado en
-  // appLock.ts en el momento exacto del regreso):
+  // ---------------------------------------------------------------------
+  // APK: SESIÓN PERPETUA, LA HUELLA ES EL CERROJO
+  // ---------------------------------------------------------------------
+  // Se inicia sesión con usuario y clave UNA sola vez. De ahí en adelante
+  // la sesión queda en el aparato y no se borra hasta que se toque "Cerrar
+  // sesión". Cualquier ausencia —corta o larga— levanta el CANDADO DE
+  // HUELLA flotando encima de la pantalla actual, sin desmontar nada ni
+  // pedir usuario+clave: al validarse, la pantalla de abajo sigue igual.
   //
-  //   · ≤ 2 minutos: NO se cierra sesión ni se navega a ningún lado —
-  //     eso es justo lo que antes "reiniciaba" la app y perdía lo que
-  //     el administrador tenía a medio llenar. Se muestra el candado
-  //     flotante; al validarse, desaparece y la pantalla de abajo sigue
-  //     intacta porque nunca se desmontó.
-  //   · > 2 minutos: el comportamiento de siempre — mismo cierre que el
-  //     botón "Cerrar sesión" (conserva el pase de la huella si está
-  //     activada, cierre real si no) y vuelta a la tienda pública,
-  //     exigiendo iniciar sesión desde cero.
+  // Eso es lo "anti-ataques": si la huella falla o el aparato no tiene
+  // sensor, el propio candado (ReautenticacionRapidaOverlay) cae al
+  // respaldo —cierre a la tienda + clave—, así que quien tenga el teléfono
+  // sin la huella tampoco entra. Pero para el dueño legítimo nunca hay que
+  // volver a teclear la contraseña por el solo hecho de haberse ausentado.
   //
-  // En AMBOS casos la re-autenticación es obligatoria — lo único que
-  // cambia es qué pasa con la pantalla una vez que ya se autenticó.
+  // WEB: se mantiene el matiz de antes —una ausencia breve levanta el
+  // candado; 5 minutos de inactividad real sí piden iniciar sesión de
+  // nuevo (una pestaña de navegador no es un teléfono que se presta).
   useEffect(() => {
     const alForzarReingreso = (evento: Event) => {
       if (!currentUser) return; // nadie con sesión abierta, no hay nada que bloquear
       const ausenteMs = (evento as CustomEvent<{ ausenteMs?: number }>).detail?.ausenteMs;
+
+      // APK: siempre el candado de huella, sesión perpetua.
+      if (esAplicacionNativa()) {
+        setRequiereReautenticacionRapida(true);
+        return;
+      }
+
+      // Web: candado si fue breve; re-login si fue inactividad real.
       if (typeof ausenteMs === 'number' && ausenteMs <= UMBRAL_REINGRESO_RAPIDO_MS) {
         setRequiereReautenticacionRapida(true);
         return;
