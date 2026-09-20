@@ -1,6 +1,7 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, MoreVertical, Send, StickyNote, ImagePlus, RefreshCw, Bot, Trash2, Mic } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Send, StickyNote, ImagePlus, RefreshCw, Bot, Trash2, Mic, Camera } from 'lucide-react';
 import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS } from '../../utils/adjuntosChat';
+import { tomarFotoNativa, hayCamaraNativa } from '../../utils/camara';
 import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../../utils/grabadorVoz';
 import { borrarMensajeParaTodos, cerrarConversacion } from '../../utils/storage';
 import { ChatConversation } from '../../types';
@@ -36,6 +37,9 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   const [showMenu, setShowMenu] = useState(false);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  // Input aparte SOLO para la cámara en el navegador: `capture="environment"`
+  // abre la cámara trasera directo (ver `handleCamara`).
+  const camaraRef = useRef<HTMLInputElement>(null);
   // La subida de imagen es asíncrona (lectura + compresión + Storage); si el
   // admin cambia de conversación o sale del módulo antes de que termine, no
   // se debe tocar el estado de un componente ya desmontado.
@@ -86,6 +90,34 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
       await onSendMessage(conversation.id, { text: '', ...adjunto });
     } catch (err: any) {
       if (isMountedRef.current) toast.error('No se pudo enviar el adjunto. ' + (err?.message || err));
+    } finally {
+      if (isMountedRef.current) setUploading(false);
+    }
+  };
+
+  /**
+   * Botón de CÁMARA del personal: tomar una foto y mandarla al toque.
+   *
+   * En la APK abre la cámara del sistema (`tomarFotoNativa`); en el
+   * navegador dispara el `<input capture="environment">`, que cae en el
+   * mismo `handleImagePick`. Igual que del lado del cliente.
+   */
+  const handleCamara = async () => {
+    if (uploading) return;
+
+    if (!hayCamaraNativa()) {
+      camaraRef.current?.click();
+      return;
+    }
+
+    setUploading(true);
+    try {
+      const file = await tomarFotoNativa();
+      if (!file) return; // se cerró la cámara sin tomar nada
+      const adjunto = await subirAdjuntoChat(conversation.id, file);
+      await onSendMessage(conversation.id, { text: '', ...adjunto });
+    } catch (err: any) {
+      if (isMountedRef.current) toast.error('No se pudo tomar la foto. ' + (err?.message || err));
     } finally {
       if (isMountedRef.current) setUploading(false);
     }
@@ -353,6 +385,9 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
 
       <form onSubmit={handleSendText} className={`p-3 border-t border-[var(--border-color)] flex items-center gap-2 transition-colors ${noteMode ? 'bg-amber-400/10' : 'bg-[var(--bg-elevated)]'}`} id="chat-thread-input">
         <input ref={fileInputRef} type="file" accept={ACEPTA_ADJUNTOS} className="hidden" onChange={handleImagePick} />
+        {/* Input exclusivo de la cámara en el navegador (`capture="environment"`
+            abre la cámara trasera directo). En la APK manda el plugin nativo. */}
+        <input ref={camaraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImagePick} />
         <button
           type="button"
           onClick={() => setNoteMode(v => !v)}
@@ -360,6 +395,16 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           className={`w-9 h-9 rounded-full flex items-center justify-center transition shrink-0 border ${noteMode ? 'bg-amber-500 border-amber-500 text-white' : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-amber-500 hover:border-amber-500'}`}
         >
           <StickyNote className="w-4 h-4" />
+        </button>
+        <button
+          type="button"
+          onClick={() => void handleCamara()}
+          disabled={uploading}
+          title="Tomar una foto"
+          aria-label="Tomar una foto"
+          className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-color)] bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition shrink-0 disabled:opacity-40"
+        >
+          {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
         </button>
         <button
           type="button"

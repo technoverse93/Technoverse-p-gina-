@@ -1,11 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, ImagePlus, Loader2, Mic } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, ImagePlus, Loader2, Mic, Camera } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../utils/storage';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 import VideoMensaje from './chat/VideoMensaje';
 import ImagenMensaje from './chat/ImagenMensaje';
 import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS, type Adjunto } from '../utils/adjuntosChat';
+import { tomarFotoNativa, hayCamaraNativa } from '../utils/camara';
 import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../utils/grabadorVoz';
 import AudioMensaje from './chat/AudioMensaje';
 import { pedirPermisoNotificaciones, notificarMensajeChat, EVENTO_ABRIR_CHAT } from '../mobile/notificaciones';
@@ -107,6 +108,9 @@ export default function LiveChat() {
   /** Grabación de voz en curso, si la hay (ver `alternarGrabacion`). */
   const [grabacion, setGrabacion] = useState<GrabacionEnCurso | null>(null);
   const fileRef = useRef<HTMLInputElement>(null);
+  // Input aparte SOLO para la cámara en el navegador: `capture="environment"`
+  // hace que el teléfono abra la cámara trasera directo (ver `handleCamara`).
+  const camaraRef = useRef<HTMLInputElement>(null);
   // Notificaciones: ids de mensajes entrantes ya "vistos" (para no avisar
   // dos veces), y una bandera para no notificar la PRIMERA carga (el
   // historial que ya existía no es un mensaje nuevo).
@@ -421,14 +425,73 @@ export default function LiveChat() {
     }
   };
 
+  /**
+   * FOTO CON LATENCIA CERO — la burbuja aparece a los 0 ms.
+   *
+   * A diferencia de subir-y-después-mostrar (que deja al cliente mirando un
+   * spinner mientras la foto viaja), aquí la burbuja se pinta AL INSTANTE con
+   * una URL local de la propia foto (`createObjectURL`) y su tic tenue de
+   * "enviando". La subida a Storage ocurre en segundo plano; cuando termina,
+   * la URL local se cambia en silencio por la pública —misma burbuja, mismo
+   * lugar— y recién ahí se guarda el mensaje real. Si la subida falla, la
+   * burbuja se retira y se avisa.
+   *
+   * Sirve para la cámara y para una imagen elegida de la galería por igual;
+   * el video no pasa por acá (no hay preview local barato que valga la pena).
+   */
+  const enviarFotoOptimista = async (convId: string, file: File) => {
+    const urlLocal = URL.createObjectURL(file);
+    const msgId = newId('MSG');
+    const msgLocal: ChatMessage = {
+      id: msgId, sender: 'customer', text: '',
+      timestamp: new Date().toISOString(), imageUrl: urlLocal,
+    };
+    // 0 ms: se ve la foto local con el tic de "enviando", sin esperar la red.
+    appendOptimistic(convId, [msgLocal], 1);
+
+    try {
+      const adjunto = await subirAdjuntoChat(convId, file); // sube en segundo plano
+      const msgFinal: ChatMessage = { ...msgLocal, ...adjunto };
+      // Cambio silencioso: misma burbuja, ahora con la URL pública.
+      setConversations(prev => prev.map(c => c.id === convId
+        ? { ...c, messages: c.messages.map(m => m.id === msgId ? msgFinal : m) }
+        : c));
+      marcarMensajeEnVuelo(convId, msgFinal); // que una recarga no lo pise con la local
+
+      const db = getDB();
+      const idx = db.chat_conversations.findIndex(c => c.id === convId);
+      if (idx === -1) { rollbackOptimistic(convId, [msgId]); return; }
+      db.chat_conversations[idx].messages.push(msgFinal);
+      db.chat_conversations[idx].unreadCount += 1;
+      await saveDB(db);
+      clearPending([msgId]);
+    } catch (err: any) {
+      setChatError(err?.message || 'No se pudo enviar la foto. Verifica tu conexión e intenta de nuevo.');
+      rollbackOptimistic(convId, [msgId]);
+      loadConversations();
+    } finally {
+      // Ya no hace falta la URL local: la burbuja apunta a la pública (o se
+      // retiró). Liberarla evita que el blob quede colgado en memoria.
+      URL.revokeObjectURL(urlLocal);
+    }
+  };
+
   const handleAdjuntar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !activeConvId || subiendo) return;
+    if (!file || !activeConvId) return;
     setChatError(null);
-    setSubiendo(true);
-
     const convId = activeConvId;
+
+    // Imagen (cámara o galería): camino optimista, sin bloquear.
+    if (file.type.startsWith('image/')) {
+      await enviarFotoOptimista(convId, file);
+      return;
+    }
+
+    // Video: no hay preview local barato, se mantiene el camino con spinner.
+    if (subiendo) return;
+    setSubiendo(true);
     try {
       const adjunto = await subirAdjuntoChat(convId, file);
       await enviarAdjuntoComoMensaje(convId, adjunto, 'el archivo');
@@ -436,6 +499,33 @@ export default function LiveChat() {
       setChatError(err?.message || 'No se pudo enviar el archivo.');
     } finally {
       setSubiendo(false);
+    }
+  };
+
+  /**
+   * Botón de CÁMARA: tomar una foto y mandarla al toque.
+   *
+   * En la APK abre la cámara del sistema (`tomarFotoNativa`); en el navegador
+   * no hay plugin, así que se dispara el `<input capture="environment">` y la
+   * foto cae en `handleAdjuntar`. En ambos casos la foto termina en
+   * `enviarFotoOptimista`, con la burbuja visible a los 0 ms.
+   */
+  const handleCamara = async () => {
+    if (!activeConvId) return;
+
+    if (!hayCamaraNativa()) {
+      camaraRef.current?.click();
+      return;
+    }
+
+    setChatError(null);
+    const convId = activeConvId;
+    try {
+      const file = await tomarFotoNativa();
+      if (!file) return; // la persona cerró la cámara sin tomar nada
+      await enviarFotoOptimista(convId, file);
+    } catch (err: any) {
+      setChatError(err?.message || 'No se pudo tomar la foto.');
     }
   };
 
@@ -751,6 +841,21 @@ export default function LiveChat() {
 
                     <form onSubmit={handleSendMessage} className="p-3 bg-[var(--bg-surface)] border-t border-[var(--border-color)] flex gap-2 shrink-0">
                       <input ref={fileRef} type="file" accept={ACEPTA_ADJUNTOS} className="hidden" onChange={handleAdjuntar} />
+                      {/* Input exclusivo de la cámara en el navegador:
+                          `capture="environment"` abre la cámara trasera del
+                          teléfono directo. En la APK no se usa —ahí manda el
+                          plugin nativo desde `handleCamara`—. */}
+                      <input ref={camaraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleAdjuntar} />
+                      <button
+                        type="button"
+                        onClick={() => void handleCamara()}
+                        disabled={subiendo}
+                        aria-label="Tomar una foto"
+                        title="Tomar una foto"
+                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[var(--bg-sunken)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition disabled:opacity-50"
+                      >
+                        {subiendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
+                      </button>
                       <button
                         type="button"
                         onClick={() => fileRef.current?.click()}
