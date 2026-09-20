@@ -97,6 +97,12 @@ function cssDelDocumento(): string {
 export default function ConsolaSupervision() {
   const [gente, setGente] = useState<Presencia[]>([]);
   const [visitantes, setVisitantes] = useState<Visitante[]>([]);
+  // ¿Ya volvió la PRIMERA consulta de presencia? Antes de esto, `gente` y
+  // `visitantes` empiezan en `[]` — sin esta bandera se leía igual que
+  // "no hay nadie conectado", un dato falso mostrado como si fuera real
+  // mientras la consulta todavía viaja. Con la bandera se distingue "no
+  // hay nadie" (de verdad) de "todavía no se sabe".
+  const [presenciaLista, setPresenciaLista] = useState(false);
   const [sel, setSel] = useState<string | null>(null);
 
   const [estado, setEstado] = useState<'idle' | 'esperando' | 'vivo'>('idle');
@@ -129,6 +135,19 @@ export default function ConsolaSupervision() {
    */
   const [telemetria, setTelemetria] = useState<{ bateria: { nivel: number; cargando: boolean } | null; red: { tipo: string; rttMs: number | null; downlinkMbps: number | null } | null } | null>(null);
 
+  /**
+   * LATIDO DEL ESPEJO — marca de la última vez que llegó CUALQUIER señal
+   * del supervisado (un lote de rrweb, el CSS, el tema o la telemetría:
+   * todo pasa por `manejarLote`, así que basta un solo punto). Sirve para
+   * el vigía de congelamiento de abajo: mientras el canal siga
+   * "SUBSCRIBED" a los ojos de Supabase pero el otro lado dejó de mandar
+   * nada —su pestaña se congeló en segundo plano, el aparato se quedó sin
+   * red sin que el WebSocket se enterara— esto es lo único que lo nota.
+   */
+  const ultimaSenalRef = useRef<number>(0);
+  /** Evita que el vigía dispare una reconexión encima de otra ya en curso. */
+  const reconectandoAutoRef = useRef(false);
+
   // --------------------------- Presencia ---------------------------
   const cargar = useCallback(async () => {
     // Solo lo FRESCO, y filtrado en el servidor. Antes se traía la tabla
@@ -154,6 +173,7 @@ export default function ConsolaSupervision() {
     const visitas = (clientes.data as Visitante[]) || [];
     setGente(filas);
     setVisitantes(visitas);
+    setPresenciaLista(true);
     return { filas, visitas };
   }, []);
 
@@ -293,6 +313,9 @@ export default function ConsolaSupervision() {
 
   const manejarLote = useCallback((lote: any[]) => {
     if (!Array.isArray(lote) || lote.length === 0) return;
+    // Cualquier lote real —eventos de rrweb, css, tema o telemetría— cuenta
+    // como "sigue vivo". Ver `ultimaSenalRef` para el porqué.
+    ultimaSenalRef.current = Date.now();
 
     for (const ev of lote) {
       // Cambio de tema del supervisado. Antes esto DESTRUÍA el reproductor
@@ -398,6 +421,10 @@ export default function ConsolaSupervision() {
   /** Abre los dos caminos (rápido y respaldo) y pide la grabación. */
   const engancharA = useCallback(async (clave: string) => {
     setEstado('esperando');
+    // Arranca el latido en cero: le da al primer fotograma su propio
+    // margen para llegar antes de que el vigía de congelamiento pudiera
+    // malinterpretar el silencio inicial como una pantalla trabada.
+    ultimaSenalRef.current = Date.now();
 
     // Camino rápido: canal privado de broadcast. Es el único que tienen
     // los clientes de la tienda (no pueden escribir en la tabla).
@@ -543,6 +570,62 @@ export default function ConsolaSupervision() {
     }
   }, [cargar, soltar, engancharA, destruirReplayer]);
 
+  // ---------------------------------------------------------------------
+  // VIGÍA DE CONGELAMIENTO — reconexión automática y silenciosa
+  // ---------------------------------------------------------------------
+  // FALLO CORREGIDO: "la transmisión se congela... aunque la persona
+  // supervisada siga activa. Requiere quitar y poner el componente
+  // repetidas veces hasta que vuelve a reaccionar."
+  //
+  // La causa: Supabase Realtime reconecta el WebSocket SOLO cuando de
+  // verdad se cae (error de red, servidor que lo cierra). Si en cambio el
+  // lado que transmite se congela —su pestaña pasó a segundo plano y el
+  // navegador le recorta los temporizadores, el aparato se quedó sin
+  // batería de golpe, un error de JavaScript mató el bucle de `record()`
+  // sin cerrar el canal— el WebSocket del Superadmin sigue perfectamente
+  // "SUBSCRIBED": no hay ningún error que reaccionar, solo silencio. Antes
+  // NADA vigilaba ese silencio, así que el espejo se quedaba pegado en el
+  // último fotograma para siempre, y la única salida era la reconexión
+  // manual (cambiar de persona y volver, o el botón Actualizar).
+  //
+  // Ahora, mientras hay alguien seleccionado, se comprueba cada 5 s cuánto
+  // hace que llegó la última señal real (`ultimaSenalRef`, marcada en
+  // `manejarLote`). Un supervisado vivo manda algo AL MENOS cada 10-15 s
+  // sin que nadie toque nada (la telemetría cada 15 s, el CSS cada 10 s, la
+  // foto completa cada 12 s), así que un silencio de 22 s ya no es una
+  // pausa normal: es que el otro lado dejó de mandar. Ahí se dispara,
+  // SOLA, la misma reconexión limpia que hace el botón Actualizar para el
+  // caso (b) — soltar, destruir el reproductor y volver a enganchar—, sin
+  // que el administrador tenga que notarlo ni tocar nada.
+  const UMBRAL_CONGELAMIENTO_MS = 22000;
+
+  const reconectarEspejo = useCallback(async (clave: string) => {
+    await soltar(clave);
+    destruirReplayer();
+    await new Promise(r => setTimeout(r, 300));
+    if (selRef.current !== clave) return; // cambió de persona mientras tanto
+    await engancharA(clave);
+  }, [soltar, destruirReplayer, engancharA]);
+
+  useEffect(() => {
+    const vigia = setInterval(() => {
+      const actual = selRef.current;
+      if (!actual || reconectandoAutoRef.current) return;
+      if (Date.now() - ultimaSenalRef.current < UMBRAL_CONGELAMIENTO_MS) return;
+
+      reconectandoAutoRef.current = true;
+      setAviso('Sin señal por un momento: reconectando automáticamente…');
+      void reconectarEspejo(actual).finally(() => {
+        reconectandoAutoRef.current = false;
+        // Se reinicia igual pase lo que pase: si la reconexión también se
+        // quedó sin señal, el próximo ciclo del vigía (5 s después) lo
+        // vuelve a intentar en vez de disparar en bucle cerrado.
+        ultimaSenalRef.current = Date.now();
+      });
+    }, 5000);
+    return () => clearInterval(vigia);
+  }, [reconectarEspejo]);
+
   // Al desmontar, suelta a quien se esté mirando (para su grabación).
   useEffect(() => () => { void soltar(selRef.current); }, [soltar]);
 
@@ -617,7 +700,12 @@ export default function ConsolaSupervision() {
           <div className="px-3 py-2 border-b border-[var(--border-color)] bg-[var(--bg-sunken)]">
             <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">Conectados</span>
           </div>
-          {gente.filter(enLinea).length === 0 ? (
+          {!presenciaLista ? (
+            <div className="flex items-center justify-center gap-2 px-3 py-6 text-[var(--text-muted)]">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <span className="text-[11.5px]">Consultando…</span>
+            </div>
+          ) : gente.filter(enLinea).length === 0 ? (
             <p className="text-[12px] text-[var(--text-muted)] italic px-3 py-6 text-center">Nadie del personal en línea.</p>
           ) : (
             gente.filter(enLinea).map(p => {
@@ -664,7 +752,12 @@ export default function ConsolaSupervision() {
             <span className="text-[10px] font-bold uppercase tracking-[0.08em] text-[var(--text-muted)]">En la tienda</span>
             <span className="text-[10px] font-mono text-[var(--text-muted)]">solo modelo</span>
           </div>
-          {visitantes.filter(visitaEnLinea).length === 0 ? (
+          {!presenciaLista ? (
+            <div className="flex items-center justify-center gap-2 px-3 py-5 text-[var(--text-muted)]">
+              <RefreshCw className="w-3.5 h-3.5 animate-spin" />
+              <span className="text-[11.5px]">Consultando…</span>
+            </div>
+          ) : visitantes.filter(visitaEnLinea).length === 0 ? (
             <p className="text-[12px] text-[var(--text-muted)] italic px-3 py-5 text-center">Ningún cliente navegando ahora.</p>
           ) : (
             visitantes.filter(visitaEnLinea).map(v => {
@@ -726,9 +819,16 @@ export default function ConsolaSupervision() {
             <div ref={lienzoRef} className="w-full" />
 
 
+            {/* No se muestra NADA del lienzo hasta que `estado === 'vivo'`:
+                esta capa lo tapa por completo mientras tanto, así que el
+                DOM que rrweb va reconstruyendo por debajo —a medio armar,
+                sin estilos aplicados todavía— nunca llega a pintarse. Es
+                lo que impide el "recuadro sin diseño" al enganchar. */}
             {estado !== 'vivo' && (
-              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center px-6 pointer-events-none">
-                <MonitorPlay className="w-9 h-9 text-white/20" />
+              <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 text-center px-6 pointer-events-none bg-[#0b0f0e]">
+                {seleccionado
+                  ? <RefreshCw className="w-8 h-8 text-white/30 animate-spin" />
+                  : <MonitorPlay className="w-9 h-9 text-white/20" />}
                 <p className="text-[12.5px] text-white/45">
                   {seleccionado ? 'Esperando la señal del dispositivo…' : 'El espejo aparece al elegir a alguien conectado.'}
                 </p>

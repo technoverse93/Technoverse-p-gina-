@@ -6,7 +6,14 @@ import { soportaBiometria, entrarConBiometria } from '../../utils/biometria';
 
 interface Props {
   email: string;
-  onDesbloqueado: () => void;
+  /**
+   * Recibe la identidad que acaba de abrir la huella (`userId`/`email` de
+   * `ResultadoBiometria`). El candado de ausencia breve la ignora —ya tenía
+   * `currentUser` puesto de antes—, pero el candado de ARRANQUE EN FRÍO
+   * (App.tsx) la necesita para poblar `currentUser` desde cero: en ese caso
+   * no había ningún usuario en memoria al montarse este componente.
+   */
+  onDesbloqueado: (resultado: { userId?: string; email?: string }) => void;
   /** Mismo efecto que "Cerrar sesión": cierre real y vuelta a la tienda pública. */
   onFalloTotal: () => void;
 }
@@ -64,7 +71,7 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
       const resultado = await entrarConBiometria(email);
       if (!vigente) return;
       if (resultado.ok) {
-        onDesbloqueado();
+        onDesbloqueado({ userId: resultado.userId, email: resultado.email });
       } else {
         setEstado('fallo');
       }

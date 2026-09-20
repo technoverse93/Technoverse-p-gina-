@@ -34,6 +34,9 @@ import ResetPasswordView from './components/ResetPasswordView';
 // aquí es la optimización de mayor impacto: nadie fuera de /admin lo paga.
 const AdminPanel = lazy(() => import('./components/AdminPanel'));
 
+/** Ver el efecto que la escribe, dentro de App(), para el porqué. */
+const CLAVE_ULTIMO_CORREO = 'technoverse_ultimo_correo';
+
 function AdminPanelFallback() {
   return (
     <div className="min-h-dvh flex items-center justify-center bg-[var(--bg-base,#0F1217)]">
@@ -208,6 +211,17 @@ function AppInner() {
     void fijarFlagSecureSegunCorreo(esAdmin);
   }, [currentUser]);
 
+  // Recuerda el último correo con sesión abierta en ESTE aparato, para que
+  // el candado de arranque en frío (más abajo) pueda decir "sigue siendo
+  // fulano@..." desde el primer fotograma, sin esperar a que la huella
+  // termine de verificar para saber de quién es la sesión que va a abrir.
+  // Es solo texto para la pantalla — la cuenta que de verdad se abre la
+  // decide el pase/huella, nunca este valor.
+  useEffect(() => {
+    if (!currentUser?.email) return;
+    try { localStorage.setItem(CLAVE_ULTIMO_CORREO, currentUser.email); } catch { /* sin almacenamiento no hay recordatorio, no es grave */ }
+  }, [currentUser]);
+
   // ---- Recuperación de la sesión al abrir la aplicación --------------------
   //
   // FALLO CORREGIDO: `currentUser` arrancaba SIEMPRE en null y solo se
@@ -228,6 +242,35 @@ function AppInner() {
   // abajo que expulsa al panel administrativo.
   const [sesionVerificada, setSesionVerificada] = useState(false);
 
+  // Lee el perfil completo de un usuario ya autenticado en Supabase (con
+  // tope de espera). Lo comparten dos caminos que necesitan exactamente lo
+  // mismo: `recuperar()` (arranque normal, sesión no bloqueada) y el
+  // candado de ARRANQUE EN FRÍO más abajo (sesión bloqueada, la huella la
+  // acaba de abrir y hay que poblar `currentUser` desde cero).
+  //
+  // Columnas explícitas, no `select('*')`: `profiles` guarda el hash del
+  // token de seguridad de 4 dígitos (ver migración del PIN), y ese hash
+  // tiene revocado el SELECT a nivel de columna para cualquier rol del
+  // cliente. Un `select('*')` fallaría entero con "permission denied for
+  // column" en vez de solo omitirla.
+  const cargarPerfilCompleto = async (userId?: string): Promise<User | null> => {
+    if (!userId) return null;
+    try {
+      const { data: perfil } = await conTope(
+        supabase
+          .from('profiles')
+          .select('id, email, name, role, created_at')
+          .eq('id', userId)
+          .maybeSingle(),
+        8000
+      );
+      if (!perfil) return null;
+      return { id: perfil.id, email: perfil.email, role: perfil.role, name: perfil.name || perfil.email };
+    } catch {
+      return null;
+    }
+  };
+
   useEffect(() => {
     let vigente = true;
 
@@ -238,6 +281,15 @@ function AppInner() {
         // aparato y solo la huella la abre. Si no se comprobara esto,
         // cerrar sesión no tendría ningún efecto visible: la pantalla
         // volvería a entrar sola al reabrir la aplicación.
+        //
+        // ARRANQUE EN FRÍO: cuando Android mató el proceso mientras la
+        // sesión estaba bloqueada, esto deja `currentUser` en null a
+        // propósito — antes eso significaba caer a la tienda pública como
+        // visitante, pidiendo usuario y clave de nuevo (el fallo
+        // reportado). Ahora el candado de más abajo (`arranqueFrioBloqueado`)
+        // detecta exactamente esta combinación —sesión bloqueada,
+        // `currentUser` nulo, ya verificado— y levanta el prompt biométrico
+        // en su lugar, sin pasar por aquí otra vez.
         if (sesionBloqueada()) return;
 
         // CON TOPE DE TIEMPO, igual que el formulario de acceso.
@@ -255,28 +307,10 @@ function AppInner() {
         const usuario = data?.session?.user;
         if (!vigente || !usuario?.id) return;
 
-        // Columnas explícitas, no `select('*')`: `profiles` guarda el hash
-        // del token de seguridad de 4 dígitos (ver migración del PIN), y
-        // ese hash tiene revocado el SELECT a nivel de columna para
-        // cualquier rol del cliente. Un `select('*')` fallaría entero con
-        // "permission denied for column" en vez de solo omitirla.
-        const { data: perfil } = await conTope(
-          supabase
-            .from('profiles')
-            .select('id, email, name, role, created_at')
-            .eq('id', usuario.id)
-            .maybeSingle(),
-          8000
-        );
-
+        const perfil = await cargarPerfilCompleto(usuario.id);
         if (!vigente || !perfil) return;
 
-        setCurrentUser({
-          id: perfil.id,
-          email: perfil.email,
-          role: perfil.role,
-          name: perfil.name || perfil.email,
-        });
+        setCurrentUser(perfil);
       } catch {
         /* sin sesión recuperable se sigue como visitante: nada se rompe */
       } finally {
@@ -550,6 +584,31 @@ function AppInner() {
     return <PantallaBloqueada porCuenta={bloqueoPorCuenta} />;
   }
 
+  // ---------------------------------------------------------------------
+  // CANDADO DE ARRANQUE EN FRÍO (APK)
+  // ---------------------------------------------------------------------
+  // FALLO CORREGIDO: "cierro la aplicación del todo y al volver pide
+  // usuario y clave otra vez", con la sesión perpetua ya activa.
+  //
+  // Causa real: `recuperar()` (arriba) hace exactamente lo correcto al
+  // encontrar `sesionBloqueada() === true` — no restaura `currentUser`,
+  // para no abrir la sesión sin pasar por la huella — pero eso deja
+  // `currentUser` en null. El candado de AUSENCIA BREVE de más abajo
+  // exige `currentUser` para mostrarse (`requiereReautenticacionRapida &&
+  // currentUser`), así que en un arranque de cero —proceso matado, React
+  // arranca sin nada en memoria— nunca aparecía: la aplicación caía
+  // derecho a la tienda pública, como si nadie hubiera iniciado sesión
+  // nunca, y solo pedía la huella si la persona abría el acceso a mano.
+  //
+  // Esta condición cubre exactamente ese hueco: sesión bloqueada,
+  // `currentUser` todavía sin poblar, y `recuperar()` YA terminó de
+  // intentarlo (`sesionVerificada`, para no dispararse mientras ese
+  // intento sigue en curso). Solo aplica a la APK — en la web el bloqueo
+  // por 5 minutos de inactividad real SÍ debe pedir usuario y clave de
+  // nuevo, es la política que ya existía y sigue intacta.
+  const arranqueFrioBloqueado =
+    esAplicacionNativa() && sesionVerificada && !currentUser && sesionBloqueada();
+
   return (
     <div className="min-h-dvh bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700" id="technoverse-application-container">
       {currentView === 'reset-password' ? (
@@ -613,6 +672,40 @@ function AppInner() {
           }}
           onFalloTotal={() => {
             setRequiereReautenticacionRapida(false);
+            handleLogout();
+            setAutoOpenLogin(true);
+          }}
+        />
+      )}
+
+      {/* Candado de ARRANQUE EN FRÍO — ver `arranqueFrioBloqueado` arriba.
+          Es el MISMO componente que el candado de ausencia breve: la
+          diferencia entera está en qué pasa al desbloquear. Aquí no había
+          ningún `currentUser` en memoria, así que hay que poblarlo desde
+          el resultado de la huella en vez de solo bajar una bandera; y al
+          fallar del todo no hace falta `setRequiereReautenticacionRapida`
+          porque este candado nunca usó ese estado — se apaga solo en
+          cuanto `currentUser` deja de ser null (o `handleLogout` limpia
+          `sesionBloqueada`, lo que ocurra). */}
+      {arranqueFrioBloqueado && (
+        <ReautenticacionRapidaOverlay
+          email={(() => { try { return localStorage.getItem(CLAVE_ULTIMO_CORREO) || ''; } catch { return ''; } })()}
+          onDesbloqueado={async ({ userId }) => {
+            const perfil = await cargarPerfilCompleto(userId);
+            if (perfil) {
+              setCurrentUser(perfil);
+              marcarBloqueo(false);
+            } else {
+              // La huella se aprobó pero el perfil no se pudo leer (red
+              // caída justo en ese instante, por ejemplo). No se deja a la
+              // persona en un candado que ya aprobó pero no abre nada: se
+              // cae al mismo cierre real que un fallo de huella, y desde
+              // ahí puede entrar con su contraseña.
+              handleLogout();
+              setAutoOpenLogin(true);
+            }
+          }}
+          onFalloTotal={() => {
             handleLogout();
             setAutoOpenLogin(true);
           }}

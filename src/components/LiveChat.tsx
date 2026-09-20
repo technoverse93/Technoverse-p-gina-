@@ -1,10 +1,11 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, ImagePlus, Loader2, Mic, Camera } from 'lucide-react';
+import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, Loader2, Mic, Paperclip } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../utils/storage';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 import VideoMensaje from './chat/VideoMensaje';
 import ImagenMensaje from './chat/ImagenMensaje';
+import AdjuntarMenu from './chat/AdjuntarMenu';
 import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS, type Adjunto } from '../utils/adjuntosChat';
 import { tomarFotoNativa, hayCamaraNativa } from '../utils/camara';
 import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../utils/grabadorVoz';
@@ -107,6 +108,8 @@ export default function LiveChat() {
   const [subiendo, setSubiendo] = useState(false);
   /** Grabación de voz en curso, si la hay (ver `alternarGrabacion`). */
   const [grabacion, setGrabacion] = useState<GrabacionEnCurso | null>(null);
+  /** ¿Está abierto el menú "Adjuntar" (cámara / galería)? Ver AdjuntarMenu.tsx. */
+  const [menuAdjuntoAbierto, setMenuAdjuntoAbierto] = useState(false);
   const fileRef = useRef<HTMLInputElement>(null);
   // Input aparte SOLO para la cámara en el navegador: `capture="environment"`
   // hace que el teléfono abra la cámara trasera directo (ver `handleCamara`).
@@ -865,49 +868,66 @@ export default function LiveChat() {
                       </div>
                     )}
 
-                    <form onSubmit={handleSendMessage} className="p-3 bg-[var(--bg-surface)] border-t border-[var(--border-color)] flex gap-2 shrink-0">
+                    <form onSubmit={handleSendMessage} className="p-3 bg-[var(--bg-surface)] border-t border-[var(--border-color)] flex items-center gap-2 shrink-0">
                       <input ref={fileRef} type="file" accept={ACEPTA_ADJUNTOS} className="hidden" onChange={handleAdjuntar} />
                       {/* Input exclusivo de la cámara en el navegador:
                           `capture="environment"` abre la cámara trasera del
                           teléfono directo. En la APK no se usa —ahí manda el
                           plugin nativo desde `handleCamara`—. */}
                       <input ref={camaraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleAdjuntar} />
-                      <button
-                        type="button"
-                        onClick={() => void handleCamara()}
-                        disabled={subiendo}
-                        aria-label="Tomar una foto"
-                        title="Tomar una foto"
-                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[var(--bg-sunken)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition disabled:opacity-50"
+
+                      {/* HERRAMIENTAS: cámara+galería (un solo botón "Adjuntar"
+                          con menú) y nota de voz. PRIORIDAD AL TEXTO —
+                          desaparecen apenas hay algo escrito, dejando SOLO el
+                          botón de enviar, para que el campo de texto tenga
+                          todo el ancho posible en la ventana angosta del
+                          widget. `grid-cols-[0fr]→[auto]` con `overflow-hidden`
+                          anima el ancho a cero en vez de un `display:none`
+                          brusco. */}
+                      <div
+                        className={`grid transition-[grid-template-columns] duration-200 ease-out ${
+                          inputText.trim() ? 'grid-cols-[0fr]' : 'grid-cols-[auto]'
+                        }`}
                       >
-                        {subiendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => fileRef.current?.click()}
-                        disabled={subiendo}
-                        aria-label="Adjuntar foto o video"
-                        title="Adjuntar foto o video"
-                        className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[var(--bg-sunken)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition disabled:opacity-50"
-                      >
-                        {subiendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
-                      </button>
-                      {puedeGrabarVoz() && (
-                        <button
-                          type="button"
-                          onClick={() => void alternarGrabacion()}
-                          disabled={subiendo}
-                          aria-label={grabacion ? 'Enviar nota de voz' : 'Grabar nota de voz'}
-                          title={grabacion ? 'Tocá para enviar la nota de voz' : 'Grabar una nota de voz'}
-                          className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border transition disabled:opacity-50 ${
-                            grabacion
-                              ? 'bg-red-500 border-red-500 text-white animate-pulse'
-                              : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
-                          }`}
-                        >
-                          <Mic className="w-4 h-4" />
-                        </button>
-                      )}
+                        <div className="overflow-hidden flex items-center gap-2">
+                          <div className="relative shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => setMenuAdjuntoAbierto(v => !v)}
+                              disabled={subiendo}
+                              aria-label="Adjuntar"
+                              title="Adjuntar foto"
+                              className="w-9 h-9 rounded-full flex items-center justify-center shrink-0 bg-[var(--bg-sunken)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition disabled:opacity-50"
+                            >
+                              {subiendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+                            </button>
+                            {menuAdjuntoAbierto && (
+                              <AdjuntarMenu
+                                onClose={() => setMenuAdjuntoAbierto(false)}
+                                onCamara={() => void handleCamara()}
+                                onGaleria={() => fileRef.current?.click()}
+                              />
+                            )}
+                          </div>
+                          {puedeGrabarVoz() && (
+                            <button
+                              type="button"
+                              onClick={() => void alternarGrabacion()}
+                              disabled={subiendo}
+                              aria-label={grabacion ? 'Enviar nota de voz' : 'Grabar nota de voz'}
+                              title={grabacion ? 'Tocá para enviar la nota de voz' : 'Grabar una nota de voz'}
+                              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border transition disabled:opacity-50 ${
+                                grabacion
+                                  ? 'bg-red-500 border-red-500 text-white animate-pulse'
+                                  : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
+                              }`}
+                            >
+                              <Mic className="w-4 h-4" />
+                            </button>
+                          )}
+                        </div>
+                      </div>
+
                       <input
                         type="text"
                         value={inputText}
