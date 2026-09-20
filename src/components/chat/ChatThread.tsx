@@ -34,6 +34,12 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   const [grabacion, setGrabacion] = useState<GrabacionEnCurso | null>(null);
   /** ¿Está abierto el menú "Adjuntar" (cámara / galería)? Ver AdjuntarMenu.tsx. */
   const [menuAdjuntoAbierto, setMenuAdjuntoAbierto] = useState(false);
+  // El botón "Adjuntar" se oculta con el resto de las herramientas apenas
+  // hay texto escrito. Si el menú quedó abierto justo antes de eso, se
+  // cierra solo en vez de quedar flotando sin el botón que lo ancla.
+  useEffect(() => {
+    if (inputText.trim()) setMenuAdjuntoAbierto(false);
+  }, [inputText]);
   const [borrandoId, setBorrandoId] = useState<string | null>(null);
   /** Mensaje cuyo menú de acciones está abierto (se abre al tocarlo). */
   const [menuMsgId, setMenuMsgId] = useState<string | null>(null);
@@ -397,22 +403,34 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
             escrito, dejando solo el botón de enviar — el campo de texto es
             lo que importa leer, no la fila de íconos. El tinte ámbar de
             "modo nota" (arriba, en el `form`) sigue visible aunque el
-            toggle se oculte, así que no se pierde esa señal al escribir. */}
-        <div
-          className={`grid transition-[grid-template-columns] duration-200 ease-out ${
-            inputText.trim() ? 'grid-cols-[0fr]' : 'grid-cols-[auto]'
-          }`}
-        >
-          <div className="overflow-hidden flex items-center gap-2">
-            <button
-              type="button"
-              onClick={() => setNoteMode(v => !v)}
-              title="Nota interna"
-              className={`w-9 h-9 rounded-full flex items-center justify-center transition shrink-0 border ${noteMode ? 'bg-amber-500 border-amber-500 text-white' : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-amber-500 hover:border-amber-500'}`}
-            >
-              <StickyNote className="w-4 h-4" />
-            </button>
-            <div className="relative shrink-0">
+            toggle se oculte, así que no se pierde esa señal al escribir.
+
+            FALLO CORREGIDO — el botón "Adjuntar" no hacía nada visible: el
+            `relative` que ancla su menú (`AdjuntarMenu.tsx`) tiene que
+            quedar AFUERA del `overflow-hidden` que recorta el ancho para
+            la animación, o el menú se recorta a la nada aunque el botón sí
+            reaccione. Por eso el `relative` de abajo envuelve TODA la fila
+            de herramientas —nota, adjuntar, voz— y el menú se dibuja como
+            hermano de la caja recortada, no adentro. Como acá el botón de
+            adjuntar es el SEGUNDO (después de "nota interna", 36px + 8px
+            de separación), el menú necesita ese mismo desplazamiento para
+            seguir quedando debajo del botón correcto: `anchorOffsetClass`
+            en vez del `left-0` por defecto (ver AdjuntarMenu.tsx). */}
+        <div className="relative" id="div-menu-admin">
+          <div
+            className={`grid transition-[grid-template-columns] duration-200 ease-out ${
+              inputText.trim() ? 'grid-cols-[0fr]' : 'grid-cols-[auto]'
+            }`}
+          >
+            <div className="overflow-hidden flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setNoteMode(v => !v)}
+                title="Nota interna"
+                className={`w-9 h-9 rounded-full flex items-center justify-center transition shrink-0 border ${noteMode ? 'bg-amber-500 border-amber-500 text-white' : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-amber-500 hover:border-amber-500'}`}
+              >
+                <StickyNote className="w-4 h-4" />
+              </button>
               <button
                 type="button"
                 onClick={() => setMenuAdjuntoAbierto(v => !v)}
@@ -423,31 +441,32 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
               >
                 {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
               </button>
-              {menuAdjuntoAbierto && (
-                <AdjuntarMenu
-                  onClose={() => setMenuAdjuntoAbierto(false)}
-                  onCamara={() => void handleCamara()}
-                  onGaleria={() => fileInputRef.current?.click()}
-                />
+              {puedeGrabarVoz() && (
+                <button
+                  type="button"
+                  onClick={() => void alternarGrabacion()}
+                  disabled={uploading}
+                  title={grabacion ? 'Tocá para enviar la nota de voz' : 'Grabar una nota de voz'}
+                  aria-label={grabacion ? 'Enviar nota de voz' : 'Grabar nota de voz'}
+                  className={`w-9 h-9 rounded-full flex items-center justify-center border transition shrink-0 disabled:opacity-40 ${
+                    grabacion
+                      ? 'bg-red-500 border-red-500 text-white animate-pulse'
+                      : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
+                  }`}
+                >
+                  <Mic className="w-4 h-4" />
+                </button>
               )}
             </div>
-            {puedeGrabarVoz() && (
-              <button
-                type="button"
-                onClick={() => void alternarGrabacion()}
-                disabled={uploading}
-                title={grabacion ? 'Tocá para enviar la nota de voz' : 'Grabar una nota de voz'}
-                aria-label={grabacion ? 'Enviar nota de voz' : 'Grabar nota de voz'}
-                className={`w-9 h-9 rounded-full flex items-center justify-center border transition shrink-0 disabled:opacity-40 ${
-                  grabacion
-                    ? 'bg-red-500 border-red-500 text-white animate-pulse'
-                    : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
-                }`}
-              >
-                <Mic className="w-4 h-4" />
-              </button>
-            )}
           </div>
+          {menuAdjuntoAbierto && (
+            <AdjuntarMenu
+              onClose={() => setMenuAdjuntoAbierto(false)}
+              onCamara={() => void handleCamara()}
+              onGaleria={() => fileInputRef.current?.click()}
+              anchorOffsetClass="left-11"
+            />
+          )}
         </div>
 
         <input

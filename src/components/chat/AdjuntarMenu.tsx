@@ -5,6 +5,15 @@ interface Props {
   onClose: () => void;
   onCamara: () => void;
   onGaleria: () => void;
+  /**
+   * Clase de posición horizontal (`left-0`, `left-11`, …). El menú se
+   * ancla al contenedor `position: relative` más cercano que NO tenga
+   * `overflow: hidden` —ver el porqué en el comentario de más abajo—, y
+   * ese contenedor no siempre empieza justo en el botón "Adjuntar": en el
+   * panel de admin hay un botón de "nota interna" ANTES. Por defecto
+   * `left-0` (el botón es el primero, caso del widget del cliente).
+   */
+  anchorOffsetClass?: string;
 }
 
 /**
@@ -35,8 +44,21 @@ interface Props {
  * inferior de una ventana angosta (el widget flotante o el panel), así
  * que un menú que abriera hacia abajo saldría cortado o tapado por el
  * borde de la pantalla.
+ *
+ * ---------------------------------------------------------------------
+ * FALLO CORREGIDO — el botón no hacía nada visible
+ * ---------------------------------------------------------------------
+ * Este menú es `position: absolute` y se ancla al `position: relative`
+ * más cercano. El botón "Adjuntar" vive dentro de un contenedor con
+ * `overflow: hidden` (el que anima el ancho a cero al escribir, ver
+ * LiveChat.tsx/ChatThread.tsx): si el `relative` que ancla este menú
+ * quedara DENTRO de esa caja recortada, el menú se recorta a la nada —el
+ * botón cambia de estado con normalidad, pero visualmente no aparece
+ * nada, exactamente el "toco el ícono y no pasa nada" reportado. Por eso
+ * quien llama a este componente debe ponerlo como HERMANO del contenedor
+ * `overflow-hidden`, dentro de un `relative` que quede AFUERA de él.
  */
-export default function AdjuntarMenu({ onClose, onCamara, onGaleria }: Props) {
+export default function AdjuntarMenu({ onClose, onCamara, onGaleria, anchorOffsetClass = 'left-0' }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -55,7 +77,7 @@ export default function AdjuntarMenu({ onClose, onCamara, onGaleria }: Props) {
   return (
     <div
       ref={rootRef}
-      className="absolute left-0 bottom-full mb-1.5 w-48 z-[70] rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] shadow-lg overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-150"
+      className={`absolute ${anchorOffsetClass} bottom-full mb-1.5 w-48 z-[70] rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] shadow-lg overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-150`}
       id="menu-adjuntar-chat"
     >
       <button

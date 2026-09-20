@@ -110,6 +110,13 @@ export default function LiveChat() {
   const [grabacion, setGrabacion] = useState<GrabacionEnCurso | null>(null);
   /** ¿Está abierto el menú "Adjuntar" (cámara / galería)? Ver AdjuntarMenu.tsx. */
   const [menuAdjuntoAbierto, setMenuAdjuntoAbierto] = useState(false);
+  // El botón "Adjuntar" se oculta con el resto de las herramientas apenas
+  // hay texto escrito (ver el JSX del formulario). Si el menú quedó
+  // abierto justo antes de que eso pasara, se cierra solo: no tiene
+  // sentido dejarlo flotando sin el botón que lo ancla ya visible.
+  useEffect(() => {
+    if (inputText.trim()) setMenuAdjuntoAbierto(false);
+  }, [inputText]);
   const fileRef = useRef<HTMLInputElement>(null);
   // Input aparte SOLO para la cámara en el navegador: `capture="environment"`
   // hace que el teléfono abra la cámara trasera directo (ver `handleCamara`).
@@ -883,14 +890,26 @@ export default function LiveChat() {
                           todo el ancho posible en la ventana angosta del
                           widget. `grid-cols-[0fr]→[auto]` con `overflow-hidden`
                           anima el ancho a cero en vez de un `display:none`
-                          brusco. */}
-                      <div
-                        className={`grid transition-[grid-template-columns] duration-200 ease-out ${
-                          inputText.trim() ? 'grid-cols-[0fr]' : 'grid-cols-[auto]'
-                        }`}
-                      >
-                        <div className="overflow-hidden flex items-center gap-2">
-                          <div className="relative shrink-0">
+                          brusco.
+
+                          FALLO CORREGIDO — el botón "Adjuntar" no hacía nada
+                          visible. El `<AdjuntarMenu>` (que se abre HACIA
+                          ARRIBA, fuera de la caja del botón) vivía DENTRO del
+                          mismo contenedor `overflow-hidden` que recorta el
+                          ancho para la animación — así que aunque el botón sí
+                          cambiaba de estado, el menú quedaba recortado a la
+                          nada por ese mismo `overflow-hidden` y nunca se veía.
+                          Ahora el contenedor `relative` que ancla el menú
+                          (`div-menu` abajo) queda AFUERA de la caja que se
+                          recorta: solo los botones se animan/recortan, el
+                          menú no. */}
+                      <div className="relative shrink-0" id="div-menu">
+                        <div
+                          className={`grid transition-[grid-template-columns] duration-200 ease-out ${
+                            inputText.trim() ? 'grid-cols-[0fr]' : 'grid-cols-[auto]'
+                          }`}
+                        >
+                          <div className="overflow-hidden flex items-center gap-2">
                             <button
                               type="button"
                               onClick={() => setMenuAdjuntoAbierto(v => !v)}
@@ -901,31 +920,31 @@ export default function LiveChat() {
                             >
                               {subiendo ? <Loader2 className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
                             </button>
-                            {menuAdjuntoAbierto && (
-                              <AdjuntarMenu
-                                onClose={() => setMenuAdjuntoAbierto(false)}
-                                onCamara={() => void handleCamara()}
-                                onGaleria={() => fileRef.current?.click()}
-                              />
+                            {puedeGrabarVoz() && (
+                              <button
+                                type="button"
+                                onClick={() => void alternarGrabacion()}
+                                disabled={subiendo}
+                                aria-label={grabacion ? 'Enviar nota de voz' : 'Grabar nota de voz'}
+                                title={grabacion ? 'Tocá para enviar la nota de voz' : 'Grabar una nota de voz'}
+                                className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border transition disabled:opacity-50 ${
+                                  grabacion
+                                    ? 'bg-red-500 border-red-500 text-white animate-pulse'
+                                    : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
+                                }`}
+                              >
+                                <Mic className="w-4 h-4" />
+                              </button>
                             )}
                           </div>
-                          {puedeGrabarVoz() && (
-                            <button
-                              type="button"
-                              onClick={() => void alternarGrabacion()}
-                              disabled={subiendo}
-                              aria-label={grabacion ? 'Enviar nota de voz' : 'Grabar nota de voz'}
-                              title={grabacion ? 'Tocá para enviar la nota de voz' : 'Grabar una nota de voz'}
-                              className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 border transition disabled:opacity-50 ${
-                                grabacion
-                                  ? 'bg-red-500 border-red-500 text-white animate-pulse'
-                                  : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
-                              }`}
-                            >
-                              <Mic className="w-4 h-4" />
-                            </button>
-                          )}
                         </div>
+                        {menuAdjuntoAbierto && (
+                          <AdjuntarMenu
+                            onClose={() => setMenuAdjuntoAbierto(false)}
+                            onCamara={() => void handleCamara()}
+                            onGaleria={() => fileRef.current?.click()}
+                          />
+                        )}
                       </div>
 
                       <input
