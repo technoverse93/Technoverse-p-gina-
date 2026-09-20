@@ -45,6 +45,45 @@ export async function tomarFotoNativa(): Promise<File | null> {
   if (!hayCamaraNativa()) return null;
 
   const { Camera, CameraSource, CameraResultType } = await import('@capacitor/camera');
+
+  // ---------------------------------------------------------------------
+  // FALLO CORREGIDO — "el botón de cámara no responde" en la APK instalada
+  // ---------------------------------------------------------------------
+  // `Camera.getPhoto()` pide el permiso de cámara por su cuenta la PRIMERA
+  // vez, pero si la persona lo negó en ese momento —un toque sin querer, o
+  // a propósito— Android deja de mostrar el diálogo de permiso en los
+  // toques siguientes: no es que la app no lo pida, es que el sistema ya
+  // decidió no volver a preguntar. `getPhoto()` entonces rechaza la
+  // promesa de una sin abrir nada visible, y desde el botón eso se ve
+  // exactamente como "no responde" — no hay diálogo, no hay foto, ni
+  // siquiera un error en pantalla si algo más arriba lo dejara pasar en
+  // silencio.
+  //
+  // Ahora el permiso se comprueba A MANO, ANTES de tocar el hardware: si
+  // falta, se pide de forma explícita con `requestPermissions`, y si la
+  // persona lo niega, se lanza un mensaje que dice exactamente qué hacer
+  // —no un "no se pudo" genérico— en vez de dejar el botón pareciendo
+  // roto.
+  try {
+    const estado = await Camera.checkPermissions();
+    if (estado.camera !== 'granted') {
+      const pedido = await Camera.requestPermissions({ permissions: ['camera'] });
+      if (pedido.camera !== 'granted') {
+        throw new Error(
+          'Technoverse necesita permiso de cámara para tomar la foto. ' +
+          'Activalo en Ajustes del teléfono → Aplicaciones → Technoverse → Permisos → Cámara.'
+        );
+      }
+    }
+  } catch (err: any) {
+    // El mensaje de "falta el permiso" (armado arriba) SÍ hay que
+    // mostrarlo. Cualquier otro fallo viene de que `checkPermissions`
+    // mismo no está disponible (plugin viejo, versión de Android rara):
+    // no es motivo para rendirse, `getPhoto()` va a pedir el permiso por
+    // su cuenta si hiciera falta.
+    if (err instanceof Error && err.message.startsWith('Technoverse necesita permiso')) throw err;
+  }
+
   try {
     const foto = await Camera.getPhoto({
       source: CameraSource.Camera,   // la cámara, no la galería

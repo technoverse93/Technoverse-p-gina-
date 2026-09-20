@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, MoreVertical, Send, StickyNote, ImagePlus, RefreshCw, Bot, Trash2, Mic, Camera } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Send, StickyNote, RefreshCw, Bot, Trash2, Mic, Paperclip } from 'lucide-react';
 import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS } from '../../utils/adjuntosChat';
 import { tomarFotoNativa, hayCamaraNativa } from '../../utils/camara';
 import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../../utils/grabadorVoz';
@@ -8,6 +8,7 @@ import { ChatConversation } from '../../types';
 import { compressImage } from '../../utils/storage';
 import { supabase } from '../../supabaseClient';
 import ChatActionsMenu from './ChatActionsMenu';
+import AdjuntarMenu from './AdjuntarMenu';
 import { useToast } from '../ui/Overlays';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './formatoChat';
 import VideoMensaje from './VideoMensaje';
@@ -31,6 +32,8 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   const [uploading, setUploading] = useState(false);
   /** Grabación de voz en curso, si la hay (ver `alternarGrabacion`). */
   const [grabacion, setGrabacion] = useState<GrabacionEnCurso | null>(null);
+  /** ¿Está abierto el menú "Adjuntar" (cámara / galería)? Ver AdjuntarMenu.tsx. */
+  const [menuAdjuntoAbierto, setMenuAdjuntoAbierto] = useState(false);
   const [borrandoId, setBorrandoId] = useState<string | null>(null);
   /** Mensaje cuyo menú de acciones está abierto (se abre al tocarlo). */
   const [menuMsgId, setMenuMsgId] = useState<string | null>(null);
@@ -388,49 +391,65 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
         {/* Input exclusivo de la cámara en el navegador (`capture="environment"`
             abre la cámara trasera directo). En la APK manda el plugin nativo. */}
         <input ref={camaraRef} type="file" accept="image/*" capture="environment" className="hidden" onChange={handleImagePick} />
-        <button
-          type="button"
-          onClick={() => setNoteMode(v => !v)}
-          title="Nota interna"
-          className={`w-9 h-9 rounded-full flex items-center justify-center transition shrink-0 border ${noteMode ? 'bg-amber-500 border-amber-500 text-white' : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-amber-500 hover:border-amber-500'}`}
+
+        {/* HERRAMIENTAS: nota interna, adjuntar (cámara+galería en un solo
+            botón con menú) y nota de voz. Desaparecen apenas hay texto
+            escrito, dejando solo el botón de enviar — el campo de texto es
+            lo que importa leer, no la fila de íconos. El tinte ámbar de
+            "modo nota" (arriba, en el `form`) sigue visible aunque el
+            toggle se oculte, así que no se pierde esa señal al escribir. */}
+        <div
+          className={`grid transition-[grid-template-columns] duration-200 ease-out ${
+            inputText.trim() ? 'grid-cols-[0fr]' : 'grid-cols-[auto]'
+          }`}
         >
-          <StickyNote className="w-4 h-4" />
-        </button>
-        <button
-          type="button"
-          onClick={() => void handleCamara()}
-          disabled={uploading}
-          title="Tomar una foto"
-          aria-label="Tomar una foto"
-          className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-color)] bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition shrink-0 disabled:opacity-40"
-        >
-          {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Camera className="w-4 h-4" />}
-        </button>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={uploading}
-          title="Adjuntar imagen"
-          className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-color)] bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition shrink-0 disabled:opacity-40"
-        >
-          {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <ImagePlus className="w-4 h-4" />}
-        </button>
-        {puedeGrabarVoz() && (
-          <button
-            type="button"
-            onClick={() => void alternarGrabacion()}
-            disabled={uploading}
-            title={grabacion ? 'Tocá para enviar la nota de voz' : 'Grabar una nota de voz'}
-            aria-label={grabacion ? 'Enviar nota de voz' : 'Grabar nota de voz'}
-            className={`w-9 h-9 rounded-full flex items-center justify-center border transition shrink-0 disabled:opacity-40 ${
-              grabacion
-                ? 'bg-red-500 border-red-500 text-white animate-pulse'
-                : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
-            }`}
-          >
-            <Mic className="w-4 h-4" />
-          </button>
-        )}
+          <div className="overflow-hidden flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => setNoteMode(v => !v)}
+              title="Nota interna"
+              className={`w-9 h-9 rounded-full flex items-center justify-center transition shrink-0 border ${noteMode ? 'bg-amber-500 border-amber-500 text-white' : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-amber-500 hover:border-amber-500'}`}
+            >
+              <StickyNote className="w-4 h-4" />
+            </button>
+            <div className="relative shrink-0">
+              <button
+                type="button"
+                onClick={() => setMenuAdjuntoAbierto(v => !v)}
+                disabled={uploading}
+                title="Adjuntar"
+                aria-label="Adjuntar"
+                className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-color)] bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition shrink-0 disabled:opacity-40"
+              >
+                {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
+              </button>
+              {menuAdjuntoAbierto && (
+                <AdjuntarMenu
+                  onClose={() => setMenuAdjuntoAbierto(false)}
+                  onCamara={() => void handleCamara()}
+                  onGaleria={() => fileInputRef.current?.click()}
+                />
+              )}
+            </div>
+            {puedeGrabarVoz() && (
+              <button
+                type="button"
+                onClick={() => void alternarGrabacion()}
+                disabled={uploading}
+                title={grabacion ? 'Tocá para enviar la nota de voz' : 'Grabar una nota de voz'}
+                aria-label={grabacion ? 'Enviar nota de voz' : 'Grabar nota de voz'}
+                className={`w-9 h-9 rounded-full flex items-center justify-center border transition shrink-0 disabled:opacity-40 ${
+                  grabacion
+                    ? 'bg-red-500 border-red-500 text-white animate-pulse'
+                    : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
+                }`}
+              >
+                <Mic className="w-4 h-4" />
+              </button>
+            )}
+          </div>
+        </div>
+
         <input
           type="text"
           value={inputText}
