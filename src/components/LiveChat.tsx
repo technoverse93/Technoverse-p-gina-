@@ -359,6 +359,46 @@ export default function LiveChat() {
   };
 
   /**
+   * Busca la conversación activa en el caché local antes de escribirle un
+   * mensaje; si no está, pide una relectura forzada del servidor y
+   * reintenta UNA vez antes de darse por vencido.
+   *
+   * ---------------------------------------------------------------------
+   * FALLO CORREGIDO — envíos que desaparecían en silencio
+   * ---------------------------------------------------------------------
+   * Reporte: "el cliente manda una foto, a él le aparece, pero al admin
+   * no le llega nada — ni el mensaje existe". Las cuatro funciones de
+   * envío de este archivo (foto, video/nota de voz, texto, FAQ) arman el
+   * mensaje sobre una COPIA del caché local (`getDB()`); si esa copia no
+   * trae la conversación activa, se revertía la burbuja y se cortaba ahí
+   * — sin avisar NADA. Eso puede pasar cuando la recarga periódica del
+   * servidor (`recargarChatDelServidor`, cada 30 s, o al volver de
+   * segundo plano) corre justo mientras una foto tarda unos segundos en
+   * subir: el caché local queda un instante sin esa conversación —por
+   * ejemplo si el panel acababa de tocarla (cambiar su estado, asignarla)
+   * un momento antes— y el mensaje se perdía sin dejar rastro: ni un
+   * error en la pantalla del cliente, ni una fila en la base de datos
+   * para que el admin viera.
+   *
+   * Ahora, antes de rendirse, se fuerza UNA relectura fresca del servidor
+   * y se busca de nuevo: la mayoría de las veces la conversación
+   * reaparece —era un desfasaje momentáneo, no algo real— y el envío
+   * sigue su curso normal. Solo si TODAVÍA no aparece —la conversación de
+   * verdad ya no existe, la cerraron o la borraron— se devuelve `null`
+   * para que quien llama muestre un aviso claro en vez de fallar callado.
+   */
+  const buscarConversacionConReintento = async (convId: string) => {
+    let db = getDB();
+    let idx = db.chat_conversations.findIndex(c => c.id === convId);
+    if (idx === -1) {
+      await recargarChatDelServidor(true);
+      db = getDB();
+      idx = db.chat_conversations.findIndex(c => c.id === convId);
+    }
+    return idx === -1 ? null : { db, idx };
+  };
+
+  /**
    * El CLIENTE adjunta una foto o un video.
    *
    * Antes esto no existía —y la política del bucket exigía `is_staff()`,
@@ -380,9 +420,13 @@ export default function LiveChat() {
     };
     appendOptimistic(convId, [newMsg], 1);
 
-    const db = getDB();
-    const idx = db.chat_conversations.findIndex(c => c.id === convId);
-    if (idx === -1) { rollbackOptimistic(convId, [newMsg.id]); return; }
+    const hallado = await buscarConversacionConReintento(convId);
+    if (!hallado) {
+      setChatError(`No se pudo enviar ${queFalla}: la conversación ya no está disponible. Iniciá una nueva consulta.`);
+      rollbackOptimistic(convId, [newMsg.id]);
+      return;
+    }
+    const { db, idx } = hallado;
     db.chat_conversations[idx].messages.push(newMsg);
     db.chat_conversations[idx].unreadCount += 1;
 
@@ -492,9 +536,13 @@ export default function LiveChat() {
         : c));
       marcarMensajeEnVuelo(convId, msgFinal); // que una recarga no lo pise con la local
 
-      const db = getDB();
-      const idx = db.chat_conversations.findIndex(c => c.id === convId);
-      if (idx === -1) { rollbackOptimistic(convId, [msgId]); return; }
+      const hallado = await buscarConversacionConReintento(convId);
+      if (!hallado) {
+        setChatError('No se pudo enviar la foto: la conversación ya no está disponible. Iniciá una nueva consulta.');
+        rollbackOptimistic(convId, [msgId]);
+        return;
+      }
+      const { db, idx } = hallado;
       db.chat_conversations[idx].messages.push(msgFinal);
       db.chat_conversations[idx].unreadCount += 1;
       await saveDB(db);
@@ -578,13 +626,15 @@ export default function LiveChat() {
     appendOptimistic(convId, [newMsg], 1);
     setIsSubmitting(true);
 
-    const db = getDB();
-    const convIndex = db.chat_conversations.findIndex(c => c.id === convId);
-    if (convIndex === -1) {
+    const hallado = await buscarConversacionConReintento(convId);
+    if (!hallado) {
+      setChatError('No se pudo enviar tu mensaje: la conversación ya no está disponible. Iniciá una nueva consulta.');
+      setInputText(messageText);
       rollbackOptimistic(convId, [newMsg.id]);
       setIsSubmitting(false);
       return;
     }
+    const { db, idx: convIndex } = hallado;
     db.chat_conversations[convIndex].messages.push(newMsg);
     db.chat_conversations[convIndex].unreadCount += 1;
 
@@ -616,13 +666,14 @@ export default function LiveChat() {
     appendOptimistic(convId, [qMsg, aMsg], 0);
     setIsSubmitting(true);
 
-    const db = getDB();
-    const convIndex = db.chat_conversations.findIndex(c => c.id === convId);
-    if (convIndex === -1) {
+    const hallado = await buscarConversacionConReintento(convId);
+    if (!hallado) {
+      setChatError('No se pudo enviar tu consulta: la conversación ya no está disponible. Iniciá una nueva consulta.');
       rollbackOptimistic(convId, [qMsg.id, aMsg.id]);
       setIsSubmitting(false);
       return;
     }
+    const { db, idx: convIndex } = hallado;
     db.chat_conversations[convIndex].messages.push(qMsg, aMsg);
 
     try {
