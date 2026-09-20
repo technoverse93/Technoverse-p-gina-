@@ -6,6 +6,7 @@ import { supabase } from '../../supabaseClient';
 import ChatInbox from './ChatInbox';
 import ChatThread from './ChatThread';
 import { useToast, useConfirm } from '../ui/Overlays';
+import { pedirPermisoNotificaciones, notificarMensajeChat } from '../../mobile/notificaciones';
 
 interface ChatCRMProps {
   currentUser: User | null;
@@ -40,10 +41,39 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
     return () => { isMountedRef.current = false; };
   }, []);
 
+  // Notificaciones al admin: ids de mensajes de CLIENTE ya "vistos" (para
+  // no avisar dos veces) y una bandera para no notificar del historial que
+  // ya existía en la primera carga — mismo patrón que LiveChat.tsx, pero en
+  // la dirección contraria (avisa cuando escribe el CLIENTE, no soporte).
+  const vistosRef = useRef<Set<string>>(new Set());
+  const sembradoRef = useRef(false);
+
+  const detectarMensajesDeClientes = useCallback((convs: ChatConversation[]) => {
+    const entrantes = convs.flatMap(c => c.messages.filter(m => m && m.sender === 'customer'));
+
+    if (!sembradoRef.current) {
+      entrantes.forEach(m => vistosRef.current.add(m.id));
+      sembradoRef.current = true;
+      return;
+    }
+
+    const nuevos = entrantes.filter(m => !vistosRef.current.has(m.id));
+    nuevos.forEach(m => vistosRef.current.add(m.id));
+    if (nuevos.length === 0) return;
+
+    const ultimo = nuevos[nuevos.length - 1];
+    const deQuien = convs.find(c => c.messages.some(m => m.id === ultimo.id))?.customerName || 'un cliente';
+    const cuerpo = (ultimo.text || '').trim()
+      || (ultimo.imageUrl ? '📷 Imagen' : ultimo.audioUrl ? '🎤 Nota de voz' : ultimo.videoUrl ? '🎬 Video' : 'Mensaje nuevo');
+    void notificarMensajeChat(`${deQuien} — Technoverse`, cuerpo);
+  }, []);
+
   const loadConversations = useCallback(() => {
     const db = getDB();
-    setConversations(db.chat_conversations || []);
-  }, []);
+    const lista = db.chat_conversations || [];
+    setConversations(lista);
+    detectarMensajesDeClientes(lista);
+  }, [detectarMensajesDeClientes]);
 
   useEffect(() => {
     loadConversations();
@@ -51,6 +81,11 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
     window.addEventListener('technoverse_db_updated', handleUpdate);
     return () => window.removeEventListener('technoverse_db_updated', handleUpdate);
   }, [loadConversations]);
+
+  // El permiso se pide al entrar a esta pantalla (Chat CRM), igual que en
+  // el chat del cliente se pide al abrir el widget: en el momento en que
+  // tiene sentido, no al arrancar la app entera.
+  useEffect(() => { void pedirPermisoNotificaciones(); }, []);
 
   useEffect(() => {
     let active = true;

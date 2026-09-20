@@ -11,17 +11,18 @@ import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesi
 import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO, UMBRAL_REINGRESO_RAPIDO_MS } from './mobile/appLock';
 import { marcarBloqueo, esAplicacionNativa } from './utils/biometriaNativa';
 import { supabase } from './supabaseClient';
-import { tieneTokenSeguridad } from './utils/securityPin';
+import { tieneTokenSeguridad, esAdminSupremo } from './utils/securityPin';
 import { esGestion, esStaff, esSuperadmin } from './utils/roles';
 import { iniciarSupervision, detenerSupervision } from './supervision/grabador';
 import { iniciarVisitante, detenerVisitante } from './supervision/visitante';
 import { precalentarEspejo } from './supervision/motorEspejo';
 import { registrarIngreso } from './utils/auditoria';
 import { iniciarKillSwitch, fijarModeloAparato, fijarHuellaAparato } from './seguridad/killSwitch';
-import { activarFlagSecure } from './seguridad/flagSecure';
-import { iniciarAntiCaptura } from './seguridad/antiCaptura';
+import { activarFlagSecure, fijarFlagSecureSegunCorreo } from './seguridad/flagSecure';
+import { iniciarAntiCaptura, fijarExencionAntiCaptura } from './seguridad/antiCaptura';
 import { obtenerHuellaAparato } from './utils/fingerprint';
 import { iniciarAvisoDePurga } from './seguridad/avisoPurgaChat';
+import { iniciarNotificaciones } from './mobile/notificaciones';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
 import ResetPasswordView from './components/ResetPasswordView';
@@ -196,6 +197,16 @@ function AppInner() {
        return () => window.removeEventListener('technoverse_auth_sync', handleSession);
     }
   }, []);
+
+  // Excepción de anti-captura: SOLO la cuenta del administrador (el mismo
+  // correo que gobierna Ubicaciones/Supervisión) puede tomar capturas.
+  // Reacciona a cada cambio de sesión — entrar, salir, o restaurarse al
+  // abrir la app — para todos los demás, el bloqueo sigue intacto.
+  useEffect(() => {
+    const esAdmin = esAdminSupremo(currentUser?.email);
+    fijarExencionAntiCaptura(esAdmin);
+    void fijarFlagSecureSegunCorreo(esAdmin);
+  }, [currentUser]);
 
   // ---- Recuperación de la sesión al abrir la aplicación --------------------
   //
@@ -379,6 +390,11 @@ function AppInner() {
     // portapapeles (ver los archivos para sus límites reales).
     void activarFlagSecure();
     iniciarAntiCaptura();
+    // Notificaciones: listeners nativos (estado de la app, toque sobre la
+    // notificación) para TODA la aplicación, no solo el chat del cliente —
+    // así el admin en el panel también los tiene, sin depender de que
+    // LiveChat esté montado (no lo está dentro del panel).
+    iniciarNotificaciones();
     // La huella (aparato físico) y el modelo alimentan el bloqueo por
     // dispositivo. Su lectura es asíncrona —nativa en la APK— y se entrega
     // en cuanto está, para que ese modo de bloqueo funcione.

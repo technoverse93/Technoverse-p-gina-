@@ -1,8 +1,18 @@
 // =====================================================================
 // ANTI-CAPTURA WEB — lo que un navegador SÍ puede hacer
 // =====================================================================
-// Regla: NADIE captura, para todos por igual. Sin lista blanca, sin
-// excepciones, sin consola: se activa una vez al arrancar y queda así.
+// Regla: NADIE captura, salvo UNA excepción explícita — la cuenta del
+// administrador (mismo correo que gobierna Ubicaciones/Supervisión, ver
+// `esAdminSupremo` en securityPin.ts). App.tsx llama a
+// `fijarExencionAntiCaptura(esAdminSupremo(currentUser?.email))` cada vez
+// que cambia la sesión; mientras esa sesión esté abierta, este escudo no
+// hace nada. Para cualquier otra cuenta o sin sesión, el bloqueo sigue
+// intacto.
+//
+// Los listeners quedan SIEMPRE puestos (no se agregan ni se quitan según
+// la sesión): lo que cambia es si el EFECTO se aplica o no. Así no hay
+// carrera posible entre "todavía no sé quién inició sesión" y un evento
+// que llega justo en ese instante.
 //
 // Tres defensas, todas del NAVEGADOR (el bloqueo REAL de Android está en
 // flagSecure.ts, que lo aplica el sistema operativo):
@@ -34,7 +44,23 @@
 
 const ID_ESTILO = 'tv-anti-captura-impresion';
 const ID_VELO = 'tv-anti-captura-velo';
+/** Clase en <html> que la hoja de impresión usa para saltarse el bloqueo. */
+const CLASE_EXENTO = 'tv-anti-captura-exento';
 let puesto = false;
+let exento = false;
+
+/**
+ * Concede o retira la excepción, en vivo. Al conceder mientras la lámina
+ * ya estuviera puesta, se quita de inmediato — no hace falta que la
+ * persona vuelva a cambiar de pestaña para que deje de verla.
+ */
+export function fijarExencionAntiCaptura(activa: boolean): void {
+  exento = activa;
+  if (typeof document !== 'undefined' && document.documentElement) {
+    document.documentElement.classList.toggle(CLASE_EXENTO, activa);
+  }
+  if (activa) ocultarVelo();
+}
 
 // ---------------------------------------------------------------------
 // 1. Lámina "no se permiten capturas"
@@ -63,6 +89,7 @@ function crearVelo(): HTMLElement | null {
 }
 
 function mostrarVelo(): void {
+  if (exento) return;
   const v = crearVelo();
   if (v) v.style.display = 'flex';
 }
@@ -87,9 +114,12 @@ function hojaDeImpresion(): void {
   // `visibility` y no `display:none`: algunos navegadores cancelan la
   // impresión si el documento queda sin caja, y una impresión cancelada
   // deja la duda de si salió algo. Así sale una hoja, pero en blanco.
+  // `html:not(.tv-anti-captura-exento)` en cada selector: así la cuenta
+  // exenta (fijarExencionAntiCaptura) SÍ puede imprimir normal, sin tener
+  // que quitar y volver a poner esta hoja según quién tenga sesión.
   estilo.textContent = `@media print {
-    html body > * { visibility: hidden !important; }
-    html body::after {
+    html:not(.${CLASE_EXENTO}) body > * { visibility: hidden !important; }
+    html:not(.${CLASE_EXENTO}) body::after {
       content: "Contenido protegido - Technoverse";
       visibility: visible !important;
       position: fixed; inset: 0;
@@ -104,6 +134,7 @@ function hojaDeImpresion(): void {
 // 3. PrintScreen → pisar el portapapeles
 // ---------------------------------------------------------------------
 function pisarPortapapeles(): void {
+  if (exento) return;
   const intentar = () => {
     try {
       if (!document.hasFocus()) return;
@@ -115,6 +146,7 @@ function pisarPortapapeles(): void {
 }
 
 function alTeclear(e: KeyboardEvent): void {
+  if (exento) return;
   // Imprimir / Guardar como PDF: se corta antes de abrir el diálogo.
   if ((e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P')) {
     e.preventDefault();
@@ -132,7 +164,8 @@ function alSoltarTecla(e: KeyboardEvent): void {
 // ---------------------------------------------------------------------
 /**
  * Activa el escudo web, una sola vez, para toda la aplicación (tienda y
- * panel, con y sin sesión). Idempotente.
+ * panel, con y sin sesión). Idempotente. Ver `fijarExencionAntiCaptura`
+ * para la única excepción (la cuenta del administrador).
  */
 export function iniciarAntiCaptura(): void {
   if (typeof window === 'undefined' || puesto) return;
