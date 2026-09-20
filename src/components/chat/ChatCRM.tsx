@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { MessageSquare } from 'lucide-react';
 import { ChatConversation, User } from '../../types';
-import { getDB, saveDB, addAuditLog, marcarMensajeEnVuelo, confirmarMensajeEnVuelo } from '../../utils/storage';
+import { getDB, saveDB, addAuditLog, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../../utils/storage';
 import { supabase } from '../../supabaseClient';
 import ChatInbox from './ChatInbox';
 import ChatThread from './ChatThread';
@@ -175,6 +175,39 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
       setConversations(prev => prev.map(c => c.id === convId
         ? { ...c, messages: [...c.messages, newMsg], unreadCount: 0 }
         : c));
+    }
+
+    // FALLO CORREGIDO — el mensaje del admin podía "enviarse" sin enviar
+    // nada. `persist()` corre el mutador, pero si `idx === -1` (la
+    // conversación no estaba en ESE snapshot local del caché —por
+    // ejemplo, una recarga corrió justo mientras algo tardaba en subir—)
+    // el mutador no hacía NADA: el `db` que `persist()` termina guardando
+    // sale IDÉNTICO al que ya estaba, `saveDB` no encuentra ninguna
+    // diferencia que sincronizar, y `persist()` devuelve `ok = true`
+    // aunque el mensaje nunca se guardó en ningún lado. El admin veía la
+    // burbuja optimista, el log de auditoría decía "Respuesta Chat"... y
+    // el cliente no recibía absolutamente nada.
+    //
+    // Antes de intentar el guardado, se busca la conversación con UN
+    // reintento tras forzar una relectura fresca del servidor —el mismo
+    // arreglo que en LiveChat.tsx, del lado del cliente—: la mayoría de
+    // las veces era solo un desfasaje momentáneo del caché y así se
+    // resuelve solo. Si de verdad no aparece, se avisa con un error claro
+    // en vez de fingir un envío que nunca ocurrió.
+    let db = getDB();
+    let idx = db.chat_conversations.findIndex(c => c.id === convId);
+    if (idx === -1) {
+      await recargarChatDelServidor(true);
+      db = getDB();
+      idx = db.chat_conversations.findIndex(c => c.id === convId);
+    }
+    if (idx === -1) {
+      confirmarMensajeEnVuelo(newMsg.id);
+      if (isMountedRef.current) {
+        toast.error('No se pudo enviar: esa conversación ya no está disponible.');
+        loadConversations();
+      }
+      return;
     }
 
     const ok = await persist(db => {
