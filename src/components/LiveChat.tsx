@@ -438,8 +438,32 @@ export default function LiveChat() {
    *
    * Sirve para la cámara y para una imagen elegida de la galería por igual;
    * el video no pasa por acá (no hay preview local barato que valga la pena).
+   *
+   * ---------------------------------------------------------------------
+   * FALLO CORREGIDO — fotos que se subían pero el mensaje nunca aparecía
+   * ---------------------------------------------------------------------
+   * Esta función, a diferencia de CUALQUIER otro envío del chat (texto,
+   * video, nota de voz), no tenía ningún candado de "ya hay uno en curso".
+   * La foto sube en segundo plano durante varios segundos con la burbuja ya
+   * pintada pero SIN ningún indicador en el botón (`subiendo` nunca se
+   * ponía en `true`), así que ante cualquier demora la persona veía el
+   * botón como si no hubiera pasado nada y lo volvía a tocar — visto en
+   * producción: "no sé por qué no se manda" / "mandalo de nuevo".
+   *
+   * Eso disparaba DOS subidas en simultáneo, cada una con su propio
+   * getDB()+saveDB() sobre el mismo caché local compartido
+   * (`localCache`/`lastSyncedDb` en storage.ts): la segunda podía pisar a
+   * la primera antes de que su mensaje llegara a guardarse en el servidor.
+   * La foto SÍ quedaba subida a Storage (por eso no daba ningún error),
+   * pero el mensaje correspondiente nunca se insertaba en `chat_messages`.
+   *
+   * El arreglo es el mismo candado `subiendo` que ya protegía al video:
+   * mientras una foto está en camino, el botón queda deshabilitado y una
+   * segunda selección/toma se ignora hasta que la primera termine.
    */
   const enviarFotoOptimista = async (convId: string, file: File) => {
+    if (subiendo) return;
+    setSubiendo(true);
     const urlLocal = URL.createObjectURL(file);
     const msgId = newId('MSG');
     const msgLocal: ChatMessage = {
@@ -473,24 +497,25 @@ export default function LiveChat() {
       // Ya no hace falta la URL local: la burbuja apunta a la pública (o se
       // retiró). Liberarla evita que el blob quede colgado en memoria.
       URL.revokeObjectURL(urlLocal);
+      setSubiendo(false);
     }
   };
 
   const handleAdjuntar = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = '';
-    if (!file || !activeConvId) return;
+    if (!file || !activeConvId || subiendo) return;
     setChatError(null);
     const convId = activeConvId;
 
-    // Imagen (cámara o galería): camino optimista, sin bloquear.
+    // Imagen (cámara o galería): camino optimista, con el mismo candado
+    // `subiendo` que el video (ver el comentario en `enviarFotoOptimista`).
     if (file.type.startsWith('image/')) {
       await enviarFotoOptimista(convId, file);
       return;
     }
 
     // Video: no hay preview local barato, se mantiene el camino con spinner.
-    if (subiendo) return;
     setSubiendo(true);
     try {
       const adjunto = await subirAdjuntoChat(convId, file);
@@ -508,10 +533,11 @@ export default function LiveChat() {
    * En la APK abre la cámara del sistema (`tomarFotoNativa`); en el navegador
    * no hay plugin, así que se dispara el `<input capture="environment">` y la
    * foto cae en `handleAdjuntar`. En ambos casos la foto termina en
-   * `enviarFotoOptimista`, con la burbuja visible a los 0 ms.
+   * `enviarFotoOptimista`, con la burbuja visible a los 0 ms y el mismo
+   * candado `subiendo` para no disparar dos subidas en simultáneo.
    */
   const handleCamara = async () => {
-    if (!activeConvId) return;
+    if (!activeConvId || subiendo) return;
 
     if (!hayCamaraNativa()) {
       camaraRef.current?.click();
