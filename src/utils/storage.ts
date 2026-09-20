@@ -1267,6 +1267,11 @@ export function confirmarMensajeEnVuelo(id: string): void {
  * completa. Si el servidor ya trae el mensaje, se da por confirmado y se
  * saca del registro; si no, se reinyecta para que la pantalla no lo
  * pierda.
+ *
+ * OJO: esto es SOLO para lo que se ve en pantalla (`localCache`). Nunca se le
+ * pasa el array que después se clona en `lastSyncedDb`: ver el comentario
+ * largo en `refreshChatFromSupabase` sobre la foto que jamás llegaba al
+ * admin aunque Storage sí la recibiera.
  */
 function reinyectarMensajesEnVuelo(conversaciones: ChatConversation[]): void {
   if (mensajesEnVuelo.size === 0) return;
@@ -1320,9 +1325,21 @@ async function refreshChatFromSupabase() {
         imageUrl: m.image_url || undefined, videoUrl: m.video_url || undefined, audioUrl: m.audio_url || undefined, isInternalNote: !!m.is_internal_note
       }))
     }));
+    // FALLO CORREGIDO: una foto se subía a Storage sin ningún error, pero el
+    // mensaje jamás llegaba a `chat_messages` — ni un solo intento de INSERT
+    // salía hacia el servidor — así que para el admin no había existido
+    // nunca. La causa: `lastSyncedDb` se clonaba DESPUÉS de reinyectar los
+    // mensajes en vuelo, así que un mensaje que todavía no se había guardado
+    // en el servidor quedaba grabado como "ya sincronizado" en la foto de
+    // referencia. El siguiente `saveDB()` comparaba contra esa foto, lo veía
+    // como ya conocido y nunca disparaba su INSERT — la conversación sí se
+    // actualizaba (por eso no había ningún error visible), pero el mensaje
+    // se perdía en silencio para siempre. Ahora la foto de referencia se
+    // toma de la verdad del servidor ANTES de reinyectar nada: la
+    // reinyección solo afecta lo que se ve en pantalla.
+    lastSyncedDb.chat_conversations = structuredClone(conversations);
     reinyectarMensajesEnVuelo(conversations);
     localCache.chat_conversations = conversations;
-    lastSyncedDb.chat_conversations = structuredClone(conversations);
     notifyUpdate();
     return;
   }
@@ -1356,9 +1373,12 @@ async function refreshChatFromSupabase() {
     customerToken: r.customer_token || undefined,
     updatedAt: r.updated_at || r.created_at || undefined
   }));
+  // Mismo fallo y mismo arreglo que en la rama de cliente anónimo arriba:
+  // la foto de referencia sale de la verdad del servidor ANTES de
+  // reinyectar mensajes en vuelo.
+  lastSyncedDb.chat_conversations = structuredClone(conversations);
   reinyectarMensajesEnVuelo(conversations);
   localCache.chat_conversations = conversations;
-  lastSyncedDb.chat_conversations = structuredClone(conversations);
   notifyUpdate();
 }
 
