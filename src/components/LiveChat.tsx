@@ -8,7 +8,7 @@ import ImagenMensaje from './chat/ImagenMensaje';
 import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS, type Adjunto } from '../utils/adjuntosChat';
 import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../utils/grabadorVoz';
 import AudioMensaje from './chat/AudioMensaje';
-import { iniciarNotificaciones, pedirPermisoNotificaciones, notificarMensajeChat, EVENTO_ABRIR_CHAT } from '../mobile/notificaciones';
+import { pedirPermisoNotificaciones, notificarMensajeChat, EVENTO_ABRIR_CHAT } from '../mobile/notificaciones';
 
 // ---------------------------------------------------------------------
 // DECISIÓN TOMADA: el chat funciona COMPLETO en los dos lados
@@ -132,8 +132,6 @@ export default function LiveChat() {
       setIsRegistered(true);
     }
     loadConversations(savedEmail);
-
-    iniciarNotificaciones();
 
     const handleUpdate = () => loadConversations(readLS(EMAIL_KEY));
     window.addEventListener('technoverse_db_updated', handleUpdate);

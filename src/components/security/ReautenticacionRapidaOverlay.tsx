@@ -1,52 +1,64 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ShieldCheck, Fingerprint } from 'lucide-react';
+import { ShieldCheck, Fingerprint, RotateCw, LogOut } from 'lucide-react';
 import { Modal } from '../ui/Overlays';
+import { Btn } from '../admin/AdminKit';
 import { soportaBiometria, entrarConBiometria } from '../../utils/biometria';
 
 interface Props {
   email: string;
   onDesbloqueado: () => void;
-  /** Mismo efecto que una ausencia larga (> 2 minutos): cierre real de sesión y vuelta a la tienda pública. */
+  /** Mismo efecto que "Cerrar sesión": cierre real y vuelta a la tienda pública. */
   onFalloTotal: () => void;
 }
 
 /**
- * Candado de re-autenticación para una AUSENCIA BREVE (≤ 2 minutos, ver
- * `UMBRAL_REINGRESO_RAPIDO_MS` en appLock.ts).
+ * Candado de re-autenticación tras una ausencia (ver App.tsx: en la APK,
+ * CUALQUIER ausencia; en la web, una breve).
  *
  * A propósito NO es una pantalla nueva ni una redirección: se monta
- * FLOTANDO encima de lo que ya estaba en pantalla, sin que App.tsx
- * toque `currentUser`, `currentView` ni desmonte nada. Es justo esa
- * ausencia de desmontaje la que preserva "lo que el administrador
- * estaba haciendo" — un cobro a medio llenar, por ejemplo.
+ * FLOTANDO encima de lo que ya estaba en pantalla, sin que App.tsx toque
+ * `currentUser`, `currentView` ni desmonte nada. Es justo esa ausencia de
+ * desmontaje la que preserva "lo que el administrador estaba haciendo" —
+ * un cobro a medio llenar, por ejemplo.
  *
- * ÚNICAMENTE huella/Face ID, sin respaldo de contraseña (orden
- * explícita) — un solo intento, automático al montarse:
- *   · Aprobada  → onDesbloqueado(): el candado desaparece, la pantalla
- *     de abajo sigue exactamente igual porque nunca se desmontó.
- *   · Rechazada, cancelada, o el aparato no tiene biometría disponible
- *     → onFalloTotal(): el mismo efecto que una ausencia larga —cierre
- *     real de sesión y vuelta a la tienda pública, hay que iniciar
- *     sesión desde cero. Nada de reintentos ni de una contraseña de
- *     respaldo aquí.
+ * ÚNICAMENTE huella/Face ID, sin respaldo de contraseña (orden explícita).
  *
- * Para una ausencia larga (> 2 minutos) esto ni se monta: App.tsx toma
- * directo el camino de siempre.
+ * ---------------------------------------------------------------------
+ * FALLO CORREGIDO — "la sesión se cerraba sola"
+ * ---------------------------------------------------------------------
+ * Antes, CUALQUIER desenlace que no fuera "aprobada" —cancelado, sensor
+ * ocupado, un parpadeo del lector, el diálogo del sistema que no llegó a
+ * abrir— llamaba a `onFalloTotal()` de una vez: cierre real de sesión,
+ * sin reintento ni aviso. Con la sesión perpetua (App.tsx), CUALQUIER
+ * regreso a la APK pasa por este candado, así que un solo tropiezo del
+ * sensor —algo normal y frecuente en el uso real— bastaba para perder la
+ * sesión por completo. Eso es lo que se reportó como "caída inesperada".
+ *
+ * Ahora un intento fallido NO cierra nada solo: se ofrece "Reintentar"
+ * (vuelve a pedir huella) y, aparte, "Cerrar sesión" como ACCIÓN EXPLÍCITA
+ * de la persona. La sesión solo termina si alguien la cierra a propósito
+ * —tocando ese botón o desde el menú de cuenta—, nunca por un fallo
+ * transitorio de hardware. La seguridad no baja: sigue sin haber ningún
+ * camino que no sea la huella real para entrar.
  */
 export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, onFalloTotal }: Props) {
-  const [verificando, setVerificando] = useState(true);
-  const yaIntento = useRef(false);
+  const [estado, setEstado] = useState<'verificando' | 'fallo' | 'sin-biometria'>('verificando');
+  const enCurso = useRef(false);
 
-  useEffect(() => {
-    if (yaIntento.current) return;
-    yaIntento.current = true;
+  const intentar = () => {
+    if (enCurso.current) return;
+    enCurso.current = true;
+    setEstado('verificando');
 
     let vigente = true;
     (async () => {
       const disponible = await soportaBiometria();
       if (!vigente) return;
       if (!disponible) {
-        onFalloTotal();
+        // Sin sensor/huella configurada en este aparato: no hay nada que
+        // reintentar, pero tampoco se cierra sola — la persona decide.
+        setEstado('sin-biometria');
+        enCurso.current = false;
         return;
       }
       const resultado = await entrarConBiometria(email);
@@ -54,14 +66,20 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
       if (resultado.ok) {
         onDesbloqueado();
       } else {
-        onFalloTotal();
+        setEstado('fallo');
       }
-      setVerificando(false);
+      enCurso.current = false;
     })();
 
     return () => { vigente = false; };
+  };
+
+  useEffect(() => {
+    intentar();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fallido = estado === 'fallo' || estado === 'sin-biometria';
 
   return (
     <Modal open onClose={() => {}} closeOnBackdrop={false} hideClose title="Confirme su identidad" size="sm">
@@ -75,11 +93,24 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
         </div>
 
         <div className="flex flex-col items-center justify-center gap-3 py-4 text-[var(--text-secondary)]">
-          <Fingerprint className={`w-10 h-10 text-[var(--accent)] ${verificando ? 'animate-pulse' : ''}`} />
-          <span className="text-[12.5px] font-semibold">
-            {verificando ? 'Esperando huella o Face ID…' : 'Cerrando sesión…'}
+          <Fingerprint className={`w-10 h-10 ${fallido ? 'text-[var(--tv-warn,#c9862c)]' : 'text-[var(--accent)] animate-pulse'}`} />
+          <span className="text-[12.5px] font-semibold text-center">
+            {estado === 'verificando' && 'Esperando huella o Face ID…'}
+            {estado === 'fallo' && 'No se pudo verificar. Puede deberse a un tropiezo del sensor — intente de nuevo.'}
+            {estado === 'sin-biometria' && 'Este aparato no tiene la huella disponible ahora mismo.'}
           </span>
         </div>
+
+        {fallido && (
+          <div className="flex gap-2">
+            <Btn variant="primary" icon={RotateCw} onClick={intentar} className="flex-1">
+              Reintentar
+            </Btn>
+            <Btn variant="danger" icon={LogOut} onClick={onFalloTotal} className="flex-1">
+              Cerrar sesión
+            </Btn>
+          </div>
+        )}
       </div>
     </Modal>
   );
