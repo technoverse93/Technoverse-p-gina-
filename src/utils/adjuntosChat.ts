@@ -157,5 +157,49 @@ export async function subirAdjuntoChat(convId: string, file: File): Promise<Adju
     .upload(ruta, blob, { contentType: 'image/jpeg' });
   if (error) throw error;
   const { data } = supabase.storage.from('chat-images').getPublicUrl(ruta);
+
+  // CONFIRMAR QUE LA URL CARGA DE VERDAD antes de darla por buena.
+  //
+  // FALLO CORREGIDO: "la foto se ve enviándose y después sale el ícono de
+  // imagen rota, y del otro lado nunca llega nada". La subida en sí podía
+  // responder sin ningún error —el archivo SÍ queda en Storage— pero la
+  // URL pública recién generada no siempre sirve una imagen de verdad en
+  // ese mismo instante (propagación del archivo detrás del CDN de
+  // Storage, un hueco de RLS que tarda un pestañeo en asentarse). Quien
+  // llamaba daba el envío por exitoso, cambiaba la burbuja a esa URL... y
+  // ahí quedaba, rota, para siempre, porque nada volvía a intentarlo — y
+  // como el mensaje solía guardarse igual con esa URL rota, tampoco había
+  // forma limpia de detectarlo después.
+  //
+  // Ahora se espera a que la imagen CARGUE de verdad antes de devolver el
+  // éxito. Si no carga a tiempo, se lanza un error: quien llama YA sabe
+  // tratar cualquier fallo de subida —retira la burbuja optimista y
+  // avisa con un mensaje claro—, así que esto convierte un "queda roto
+  // para siempre y sin explicación" en un "no se pudo enviar, probá de
+  // nuevo" honesto.
+  await confirmarQueLaImagenCarga(data.publicUrl);
+
   return { imageUrl: data.publicUrl };
+}
+
+/**
+ * Espera a que una URL cargue como imagen de verdad, con un tope de
+ * tiempo. Ver el comentario en `subirAdjuntoChat` para el porqué.
+ */
+function confirmarQueLaImagenCarga(url: string, timeoutMs = 8000): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const limpiar = () => { img.onload = null; img.onerror = null; };
+    const temporizador = setTimeout(() => {
+      limpiar();
+      reject(new Error('La foto se subió pero no se pudo confirmar que esté accesible. Probá enviarla de nuevo.'));
+    }, timeoutMs);
+    img.onload = () => { clearTimeout(temporizador); limpiar(); resolve(); };
+    img.onerror = () => {
+      clearTimeout(temporizador);
+      limpiar();
+      reject(new Error('La foto se subió pero el servidor todavía no la sirve. Probá enviarla de nuevo en un momento.'));
+    };
+    img.src = url;
+  });
 }
