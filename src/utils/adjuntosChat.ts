@@ -106,6 +106,7 @@ export async function subirNotaDeVoz(convId: string, blob: Blob): Promise<Adjunt
     .upload(ruta, blob, { contentType: tipo });
   if (error) throw error;
   const { data } = supabase.storage.from('chat-images').getPublicUrl(ruta);
+  await confirmarQueElArchivoExiste(data.publicUrl, 'La nota de voz');
   return { audioUrl: data.publicUrl };
 }
 
@@ -139,6 +140,7 @@ export async function subirAdjuntoChat(convId: string, file: File): Promise<Adju
       .upload(ruta, file, { contentType: file.type });
     if (error) throw error;
     const { data } = supabase.storage.from('chat-images').getPublicUrl(ruta);
+    await confirmarQueElArchivoExiste(data.publicUrl, 'El video');
     return { videoUrl: data.publicUrl };
   }
 
@@ -180,6 +182,45 @@ export async function subirAdjuntoChat(convId: string, file: File): Promise<Adju
   await confirmarQueLaImagenCarga(data.publicUrl);
 
   return { imageUrl: data.publicUrl };
+}
+
+/**
+ * Confirma que una URL YA responde con el archivo, sin exigir que el
+ * navegador sepa REPRODUCIRLO.
+ *
+ * ---------------------------------------------------------------------
+ * POR QUÉ NO ES LO MISMO QUE `confirmarQueLaImagenCarga`
+ * ---------------------------------------------------------------------
+ * Esa función exige que el archivo DECODIFIQUE como imagen — correcto
+ * para una foto, porque cualquier navegador sabe abrir un JPEG. Un video
+ * no tiene esa garantía: muchos teléfonos graban en H.265/HEVC por
+ * defecto, y Chrome no lo decodifica (ver el comentario largo en
+ * `VideoMensaje.tsx`) aunque el archivo esté perfecto y se pueda ver con
+ * el reproductor del sistema. Si esta función exigiera reproducción
+ * real, un video HEVC válido nunca podría enviarse — ni siquiera con la
+ * salida de emergencia que ya existe para ese caso.
+ *
+ * Lo único que confirma es que el servidor YA sirve el archivo (mismo
+ * fallo que corrigió `confirmarQueLaImagenCarga`: un archivo recién
+ * subido que todavía no propaga detrás del CDN de Storage) — sin
+ * importar si el navegador de quien envía puede reproducirlo o no.
+ */
+async function confirmarQueElArchivoExiste(url: string, etiqueta: string, timeoutMs = 8000): Promise<void> {
+  const controlador = new AbortController();
+  const temporizador = setTimeout(() => controlador.abort(), timeoutMs);
+  try {
+    const resp = await fetch(url, { method: 'HEAD', signal: controlador.signal });
+    if (!resp.ok) {
+      throw new Error(`${etiqueta} se subió pero el servidor todavía no lo sirve. Probá enviarlo de nuevo en un momento.`);
+    }
+  } catch (err: any) {
+    if (err?.name === 'AbortError') {
+      throw new Error(`${etiqueta} se subió pero no se pudo confirmar que esté accesible. Probá enviarlo de nuevo.`);
+    }
+    throw err;
+  } finally {
+    clearTimeout(temporizador);
+  }
 }
 
 /**

@@ -213,7 +213,12 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
     const ok = await persist(db => {
       const idx = db.chat_conversations.findIndex(c => c.id === convId);
       if (idx === -1) return;
-      db.chat_conversations[idx].messages.push(newMsg);
+      // Sin este chequeo por id, un mensaje ya reinyectado por
+      // `reinyectarMensajesEnVuelo` (storage.ts) mientras esto tardaba en
+      // guardarse quedaba duplicado: dos burbujas idénticas por un rato.
+      // Ver el comentario largo en `empujarMensajes`, LiveChat.tsx.
+      const mensajes = db.chat_conversations[idx].messages;
+      if (!mensajes.some(m => m.id === newMsg.id)) mensajes.push(newMsg);
       db.chat_conversations[idx].unreadCount = 0;
     });
     if (ok) {

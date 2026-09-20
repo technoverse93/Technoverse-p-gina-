@@ -399,6 +399,37 @@ export default function LiveChat() {
   };
 
   /**
+   * Agrega mensajes a una conversación sin duplicarlos.
+   *
+   * ---------------------------------------------------------------------
+   * FALLO CORREGIDO — la foto (o cualquier envío) se veía DOBLE un rato
+   * ---------------------------------------------------------------------
+   * `appendOptimistic` marca el mensaje "en vuelo" DESDE EL PRIMER
+   * instante, antes incluso de que la foto termine de subir. Si en ese
+   * rato cae una recarga completa del chat (típico: volver de la cámara
+   * nativa), `reinyectarMensajesEnVuelo` (storage.ts) ya lo reinserta en
+   * el caché local para que la burbuja no desaparezca de pantalla. El
+   * problema era que, al terminar la subida, este archivo volvía a
+   * empujarlo con un `.push()` ciego sobre esa MISMA copia del caché —
+   * que ya lo tenía— y quedaban dos objetos con el mismo id en el mismo
+   * array: dos burbujas idénticas durante un momento, hasta que la
+   * siguiente recarga las volvía a fundir en una.
+   *
+   * Ahora se busca por id antes de empujar: si ya estaba (reinyectado),
+   * se reemplaza en el mismo lugar; si no, se agrega.
+   */
+  const empujarMensajes = (db: ReturnType<typeof getDB>, idx: number, msgs: ChatMessage[]): number => {
+    const mensajes = db.chat_conversations[idx].messages;
+    let agregados = 0;
+    for (const msg of msgs) {
+      const yaEstaba = mensajes.findIndex(m => m.id === msg.id);
+      if (yaEstaba === -1) { mensajes.push(msg); agregados++; }
+      else mensajes[yaEstaba] = msg;
+    }
+    return agregados;
+  };
+
+  /**
    * El CLIENTE adjunta una foto o un video.
    *
    * Antes esto no existía —y la política del bucket exigía `is_staff()`,
@@ -427,8 +458,7 @@ export default function LiveChat() {
       return;
     }
     const { db, idx } = hallado;
-    db.chat_conversations[idx].messages.push(newMsg);
-    db.chat_conversations[idx].unreadCount += 1;
+    db.chat_conversations[idx].unreadCount += empujarMensajes(db, idx, [newMsg]);
 
     try {
       await saveDB(db);
@@ -543,8 +573,7 @@ export default function LiveChat() {
         return;
       }
       const { db, idx } = hallado;
-      db.chat_conversations[idx].messages.push(msgFinal);
-      db.chat_conversations[idx].unreadCount += 1;
+      db.chat_conversations[idx].unreadCount += empujarMensajes(db, idx, [msgFinal]);
       await saveDB(db);
       clearPending([msgId]);
     } catch (err: any) {
@@ -635,8 +664,7 @@ export default function LiveChat() {
       return;
     }
     const { db, idx: convIndex } = hallado;
-    db.chat_conversations[convIndex].messages.push(newMsg);
-    db.chat_conversations[convIndex].unreadCount += 1;
+    db.chat_conversations[convIndex].unreadCount += empujarMensajes(db, convIndex, [newMsg]);
 
     try {
       await saveDB(db);
@@ -674,7 +702,7 @@ export default function LiveChat() {
       return;
     }
     const { db, idx: convIndex } = hallado;
-    db.chat_conversations[convIndex].messages.push(qMsg, aMsg);
+    empujarMensajes(db, convIndex, [qMsg, aMsg]);
 
     try {
       await saveDB(db);
