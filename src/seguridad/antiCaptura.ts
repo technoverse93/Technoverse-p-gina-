@@ -173,8 +173,25 @@ export function iniciarAntiCaptura(): void {
   crearVelo();
   hojaDeImpresion();
   document.addEventListener('visibilitychange', alCambiarVisibilidad);
-  window.addEventListener('blur', mostrarVelo);
-  window.addEventListener('focus', ocultarVelo);
+
+  // FALLO CORREGIDO — la lámina tapaba la pantalla al escribir en el
+  // celular. En un aparato TÁCTIL, abrir el teclado en pantalla dispara un
+  // `blur` de la ventana como comportamiento normal del navegador móvil
+  // (el foco pasa un instante al teclado del sistema); no es que la
+  // persona haya cambiado de app. Con `blur` puesto ahí, cada vez que un
+  // cliente tocaba un campo para escribir, la lámina lo tapaba TODO,
+  // texto incluido. `blur`/`focus` solo tienen sentido en escritorio,
+  // donde escribir en un campo nunca le quita el foco a la ventana —ahí
+  // sí sirve para pescar herramientas de grabación que toman foco sin
+  // ocultar la pestaña—. En táctil queda SOLO `visibilitychange`, que
+  // sigue cubriendo cambiar de app de verdad o minimizar, y que el
+  // teclado en pantalla no dispara nunca.
+  const esTactil = ('ontouchstart' in window) || navigator.maxTouchPoints > 0;
+  if (!esTactil) {
+    window.addEventListener('blur', mostrarVelo);
+    window.addEventListener('focus', ocultarVelo);
+  }
+
   window.addEventListener('keydown', alTeclear, true);
   window.addEventListener('keyup', alSoltarTecla, true);
 }
