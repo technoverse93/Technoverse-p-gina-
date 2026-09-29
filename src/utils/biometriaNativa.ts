@@ -210,6 +210,48 @@ function opcionesVerificacion(subtitulo: string, motivo: string) {
  */
 const MAX_INTENTOS_HUELLA = 5;
 
+/**
+ * Por debajo de esto, una cancelación "del sistema" se considera espuria
+ * (el diálogo nunca llegó a dibujarse) y no una decisión de la persona.
+ * Ver el bloque largo en `verificarConReintentos`.
+ */
+const VENTANA_CANCELACION_ESPURIA_MS = 1200;
+
+/** Cuántas veces se rescata esa cancelación espuria antes de rendirse. */
+const MAX_RESCATES_CANCELACION = 2;
+
+/**
+ * Espera a que la aplicación esté visible de verdad antes de pedir la
+ * huella.
+ *
+ * `BiometricPrompt` necesita una actividad en primer plano. Pedirla
+ * mientras la aplicación todavía se está reanudando es lo que producía
+ * el falso error descrito en `verificarConReintentos`; esto cierra esa
+ * ventana por el otro lado, esperando en vez de reaccionar después.
+ *
+ * El tope evita quedarse esperando para siempre si el evento de
+ * visibilidad no llega nunca (pasa en algunos WebView): pasado ese
+ * tiempo se intenta igual, que es como se comportaba antes.
+ */
+async function esperarAPrimerPlano(topeMs = 3000): Promise<void> {
+  try {
+    if (typeof document === 'undefined') return;
+    if (document.visibilityState === 'visible') return;
+    await new Promise<void>(resolve => {
+      const terminar = () => {
+        document.removeEventListener('visibilitychange', alCambiar);
+        clearTimeout(temporizador);
+        resolve();
+      };
+      const alCambiar = () => { if (document.visibilityState === 'visible') terminar(); };
+      const temporizador = setTimeout(terminar, topeMs);
+      document.addEventListener('visibilitychange', alCambiar);
+    });
+  } catch {
+    /* si no se puede observar la visibilidad, se sigue igual */
+  }
+}
+
 /** Marca que se agotaron los reintentos SIN que el pase guardado se tocara. */
 class LecturaAgotada extends Error {
   constructor(public original: any) {
@@ -258,16 +300,62 @@ class LecturaAgotada extends Error {
  */
 async function verificarConReintentos(p: PluginBiometrico, opciones: any): Promise<void> {
   let ultimoError: any = null;
+  let rescatesDeCancelacionDelSistema = 0;
+
   for (let intento = 1; intento <= MAX_INTENTOS_HUELLA; intento++) {
+    const arrancoEn = Date.now();
     try {
       await p.verifyIdentity(opciones);
       return;
     } catch (e: any) {
       ultimoError = e;
+      const codigo = Number(e?.code);
+
       // Código 10 = Authentication Failed: el sensor SÍ se activó y no
-      // reconoció el dedo. Cualquier otro código sale de inmediato — ver
-      // el porqué de cada exclusión arriba.
-      if (Number(e?.code) !== 10) throw e;
+      // reconoció el dedo. Se reintenta, que es para lo que existe esto.
+      if (codigo === 10) continue;
+
+      // -------------------------------------------------------------
+      // EL "FALSO ERROR DE HUELLA", CORREGIDO
+      // -------------------------------------------------------------
+      // Reporte: al pedir la huella salía SIEMPRE un error, sin haber
+      // llegado a tocar el sensor, y no dejaba reintentar — había que
+      // cerrar sesión y entrar con la contraseña.
+      //
+      // La causa es de ciclo de vida, no del lector: el candado pide la
+      // huella en cuanto la aplicación vuelve del segundo plano, y en
+      // ese instante la actividad de Android todavía no terminó de
+      // reanudarse. `BiometricPrompt` no se puede mostrar sobre una
+      // actividad que no está en primer plano, así que el sistema lo
+      // cancela ÉL SOLO (código 15, System Cancel) antes de que aparezca
+      // nada en pantalla. La persona no canceló nada: nunca vio el
+      // diálogo. Pero la versión anterior salía de inmediato ante
+      // cualquier código que no fuera 10, y ese 15 terminaba mostrado
+      // como un fallo del que no se podía volver.
+      //
+      // La firma de esa cancelación espuria es que ocurre CASI AL
+      // INSTANTE: el sistema la rechaza antes de dibujar el diálogo. Una
+      // cancelación humana de verdad exige ver el diálogo y tocar
+      // "Cancelar", cosa que no pasa en menos de un segundo. Por eso el
+      // rescate se limita a las cancelaciones del SISTEMA (nunca las de
+      // la persona: 11/12/13/16/17) que llegan dentro de esa ventana, y
+      // solo un par de veces, con una pausa para darle tiempo a la
+      // actividad a terminar de reanudarse.
+      const casiInstantaneo = Date.now() - arrancoEn < VENTANA_CANCELACION_ESPURIA_MS;
+      if (codigo === 15 && casiInstantaneo && rescatesDeCancelacionDelSistema < MAX_RESCATES_CANCELACION) {
+        rescatesDeCancelacionDelSistema++;
+        await esperarAPrimerPlano();
+        await new Promise(resolve => setTimeout(resolve, 350));
+        // No cuenta como intento de lectura: el sensor nunca llegó a
+        // encenderse, así que gastar uno de los cinco sería castigar a la
+        // persona por un tropiezo del sistema.
+        intento--;
+        continue;
+      }
+
+      // Cualquier otro código sale de inmediato — ver el porqué de cada
+      // exclusión arriba.
+      throw e;
     }
   }
   throw new LecturaAgotada(ultimoError);
@@ -554,6 +642,12 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
     if (!guardado?.password && !estaMarcadaActiva()) {
       return { ok: false, mensaje: 'Todavía no ha activado la huella en este teléfono.' };
     }
+
+    // El candado pide la huella justo cuando la aplicación vuelve del
+    // segundo plano. Esperar a estar visible de verdad evita que el
+    // sistema cancele el diálogo antes de dibujarlo — ver
+    // `esperarAPrimerPlano` y el bloque de `verificarConReintentos`.
+    await esperarAPrimerPlano();
 
     await verificarConReintentos(
       p,

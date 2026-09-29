@@ -1,3 +1,4 @@
+import { agruparAvisos } from './agruparAvisos';
 import { supabase } from '../supabaseClient';
 import {
   User, Product, InventoryMovement, RepairOrder, Order,
@@ -230,14 +231,23 @@ export function getDBVersion(): number {
   return dbVersion;
 }
 
-function notifyUpdate() {
-  dbVersion++;
+function despacharActualizacion() {
   if (typeof window !== 'undefined') {
     window.dispatchEvent(new CustomEvent('technoverse_db_updated', { detail: localCache }));
     if (broadcastChannel) {
       try { broadcastChannel.postMessage({ type: 'UPDATE_DB' }); } catch (e) {}
     }
   }
+}
+
+// El contador sube SIEMPRE y al instante (quien sondea `getDBVersion()` ve
+// el cambio de inmediato); lo que se agrupa es el AVISO a los oyentes,
+// porque cada uno responde clonando la base entera. Ver `agruparAvisos`.
+const despacharAgrupado = agruparAvisos(despacharActualizacion, 50);
+
+function notifyUpdate() {
+  dbVersion++;
+  despacharAgrupado();
 }
 
 function notifySyncError(message: string) {

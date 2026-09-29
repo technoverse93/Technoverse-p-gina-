@@ -14,7 +14,6 @@ import { FunctionsHttpError } from '@supabase/supabase-js';
 import { getDB, saveDB, addAuditLog, ADMIN_PASSWORD, saveLogo } from '../utils/storage';
 import { cerrarSesionConservandoBiometria } from '../utils/biometria';
 import { CATEGORIAS_TIENDA, normalizarCategoria, esRepuesto } from '../utils/categorias';
-import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, BarChart, Bar, Legend } from 'recharts';
 
 import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog } from '../types';
 import { useToast, useConfirm } from './ui/Overlays';

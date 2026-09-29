@@ -43,8 +43,11 @@ import {
   esAplicacionNativa, soportaBiometriaNativa, activarBiometriaNativa,
   entrarConBiometriaNativa, hayAccesoGuardado, borrarBiometriaNativa,
   iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria,
-  sesionBloqueada,
+  sesionBloqueada, marcarBloqueo,
 } from './biometriaNativa';
+import {
+  MetodoDesbloqueo, metodoDesbloqueoLocal, verificarDesbloqueoLocal,
+} from './desbloqueoLocal';
 
 // Se reexportan para que las pantallas no tengan que saber si están en la
 // web o en la APK: llaman a lo mismo y cada camino hace lo suyo.
@@ -110,6 +113,72 @@ export async function soportaBiometria(): Promise<boolean> {
  */
 export function tipoDeBiometria(): 'nativa' | 'webauthn' {
   return esAplicacionNativa() ? 'nativa' : 'webauthn';
+}
+
+export interface CapacidadesDesbloqueo {
+  /** ¿Este aparato tiene lector biométrico disponible AHORA? */
+  biometria: boolean;
+  /** PIN o patrón configurado en este aparato, si hay alguno. */
+  metodoLocal: MetodoDesbloqueo | null;
+  /** ¿Hay al menos una forma de abrir el cerrojo sin escribir la contraseña? */
+  hayAlguno: boolean;
+}
+
+/**
+ * Qué puede ofrecer ESTE aparato para abrir el cerrojo.
+ *
+ * ---------------------------------------------------------------------
+ * EL FALLO QUE ESTO CORRIGE — la tablet que no se podía usar
+ * ---------------------------------------------------------------------
+ * Reporte: en una tablet sin lector de huella (Redmi Pad SE) y en el
+ * navegador, el candado exigía huella de todas formas y no había manera
+ * de pasar de ahí.
+ *
+ * La detección de hardware ya existía (`soportaBiometria`) y respondía
+ * bien que no había lector; el problema era que ese "no" no llevaba a
+ * ninguna parte, porque la huella era el ÚNICO método. Preguntar por las
+ * capacidades en conjunto —y no solo por la biometría— es lo que permite
+ * que la pantalla elija sola el método que este aparato sí puede usar.
+ */
+export async function capacidadesDeDesbloqueo(): Promise<CapacidadesDesbloqueo> {
+  const metodoLocal = metodoDesbloqueoLocal();
+  const biometria = await soportaBiometria();
+  return { biometria, metodoLocal, hayAlguno: biometria || metodoLocal !== null };
+}
+
+/**
+ * Abre el cerrojo con el PIN/patrón de este aparato.
+ *
+ * Igual que la huella, esto NO inicia sesión: confirma que quien está
+ * delante puede abrir el cerrojo y libera la sesión que YA estaba
+ * guardada en el aparato. Si esa sesión caducó de verdad mientras el
+ * cerrojo estaba echado, no hay nada que liberar y se dice claramente,
+ * en vez de dejar el candado dando vueltas.
+ */
+export async function entrarConDesbloqueoLocal(
+  secreto: string,
+  cuenta?: string | null,
+): Promise<ResultadoBiometria> {
+  const verificacion = await verificarDesbloqueoLocal(secreto, cuenta);
+  if (!verificacion.ok) return { ok: false, mensaje: verificacion.mensaje };
+
+  let usuario: { id?: string; email?: string } | null = null;
+  try {
+    const { data } = await supabase.auth.getSession();
+    usuario = data?.session?.user ?? null;
+  } catch {
+    usuario = null;
+  }
+
+  if (!usuario?.id) {
+    return {
+      ok: false,
+      mensaje: 'La sesión guardada en este aparato ya no está disponible. Entre con su contraseña una vez y el PIN vuelve a quedar listo.',
+    };
+  }
+
+  marcarBloqueo(false);
+  return { ok: true, mensaje: 'Bienvenido.', userId: usuario.id, email: usuario.email || undefined };
 }
 
 /** ¿Ya está activada en este aparato? Solo aplica al camino nativo. */
