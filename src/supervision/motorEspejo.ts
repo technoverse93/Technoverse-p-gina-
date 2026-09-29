@@ -108,9 +108,22 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
    * forma periódica, para que se autocure solo sin depender de ninguna
    * casualidad.
    */
-  let reenviarCss: (() => void) | null = null;
+  let reenviarCss: ((forzar?: boolean) => void) | null = null;
   let cssTimer: ReturnType<typeof setInterval> | null = null;
   const REENVIO_CSS_MS = 10000;
+  /** Huella barata de las hojas de estilo: cuántas hay y cuántas reglas suman. */
+  let ultimaFirmaCss = '';
+  /**
+   * Número de lote. Cada lote sale con el siguiente número, así quien mira
+   * puede darse cuenta de que se perdió uno (saltó de 5 a 7) y pedir una
+   * foto completa AL INSTANTE, en vez de quedarse con la pantalla
+   * desactualizada hasta el próximo checkout periódico (12 s).
+   *
+   * Solo avanza cuando el lote salió de verdad: si el envío falla y el
+   * lote se reencola, se reintenta con el MISMO número, para que el
+   * receptor no vea un hueco donde nunca se perdió nada.
+   */
+  let secuencia = 0;
 
   /**
    * Batería y calidad de red del supervisado, mandadas cada
@@ -123,6 +136,18 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
    */
   let telemetriaTimer: ReturnType<typeof setInterval> | null = null;
   const TELEMETRIA_MS = 15000;
+  /**
+   * Latido mínimo para que quien mira detecte un lote perdido.
+   *
+   * La numeración de lotes solo delata un hueco cuando LLEGA el lote
+   * siguiente. Si se pierde el último y la pantalla se queda quieta, no
+   * llega ninguno y el espejo quedaría desactualizado hasta el checkout
+   * (12 s). Un evento diminuto cada `LATIDO_MS`, únicamente cuando no
+   * hubo otro tráfico, cierra ese hueco en segundos.
+   */
+  let latidoTimer: ReturnType<typeof setInterval> | null = null;
+  let huboTrafico = false;
+  const LATIDO_MS = 3000;
 
   function abrirCanal(): void {
     if (canal) return;
@@ -169,13 +194,21 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         const cuerpo = JSON.stringify(lote);
         const id = `${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
         const partes = Math.ceil(cuerpo.length / TROZO_MAX) || 1;
+        const s = secuencia + 1;
         for (let i = 0; i < partes; i++) {
-          await canal.send({
+          // `send()` NO lanza cuando falla: devuelve 'ok', 'timed out' o
+          // 'error'. Antes el resultado se ignoraba, así que un trozo
+          // rechazado o vencido se daba por enviado y el lote se perdía en
+          // silencio. Ahora cualquier resultado distinto de 'ok' cuenta
+          // como fallo y el lote entero vuelve a la cola.
+          const resultado = await canal.send({
             type: 'broadcast',
             event: 'lote',
-            payload: { id, i, n: partes, d: cuerpo.slice(i * TROZO_MAX, (i + 1) * TROZO_MAX) },
+            payload: { id, s, i, n: partes, d: cuerpo.slice(i * TROZO_MAX, (i + 1) * TROZO_MAX) },
           });
+          if (resultado !== 'ok') throw new Error(`send: ${String(resultado)}`);
         }
+        secuencia = s;
         return true;
       } catch { /* el canal falló: se intenta el respaldo */ }
     }
@@ -198,6 +231,7 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
     if (buffer.length === 0) return;
     const lote = buffer;
     buffer = [];
+    huboTrafico = true;
     const salio = await enviar(lote);
     // ANTES SE PERDÍA. `buffer` se vaciaba antes de intentar el envío, así
     // que si el canal todavía no estaba suscrito el lote se evaporaba —y el
@@ -244,6 +278,18 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         attributeFilter: ['class', 'style', 'data-theme'],
       });
     } catch { /* sin MutationObserver: se autocura en el checkout periódico */ }
+  }
+
+  function firmaCss(): string {
+    let hojas = 0;
+    let reglas = 0;
+    try {
+      for (const hoja of Array.from(document.styleSheets)) {
+        hojas++;
+        try { reglas += hoja.cssRules.length; } catch { /* hoja de otro origen */ }
+      }
+    } catch { /* sin acceso a las hojas: se manda siempre */ return String(Date.now()); }
+    return `${hojas}:${reglas}`;
   }
 
   /**
@@ -343,13 +389,23 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         }) || null;
 
         vigilarTema(addCustomEvent);
-        reenviarCss = () => mandarCss(addCustomEvent);
+        // `forzar` (el valor por defecto) manda la hoja SIEMPRE: hace falta
+        // cuando alguien acaba de engancharse y no tiene ninguna. El
+        // reenvío periódico, en cambio, solo manda si las hojas cambiaron —
+        // antes mandaba cientos de KB cada 10 s aunque no hubiera cambiado
+        // nada, en el teléfono de quien se está mirando.
+        reenviarCss = (forzar = true) => {
+          const firma = firmaCss();
+          if (!forzar && firma === ultimaFirmaCss) return;
+          ultimaFirmaCss = firma;
+          mandarCss(addCustomEvent);
+        };
         reenviarCss();
         // Reenvío periódico: cubre navegar a un módulo con CSS diferido
         // nuevo sin que nada más lo dispare (sin cambiar de tema, sin
         // volver a enganchar). El lado que mira reinyecta la hoja nueva
         // en cuanto llega, sin esperar ninguna foto completa.
-        cssTimer = setInterval(() => reenviarCss?.(), REENVIO_CSS_MS);
+        cssTimer = setInterval(() => reenviarCss?.(false), REENVIO_CSS_MS);
 
         const mandarTelemetria = () => {
           void leerTelemetria().then(t => { addCustomEvent('telemetria', t); void volcar(); });
@@ -364,6 +420,12 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         // ráfagas al momento, y un volcado vacío no cuesta nada, así que
         // acortar el intervalo solo adelanta los cambios sueltos.
         flushTimer = setInterval(() => void volcar(), 60);
+
+        latidoTimer = setInterval(() => {
+          if (huboTrafico) { huboTrafico = false; return; }
+          addCustomEvent('latido', {});
+          void volcar();
+        }, LATIDO_MS);
 
         // FOTO AL FINAL DEL MONTAJE, no en medio.
         //
@@ -392,8 +454,11 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
     async parar() {
       if (flushTimer) { clearInterval(flushTimer); flushTimer = null; }
       if (cssTimer) { clearInterval(cssTimer); cssTimer = null; }
+      if (latidoTimer) { clearInterval(latidoTimer); latidoTimer = null; }
+      huboTrafico = false;
       if (telemetriaTimer) { clearInterval(telemetriaTimer); telemetriaTimer = null; }
       reenviarCss = null;
+      ultimaFirmaCss = '';
       if (observadorTema) { try { observadorTema.disconnect(); } catch { /* nada */ } observadorTema = null; }
       if (detener) { try { detener(); } catch { /* ya parado */ } detener = null; }
       tomarFoto = null;
