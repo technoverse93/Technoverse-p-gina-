@@ -395,6 +395,18 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
         // antes mandaba cientos de KB cada 10 s aunque no hubiera cambiado
         // nada, en el teléfono de quien se está mirando.
         reenviarCss = (forzar = true) => {
+          // Qué compilación y pantalla tiene este aparato: la consola lo
+          // muestra en su diagnóstico. Va con cada foto completa (no una
+          // sola vez) para que llegue aunque se pierda el primer lote.
+          if (forzar) {
+            try {
+              addCustomEvent('version', {
+                build: typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : '?',
+                ancho: window.innerWidth, alto: window.innerHeight,
+                hojas: document.styleSheets.length,
+              });
+            } catch { /* nada */ }
+          }
           const firma = firmaCss();
           if (!forzar && firma === ultimaFirmaCss) return;
           ultimaFirmaCss = firma;
