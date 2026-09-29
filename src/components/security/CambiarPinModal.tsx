@@ -147,6 +147,12 @@ export default function CambiarPinModal({ open, onClose }: Props) {
         <Btn type="submit" variant="primary" disabled={!puedeGuardar || guardando} className="w-full justify-center">
           {guardando ? 'Guardando…' : 'Guardar'}
         </Btn>
+        {/* Un botón gris sin explicación se lee como "no hace nada". */}
+        {!puedeGuardar && !guardando && (
+          <p className="text-center text-[11.5px] text-[var(--text-secondary)]">
+            «Guardar» se activa cuando los tres códigos tienen 4 dígitos y el nuevo coincide con su confirmación.
+          </p>
+        )}
       </form>
     </Modal>
   );

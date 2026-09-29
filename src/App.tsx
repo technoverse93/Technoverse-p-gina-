@@ -404,9 +404,19 @@ function AppInner() {
     return () => detenerVisitante();
   }, [currentUser]);
 
-  // Precalienta rrweb una vez al arrancar, con la red ociosa, para que el
-  // primer "ver" no espere la descarga de la librería.
-  useEffect(() => { precalentarEspejo(); }, []);
+  // Precalienta rrweb para que el primer "ver" no espere la descarga de la
+  // librería (161 KB). Antes corría al montar, compitiendo con la carga del
+  // catálogo por red y por hilo principal en CADA visitante, aunque nunca
+  // fuera a ser observado. Ahora espera a que el navegador esté ocioso.
+  useEffect(() => {
+    const ric: any = (window as any).requestIdleCallback;
+    if (typeof ric === 'function') {
+      const id = ric(() => precalentarEspejo(), { timeout: 10000 });
+      return () => (window as any).cancelIdleCallback?.(id);
+    }
+    const t = setTimeout(precalentarEspejo, 4000);
+    return () => clearTimeout(t);
+  }, []);
 
   // Kill Switch: vigilancia de bloqueos para TODOS —personal y visitantes,
   // web y APK— desde el arranque y una sola vez. Se une al canal común
@@ -487,19 +497,27 @@ function AppInner() {
       if (!currentUser) return; // nadie con sesión abierta, no hay nada que bloquear
       const ausenteMs = (evento as CustomEvent<{ ausenteMs?: number }>).detail?.ausenteMs;
 
-      // APK: siempre el candado de huella, sesión perpetua.
+      // APK: siempre el candado, sesión perpetua.
       if (esAplicacionNativa()) {
         setRequiereReautenticacionRapida(true);
         return;
       }
 
-      // Web: candado si fue breve; re-login si fue inactividad real.
-      if (typeof ausenteMs === 'number' && ausenteMs <= UMBRAL_REINGRESO_RAPIDO_MS) {
-        setRequiereReautenticacionRapida(true);
-        return;
-      }
-      handleLogout();
-      setAutoOpenLogin(true);
+      // WEB — CAMBIO: la inactividad ya NO cierra la sesión.
+      //
+      // Antes, 5 minutos sin tocar nada hacían `handleLogout()` y había
+      // que reescribir correo y contraseña — el "la sesión se cierra sola"
+      // reportado. Ahora se echa el CERROJO: la sesión sigue guardada y
+      // se vuelve a abrir con huella, PIN o patrón. `marcarBloqueo(true)`
+      // es lo que hace que recargar la página tampoco la abra sola (ver
+      // `arranqueFrioBloqueado` más abajo).
+      //
+      // Si este navegador no tiene ningún método para abrir el cerrojo, el
+      // propio candado lo detecta y cae al cierre con contraseña de
+      // siempre (`onSinMetodo`), que sigue siendo el comportamiento
+      // seguro cuando no hay otra cosa.
+      if (typeof ausenteMs === 'number' && ausenteMs > UMBRAL_REINGRESO_RAPIDO_MS) marcarBloqueo(true);
+      setRequiereReautenticacionRapida(true);
     };
     window.addEventListener(EVENTO_FORZAR_REINGRESO, alForzarReingreso);
     return () => window.removeEventListener(EVENTO_FORZAR_REINGRESO, alForzarReingreso);
@@ -606,8 +624,27 @@ function AppInner() {
   // intento sigue en curso). Solo aplica a la APK — en la web el bloqueo
   // por 5 minutos de inactividad real SÍ debe pedir usuario y clave de
   // nuevo, es la política que ya existía y sigue intacta.
+  // Ya no es exclusivo de la APK: en la web el bloqueo por inactividad
+  // también deja el cerrojo puesto, y recargar la página no debe saltárselo.
   const arranqueFrioBloqueado =
-    esAplicacionNativa() && sesionVerificada && !currentUser && sesionBloqueada();
+    sesionVerificada && !currentUser && sesionBloqueada();
+
+  // Sin ningún método para abrir el cerrojo (sin lector, sin PIN/patrón):
+  //   · APK  → se suelta el cerrojo. Encerrar a la persona sin salida —lo
+  //     que pasaba en la tablet sin lector— es peor; la defensa que queda
+  //     es el bloqueo de pantalla del propio aparato. Se puede activar un
+  //     PIN o patrón en Seguridad para volver a tener candado propio.
+  //   · Web  → cierre con contraseña, como siempre.
+  const alNoHaberMetodo = () => {
+    if (esAplicacionNativa()) {
+      marcarBloqueo(false);
+      setRequiereReautenticacionRapida(false);
+      return;
+    }
+    setRequiereReautenticacionRapida(false);
+    handleLogout();
+    setAutoOpenLogin(true);
+  };
 
   return (
     <div className="min-h-dvh bg-transparent font-sans selection:bg-blue-500/20 selection:text-blue-700" id="technoverse-application-container">
@@ -675,6 +712,7 @@ function AppInner() {
             handleLogout();
             setAutoOpenLogin(true);
           }}
+          onSinMetodo={alNoHaberMetodo}
         />
       )}
 
@@ -706,6 +744,24 @@ function AppInner() {
             }
           }}
           onFalloTotal={() => {
+            handleLogout();
+            setAutoOpenLogin(true);
+          }}
+          onSinMetodo={async () => {
+            // Arranque en frío sin ningún método para abrir el cerrojo. En
+            // la APK se restaura la sesión guardada (ver `alNoHaberMetodo`);
+            // en la web, o si no hay sesión que restaurar, cierre normal.
+            if (esAplicacionNativa()) {
+              try {
+                const { data } = await conTope(supabase.auth.getSession(), 8000);
+                const perfil = await cargarPerfilCompleto(data?.session?.user?.id);
+                if (perfil) {
+                  setCurrentUser(perfil);
+                  marcarBloqueo(false);
+                  return;
+                }
+              } catch { /* se cae al cierre normal de abajo */ }
+            }
             handleLogout();
             setAutoOpenLogin(true);
           }}

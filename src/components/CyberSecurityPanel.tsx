@@ -1,3 +1,4 @@
+import ConfigurarDesbloqueoLocal from './security/ConfigurarDesbloqueoLocal';
 import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import {
   ShieldAlert, Globe, Ban, CheckCircle, XCircle, RefreshCw, Trash2,
@@ -1810,6 +1811,10 @@ function CyberSecurityPanel({
       {/* =============== MI ACCESO BIOMÉTRICO =============== */}
       {seccion === 'biometria' && (
         <div className="space-y-4">
+          {/* PIN o patrón: alternativa a la huella, y el único método en
+              aparatos sin lector (tablets) o en el navegador. */}
+          <ConfigurarDesbloqueoLocal email={currentUserEmail || ''} />
+
           <p className="text-xs text-[var(--text-secondary)] max-w-2xl leading-relaxed">
             Face ID, Touch ID o huella para entrar sin escribir la contraseña.{' '}
             <strong className="text-[var(--text-primary)]">Aquí no se guarda ninguna cara ni ninguna huella</strong>: el
