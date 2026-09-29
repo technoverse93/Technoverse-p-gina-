@@ -115,7 +115,10 @@ export default function ConsolaSupervision() {
   const colaRef = useRef<any[]>([]);
   const canalEventosRef = useRef<any>(null);
   const canalEspejoRef = useRef<any>(null);
-  const trozosRef = useRef<Map<string, { n: number; partes: string[] }>>(new Map());
+  const trozosRef = useRef<Map<string, { n: number; partes: string[]; venc: ReturnType<typeof setTimeout> }>>(new Map());
+  /** Próximo número de lote esperado del emisor (null = aún no se sabe). */
+  const secEsperadaRef = useRef<number | null>(null);
+  const ultimoPedidoFotoRef = useRef(0);
   /** Último tema conocido del supervisado. Se reaplica tras cada foto. */
   const temaRef = useRef<{ clase: string; estilo: string; data: string } | null>(null);
   /**
@@ -259,7 +262,9 @@ export default function ConsolaSupervision() {
     try { replayerRef.current?.pause?.(); } catch { /* nada */ }
     replayerRef.current = null;
     colaRef.current = [];
+    trozosRef.current.forEach(t => clearTimeout(t.venc));
     trozosRef.current.clear();
+    secEsperadaRef.current = null;
     // El tema es de QUIEN se estaba mirando: si no se olvida, el siguiente
     // supervisado heredaría el claro/oscuro del anterior hasta su primer
     // cambio de tema.
@@ -292,6 +297,27 @@ export default function ConsolaSupervision() {
         liveMode: true,
         mouseTail: false,
         speed: 1,
+        // FALLO CORREGIDO — "el espejo sale a medias / sin contenido".
+        //
+        // rrweb, por defecto, PAUSA todas las animaciones CSS del
+        // documento reproducido: tras cada foto completa marca el <html>
+        // como `rrweb-paused` si el reproductor no está en estado
+        // "playing" —y en modo en vivo nunca lo está, es "live"— e inyecta
+        // `animation-play-state: paused !important` para todo el árbol.
+        // Está pensado para pausar una GRABACIÓN vista en diferido, no una
+        // transmisión en vivo.
+        //
+        // El efecto aquí era devastador y silencioso: cualquier elemento
+        // que entra con una animación desde `opacity: 0` se quedaba
+        // congelado en su primer cuadro, o sea INVISIBLE, para siempre.
+        // Cada pestaña del panel de administración entra así
+        // (`tv-entra-pestana`), como los menús, los modales y las
+        // burbujas del chat. El DOM llegaba completo —los mismos
+        // elementos, las mismas medidas— pero el contenido no se
+        // pintaba: una pantalla con el marco y sin lo de adentro, que se
+        // leía como "formato roto" y como "desactualizado" (los cambios
+        // sí llegaban, pero lo nuevo también entraba invisible).
+        pauseAnimation: false,
       });
       r.on('resize', (e: any) => ajustarEscala(e?.width, e?.height));
       // Cada foto completa rehace el documento del iframe y se lleva por
@@ -329,7 +355,10 @@ export default function ConsolaSupervision() {
       // estilo de los módulos que esa persona está mirando.
       if (ev?.type === 5 && ev?.data?.tag === 'css') {
         const texto = ev.data.payload?.texto;
-        if (typeof texto === 'string' && texto.length > 0) {
+        // El emisor puede repetir la misma hoja: si no cambió, no hay nada
+        // que rehacer (reinyectar cientos de KB de CSS fuerza un reparseo
+        // completo del documento del espejo).
+        if (typeof texto === 'string' && texto.length > 0 && texto !== cssRemotoRef.current) {
           cssRemotoRef.current = texto;
           try {
             const doc = (replayerRef.current?.iframe as HTMLIFrameElement | undefined)?.contentDocument;
@@ -346,6 +375,10 @@ export default function ConsolaSupervision() {
         aplicarTema();
         continue;
       }
+
+      // Latido del emisor: solo sirve para que el lote llegue (y con él la
+      // numeración que delata un hueco). No es parte del DOM replicado.
+      if (ev?.type === 5 && ev?.data?.tag === 'latido') continue;
 
       // Batería y red del supervisado (ver utils/telemetria.ts). Es
       // informativo, no forma parte del DOM replicado: no va a rrweb.
@@ -367,16 +400,58 @@ export default function ConsolaSupervision() {
     if (!replayerRef.current) void iniciarSiHayFoto();
   }, [iniciarSiHayFoto, aplicarTema, inyectarEstilos]);
 
+  /**
+   * Pide al supervisado una foto COMPLETA nueva por el canal del espejo.
+   *
+   * Es la forma de sanar cualquier desincronización: se perdió un lote, un
+   * trozo no llegó, un evento no se pudo descomprimir. Con una foto
+   * completa el espejo queda igual que el origen en un instante, sin
+   * esperar al checkout periódico (12 s). Se limita a una por 1,5 s para
+   * no inundar al supervisado si el problema es una racha de pérdidas.
+   */
+  const pedirFotoNueva = useCallback(() => {
+    const ahora = Date.now();
+    if (ahora - ultimoPedidoFotoRef.current < 1500) return;
+    ultimoPedidoFotoRef.current = ahora;
+    try { void canalEspejoRef.current?.send({ type: 'broadcast', event: 'pedir-foto', payload: {} }); } catch { /* nada */ }
+  }, []);
+
   /** Reensambla los trozos del canal rápido y descomprime los eventos. */
   const manejarTrozo = useCallback(async (p: any) => {
     if (!p?.id || typeof p.d !== 'string') return;
+
+    // DETECCIÓN DE LOTES PERDIDOS. Cada lote trae su número (`s`); si salta
+    // uno, faltó un lote entero y todo lo que venga encima se aplicaría
+    // sobre un documento distinto del origen. Los emisores anteriores a
+    // este cambio no numeran: sin `s` no se comprueba nada.
+    if (typeof p.s === 'number') {
+      const esperada = secEsperadaRef.current;
+      if (esperada !== null && p.s > esperada) pedirFotoNueva();
+      // Si `s` es MENOR que lo esperado, el emisor reinició su cuenta (otro
+      // arranque): se toma su número como nuevo punto de partida.
+      secEsperadaRef.current = esperada === null || p.s < esperada - 1 ? p.s + 1 : Math.max(esperada, p.s + 1);
+    }
+
     const mapa = trozosRef.current;
-    const entrada = mapa.get(p.id) || { n: p.n || 1, partes: [] };
+    let entrada = mapa.get(p.id);
+    if (!entrada) {
+      // Un lote que no se completa en 4 s perdió al menos un trozo: se
+      // descarta y se pide foto nueva, en vez de dejar el resto colgado.
+      const id = p.id;
+      entrada = {
+        n: p.n || 1,
+        partes: [],
+        venc: setTimeout(() => {
+          if (trozosRef.current.delete(id)) pedirFotoNueva();
+        }, 4000),
+      };
+      mapa.set(id, entrada);
+    }
     entrada.partes[p.i || 0] = p.d;
-    mapa.set(p.id, entrada);
 
     const completo = entrada.partes.filter(Boolean).length === entrada.n;
     if (!completo) return;
+    clearTimeout(entrada.venc);
     mapa.delete(p.id);
 
     try {
@@ -384,9 +459,17 @@ export default function ConsolaSupervision() {
       const { unpack } = await import('rrweb');
       // El grabador comprime cada evento; `unpack` devuelve el objeto.
       const eventos = (crudo as any[]).map(e => { try { return unpack(e); } catch { return e; } });
-      manejarLote(eventos);
-    } catch { /* lote corrupto: el próximo checkout lo arregla */ }
-  }, [manejarLote]);
+      // Un evento que no se pudo descomprimir se queda como texto y no
+      // tiene `type` numérico: dárselo a rrweb lo confunde. Se descarta y
+      // se pide foto nueva para no quedar desincronizados.
+      const validos = eventos.filter(e => e && typeof e.type === 'number');
+      if (validos.length !== eventos.length) pedirFotoNueva();
+      manejarLote(validos);
+    } catch {
+      /* lote corrupto: se pide una foto nueva en vez de esperar al checkout */
+      pedirFotoNueva();
+    }
+  }, [manejarLote, pedirFotoNueva]);
 
   // --------------------------- Enganche / desenganche ---------------------------
   const cerrarCanales = useCallback(() => {
