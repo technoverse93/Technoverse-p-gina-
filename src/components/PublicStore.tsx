@@ -1,3 +1,4 @@
+import { soloDigitos as soloDigitosCR, detectarTipo as detectarTipoCR } from '../utils/identificacionCR';
 import { motion, AnimatePresence } from "motion/react";
 import React, { useState, useEffect, useRef, useLayoutEffect, useMemo, useCallback } from 'react';
 import { PaginatedGrid } from './PaginationHelper';
@@ -2206,7 +2207,14 @@ export default function PublicStore({
                         <input
                           type="text"
                           value={fiscalIdValue}
-                          onChange={(e) => setFiscalIdValue(e.target.value.replace(/\D/g, ''))}
+                          onChange={(e) => {
+                            const d = soloDigitosCR(e.target.value);
+                            setFiscalIdValue(d);
+                            const deducido = detectarTipoCR(d);
+                            if (deducido) setFiscalIdType(deducido);
+                          }}
+                          inputMode="numeric"
+                          autoComplete="off"
                           placeholder="Solo números"
                           className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none font-mono"
                         />

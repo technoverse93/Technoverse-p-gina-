@@ -23,15 +23,17 @@
 // con costo ₡0, que es exactamente lo que el cliente recibió.
 // =====================================================================
 
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import {
-  Receipt, Gift, Wrench, Plus, Trash2, CheckCircle, Download, AlertTriangle, Link2, Mail, ShoppingBag,
+  Receipt, Gift, Wrench, Plus, Trash2, CheckCircle, Download, AlertTriangle, Link2, Mail, ShoppingBag, Search, Loader2,
 } from 'lucide-react';
 import { PageHead, Card, Btn, Field, Chip, Stat, Empty, Carpetas, colones } from './admin/AdminKit';
 import { CustomSelect } from './CustomSelect';
 import { useToast, useConfirm } from './ui/Overlays';
 import { getDB, refreshProductsFromSupabase } from '../utils/storage';
 import { validateCedula } from '../utils/invoicePdf';
+import { soloDigitos, detectarTipo, formatear, longitudMaximaDe } from '../utils/identificacionCR';
+import { useConsultaIdentificacion, type DatosEncontrados } from '../utils/consultaCedula';
 import type { IdentificacionTipo } from '../utils/invoicePdf';
 import {
   MEDIOS_DE_COBRO, OPCIONES_GARANTIA, calcularMargen, cobrarServicio, componentesDe,
@@ -90,6 +92,36 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
   const [idValor, setIdValor] = useState('');
   const [correo, setCorreo] = useState('');
   const [telefono, setTelefono] = useState('');
+
+  // ---- Autocompletado por identificación -----------------------------------
+  // Lo que escribe el cajero a mano manda SIEMPRE: solo se rellena un campo
+  // que él no tocó. `autocompletado` recuerda qué se rellenó solo, para
+  // poder retirarlo si cambia la cédula y el nuevo cliente no trae datos
+  // (si no, quedaría el nombre del cliente anterior con la cédula del nuevo).
+  const [tocado, setTocado] = useState({ nombre: false, correo: false });
+  const autocompletado = useRef({ nombre: false, correo: false });
+
+  const aplicarDatos = (d: DatosEncontrados) => {
+    if (d.tipo) setIdTipo(d.tipo);
+    if (d.nombre && !tocado.nombre) { setNombre(d.nombre); autocompletado.current.nombre = true; }
+    if (d.correo && !tocado.correo) { setCorreo(d.correo); autocompletado.current.correo = true; }
+  };
+
+  const consulta = useConsultaIdentificacion({
+    digitos: idValor, tipo: idTipo, usarHistorial: true, onDatos: aplicarDatos,
+  });
+
+  const alCambiarIdentificacion = (crudo: string) => {
+    const digitos = soloDigitos(crudo);
+    if (digitos === idValor) return;
+    // Otra cédula: lo que se había rellenado solo ya no corresponde.
+    if (autocompletado.current.nombre && !tocado.nombre) setNombre('');
+    if (autocompletado.current.correo && !tocado.correo) setCorreo('');
+    autocompletado.current = { nombre: false, correo: false };
+    setIdValor(digitos);
+    const deducido = detectarTipo(digitos);
+    if (deducido) setIdTipo(deducido);
+  };
 
   // ---- Datos del cobro ---------------------------------------------------
   const [descripcion, setDescripcion] = useState('');
@@ -312,6 +344,9 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
 
   const limpiar = () => {
     setNombre(''); setIdValor(''); setCorreo(''); setTelefono('');
+    setTocado({ nombre: false, correo: false });
+    autocompletado.current = { nombre: false, correo: false };
+    consulta.reiniciar();
     setDescripcion(''); setMonto(''); setGarantia('3'); setMedio('SINPE');
     setRepuestos([]); setInsumos([]);
     setRepuestoElegido(''); setInsumoElegido('');
@@ -551,7 +586,7 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
         <Card title="Cliente">
           <div className="tv-stack">
             <Field label="Nombre completo">
-              <input className="tv-input" value={nombre} onChange={e => setNombre(e.target.value)} placeholder="Nombre y apellidos" />
+              <input className="tv-input" value={nombre} onChange={e => { setNombre(e.target.value); setTocado(t => ({ ...t, nombre: true })); autocompletado.current.nombre = false; }} placeholder="Nombre y apellidos" />
             </Field>
             <div className="tv-grid tv-grid-2">
               <Field label="Tipo de identificación">
@@ -562,17 +597,51 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
                 />
               </Field>
               <Field label="Número de identificación">
-                <input
-                  className="tv-input font-mono"
-                  value={idValor}
-                  onChange={e => setIdValor(e.target.value)}
-                  placeholder="Solo dígitos"
-                  inputMode="numeric"
-                />
+                <div className="flex gap-2">
+                  <input
+                    className="tv-input font-mono flex-1"
+                    value={formatear(idTipo, idValor)}
+                    onChange={e => alCambiarIdentificacion(e.target.value)}
+                    placeholder="Escriba la cédula y se completa sola"
+                    inputMode="numeric"
+                    maxLength={longitudMaximaDe(idTipo) + 3}
+                    autoComplete="off"
+                  />
+                  <Btn
+                    type="button"
+                    icon={consulta.resultado.estado === 'buscando' ? Loader2 : Search}
+                    onClick={consulta.buscarAhora}
+                    disabled={consulta.resultado.estado === 'buscando' || validateCedula(idTipo, idValor) !== null}
+                    aria-label="Buscar los datos de esta identificación"
+                  >
+                    Buscar
+                  </Btn>
+                </div>
               </Field>
             </div>
+            {consulta.resultado.estado !== 'inactivo' && (
+              <p
+                role="status"
+                className={`-mt-1 text-[12px] font-semibold ${
+                  consulta.resultado.estado === 'encontrado' ? 'text-[var(--ok)]'
+                  : consulta.resultado.estado === 'error' ? 'text-[var(--tv-warn,#c9862c)]'
+                  : 'text-[var(--text-secondary)]'
+                }`}
+              >
+                {consulta.resultado.estado === 'buscando' && 'Buscando en Hacienda y en el historial…'}
+                {consulta.resultado.estado === 'encontrado' && (
+                  <>
+                    Datos encontrados en {consulta.resultado.datos?.fuentes.map(f => f === 'hacienda' ? 'Hacienda' : 'el historial de compras').join(' y ')}
+                    {consulta.resultado.datos?.situacion ? ` (${consulta.resultado.datos.situacion})` : ''}.
+                    {' '}Revise el nombre; el teléfono no viene de ninguna fuente y va a mano.
+                  </>
+                )}
+                {consulta.resultado.estado === 'noEncontrado' && 'Esa identificación no aparece en Hacienda ni en el historial. Complete los datos a mano.'}
+                {consulta.resultado.estado === 'error' && consulta.resultado.mensaje}
+              </p>
+            )}
             <Field label="Correo electrónico" hint="Aquí llega el comprobante en PDF.">
-              <input className="tv-input font-mono" type="email" value={correo} onChange={e => setCorreo(e.target.value)} placeholder="cliente@correo.com" />
+              <input className="tv-input font-mono" type="email" value={correo} onChange={e => { setCorreo(e.target.value); setTocado(t => ({ ...t, correo: true })); autocompletado.current.correo = false; }} placeholder="cliente@correo.com" />
             </Field>
             <Field label="Teléfono">
               <input className="tv-input font-mono" type="tel" value={telefono} onChange={e => setTelefono(e.target.value)} placeholder="8888 8888" inputMode="tel" />

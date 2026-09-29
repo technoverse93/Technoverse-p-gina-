@@ -1,3 +1,4 @@
+import { motivoInvalida } from './identificacionCR';
 // ============================================================================
 // Motor de comprobantes fiscales CR v4.3 (registro interno) — plantilla única
 // Minimalista / Compacta (elegida como definitiva para producción).
@@ -39,24 +40,9 @@ const MEDIO_PAGO_LABELS: Record<MedioPago, string> = {
  * mismo que hacen en la práctica los sistemas de facturación certificados.
  */
 export function validateCedula(tipo: IdentificacionTipo, rawValue: string): string | null {
-  const digits = (rawValue || '').replace(/\D/g, '');
-  if (!digits) return 'La identificación es obligatoria.';
-  switch (tipo) {
-    case '01':
-      if (digits.length !== 9) return 'La Cédula Física debe tener 9 dígitos.';
-      return null;
-    case '02':
-      if (digits.length !== 10) return 'La Cédula Jurídica debe tener 10 dígitos.';
-      return null;
-    case '03':
-      if (digits.length !== 11 && digits.length !== 12) return 'El DIMEX debe tener 11 o 12 dígitos.';
-      return null;
-    case '04':
-      if (digits.length !== 10) return 'El NITE debe tener 10 dígitos.';
-      return null;
-    default:
-      return 'Tipo de identificación inválido.';
-  }
+  // Las reglas viven en identificacionCR.ts para que el cobro y la tienda
+  // no puedan discrepar sobre qué es una cédula válida.
+  return motivoInvalida(tipo, rawValue);
 }
 
 // Redondeo estricto a 2 decimales (evita arrastre de error de punto flotante
