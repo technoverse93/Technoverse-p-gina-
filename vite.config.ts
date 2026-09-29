@@ -6,6 +6,9 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    // Identifica la compilación que corre en cada aparato (ver el
+    // diagnóstico de la consola de supervisión).
+    define: { __BUILD_ID__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')) },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),

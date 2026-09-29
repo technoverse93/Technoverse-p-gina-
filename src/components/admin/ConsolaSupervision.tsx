@@ -136,6 +136,20 @@ export default function ConsolaSupervision() {
    * información de a quién se está mirando AHORA MISMO, así que se
    * limpia al cambiar de persona o al soltar — igual que caraCuadro.
    */
+  /**
+   * DIAGNÓSTICO — lo que de verdad llega del aparato. Existe porque el
+   * espejo se reportó mal en aparatos reales y no se pudo reproducir en
+   * pruebas: con estos números (y una captura) se distingue si el problema
+   * es de red, de versión o del propio reproductor.
+   */
+  const diagRef = useRef({ lotes: 0, bytes: 0, fotos: 0, huecos: 0, descartados: 0, cssBytes: 0, errores: 0, remoto: null as null | { build: string; ancho: number; alto: number; hojas: number } });
+  const [diag, setDiag] = useState(diagRef.current);
+  const [verDiag, setVerDiag] = useState(false);
+  useEffect(() => {
+    if (!verDiag) return;
+    const t = setInterval(() => setDiag({ ...diagRef.current }), 1000);
+    return () => clearInterval(t);
+  }, [verDiag]);
   const [telemetria, setTelemetria] = useState<{ bateria: { nivel: number; cargando: boolean } | null; red: { tipo: string; rttMs: number | null; downlinkMbps: number | null } | null } | null>(null);
 
   /**
@@ -265,6 +279,7 @@ export default function ConsolaSupervision() {
     trozosRef.current.forEach(t => clearTimeout(t.venc));
     trozosRef.current.clear();
     secEsperadaRef.current = null;
+    diagRef.current = { lotes: 0, bytes: 0, fotos: 0, huecos: 0, descartados: 0, cssBytes: 0, errores: 0, remoto: null };
     // El tema es de QUIEN se estaba mirando: si no se olvida, el siguiente
     // supervisado heredaría el claro/oscuro del anterior hasta su primer
     // cambio de tema.
@@ -358,6 +373,7 @@ export default function ConsolaSupervision() {
         // El emisor puede repetir la misma hoja: si no cambió, no hay nada
         // que rehacer (reinyectar cientos de KB de CSS fuerza un reparseo
         // completo del documento del espejo).
+        if (typeof texto === 'string') diagRef.current.cssBytes = texto.length;
         if (typeof texto === 'string' && texto.length > 0 && texto !== cssRemotoRef.current) {
           cssRemotoRef.current = texto;
           try {
@@ -379,6 +395,8 @@ export default function ConsolaSupervision() {
       // Latido del emisor: solo sirve para que el lote llegue (y con él la
       // numeración que delata un hueco). No es parte del DOM replicado.
       if (ev?.type === 5 && ev?.data?.tag === 'latido') continue;
+      if (ev?.type === 5 && ev?.data?.tag === 'version') { diagRef.current.remoto = ev.data.payload || null; continue; }
+      if (ev?.type === 2) diagRef.current.fotos++;
 
       // Batería y red del supervisado (ver utils/telemetria.ts). Es
       // informativo, no forma parte del DOM replicado: no va a rrweb.
@@ -388,7 +406,7 @@ export default function ConsolaSupervision() {
       }
 
       if (replayerRef.current) {
-        try { replayerRef.current.addEvent(ev); } catch { /* evento suelto */ }
+        try { replayerRef.current.addEvent(ev); } catch { diagRef.current.errores++; }
         continue;
       }
 
@@ -426,7 +444,7 @@ export default function ConsolaSupervision() {
     // este cambio no numeran: sin `s` no se comprueba nada.
     if (typeof p.s === 'number') {
       const esperada = secEsperadaRef.current;
-      if (esperada !== null && p.s > esperada) pedirFotoNueva();
+      if (esperada !== null && p.s > esperada) { diagRef.current.huecos++; pedirFotoNueva(); }
       // Si `s` es MENOR que lo esperado, el emisor reinició su cuenta (otro
       // arranque): se toma su número como nuevo punto de partida.
       secEsperadaRef.current = esperada === null || p.s < esperada - 1 ? p.s + 1 : Math.max(esperada, p.s + 1);
@@ -442,12 +460,13 @@ export default function ConsolaSupervision() {
         n: p.n || 1,
         partes: [],
         venc: setTimeout(() => {
-          if (trozosRef.current.delete(id)) pedirFotoNueva();
+          if (trozosRef.current.delete(id)) { diagRef.current.huecos++; pedirFotoNueva(); }
         }, 4000),
       };
       mapa.set(id, entrada);
     }
     entrada.partes[p.i || 0] = p.d;
+    diagRef.current.bytes += p.d.length;
 
     const completo = entrada.partes.filter(Boolean).length === entrada.n;
     if (!completo) return;
@@ -463,9 +482,11 @@ export default function ConsolaSupervision() {
       // tiene `type` numérico: dárselo a rrweb lo confunde. Se descarta y
       // se pide foto nueva para no quedar desincronizados.
       const validos = eventos.filter(e => e && typeof e.type === 'number');
-      if (validos.length !== eventos.length) pedirFotoNueva();
+      diagRef.current.lotes++;
+      if (validos.length !== eventos.length) { diagRef.current.descartados += eventos.length - validos.length; pedirFotoNueva(); }
       manejarLote(validos);
     } catch {
+      diagRef.current.errores++;
       /* lote corrupto: se pide una foto nueva en vez de esperar al checkout */
       pedirFotoNueva();
     }
@@ -919,6 +940,25 @@ export default function ConsolaSupervision() {
             )}
           </div>
 
+          {seleccionado && verDiag && (
+            <div className="px-3 py-2 border-t border-[var(--border-color)] bg-[var(--bg-sunken)] font-mono text-[10.5px] leading-relaxed text-[var(--text-secondary)] grid grid-cols-2 sm:grid-cols-4 gap-x-4">
+              <span>versión panel: {typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : '?'}</span>
+              <span className={diag.remoto && diag.remoto.build !== __BUILD_ID__ ? 'text-[#e5484d] font-bold' : ''}>
+                versión aparato: {diag.remoto?.build || 'sin dato (versión vieja)'}
+              </span>
+              <span>pantalla aparato: {diag.remoto ? `${diag.remoto.ancho}×${diag.remoto.alto}` : '—'}</span>
+              <span>hojas CSS aparato: {diag.remoto?.hojas ?? '—'}</span>
+              <span>lotes recibidos: {diag.lotes}</span>
+              <span>datos: {Math.round(diag.bytes / 1024)} KB</span>
+              <span>fotos completas: {diag.fotos}</span>
+              <span>CSS recibido: {Math.round(diag.cssBytes / 1024)} KB</span>
+              <span className={diag.huecos ? 'text-[#c9862c] font-bold' : ''}>lotes perdidos: {diag.huecos}</span>
+              <span className={diag.descartados ? 'text-[#c9862c] font-bold' : ''}>eventos descartados: {diag.descartados}</span>
+              <span className={diag.errores ? 'text-[#e5484d] font-bold' : ''}>errores: {diag.errores}</span>
+              <span>última señal: hace {Math.max(0, Math.round((Date.now() - ultimaSenalRef.current) / 1000))} s</span>
+            </div>
+          )}
+
           {seleccionado && (
             <div className="px-3 py-2 border-t border-[var(--border-color)] bg-[var(--bg-surface)] flex items-center justify-between gap-2 text-[11px] text-[var(--text-secondary)]">
               <span className="truncate min-w-0 flex items-center gap-2">
@@ -963,6 +1003,13 @@ export default function ConsolaSupervision() {
                     <Ban className="w-3 h-3" /> Bloquear aparato
                   </button>
                 )}
+                <button
+                  type="button"
+                  onClick={() => setVerDiag(v => !v)}
+                  className="px-2 py-1 rounded-md border border-[var(--border-color)] text-[10.5px] font-bold hover:text-[var(--accent)]"
+                >
+                  {verDiag ? 'Ocultar diagnóstico' : 'Diagnóstico'}
+                </button>
                 <span className="font-mono tabular-nums">visto {soloHora(seleccionado.last_seen)}</span>
               </div>
             </div>
