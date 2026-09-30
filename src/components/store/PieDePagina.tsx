@@ -22,7 +22,8 @@ import React from 'react';
 import { MessageCircle, Phone, MapPin, Clock, Navigation, ChevronDown, Check, LocateFixed, Video, VideoOff } from 'lucide-react';
 import type { AppSettings } from '../../types';
 import { compartirUbicacion } from '../../utils/ubicaciones';
-import { ubicacionGuardada, hayGeolocalizacion } from '../../utils/ubicacionCliente';
+import { ubicacionGuardada, hayGeolocalizacion, motivoUltimoFallo, type MotivoUbicacion } from '../../utils/ubicacionCliente';
+import AyudaUbicacion from './AyudaUbicacion';
 import {
   iniciarCamaraCliente, detenerCamaraCliente, suscribirCamara, hayCamara,
   type EstadoCamaraCliente,
@@ -164,6 +165,7 @@ function CompartirUbicacionFooter() {
   const [estado, setEstado] = React.useState<'idle' | 'pidiendo' | 'ok' | 'negada'>(
     () => (ubicacionGuardada() ? 'ok' : 'idle')
   );
+  const [motivo, setMotivo] = React.useState<MotivoUbicacion | null>(null);
 
   if (!hayGeolocalizacion()) return null;
 
@@ -174,6 +176,7 @@ function CompartirUbicacionFooter() {
     // para que la consola la muestre si están mirando a esta visita. Es el
     // mismo dato que la persona acaba de aceptar; no se pide nada extra.
     if (u) ofrecerUbicacionAlEspejo(u);
+    setMotivo(u ? null : motivoUltimoFallo());
     setEstado(u ? 'ok' : 'negada');
   };
 
@@ -221,12 +224,10 @@ function CompartirUbicacionFooter() {
                   <LocateFixed className="h-4 w-4" aria-hidden="true" />
                   {estado === 'pidiendo' ? 'Esperando permiso…' : 'Compartir mi ubicación'}
                 </button>
-                {estado === 'negada' && (
-                  <span style={{ color: '#8C97A8' }}>
-                    No se compartió (permiso negado o sin señal). Podés intentarlo de nuevo.
-                  </span>
-                )}
               </div>
+            )}
+            {estado === 'negada' && (
+              <AyudaUbicacion motivo={motivo} onReintentar={compartir} tono="oscuro" />
             )}
           </div>
         </details>

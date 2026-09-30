@@ -29,8 +29,9 @@ import {
 import { User } from '../types';
 import {
   hayGeolocalizacion, pedirUbicacion, olvidarUbicacion, ubicacionGuardada,
-  referenciaParaEntrega, type UbicacionCliente,
+  referenciaParaEntrega, motivoUltimoFallo, type UbicacionCliente,
 } from '../utils/ubicacionCliente';
+import AyudaUbicacion from './store/AyudaUbicacion';
 import { registrarUbicacionEnServidor, pedirUbicacionAlEntrar } from '../utils/ubicaciones';
 import { TextoEditable } from '../cms/TextoEditable';
 import { ColorEditable } from '../cms/ColorEditable';
@@ -2106,9 +2107,12 @@ export default function PublicStore({
                               {buscandoUbicacion ? 'Buscando…' : 'Usar mi ubicación'}
                             </button>
                             {ubicacionNegada && (
-                              <p className="mt-1.5 text-[10.5px] text-[var(--text-secondary)]">
-                                No se pudo obtener. No pasa nada: seguí con la referencia escrita arriba.
-                              </p>
+                              <>
+                                <AyudaUbicacion motivo={motivoUltimoFallo()} onReintentar={() => void usarMiUbicacion()} />
+                                <p className="mt-1.5 text-[10.5px] text-[var(--text-secondary)]">
+                                  Es opcional: si preferís, seguí con la referencia escrita arriba.
+                                </p>
+                              </>
                             )}
                           </div>
                         </div>

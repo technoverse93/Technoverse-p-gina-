@@ -86,3 +86,31 @@ export function selloDeLista(iso: string): string {
   if (!etiqueta) return '';
   return etiqueta === 'Hoy' ? soloHora(iso) : etiqueta;
 }
+
+// ---------------------------------------------------------------------
+// PRESENCIA DEL VISITANTE (ver chat_visitante_presente en la BD)
+// ---------------------------------------------------------------------
+// El visitante avisa cada 20 s mientras tiene el chat abierto. Si el último
+// aviso tiene menos de un minuto, está en línea; si no, se muestra hace
+// cuánto se fue.
+const EN_LINEA_MS = 60_000;
+
+export function estaEnLinea(iso?: string, ahora = Date.now()): boolean {
+  if (!iso) return false;
+  const t = new Date(iso).getTime();
+  return Number.isFinite(t) && ahora - t < EN_LINEA_MS;
+}
+
+/** "hace 5 min", "hace 2 h", "ayer"… */
+export function haceCuanto(iso?: string, ahora = Date.now()): string | null {
+  if (!iso) return null;
+  const ms = ahora - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'hace un momento';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? 'ayer' : `hace ${d} días`;
+}
