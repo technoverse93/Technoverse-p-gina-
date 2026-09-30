@@ -1,274 +1,24 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React from 'react';
 import { MessageSquare } from 'lucide-react';
-import { ChatConversation, User } from '../../types';
-import { getDB, saveDB, addAuditLog, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../../utils/storage';
-import { supabase } from '../../supabaseClient';
+import { User } from '../../types';
 import ChatInbox from './ChatInbox';
 import ChatThread from './ChatThread';
-import { useToast, useConfirm } from '../ui/Overlays';
-import { pedirPermisoNotificaciones, notificarMensajeChat } from '../../mobile/notificaciones';
+import { useChatAdmin } from './useChatAdmin';
 
 interface ChatCRMProps {
   currentUser: User | null;
   onDataChanged?: () => void;
 }
 
-// 'resueltos' reemplaza al antiguo 'archivados': ya no es una bandera booleana
-// mutable, sino una vista filtrada por rango temporal (ver ResolvedRange).
-export type ChatStatusFilter = 'nuevo' | 'pendiente' | 'todos' | 'resueltos';
-export type ResolvedRange = '1d' | '7d' | '30d';
+// Los tipos y la constante se re-exportan desde su nuevo hogar (useChatAdmin)
+// para no romper a quien los importaba desde aquí.
+export { RESOLVED_RANGE_MS } from './useChatAdmin';
+export type { ChatStatusFilter, ResolvedRange } from './useChatAdmin';
 
-export const RESOLVED_RANGE_MS: Record<ResolvedRange, number> = {
-  '1d': 24 * 60 * 60 * 1000,
-  '7d': 7 * 24 * 60 * 60 * 1000,
-  '30d': 30 * 24 * 60 * 60 * 1000
-};
-
+// La lógica vive en `useChatAdmin` (compartida con la burbuja flotante). Este
+// componente es solo la VISTA de pantalla completa de la pestaña Chat.
 function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
-  const toast = useToast();
-  const confirm = useConfirm();
-  const [conversations, setConversations] = useState<ChatConversation[]>([]);
-  const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
-  const [statusFilter, setStatusFilter] = useState<ChatStatusFilter>('nuevo');
-  const [resolvedRange, setResolvedRange] = useState<ResolvedRange>('7d');
-  const [staffEmails, setStaffEmails] = useState<string[]>([]);
-  // Si el admin sale de la pestaña Chat CRM mientras una escritura (asignar,
-  // cambiar estado, enviar mensaje, resolver) sigue en curso, no se debe
-  // tocar el estado de este componente ya desmontado.
-  const isMountedRef = useRef(true);
-  useEffect(() => {
-    isMountedRef.current = true;
-    return () => { isMountedRef.current = false; };
-  }, []);
-
-  // Notificaciones al admin: ids de mensajes de CLIENTE ya "vistos" (para
-  // no avisar dos veces) y una bandera para no notificar del historial que
-  // ya existía en la primera carga — mismo patrón que LiveChat.tsx, pero en
-  // la dirección contraria (avisa cuando escribe el CLIENTE, no soporte).
-  const vistosRef = useRef<Set<string>>(new Set());
-  const sembradoRef = useRef(false);
-
-  const detectarMensajesDeClientes = useCallback((convs: ChatConversation[]) => {
-    const entrantes = convs.flatMap(c => c.messages.filter(m => m && m.sender === 'customer'));
-
-    if (!sembradoRef.current) {
-      entrantes.forEach(m => vistosRef.current.add(m.id));
-      sembradoRef.current = true;
-      return;
-    }
-
-    const nuevos = entrantes.filter(m => !vistosRef.current.has(m.id));
-    nuevos.forEach(m => vistosRef.current.add(m.id));
-    if (nuevos.length === 0) return;
-
-    const ultimo = nuevos[nuevos.length - 1];
-    const deQuien = convs.find(c => c.messages.some(m => m.id === ultimo.id))?.customerName || 'un cliente';
-    const cuerpo = (ultimo.text || '').trim()
-      || (ultimo.imageUrl ? '📷 Imagen' : ultimo.audioUrl ? '🎤 Nota de voz' : ultimo.videoUrl ? '🎬 Video' : 'Mensaje nuevo');
-    void notificarMensajeChat(`${deQuien} — Technoverse`, cuerpo);
-  }, []);
-
-  const loadConversations = useCallback(() => {
-    const db = getDB();
-    const lista = db.chat_conversations || [];
-    setConversations(lista);
-    detectarMensajesDeClientes(lista);
-  }, [detectarMensajesDeClientes]);
-
-  useEffect(() => {
-    loadConversations();
-    const handleUpdate = () => loadConversations();
-    window.addEventListener('technoverse_db_updated', handleUpdate);
-    return () => window.removeEventListener('technoverse_db_updated', handleUpdate);
-  }, [loadConversations]);
-
-  // El permiso se pide al entrar a esta pantalla (Chat CRM), igual que en
-  // el chat del cliente se pide al abrir el widget: en el momento en que
-  // tiene sentido, no al arrancar la app entera.
-  useEffect(() => { void pedirPermisoNotificaciones(); }, []);
-
-  useEffect(() => {
-    let active = true;
-    // Todo el personal que puede atender el chat: superadmin, admin y
-    // empleado. (Antes era solo 'Dueño'; el modelo Zero Trust lo dividió.)
-    supabase.from('profiles').select('email').in('role', ['superadmin', 'admin', 'empleado']).then(({ data }) => {
-      if (active && data) setStaffEmails(data.map((p: any) => p.email).filter(Boolean));
-    });
-    return () => { active = false; };
-  }, []);
-
-  const selectedConv = conversations.find(c => c.id === selectedConvId) || null;
-
-  // Filtro puro sobre (status, updatedAt): no depende de ninguna bandera
-  // paralela que un actor distinto pudiera desincronizar. Cada evento de
-  // Realtime dispara un refetch completo (loadConversations), y este cálculo
-  // se re-evalúa desde cero en cada render con los datos frescos — así un
-  // chat resuelto fuera del rango elegido NUNCA puede "colarse" de vuelta,
-  // sin importar en qué orden lleguen los eventos del WebSocket.
-  const filteredConversations = useMemo(() => {
-    if (statusFilter === 'resueltos') {
-      const cutoff = Date.now() - RESOLVED_RANGE_MS[resolvedRange];
-      return conversations.filter(c => {
-        if (c.status !== 'resuelto') return false;
-        const ts = c.updatedAt ? new Date(c.updatedAt).getTime() : 0;
-        return ts >= cutoff;
-      });
-    }
-    return conversations.filter(c => {
-      if (c.status === 'resuelto') return false;
-      return statusFilter === 'todos' || c.status === statusFilter;
-    });
-  }, [conversations, statusFilter, resolvedRange]);
-
-  const persist = async (mutate: (db: ReturnType<typeof getDB>) => void): Promise<boolean> => {
-    const db = getDB();
-    mutate(db);
-    try {
-      await saveDB(db);
-    } catch (err: any) {
-      if (isMountedRef.current) {
-        toast.error('No se pudo guardar el cambio en la base de datos. Detalle: ' + (err?.message || err));
-        loadConversations();
-      }
-      return false;
-    }
-    if (isMountedRef.current) {
-      loadConversations();
-      onDataChanged?.();
-    }
-    return true;
-  };
-
-  // `videoUrl` NO estaba en esta firma ni se copiaba al mensaje.
-  //
-  // ESTE era el recuadro vacío. El adjunto del administrador se subía bien
-  // al bucket y devolvía su URL, ChatThread la mandaba en el payload… y
-  // aquí se caía al suelo: el mensaje se guardaba con texto vacío y las dos
-  // URLs en null. De ahí la burbuja verde sin nada dentro.
-  //
-  // No era el clonador del DOM ni las Blob URL: el espejo replicaba con
-  // fidelidad un mensaje que de verdad venía vacío desde la base de datos.
-  const handleSendMessage = async (convId: string, payload: { text: string; imageUrl?: string; videoUrl?: string; audioUrl?: string; isInternalNote?: boolean }) => {
-    const newMsg = {
-      id: `MSG-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
-      sender: 'support' as const,
-      text: payload.text,
-      timestamp: new Date().toISOString(),
-      imageUrl: payload.imageUrl,
-      videoUrl: payload.videoUrl,
-      audioUrl: payload.audioUrl,
-      isInternalNote: payload.isInternalNote
-    };
-
-    // Optimistic UI: la respuesta se ve en el hilo AHORA, antes de que
-    // termine el guardado. Si `persist()` falla, `loadConversations()`
-    // (que corre en el catch) relee de `getDB()` y esta fila optimista
-    // desaparece sola — no hace falta un rollback manual aparte.
-    //
-    // El registro de "en vuelo" es lo que impide que una recarga completa
-    // del chat, llegada entre este pintado y el INSERT, borre el mensaje
-    // de la pantalla. Era exactamente el parpadeo que se veía como un
-    // retraso de 2-3 segundos. Ver `mensajesEnVuelo` en storage.ts.
-    marcarMensajeEnVuelo(convId, newMsg);
-
-    if (isMountedRef.current) {
-      setConversations(prev => prev.map(c => c.id === convId
-        ? { ...c, messages: [...c.messages, newMsg], unreadCount: 0 }
-        : c));
-    }
-
-    // FALLO CORREGIDO — el mensaje del admin podía "enviarse" sin enviar
-    // nada. `persist()` corre el mutador, pero si `idx === -1` (la
-    // conversación no estaba en ESE snapshot local del caché —por
-    // ejemplo, una recarga corrió justo mientras algo tardaba en subir—)
-    // el mutador no hacía NADA: el `db` que `persist()` termina guardando
-    // sale IDÉNTICO al que ya estaba, `saveDB` no encuentra ninguna
-    // diferencia que sincronizar, y `persist()` devuelve `ok = true`
-    // aunque el mensaje nunca se guardó en ningún lado. El admin veía la
-    // burbuja optimista, el log de auditoría decía "Respuesta Chat"... y
-    // el cliente no recibía absolutamente nada.
-    //
-    // Antes de intentar el guardado, se busca la conversación con UN
-    // reintento tras forzar una relectura fresca del servidor —el mismo
-    // arreglo que en LiveChat.tsx, del lado del cliente—: la mayoría de
-    // las veces era solo un desfasaje momentáneo del caché y así se
-    // resuelve solo. Si de verdad no aparece, se avisa con un error claro
-    // en vez de fingir un envío que nunca ocurrió.
-    let db = getDB();
-    let idx = db.chat_conversations.findIndex(c => c.id === convId);
-    if (idx === -1) {
-      await recargarChatDelServidor(true);
-      db = getDB();
-      idx = db.chat_conversations.findIndex(c => c.id === convId);
-    }
-    if (idx === -1) {
-      confirmarMensajeEnVuelo(newMsg.id);
-      if (isMountedRef.current) {
-        toast.error('No se pudo enviar: esa conversación ya no está disponible.');
-        loadConversations();
-      }
-      return;
-    }
-
-    const ok = await persist(db => {
-      const idx = db.chat_conversations.findIndex(c => c.id === convId);
-      if (idx === -1) return;
-      // Sin este chequeo por id, un mensaje ya reinyectado por
-      // `reinyectarMensajesEnVuelo` (storage.ts) mientras esto tardaba en
-      // guardarse quedaba duplicado: dos burbujas idénticas por un rato.
-      // Ver el comentario largo en `empujarMensajes`, LiveChat.tsx.
-      const mensajes = db.chat_conversations[idx].messages;
-      if (!mensajes.some(m => m.id === newMsg.id)) mensajes.push(newMsg);
-      db.chat_conversations[idx].unreadCount = 0;
-    });
-    if (ok) {
-      addAuditLog(currentUser?.email || 'admin', 'Soporte', payload.isInternalNote ? 'Nota Interna' : 'Respuesta Chat', `Conversación ${convId}`);
-    } else {
-      // El guardado falló y el mensaje NO existe en el servidor. Hay que
-      // soltar la protección: si se quedara marcado como "en vuelo", cada
-      // recarga volvería a inyectarlo y quedaría en pantalla para siempre
-      // un mensaje que nunca se envió — que es peor que verlo desaparecer,
-      // porque el administrador creería que el cliente ya lo recibió.
-      confirmarMensajeEnVuelo(newMsg.id);
-    }
-  };
-
-  const handleAssign = async (convId: string, email: string) => {
-    const ok = await persist(db => {
-      const idx = db.chat_conversations.findIndex(c => c.id === convId);
-      if (idx !== -1) db.chat_conversations[idx].assignedAdminEmail = email;
-    });
-    if (ok) addAuditLog(currentUser?.email || 'admin', 'Soporte', 'Asignar Responsable', `Conversación ${convId} asignada a ${email}`);
-  };
-
-  const handleChangeStatus = async (convId: string, status: 'nuevo' | 'pendiente') => {
-    await persist(db => {
-      const idx = db.chat_conversations.findIndex(c => c.id === convId);
-      if (idx !== -1) db.chat_conversations[idx].status = status;
-    });
-  };
-
-  const handleResolve = async (convId: string) => {
-    const confirmed = await confirm({
-      title: 'Marcar como Resuelto',
-      message: 'La conversación saldrá de "Nuevos", "Pendientes" y "Todos", pero NO se elimina: el cliente conserva su historial completo. Quedará disponible en la pestaña "Resueltos", filtrable por 1 día, 1 semana o 1 mes. Para reabrirla, cambia su estado a Nuevo o Pendiente.',
-      confirmText: 'Marcar como Resuelto'
-    });
-    if (!confirmed) return;
-    const conv = getDB().chat_conversations.find(c => c.id === convId);
-    // Cierre suave (soft-close): en vez de borrar la conversación, se marca
-    // 'resuelto'. La marca de tiempo (updated_at) la fija automáticamente un
-    // trigger en la BD al hacer el UPDATE — es la base del filtro por rango
-    // temporal, y ningún cliente puede falsearla.
-    const ok = await persist(db => {
-      const idx = db.chat_conversations.findIndex(c => c.id === convId);
-      if (idx !== -1) db.chat_conversations[idx].status = 'resuelto';
-    });
-    if (ok) {
-      addAuditLog(currentUser?.email || 'admin', 'Soporte', 'Chat Resuelto', `Conversación de ${conv?.customerName || convId} marcada como resuelta. Historial conservado.`);
-      if (isMountedRef.current && selectedConvId === convId) setSelectedConvId(null);
-    }
-  };
+  const chat = useChatAdmin(currentUser, onDataChanged);
 
   return (
     // `h-full`, no un alto calculado a mano: el contenedor de la pestaña ya
@@ -276,27 +26,27 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
     // admin.css). El mínimo es un piso para ventanas muy bajas — por debajo
     // de eso el panel se recorre en vez de aplastar la conversación.
     <div className="flex flex-col md:flex-row h-full min-h-[420px] gap-4" id="chat-crm-root">
-      <div className={`${selectedConvId ? 'hidden md:flex' : 'flex'} md:w-[30%] md:min-w-[300px] md:max-w-sm flex-col glass-panel rounded-2xl overflow-hidden`}>
+      <div className={`${chat.selectedConvId ? 'hidden md:flex' : 'flex'} md:w-[30%] md:min-w-[300px] md:max-w-sm flex-col glass-panel rounded-2xl overflow-hidden`}>
         <ChatInbox
-          conversations={filteredConversations}
-          selectedConvId={selectedConvId}
-          statusFilter={statusFilter}
-          onFilterChange={setStatusFilter}
-          resolvedRange={resolvedRange}
-          onResolvedRangeChange={setResolvedRange}
-          onSelect={setSelectedConvId}
+          conversations={chat.filteredConversations}
+          selectedConvId={chat.selectedConvId}
+          statusFilter={chat.statusFilter}
+          onFilterChange={chat.setStatusFilter}
+          resolvedRange={chat.resolvedRange}
+          onResolvedRangeChange={chat.setResolvedRange}
+          onSelect={chat.setSelectedConvId}
         />
       </div>
-      <div className={`${selectedConvId ? 'flex' : 'hidden md:flex'} flex-1 flex-col glass-panel rounded-2xl overflow-hidden`}>
-        {selectedConv ? (
+      <div className={`${chat.selectedConvId ? 'flex' : 'hidden md:flex'} flex-1 flex-col glass-panel rounded-2xl overflow-hidden`}>
+        {chat.selectedConv ? (
           <ChatThread
-            conversation={selectedConv}
-            staffEmails={staffEmails}
-            onBack={() => setSelectedConvId(null)}
-            onSendMessage={handleSendMessage}
-            onAssign={handleAssign}
-            onChangeStatus={handleChangeStatus}
-            onResolve={handleResolve}
+            conversation={chat.selectedConv}
+            staffEmails={chat.staffEmails}
+            onBack={() => chat.setSelectedConvId(null)}
+            onSendMessage={chat.handleSendMessage}
+            onAssign={chat.handleAssign}
+            onChangeStatus={chat.handleChangeStatus}
+            onResolve={chat.handleResolve}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-[var(--text-muted)] p-8">

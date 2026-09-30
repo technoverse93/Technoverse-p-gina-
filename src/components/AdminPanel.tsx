@@ -42,6 +42,7 @@ import { esAdminSupremo } from '../utils/securityPin';
 const TallerKanban = lazy(() => import('./TallerKanban'));
 const InventarioControl = lazy(() => import('./InventarioControl'));
 const ChatCRM = lazy(() => import('./chat/ChatCRM'));
+const BurbujaChat = lazy(() => import('./chat/BurbujaChat'));
 const CyberSecurityPanel = lazy(() => import('./CyberSecurityPanel'));
 const ClienteFicha = lazy(() => import('./ClienteFicha'));
 // El módulo de cobros carga jsPDF y qrcode al emitir: se trae aparte para
@@ -1786,6 +1787,17 @@ export default function AdminPanel({
           </Activity>
         );
       })}
+
+      {/* Burbuja de chat flotante: aparece en cualquier módulo que NO sea la
+          pestaña Chat, para leer y responder sin cambiar de pestaña ni perder
+          lo que se esté haciendo (ver BurbujaChat). */}
+      <Suspense fallback={null}>
+        <BurbujaChat
+          currentUser={currentUser}
+          onDataChanged={loadAllAdminData}
+          oculto={activeTab === 'chat'}
+        />
+      </Suspense>
     </AdminShell>
   );
 }
