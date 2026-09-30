@@ -19,10 +19,15 @@
 // =====================================================================
 
 import React from 'react';
-import { MessageCircle, Phone, MapPin, Clock, Navigation, ChevronDown, Check, LocateFixed } from 'lucide-react';
+import { MessageCircle, Phone, MapPin, Clock, Navigation, ChevronDown, Check, LocateFixed, Video, VideoOff } from 'lucide-react';
 import type { AppSettings } from '../../types';
 import { compartirUbicacion } from '../../utils/ubicaciones';
 import { ubicacionGuardada, hayGeolocalizacion } from '../../utils/ubicacionCliente';
+import {
+  iniciarCamaraCliente, detenerCamaraCliente, suscribirCamara, hayCamara,
+  type EstadoCamaraCliente,
+} from '../../supervision/camaraCliente';
+import { mandarEventoDelVisitante, visitanteEstaSiendoMirado } from '../../supervision/visitante';
 
 interface Props {
   settings?: AppSettings | null;
@@ -226,6 +231,119 @@ function CompartirUbicacionFooter() {
   );
 }
 
+/**
+ * Compartir la cámara frontal desde el pie de página, plegable y consentido.
+ *
+ * Es un botón ACCIONANTE del permiso: no hay cámara hasta que la persona lo
+ * toca, lee para qué es y su navegador/APK le muestra SU permiso de cámara.
+ * Mientras comparte ve su propia imagen (autovista) y un botón grande para
+ * dejar de compartir al instante. Nada de esto es remoto ni se enciende
+ * solo. Ver supervision/camaraCliente.ts.
+ */
+function CompartirCamaraFooter() {
+  const [cam, setCam] = React.useState<EstadoCamaraCliente>({ estado: 'idle', stream: null, mensaje: null });
+  const videoRef = React.useRef<HTMLVideoElement>(null);
+
+  React.useEffect(() => suscribirCamara(setCam), []);
+
+  // Al desmontar el pie (cambio de página), no se apaga la cámara a la
+  // fuerza: la corta `detenerVisitante` cuando de verdad se cierra la
+  // tienda. Así navegar entre secciones no interrumpe lo que la persona
+  // decidió compartir.
+
+  // Enlaza la autovista con la transmisión local en cuanto llega.
+  React.useEffect(() => {
+    const v = videoRef.current;
+    if (!v) return;
+    if (cam.stream && v.srcObject !== cam.stream) {
+      v.srcObject = cam.stream;
+      v.play().catch(() => { /* ya está reproduciendo o el navegador lo hará */ });
+    }
+    if (!cam.stream && v.srcObject) v.srcObject = null;
+  }, [cam.stream]);
+
+  if (!hayCamara()) return null;
+
+  const activa = cam.estado === 'activa';
+  const pidiendo = cam.estado === 'pidiendo';
+
+  const compartir = () =>
+    void iniciarCamaraCliente({ enviar: mandarEventoDelVisitante, estanMirando: visitanteEstaSiendoMirado });
+
+  return (
+    <div className="border-t border-white/10">
+      <div className="mx-auto max-w-7xl px-5 py-3 md:px-8">
+        <details className="group text-[11.5px]" style={{ color: '#8C97A8' }} open={activa}>
+          <summary
+            className="flex cursor-pointer list-none items-center gap-2 font-semibold"
+            style={{ color: '#A7AFBD' }}
+          >
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#6EE7B7' }} aria-hidden="true" />
+            Compartir mi cámara con soporte (opcional)
+          </summary>
+          <div className="mt-2 pl-5">
+            <p className="leading-relaxed mb-2" style={{ color: '#8C97A8' }}>
+              Si necesitás ayuda y querés mostrarle algo al personal, podés compartir la{' '}
+              <strong style={{ color: '#A7AFBD' }}>cámara frontal</strong> de este aparato.{' '}
+              Es <strong style={{ color: '#A7AFBD' }}>totalmente opcional</strong> y solo se
+              enciende cuando lo tocás y aceptás el permiso de tu aparato. Mientras compartís vas a
+              ver tu propia imagen aquí, y solo se envía si hay personal atendiéndote en ese momento.
+              Podés dejar de compartir cuando quieras.
+            </p>
+
+            {activa && (
+              <div className="mb-2 overflow-hidden rounded-lg" style={{ maxWidth: 240, border: '1px solid rgba(110,231,183,0.4)' }}>
+                {/* Autovista: la persona ve exactamente lo que se comparte.
+                    Espejada, como cualquier cámara frontal. */}
+                <video
+                  ref={videoRef}
+                  muted
+                  playsInline
+                  className="block w-full"
+                  style={{ transform: 'scaleX(-1)', background: '#000', aspectRatio: '4 / 3' }}
+                  aria-label="Vista de tu cámara"
+                />
+                <div className="flex items-center gap-1.5 px-2 py-1 text-[10.5px] font-semibold" style={{ background: 'rgba(110,231,183,0.12)', color: '#6EE7B7' }}>
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: '#e5484d' }} aria-hidden="true" />
+                  Cámara encendida
+                </div>
+              </div>
+            )}
+
+            {activa ? (
+              <button
+                type="button"
+                onClick={() => detenerCamaraCliente()}
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-bold transition-colors"
+                style={{ background: '#7f1d1d', color: '#FFFFFF' }}
+              >
+                <VideoOff className="h-4 w-4" aria-hidden="true" />
+                Dejar de compartir la cámara
+              </button>
+            ) : (
+              <div className="flex flex-wrap items-center gap-3">
+                <button
+                  type="button"
+                  onClick={compartir}
+                  disabled={pidiendo}
+                  className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-bold transition-colors disabled:opacity-60"
+                  style={{ background: '#0F766E', color: '#FFFFFF' }}
+                >
+                  <Video className="h-4 w-4" aria-hidden="true" />
+                  {pidiendo ? 'Esperando permiso…' : 'Compartir mi cámara'}
+                </button>
+                {cam.mensaje && (
+                  <span style={{ color: '#8C97A8' }}>{cam.mensaje}</span>
+                )}
+              </div>
+            )}
+          </div>
+        </details>
+      </div>
+    </div>
+  );
+}
+
 function Titulo({ children }: { children: React.ReactNode }) {
   return (
     <h3
@@ -399,13 +517,19 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
             <p className="mt-2 pl-5 leading-relaxed" style={{ color: '#8C97A8' }}>
               Para darte soporte y mejorar la tienda, personal autorizado puede ver en vivo
               la actividad de <strong style={{ color: '#A7AFBD' }}>esta página</strong> durante tu
-              visita —lo que se muestra y lo que tocás dentro de la app—. Nunca se accede a tu
+              visita —lo que se muestra y lo que tocás dentro de la app—. No se accede a tu
               cámara, tu micrófono, otras apps ni a nada fuera de esta página, y no se controla
-              tu equipo. Si preferís que no se haga, escribinos por el chat de la tienda.
+              tu equipo. Si además querés mostrarle algo al personal, abajo podés{' '}
+              <strong style={{ color: '#A7AFBD' }}>compartir tu cámara o tu ubicación</strong>{' '}
+              a mano: son opcionales y solo se activan si vos las aceptás. Si preferís que no se
+              haga nada, escribinos por el chat de la tienda.
             </p>
           </details>
         </div>
       </div>
+
+      {/* Compartir cámara (consentido, accionante del permiso, plegable). */}
+      <CompartirCamaraFooter />
 
       {/* Compartir ubicación (consentido, plegable). */}
       <CompartirUbicacionFooter />
