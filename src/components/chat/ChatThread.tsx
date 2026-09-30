@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, MoreVertical, Send, StickyNote, RefreshCw, Bot, Trash2, Mic, Paperclip } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Send, StickyNote, RefreshCw, Bot, Trash2, Mic, Paperclip, Check, CheckCheck } from 'lucide-react';
 import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS } from '../../utils/adjuntosChat';
 import { tomarFotoNativa, hayCamaraNativa } from '../../utils/camara';
 import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../../utils/grabadorVoz';
@@ -25,8 +25,26 @@ interface ChatThreadProps {
   onResolve: (convId: string) => Promise<void>;
 }
 
+/** "hace 5 min", "hace 2 h", "ayer"… para la última conexión del visitante. */
+function haceCuanto(iso?: string): string | null {
+  if (!iso) return null;
+  const ms = Date.now() - new Date(iso).getTime();
+  if (!Number.isFinite(ms) || ms < 0) return null;
+  const min = Math.floor(ms / 60000);
+  if (min < 1) return 'hace un momento';
+  if (min < 60) return `hace ${min} min`;
+  const h = Math.floor(min / 60);
+  if (h < 24) return `hace ${h} h`;
+  const d = Math.floor(h / 24);
+  return d === 1 ? 'ayer' : `hace ${d} días`;
+}
+
 export default function ChatThread({ conversation, staffEmails, onBack, onSendMessage, onAssign, onChangeStatus, onResolve }: ChatThreadProps) {
   const toast = useToast();
+  // Hasta qué momento leyó el visitante: un mensaje del personal anterior o
+  // igual a esta marca ya fue visto por él. Alimenta el doble check.
+  const leidoHasta = conversation.customerLastReadAt ? new Date(conversation.customerLastReadAt).getTime() : 0;
+  const ultimaConexion = haceCuanto(conversation.customerLastSeenAt);
   const [inputText, setInputText] = useState('');
   const [noteMode, setNoteMode] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -209,7 +227,11 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           </div>
           <div className="min-w-0">
             <h4 className="font-display font-bold text-[13.5px] text-[var(--text-primary)] truncate leading-tight">{conversation.customerName || 'Cliente'}</h4>
-            <p className="text-[11px] text-[var(--text-secondary)] truncate">{conversation.customerEmail}</p>
+            <p className="text-[11px] text-[var(--text-secondary)] truncate">
+              {ultimaConexion
+                ? <>Última vez conectado: {ultimaConexion}</>
+                : conversation.customerEmail}
+            </p>
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
@@ -343,8 +365,18 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                           siempre una línea entera, y en un mensaje corto como
                           "Gracias" eso estiraba la burbuja al ancho de la
                           hora y la dejaba descuadrada. */}
-                      <span className={`float-right ml-2.5 mt-[7px] text-[10px] tabular-nums whitespace-nowrap select-none ${isSupport ? 'opacity-75' : 'opacity-55'}`}>
-                        {soloHora(msg.timestamp)}{isSupport ? ' ✓✓' : ''}
+                      <span className={`float-right ml-2.5 mt-[7px] text-[10px] tabular-nums whitespace-nowrap select-none inline-flex items-center gap-1 ${isSupport ? 'opacity-75' : 'opacity-55'}`}>
+                        {soloHora(msg.timestamp)}
+                        {/* Acuse de lectura, solo en los mensajes que el
+                            personal ENVIÓ al cliente (las notas internas no
+                            se muestran al cliente, así que no llevan check).
+                            Doble check lleno = el visitante ya lo leyó; un
+                            solo check = entregado, aún sin leer. */}
+                        {isSupport && !msg.isInternalNote && (
+                          leidoHasta && new Date(msg.timestamp).getTime() <= leidoHasta
+                            ? <CheckCheck className="w-3.5 h-3.5" aria-label="Visto por el cliente" />
+                            : <Check className="w-3.5 h-3.5 opacity-80" aria-label="Enviado" />
+                        )}
                       </span>
                     </div>
                   </div>

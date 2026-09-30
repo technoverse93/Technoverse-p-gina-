@@ -178,6 +178,11 @@ export interface ChatConversation {
   // que cambió la fila. Es la base del filtro por rango temporal de chats
   // resueltos (1 día / 1 semana / 1 mes) en el panel del admin.
   updatedAt?: string;
+  // Reportadas por el VISITANTE con su token (RPC chat_visitante_presente):
+  // cuándo tuvo el chat abierto por última vez y cuándo leyó el hilo. Solo
+  // las usa el panel para mostrar "última vez conectado" y el "visto".
+  customerLastSeenAt?: string;
+  customerLastReadAt?: string;
 }
 
 export interface AuditLog {
