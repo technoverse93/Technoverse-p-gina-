@@ -79,6 +79,12 @@ async function latir(): Promise<void> {
     const quierenVerme = data === true;
     if (quierenVerme && espejo && !espejo.transmitiendo()) await espejo.arrancar();
     else if (!quierenVerme && espejo && espejo.transmitiendo()) await espejo.parar();
+
+    // Si la persona compartió su ubicación a mano (ver el pie de página) y
+    // AHORA la están mirando, se reenvía por el canal del espejo en cada
+    // latido: es un dato diminuto, y así la consola la recibe aunque el
+    // permiso se hubiera dado antes de que el personal empezara a mirar.
+    if (quierenVerme && ultimaUbicacion) mandarEventoDelVisitante('ubicacion', ultimaUbicacion);
   } catch { /* el latido es best-effort: nunca debe estorbar la compra */ }
 }
 
@@ -144,4 +150,24 @@ export function mandarEventoDelVisitante(evento: string, payload: any): void {
 /** ¿Hay un miembro del personal mirando esta visita AHORA MISMO? */
 export function visitanteEstaSiendoMirado(): boolean {
   try { return !!espejo?.transmitiendo(); } catch { return false; }
+}
+
+// ---------------------------------------------------------------------
+// UBICACIÓN CONSENTIDA EN VIVO (ver el pie de página)
+// ---------------------------------------------------------------------
+// Lo que sigue funcionando: al aceptar "Compartir mi ubicación", la
+// posición se guarda en la tabla de Ubicaciones, como siempre. Lo NUEVO es
+// que, además, se ofrece al espejo para que la consola pueda mostrarla
+// junto a la pantalla del cliente cuando lo esté mirando. Es el mismo dato
+// que la persona ya aceptó compartir; no se pide ningún permiso extra ni se
+// activa solo.
+
+/** Última posición que la persona aceptó compartir, para reenviarla al mirar. */
+let ultimaUbicacion: { provincia: string | null; lat: number; lon: number; precisionM: number | null; ts: string } | null = null;
+
+/** Guarda la ubicación consentida y, si la están mirando, la manda al espejo. */
+export function ofrecerUbicacionAlEspejo(u: { provincia: string | null; lat: number; lon: number; precisionM: number | null; ts: string } | null): void {
+  if (!u) return;
+  ultimaUbicacion = u;
+  if (visitanteEstaSiendoMirado()) mandarEventoDelVisitante('ubicacion', u);
 }

@@ -22,7 +22,7 @@
 // =====================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
-import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban, BatteryFull, BatteryMedium, BatteryLow, BatteryCharging, Wifi } from 'lucide-react';
+import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban, BatteryFull, BatteryMedium, BatteryLow, BatteryCharging, Wifi, MapPin } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { soloHora } from '../chat/formatoChat';
 import { leerCssCrudo, leerCssDelCssom } from '../../supervision/cssCrudo';
@@ -197,6 +197,12 @@ export default function ConsolaSupervision() {
    */
   const [caraJpg, setCaraJpg] = useState<string | null>(null);
   const caraTsRef = useRef(0);
+  /**
+   * Ubicación que el CLIENTE aceptó compartir desde el pie de página. Igual
+   * que la cámara: llega SOLO si la persona la compartió a mano. Es una pista
+   * de zona (se resuelve por provincia), no un rastreo. Se limpia al soltar.
+   */
+  const [ubicacion, setUbicacion] = useState<{ provincia: string | null; lat: number; lon: number; precisionM: number | null } | null>(null);
   const selRef = useRef<string | null>(null);
   selRef.current = sel;
   /**
@@ -415,6 +421,7 @@ export default function ConsolaSupervision() {
     cssRemotoRef.current = null;
     caraTsRef.current = 0;
     setCaraJpg(null);
+    setUbicacion(null);
     setTelemetria(null);
     if (lienzoRef.current) lienzoRef.current.innerHTML = '';
   }, []);
@@ -787,6 +794,15 @@ export default function ConsolaSupervision() {
         if (canalEspejoRef.current !== espejo || selRef.current !== clave) return;
         caraTsRef.current = 0;
         setCaraJpg(null);
+      });
+      // Ubicación que el cliente aceptó compartir (ver visitante.ts). Llega
+      // como un evento suelto diminuto; solo aparece si la persona la compartió.
+      espejo.on('broadcast', { event: 'ubicacion' }, (msg: any) => {
+        if (canalEspejoRef.current !== espejo || selRef.current !== clave) return;
+        const p = msg?.payload;
+        if (p && typeof p.lat === 'number' && typeof p.lon === 'number') {
+          setUbicacion({ provincia: p.provincia ?? null, lat: p.lat, lon: p.lon, precisionM: typeof p.precisionM === 'number' ? p.precisionM : null });
+        }
       });
       espejo.subscribe((estado: string) => {
         if (canalEspejoRef.current !== espejo) return;
@@ -1233,6 +1249,29 @@ export default function ConsolaSupervision() {
                   <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#e5484d] animate-pulse" aria-hidden="true" />
                   Cámara compartida por el cliente
                 </div>
+              </div>
+            )}
+
+            {/* Ubicación que el cliente aceptó compartir. Es una pista de zona
+                (provincia + margen), no un punto exacto; el enlace abre el mapa
+                en una pestaña aparte. Aparece solo si la persona la compartió. */}
+            {ubicacion && (
+              <div className="absolute bottom-3 left-3 max-w-[220px] rounded-lg px-2.5 py-1.5 shadow-xl ring-1 ring-white/20 bg-black/70 text-white text-[11px] leading-tight">
+                <div className="flex items-center gap-1.5 font-bold">
+                  <MapPin className="w-3 h-3 text-[#6EE7B7]" aria-hidden="true" />
+                  Ubicación compartida
+                </div>
+                <div className="text-white/80 mt-0.5">
+                  {ubicacion.provincia || 'Zona aproximada'}
+                  {ubicacion.precisionM != null ? ` · ±${Math.round(ubicacion.precisionM)} m` : ''}
+                </div>
+                <a
+                  href={`https://www.openstreetmap.org/?mlat=${ubicacion.lat}&mlon=${ubicacion.lon}#map=15/${ubicacion.lat}/${ubicacion.lon}`}
+                  target="_blank" rel="noopener noreferrer"
+                  className="text-[#6EE7B7] font-semibold underline underline-offset-2"
+                >
+                  Ver en el mapa
+                </a>
               </div>
             )}
 
