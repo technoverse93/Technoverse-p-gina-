@@ -10,7 +10,7 @@ import { supabase } from '../../supabaseClient';
 import ChatActionsMenu from './ChatActionsMenu';
 import AdjuntarMenu from './AdjuntarMenu';
 import { useToast } from '../ui/Overlays';
-import { etiquetaDeDia, abreDiaNuevo, soloHora, estaEnLinea, haceCuanto } from './formatoChat';
+import { etiquetaDeDia, abreDiaNuevo, soloHora, estaEnLinea, haceCuanto, inicialDe } from './formatoChat';
 import VideoMensaje from './VideoMensaje';
 import AudioMensaje from './AudioMensaje';
 import ImagenMensaje from './ImagenMensaje';
@@ -214,7 +214,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
             <ArrowLeft className="w-4 h-4" />
           </button>
           <div className="w-9 h-9 rounded-full bg-[var(--accent)]/15 text-[var(--brand-gold-dark)] flex items-center justify-center font-display font-bold text-sm shrink-0">
-            {conversation.customerName?.charAt(0).toUpperCase() || '?'}
+            {inicialDe(conversation.customerName)}
           </div>
           <div className="min-w-0">
             <h4 className="font-display font-bold text-[13.5px] text-[var(--text-primary)] truncate leading-tight">{conversation.customerName || 'Cliente'}</h4>
@@ -301,7 +301,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           // Inicial del cliente en el avatar, no un icono genérico: en un
           // hilo largo la letra ancla la mirada mucho antes que una silueta
           // igual para todos.
-          const inicial = conversation.customerName?.trim().charAt(0).toUpperCase() || '?';
+          const inicial = inicialDe(conversation.customerName);
 
           return (
             <React.Fragment key={msg.id}>

@@ -114,3 +114,30 @@ export function haceCuanto(iso?: string, ahora = Date.now()): string | null {
   const d = Math.floor(h / 24);
   return d === 1 ? 'ayer' : `hace ${d} días`;
 }
+
+/**
+ * Inicial para el avatar de un nombre, bien hecha.
+ *
+ * `charAt(0)` parte en dos los caracteres fuera del plano básico: un nombre
+ * escrito con letras "decoradas" (𝐌𝐚𝐫𝐢𝐚𝐧, muy común en redes) daba media
+ * letra y el avatar mostraba un símbolo roto. Se toma el primer carácter
+ * COMPLETO y se normaliza (NFKC convierte 𝐌 en M).
+ */
+export function inicialDe(nombre?: string | null): string {
+  const limpio = (nombre || '').normalize('NFKC').trim();
+  const primero = Array.from(limpio)[0];
+  return primero ? primero.toUpperCase() : '?';
+}
+
+/** Nombre legible: las letras decoradas se muestran como texto normal. */
+export function nombreLegible(nombre?: string | null): string {
+  return (nombre || '').normalize('NFKC').trim();
+}
+
+const COLORES_AVATAR = ['#2F7D63', '#6D5BD0', '#C07A1E', '#2B6CB0', '#B83280', '#2C7A7B'];
+/** Color estable por conversación (el mismo cliente, siempre el mismo color). */
+export function colorDe(clave: string): string {
+  let h = 0;
+  for (const ch of clave) h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return COLORES_AVATAR[h % COLORES_AVATAR.length];
+}

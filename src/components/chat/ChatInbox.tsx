@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { ChatConversation } from '../../types';
-import { selloDeLista, estaEnLinea } from './formatoChat';
+import { selloDeLista, estaEnLinea, inicialDe } from './formatoChat';
 import type { ChatStatusFilter, ResolvedRange } from './ChatCRM';
 
 interface ChatInboxProps {
@@ -117,7 +117,7 @@ export default function ChatInbox({
             >
               <div className="relative shrink-0">
                 <div className="w-10 h-10 rounded-full bg-[var(--accent)]/15 text-[var(--brand-gold-dark)] flex items-center justify-center font-display font-bold text-sm">
-                  {conv.customerName?.charAt(0).toUpperCase() || '?'}
+                  {inicialDe(conv.customerName)}
                 </div>
                 {estaEnLinea(conv.customerLastSeenAt, ahora) && (
                   <span
