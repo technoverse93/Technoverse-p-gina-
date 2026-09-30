@@ -16,6 +16,7 @@ import { AuditLog } from '../types';
 import { PaginatedTbody } from './PaginationHelper';
 import { useToast, useConfirm } from './ui/Overlays';
 import { PageHead, Carpetas, Btn } from './admin/AdminKit';
+import MapaModal from './ui/MapaModal';
 
 // =====================================================================
 // CENTRO DE CIBERSEGURIDAD
@@ -267,6 +268,9 @@ function CyberSecurityPanel({
   const [dispositivos, setDispositivos] = useState<Dispositivo[]>([]);
   const [filtro, setFiltro] = useState<FiltroAccesos>('todos');
   const [detalle, setDetalle] = useState<Acceso | null>(null);
+  // Mapa DENTRO de la app para "ver el lugar" (ver ui/MapaModal). Reemplaza
+  // los enlaces que abrían Google Maps en una pestaña nueva.
+  const [mapa, setMapa] = useState<{ lat: number; lon: number; titulo: string; etiqueta: string } | null>(null);
 
   const [miIp, setMiIp] = useState<string | null>(null);
   const [miGeo, setMiGeo] = useState<any>(null);
@@ -919,14 +923,13 @@ function CyberSecurityPanel({
                     </span>
                   )}
                   {resumen.ultimoExito.gps_latitud != null && (
-                    <a
-                      href={`https://www.google.com/maps?q=${resumen.ultimoExito.gps_latitud},${resumen.ultimoExito.gps_longitud}`}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <button
+                      type="button"
+                      onClick={() => setMapa({ lat: Number(resumen.ultimoExito!.gps_latitud), lon: Number(resumen.ultimoExito!.gps_longitud), titulo: 'Lugar exacto (GPS)', etiqueta: `${resumen.ultimoExito!.email || ''} · ${ubicacionTexto(resumen.ultimoExito!)}` })}
                       className="text-[9px] uppercase font-bold bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] px-2 py-0.5 rounded hover:brightness-110"
                     >
                       Lugar exacto (GPS)
-                    </a>
+                    </button>
                   )}
                 </div>
               </div>
@@ -2116,23 +2119,21 @@ function CyberSecurityPanel({
                 centro de la ciudad que devuelve el proveedor de IP, no un
                 lugar. Mezclar eso con el GPS real sería engañoso. */}
             {detalle.gps_latitud != null && detalle.gps_longitud != null ? (
-              <a
-                href={`https://www.google.com/maps?q=${detalle.gps_latitud},${detalle.gps_longitud}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-center bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] text-xs font-bold px-4 py-2.5 rounded-xl transition hover:brightness-110"
+              <button
+                type="button"
+                onClick={() => setMapa({ lat: Number(detalle.gps_latitud), lon: Number(detalle.gps_longitud), titulo: 'Lugar exacto (GPS)', etiqueta: `${detalle.email || ''} · ${ubicacionTexto(detalle)}` })}
+                className="block w-full text-center bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] text-xs font-bold px-4 py-2.5 rounded-xl transition hover:brightness-110"
               >
                 Ver el lugar EXACTO en el mapa (GPS)
-              </a>
+              </button>
             ) : detalle.latitud != null && detalle.longitud != null ? (
-              <a
-                href={`https://www.google.com/maps?q=${detalle.latitud},${detalle.longitud}`}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="block text-center bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--text-secondary)] text-xs font-bold px-4 py-2.5 rounded-xl transition hover:bg-[var(--bg-surface)]"
+              <button
+                type="button"
+                onClick={() => setMapa({ lat: Number(detalle.latitud), lon: Number(detalle.longitud), titulo: 'Ciudad aproximada (no es el lugar)', etiqueta: `${ubicacionTexto(detalle)} · punto del proveedor de internet, no la posición real` })}
+                className="block w-full text-center bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--text-secondary)] text-xs font-bold px-4 py-2.5 rounded-xl transition hover:bg-[var(--bg-surface)]"
               >
                 Ver solo la ciudad en el mapa (no es el lugar)
-              </a>
+              </button>
             ) : null}
 
             {detalle.gps_latitud != null ? (
@@ -2155,9 +2156,23 @@ function CyberSecurityPanel({
           </div>
         </div>
       )}
+
+      {mapa && (
+        <MapaModal
+          abierto
+          onClose={() => setMapa(null)}
+          lat={mapa.lat}
+          lon={mapa.lon}
+          titulo={mapa.titulo}
+          etiqueta={mapa.etiqueta}
+        />
+      )}
     </div>
   );
 }
+
+/* El render del componente cierra arriba; el mapa interno se monta como
+   hermano para que cualquier "ver el lugar" lo abra sin salir de la app. */
 
 // Mismo motivo que en los otros módulos pesados: sin `memo`, las diez
 // carpetas de Ciberseguridad y sus listas (dispositivos, bloqueos,

@@ -27,6 +27,7 @@ import { supabase } from '../../supabaseClient';
 import { soloHora } from '../chat/formatoChat';
 import { leerCssCrudo, leerCssDelCssom } from '../../supervision/cssCrudo';
 import { retirarCanales } from '../../supervision/canales';
+import MapaModal from '../ui/MapaModal';
 
 // NOTA: esta consola quedó reducida a SUPERVISIÓN VISUAL de la ventana
 // (espejo del DOM por rrweb). Se retiraron a propósito el control remoto,
@@ -203,6 +204,7 @@ export default function ConsolaSupervision() {
    * de zona (se resuelve por provincia), no un rastreo. Se limpia al soltar.
    */
   const [ubicacion, setUbicacion] = useState<{ provincia: string | null; lat: number; lon: number; precisionM: number | null } | null>(null);
+  const [verMapa, setVerMapa] = useState(false);
   const selRef = useRef<string | null>(null);
   selRef.current = sel;
   /**
@@ -289,17 +291,47 @@ export default function ConsolaSupervision() {
   const visitaEnLinea = (v: Visitante) => frescura(v.last_seen);
 
   // --------------------------- Escala del espejo ---------------------------
-  const ajustarEscala = useCallback((w: number, h: number) => {
-    const cont = lienzoRef.current;
-    if (!cont || !w || !h) return;
-    const escala = Math.min(1, cont.clientWidth / w);
-    const wrap = cont.querySelector('.replayer-wrapper') as HTMLElement | null;
+  // PANTALLA COMPLETA, SIN SCROLL. El marco tiene un tamaño fijo (lo fija el
+  // layout de la tarjeta); la pantalla del supervisado se ENCOGE para caber
+  // entera dentro, escalando por el lado que más apriete —ancho o alto— y se
+  // centra. Así se ve todo de un vistazo sin barras de desplazamiento, sin
+  // importar si es un móvil alto visto desde una PC o al revés.
+  //
+  // Antes se escalaba solo por ancho y se estiraba el alto del contenedor:
+  // una pantalla más alta que el marco quedaba recortada por abajo (el
+  // `overflow-hidden` del marco la tapaba) y no había forma de ver esa zona.
+  const dimsRef = useRef<{ w: number; h: number }>({ w: 0, h: 0 });
+  const marcoRef = useRef<HTMLDivElement>(null);
+
+  const ajustarEscala = useCallback((w?: number, h?: number) => {
+    if (w && h) dimsRef.current = { w, h };
+    const { w: aw, h: ah } = dimsRef.current;
+    const marco = marcoRef.current;
+    if (!marco || !aw || !ah) return;
+    const fw = marco.clientWidth, fh = marco.clientHeight;
+    if (!fw || !fh) return;
+    // `contain`: cabe entero. Tope en 1 para no ampliar y verse borroso.
+    const escala = Math.min(1, fw / aw, fh / ah);
+    const wrap = lienzoRef.current?.querySelector('.replayer-wrapper') as HTMLElement | null;
     if (wrap) {
-      wrap.style.transform = `scale(${escala})`;
       wrap.style.transformOrigin = 'top left';
+      wrap.style.transform = `scale(${escala})`;
+      wrap.style.position = 'absolute';
+      // Centrado dentro del marco.
+      wrap.style.left = `${Math.max(0, Math.round((fw - aw * escala) / 2))}px`;
+      wrap.style.top = `${Math.max(0, Math.round((fh - ah * escala) / 2))}px`;
     }
-    cont.style.height = `${Math.round(h * escala)}px`;
   }, []);
+
+  // Recalcula el encaje cuando cambia el tamaño del marco (rotar la tablet,
+  // achicar la ventana, abrir/cerrar el panel de diagnóstico).
+  useEffect(() => {
+    const marco = marcoRef.current;
+    if (!marco || typeof ResizeObserver === 'undefined') return;
+    const obs = new ResizeObserver(() => ajustarEscala());
+    obs.observe(marco);
+    return () => obs.disconnect();
+  }, [ajustarEscala]);
 
   // --------------------------- Fidelidad visual del espejo ---------------------------
   // rrweb reproduce dentro de un IFRAME propio. Eso ya aísla el espejo del
@@ -422,6 +454,7 @@ export default function ConsolaSupervision() {
     caraTsRef.current = 0;
     setCaraJpg(null);
     setUbicacion(null);
+    setVerMapa(false);
     setTelemetria(null);
     if (lienzoRef.current) lienzoRef.current.innerHTML = '';
   }, []);
@@ -1206,7 +1239,7 @@ export default function ConsolaSupervision() {
         </div>
 
         {/* Espejo */}
-        <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-base)] overflow-hidden min-h-[280px] flex flex-col">
+        <div className="rounded-2xl border border-[var(--border-color)] bg-[var(--bg-base)] overflow-hidden flex flex-col" style={{ height: 'clamp(320px, 74vh, 820px)' }}>
           <div className="px-3 py-2 border-b border-[var(--border-color)] bg-[var(--bg-surface)] flex items-center justify-between">
             <span className="text-[12px] font-semibold text-[var(--text-primary)] truncate">
               {seleccionado ? seleccionado.titulo : 'Elegí a alguien de la izquierda'}
@@ -1235,8 +1268,8 @@ export default function ConsolaSupervision() {
 
           {/* Lienzo del reproductor. Fondo oscuro neutro para que la
               pantalla replicada resalte sea cual sea el tema. */}
-          <div className="flex-1 relative bg-[#0b0f0e] overflow-hidden">
-            <div ref={lienzoRef} className="w-full" />
+          <div ref={marcoRef} className="flex-1 relative bg-[#0b0f0e] overflow-hidden">
+            <div ref={lienzoRef} className="absolute inset-0" />
 
             {/* Cámara frontal que el cliente ACEPTÓ compartir desde el pie
                 de página. Solo aparece si están llegando fotogramas; no hay
@@ -1265,13 +1298,13 @@ export default function ConsolaSupervision() {
                   {ubicacion.provincia || 'Zona aproximada'}
                   {ubicacion.precisionM != null ? ` · ±${Math.round(ubicacion.precisionM)} m` : ''}
                 </div>
-                <a
-                  href={`https://www.openstreetmap.org/?mlat=${ubicacion.lat}&mlon=${ubicacion.lon}#map=15/${ubicacion.lat}/${ubicacion.lon}`}
-                  target="_blank" rel="noopener noreferrer"
+                <button
+                  type="button"
+                  onClick={() => setVerMapa(true)}
                   className="text-[#6EE7B7] font-semibold underline underline-offset-2"
                 >
                   Ver en el mapa
-                </a>
+                </button>
               </div>
             )}
 
@@ -1377,6 +1410,19 @@ export default function ConsolaSupervision() {
         </div>
       </div>
 
+      {/* Mapa DENTRO de la app: la ubicación compartida se ve aquí, sin abrir
+          Google Maps ni una pestaña nueva. */}
+      {ubicacion && (
+        <MapaModal
+          abierto={verMapa}
+          onClose={() => setVerMapa(false)}
+          lat={ubicacion.lat}
+          lon={ubicacion.lon}
+          precisionM={ubicacion.precisionM}
+          titulo={seleccionado ? `Ubicación · ${seleccionado.titulo}` : 'Ubicación compartida'}
+          etiqueta={`${ubicacion.provincia || 'Zona aproximada'}${ubicacion.precisionM != null ? ` · ±${Math.round(ubicacion.precisionM)} m de margen` : ''}`}
+        />
+      )}
     </div>
   );
 }
