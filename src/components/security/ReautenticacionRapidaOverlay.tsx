@@ -1,7 +1,7 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { ShieldCheck, Fingerprint, RotateCw, LogOut, KeyRound, Grid3x3 } from 'lucide-react';
-import { Modal } from '../ui/Overlays';
-import { Btn } from '../admin/AdminKit';
+import { createPortal } from 'react-dom';
+import { Fingerprint } from 'lucide-react';
+import { Z } from '../ui/Overlays';
 import {
   capacidadesDeDesbloqueo, entrarConBiometria, entrarConDesbloqueoLocal,
   CapacidadesDesbloqueo,
@@ -59,6 +59,16 @@ type Modo = 'cargando' | 'biometria' | 'pin' | 'patron';
  *
  * La sesión solo termina si alguien toca "Cerrar sesión" a propósito,
  * nunca por un fallo del sensor ni por equivocarse de PIN.
+ *
+ * ---------------------------------------------------------------------
+ * DISCRETO A PROPÓSITO
+ * ---------------------------------------------------------------------
+ * Antes era un diálogo con título, un párrafo explicando el segundo plano,
+ * el correo, y una pila de botones. Se sentía como una alarma cada vez que
+ * se volvía a la app. Ahora solo se difumina lo que hay detrás y se pide
+ * la huella (o el PIN/patrón): un ícono, una línea corta y, abajo, enlaces
+ * pequeños para cambiar de método o cerrar sesión. Los avisos de error
+ * son de una línea; una cancelación no muestra nada.
  */
 export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, onFalloTotal, onSinMetodo }: Props) {
   const [capacidades, setCapacidades] = useState<CapacidadesDesbloqueo | null>(null);
@@ -94,7 +104,7 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
       if (resultado.ok) {
         onDesbloqueado({ userId: resultado.userId, email: resultado.email });
       } else if (!resultado.cancelado) {
-        setFallo(resultado.mensaje || 'No se pudo verificar. Puede deberse a un tropiezo del sensor — intente de nuevo.');
+        setFallo(avisoCorto(resultado.mensaje));
       }
       // Cancelado: no se regaña. Los botones de abajo siguen ahí.
     } finally {
@@ -127,7 +137,7 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
         onDesbloqueado({ userId: resultado.userId, email: resultado.email });
         return;
       }
-      setFallo(resultado.mensaje || 'No se pudo verificar.');
+      setFallo(avisoCorto(resultado.mensaje, 'Incorrecto'));
       setPin('');
       setEsperaSeg(Math.ceil(esperaRestanteMs() / 1000));
     } finally {
@@ -137,36 +147,36 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
 
   const conEspera = esperaSeg > 0;
   const localDisponible = capacidades?.metodoLocal ?? null;
+  const usarHuella = () => { setFallo(null); setModo('biometria'); void pedirHuella(); };
 
-  return (
-    <Modal open onClose={() => {}} closeOnBackdrop={false} hideClose title="Confirme su identidad" size="sm">
-      <div className="space-y-4">
-        <div className="flex items-start gap-3 rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-3">
-          <ShieldCheck className="w-5 h-5 flex-shrink-0 text-[var(--accent)]" />
-          <p className="text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
-            La aplicación estuvo en segundo plano. Confirme que sigue siendo{' '}
-            <strong className="text-[var(--text-primary)]">{email || 'la cuenta de este aparato'}</strong>{' '}
-            para continuar exactamente donde se quedó.
-          </p>
-        </div>
+  const enlace = 'text-[12.5px] font-semibold text-white/75 hover:text-white underline-offset-4 hover:underline disabled:opacity-50 px-2 py-1';
 
-        {modo === 'cargando' && (
-          <div className="flex items-center justify-center py-6 text-[12.5px] font-semibold text-[var(--text-secondary)]">
-            Preparando…
-          </div>
-        )}
+  return createPortal(
+    <div
+      className="fixed inset-0 flex flex-col items-center justify-center gap-5 px-6 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150"
+      style={{ zIndex: Z.modal, paddingTop: 'env(safe-area-inset-top)', paddingBottom: 'env(safe-area-inset-bottom)' }}
+      role="dialog"
+      aria-modal="true"
+      aria-label="Desbloquear"
+    >
+      {/* Solo se difumina lo que hay detrás: nada se desmonta. */}
+      <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-xl" aria-hidden="true" />
 
+      <div className="relative flex flex-col items-center gap-4 w-full max-w-[300px]">
         {modo === 'biometria' && (
-          <div className="flex flex-col items-center justify-center gap-3 py-4 text-[var(--text-secondary)]">
-            <Fingerprint className={`w-10 h-10 ${fallo ? 'text-[var(--tv-warn,#c9862c)]' : 'text-[var(--accent)] animate-pulse'}`} />
-            <span className="text-[12.5px] font-semibold text-center">
-              {fallo || (verificando ? 'Esperando huella o Face ID…' : 'Toque «Reintentar» para usar la huella.')}
-            </span>
-          </div>
+          <button
+            type="button"
+            onClick={pedirHuella}
+            disabled={verificando}
+            aria-label="Confirmar con la huella"
+            className="w-20 h-20 rounded-full flex items-center justify-center bg-white/10 ring-1 ring-white/25 text-white transition active:scale-95"
+          >
+            <Fingerprint className={`w-10 h-10 ${verificando ? 'animate-pulse' : ''}`} />
+          </button>
         )}
 
         {modo === 'pin' && (
-          <div className="space-y-3">
+          <div className="w-full rounded-2xl bg-[var(--bg-surface)] shadow-2xl p-4">
             <TecladoPin
               valor={pin}
               onCambio={setPin}
@@ -179,51 +189,44 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
         )}
 
         {modo === 'patron' && (
-          <PatronLock onCompleto={probarSecreto} disabled={verificando || conEspera} error={!!fallo} />
-        )}
-
-        {(modo === 'pin' || modo === 'patron') && (fallo || conEspera) && (
-          <p className="text-center text-[12.5px] font-semibold text-[#E5484D]" role="alert">
-            {conEspera && !fallo ? `Espere ${esperaSeg} s para volver a intentar.` : fallo}
-          </p>
+          <div className="w-full rounded-2xl bg-[var(--bg-surface)] shadow-2xl p-3">
+            <PatronLock onCompleto={probarSecreto} disabled={verificando || conEspera} error={!!fallo} />
+          </div>
         )}
 
         {modo !== 'cargando' && (
-          <div className="flex flex-col gap-2">
-            {modo === 'biometria' && (
-              <Btn variant="primary" icon={RotateCw} onClick={pedirHuella} disabled={verificando} className="w-full justify-center">
-                Reintentar
-              </Btn>
-            )}
-
-            {/* Cambio de método: nunca se muestra uno que no esté configurado. */}
-            {modo === 'biometria' && localDisponible && (
-              <Btn
-                variant="default"
-                icon={localDisponible === 'pin' ? KeyRound : Grid3x3}
-                onClick={() => { setFallo(null); setModo(localDisponible); }}
-                className="w-full justify-center"
-              >
-                {localDisponible === 'pin' ? 'Usar mi PIN' : 'Usar mi patrón'}
-              </Btn>
-            )}
-            {(modo === 'pin' || modo === 'patron') && capacidades?.biometria && (
-              <Btn
-                variant="default"
-                icon={Fingerprint}
-                onClick={() => { setFallo(null); setModo('biometria'); void pedirHuella(); }}
-                className="w-full justify-center"
-              >
-                Usar la huella
-              </Btn>
-            )}
-
-            <Btn variant="danger" icon={LogOut} onClick={onFalloTotal} className="w-full justify-center">
-              Cerrar sesión
-            </Btn>
-          </div>
+          <p className="min-h-[18px] text-center text-[13px] font-semibold text-white/90" role={fallo ? 'alert' : undefined}>
+            {conEspera
+              ? `Espere ${esperaSeg} s`
+              : fallo || (modo === 'biometria' ? 'Confirme con su huella' : modo === 'pin' ? 'Ingrese su PIN' : 'Dibuje su patrón')}
+          </p>
         )}
       </div>
-    </Modal>
+
+      {modo !== 'cargando' && (
+        <div className="relative flex flex-wrap items-center justify-center gap-x-3">
+          {modo === 'biometria' && localDisponible && (
+            <button type="button" className={enlace} onClick={() => { setFallo(null); setModo(localDisponible); }}>
+              {localDisponible === 'pin' ? 'Usar PIN' : 'Usar patrón'}
+            </button>
+          )}
+          {(modo === 'pin' || modo === 'patron') && capacidades?.biometria && (
+            <button type="button" className={enlace} onClick={usarHuella}>Usar huella</button>
+          )}
+          <button type="button" className={enlace} onClick={onFalloTotal}>Cerrar sesión</button>
+        </div>
+      )}
+    </div>,
+    document.body,
   );
+}
+
+/**
+ * Una línea, no un párrafo. Solo se conserva el texto largo cuando pide
+ * algo que la persona tiene que hacer (entrar con la contraseña).
+ */
+function avisoCorto(mensaje: string | undefined, porDefecto = 'No se reconoció. Toque para reintentar'): string {
+  if (mensaje && /contraseña/i.test(mensaje)) return 'Entre con su contraseña para continuar';
+  if (mensaje && /demasiados intentos/i.test(mensaje)) return 'Demasiados intentos. Espere un momento';
+  return porDefecto;
 }

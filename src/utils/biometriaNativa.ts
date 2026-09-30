@@ -196,18 +196,15 @@ function opcionesVerificacion(subtitulo: string, motivo: string) {
   return {
     reason: motivo,
     title: 'Technoverse',
-    subtitle: subtitulo,
-    description: '',
+    // Sin subtítulo ni descripción si no hacen falta: una línea vacía en
+    // el diálogo del sistema solo lo hace más grande.
+    ...(subtitulo ? { subtitle: subtitulo } : {}),
     useFallback: true,
     maxAttempts: 5,
   };
 }
 
-/**
- * Cuántas veces se vuelve a mostrar el diálogo si el sensor da la huella
- * por no reconocida. Ver `verificarConReintentos` para el porqué esto es
- * una capa DISTINTA de `maxAttempts` de arriba, no la misma cosa repetida.
- */
+/** Tope de vueltas de `verificarConReintentos` (solo rescates del sistema). */
 const MAX_INTENTOS_HUELLA = 5;
 
 /**
@@ -284,9 +281,9 @@ class LecturaAgotada extends Error {
  * mismo diálogo abierto, y ese parámetro no existe en iOS —Face ID
  * gestiona sus propios reintentos internos y a veces basta un parpadeo
  * mal capturado para que el sistema rechace de una vez. Esta función
- * cubre esa otra capa: si el diálogo se cerró con "no reconocido"
- * (código 10, no cancelado ni bloqueado), se vuelve a abrir uno nuevo,
- * hasta `MAX_INTENTOS_HUELLA` veces.
+ * cubría esa otra capa reabriendo el diálogo tras un "no reconocido"
+ * (código 10). YA NO LO HACE: ver el comentario del código 10 más abajo.
+ * El bucle queda solo para rescatar las cancelaciones espurias del sistema.
  *
  * Lo que NO se reintenta a la fuerza, a propósito:
  *   · Cancelado por la persona (11/12/13/15/16/17): es su decisión, no un
@@ -311,9 +308,13 @@ async function verificarConReintentos(p: PluginBiometrico, opciones: any): Promi
       ultimoError = e;
       const codigo = Number(e?.code);
 
-      // Código 10 = Authentication Failed: el sensor SÍ se activó y no
-      // reconoció el dedo. Se reintenta, que es para lo que existe esto.
-      if (codigo === 10) continue;
+      // Código 10 = Authentication Failed: el sensor SÍ se activó y el
+      // propio diálogo del sistema ya dio sus `maxAttempts` intentos. Antes
+      // se volvía a abrir el diálogo hasta cinco veces seguidas: la
+      // ventana del sistema desaparecía y reaparecía, y eso se sentía como
+      // un aviso tras otro. Ahora se para aquí; en el candado basta tocar
+      // la huella para volver a intentarlo cuando la persona quiera.
+      if (codigo === 10) throw new LecturaAgotada(e);
 
       // -------------------------------------------------------------
       // EL "FALSO ERROR DE HUELLA", CORREGIDO
@@ -611,7 +612,7 @@ export async function activarBiometriaNativa(): Promise<ResultadoNativo> {
     if (e instanceof LecturaAgotada) {
       return {
         ok: false,
-        mensaje: `El lector no reconoció la huella tras ${MAX_INTENTOS_HUELLA} intentos. Puede intentarlo de nuevo cuando quiera.`,
+        mensaje: 'El lector no reconoció la huella. Puede intentarlo de nuevo cuando quiera.',
       };
     }
     return interpretar(e);
@@ -651,7 +652,7 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
 
     await verificarConReintentos(
       p,
-      opcionesVerificacion(guardado?.username || '', 'Confirme su identidad para entrar')
+      opcionesVerificacion('', 'Desbloquear Technoverse')
     );
 
     // -----------------------------------------------------------------
@@ -720,7 +721,7 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
     if (e instanceof LecturaAgotada) {
       return {
         ok: false,
-        mensaje: `El lector no reconoció la huella tras ${MAX_INTENTOS_HUELLA} intentos. Puede volver a intentarlo, o entrar con su correo y contraseña.`,
+        mensaje: 'El lector no reconoció la huella. Puede volver a intentarlo.',
       };
     }
     return interpretar(e);
