@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, Loader2, Mic, Paperclip } from 'lucide-react';
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../utils/storage';
+import { supabase } from '../supabaseClient';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 import VideoMensaje from './chat/VideoMensaje';
 import ImagenMensaje from './chat/ImagenMensaje';
@@ -250,6 +251,26 @@ export default function LiveChat() {
       clearInterval(reloj);
     };
   }, [isOpen]);
+
+  // ACUSE DE LECTURA Y PRESENCIA (para el panel del personal).
+  //
+  // Mientras el cliente tiene el chat abierto en una conversación, avisa al
+  // servidor —con SU token— que está presente y leyendo. Es lo que alimenta
+  // el "Última vez conectado" y el "Visto" del lado del administrador (ver
+  // ChatThread). Solo toca la fila de su propio token (RPC acotada). Si
+  // falla, no pasa nada: es puramente informativo.
+  useEffect(() => {
+    if (!isOpen || !activeConvId) return;
+    const token = ensureCustomerChatToken();
+    if (!token) return;
+    const avisar = () => {
+      if (document.visibilityState === 'hidden') return;
+      try { void supabase.rpc('chat_visitante_presente', { p_id: activeConvId, p_token: token, p_leyo: true }); } catch { /* informativo */ }
+    };
+    avisar();
+    const reloj = setInterval(avisar, 20000);
+    return () => clearInterval(reloj);
+  }, [isOpen, activeConvId]);
 
   const persistNewConversation = async (name: string, email: string): Promise<boolean> => {
     const token = ensureCustomerChatToken();

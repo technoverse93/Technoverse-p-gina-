@@ -1355,7 +1355,7 @@ async function refreshChatFromSupabase() {
   }
 
   // MODO STAFF / CLIENTE LOGUEADO: lectura directa (RLS filtra por rol/correo).
-  const { data: convRows, error: convError } = await supabase.from('chat_conversations').select('id,customer_name,customer_email,status,unread_count,assigned_admin_email,customer_token,updated_at,created_at');
+  const { data: convRows, error: convError } = await supabase.from('chat_conversations').select('id,customer_name,customer_email,status,unread_count,assigned_admin_email,customer_token,updated_at,created_at,customer_last_read_at,customer_last_seen_at');
   if (convError) {
     notifySyncError(`No se pudo leer chat_conversations: ${convError.message}`);
     return;
@@ -1381,7 +1381,9 @@ async function refreshChatFromSupabase() {
     unreadCount: r.unread_count || 0, messages: messagesByConv[r.id] || [],
     assignedAdminEmail: r.assigned_admin_email || undefined,
     customerToken: r.customer_token || undefined,
-    updatedAt: r.updated_at || r.created_at || undefined
+    updatedAt: r.updated_at || r.created_at || undefined,
+    customerLastReadAt: r.customer_last_read_at || undefined,
+    customerLastSeenAt: r.customer_last_seen_at || undefined
   }));
   // Mismo fallo y mismo arreglo que en la rama de cliente anónimo arriba:
   // la foto de referencia sale de la verdad del servidor ANTES de
