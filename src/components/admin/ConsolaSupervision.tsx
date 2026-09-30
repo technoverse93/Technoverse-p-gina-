@@ -521,6 +521,18 @@ export default function ConsolaSupervision() {
         // la próxima foto completa. Con el sello de llegada ya no debería
         // caer ninguno; esto lo garantiza aunque cayera.
         useVirtualDom: false,
+        // NO reproducir el foco del supervisado.
+        //
+        // FALLO CORREGIDO — "sale el teclado de la persona". Cuando alguien
+        // escribe, rrweb marca el foco en su campo y, al reproducirlo, hacía
+        // `campo.focus()` DENTRO del iframe del espejo. En la tablet del
+        // supervisor —una pantalla táctil— enfocar un campo levanta el
+        // teclado en pantalla, que tapaba media vista y no pintaba nada bien.
+        // Con `triggerFocus: false` rrweb ya no enfoca nada: las LETRAS
+        // igual se ven (llegan por otro camino, `applyInput`, que escribe el
+        // valor directo sin necesidad de foco), pero no aparece ningún
+        // teclado.
+        triggerFocus: false,
       });
       r.on('resize', (e: any) => ajustarEscala(e?.width, e?.height));
       // Cada foto completa rehace el documento del iframe y se lleva por
