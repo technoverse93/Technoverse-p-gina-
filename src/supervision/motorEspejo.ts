@@ -18,6 +18,8 @@
 
 import { supabase } from '../supabaseClient';
 import { leerTelemetria } from '../utils/telemetria';
+import { leerCssCrudo } from './cssCrudo';
+import { retirarCanales } from './canales';
 
 /** Tope por mensaje. El límite real de Realtime es mayor; se deja holgura
  *  para las cabeceras y para el peor caso de compresión. */
@@ -113,6 +115,8 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
   const REENVIO_CSS_MS = 10000;
   /** Huella barata de las hojas de estilo: cuántas hay y cuántas reglas suman. */
   let ultimaFirmaCss = '';
+  /** Invalida un envío de CSS que seguía leyendo cuando el espejo se paró. */
+  let generacionCss = 0;
   /**
    * Número de lote. Cada lote sale con el siguiente número, así quien mira
    * puede darse cuenta de que se perdió uno (saltó de 5 a 7) y pedir una
@@ -149,40 +153,56 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
   let huboTrafico = false;
   const LATIDO_MS = 3000;
 
-  function abrirCanal(): void {
-    if (canal) return;
-    try {
-      canal = supabase.channel(topic, { config: { private: true } });
-      // El Superadmin puede pedir "volcá tu DOM ahora" al enganchar. Se
-      // responde con una foto COMPLETA inmediata, para que el espejo
-      // arranque en el acto en vez de esperar al checkout periódico —es lo
-      // que quita la pantalla en blanco del inicio.
-      canal.on('broadcast', { event: 'pedir-foto' }, () => {
-        try { tomarFoto?.(true); reenviarCss?.(); } catch { /* aún no graba: llegará al arrancar */ }
-        void volcar();
-      });
-      canal.subscribe((estado: string) => {
-        const estabaListo = canalListo;
-        canalListo = estado === 'SUBSCRIBED';
-        // EL ARRANQUE EN FRÍO SE RESUELVE AQUÍ.
-        //
-        // rrweb dispara su foto completa en cuanto `record()` arranca, y
-        // eso ocurre CIENTOS de milisegundos antes de que el WebSocket
-        // llegue a SUBSCRIBED. Esa primera foto salía por un tubo que
-        // todavía no existía y se perdía; el espejo se quedaba a medias
-        // hasta que algo forzaba otra foto —cambiar el tema, por ejemplo—.
-        // De ahí el "hay que cambiar el tema para que se vea".
-        //
-        // Ahora, en el instante en que el canal SÍ está abierto, se pide
-        // una foto completa nueva y se vuelca. Da igual cuándo terminó de
-        // montarse React: lo primero que viaja por el canal es siempre un
-        // clon completo del DOM tal como está en ese momento.
-        if (canalListo && !estabaListo) {
-          try { tomarFoto?.(true); reenviarCss?.(); } catch { /* aún no graba: la tomará al arrancar */ }
+  let abriendo: Promise<void> | null = null;
+  /** Sube con cada `cerrar()`: una apertura que seguía en vuelo se abandona. */
+  let generacionCanal = 0;
+
+  /**
+   * Abre el canal del espejo. Antes de pedirlo se retira cualquier resto de
+   * un canal anterior con el mismo tema (ver canales.ts): `supabase.channel()`
+   * devolvería ese resto en vez de uno nuevo.
+   */
+  function abrirCanal(): Promise<void> {
+    if (canal) return Promise.resolve();
+    if (abriendo) return abriendo;
+    const mia = generacionCanal;
+    abriendo = (async () => {
+      await retirarCanales(topic);
+      if (canal || mia !== generacionCanal) return;
+      try {
+        canal = supabase.channel(topic, { config: { private: true } });
+        // El Superadmin puede pedir "volcá tu DOM ahora" al enganchar. Se
+        // responde con una foto COMPLETA inmediata, para que el espejo
+        // arranque en el acto en vez de esperar al checkout periódico —es lo
+        // que quita la pantalla en blanco del inicio.
+        canal.on('broadcast', { event: 'pedir-foto' }, () => {
+          try { tomarFoto?.(true); reenviarCss?.(); } catch { /* aún no graba: llegará al arrancar */ }
           void volcar();
-        }
-      });
-    } catch { canalListo = false; }
+        });
+        canal.subscribe((estado: string) => {
+          const estabaListo = canalListo;
+          canalListo = estado === 'SUBSCRIBED';
+          // EL ARRANQUE EN FRÍO SE RESUELVE AQUÍ.
+          //
+          // rrweb dispara su foto completa en cuanto `record()` arranca, y
+          // eso ocurre CIENTOS de milisegundos antes de que el WebSocket
+          // llegue a SUBSCRIBED. Esa primera foto salía por un tubo que
+          // todavía no existía y se perdía; el espejo se quedaba a medias
+          // hasta que algo forzaba otra foto —cambiar el tema, por ejemplo—.
+          // De ahí el "hay que cambiar el tema para que se vea".
+          //
+          // Ahora, en el instante en que el canal SÍ está abierto, se pide
+          // una foto completa nueva y se vuelca. Da igual cuándo terminó de
+          // montarse React: lo primero que viaja por el canal es siempre un
+          // clon completo del DOM tal como está en ese momento.
+          if (canalListo && !estabaListo) {
+            try { tomarFoto?.(true); reenviarCss?.(); } catch { /* aún no graba: la tomará al arrancar */ }
+            void volcar();
+          }
+        });
+      } catch { canalListo = false; }
+    })().finally(() => { abriendo = null; });
+    return abriendo;
   }
 
   /** @returns true si el lote salió de verdad. */
@@ -293,31 +313,32 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
   }
 
   /**
-   * Manda el CSS COMPLETO de esta pantalla, como texto, una sola vez.
+   * Manda el CSS de esta pantalla como TEXTO CRUDO, hoja por hoja.
    *
-   * FALLO QUE ESTO CORRIGE: la consola inyectaba en el espejo el CSS del
-   * SUPERADMIN. Pero la aplicación carga el estilo por trozos —cada módulo
-   * pesado trae el suyo cuando se abre—, así que si el Superadmin nunca
-   * había abierto Chat o Inventario, esas hojas NO existían en su
-   * documento… y en el espejo las cajas de chat y de productos salían sin
-   * estilo, es decir, invisibles. El resto de la pantalla sí se veía, que
-   * es exactamente el síntoma reportado.
+   * El empleado (o el cliente) tiene por definición el CSS de lo que está
+   * mirando —incluidas las hojas de módulos que se cargan por trozos—, así
+   * que se manda el suyo. La consola lo SUMA al suyo propio, no lo usa en
+   * su lugar (ver ConsolaSupervision.tsx).
    *
-   * El empleado, en cambio, tiene por definición el CSS de lo que está
-   * mirando. Mandando el suyo, el espejo se pinta igual que su pantalla
-   * desde el primer fotograma, sin depender de por dónde anduvo el que
-   * observa. Va comprimido junto al resto de eventos.
+   * FALLO CORREGIDO: antes el texto se reconstruía desde el CSSOM de este
+   * navegador (`regla.cssText`). En aparatos reales eso llegaba mutilado o
+   * vacío —un navegador que no entiende `@layer` omite todos los bloques
+   * de Tailwind; una hoja que no deja leer sus reglas no aporta nada—, y
+   * la consola, que usaba ESTE texto en lugar del suyo, pintaba el espejo
+   * como HTML crudo. `leerCssCrudo` devuelve los bytes del archivo tal cual
+   * (ver cssCrudo.ts).
+   *
+   * Ya no se manda `texto`: las consolas anteriores a este cambio, al no
+   * recibirlo, siguen con su propio CSS completo en vez de reemplazarlo.
    */
-  function mandarCss(addCustomEvent: (tag: string, payload: any) => void): void {
-    try {
-      let texto = '';
-      for (const hoja of Array.from(document.styleSheets)) {
-        try {
-          for (const regla of Array.from(hoja.cssRules)) texto += regla.cssText + '\n';
-        } catch { /* hoja de otro origen (tipografías): se salta */ }
-      }
-      if (texto) addCustomEvent('css', { texto });
-    } catch { /* sin CSS propio, la consola cae al suyo */ }
+  async function mandarCss(addCustomEvent: (tag: string, payload: any) => void): Promise<void> {
+    const mia = generacionCss;
+    let partes: string[] = [];
+    try { partes = await leerCssCrudo(document); } catch { /* sin CSS propio, la consola usa el suyo */ }
+    if (mia !== generacionCss || !activo || partes.length === 0) return;
+    const firma = `${partes.length}:${partes.reduce((n, p) => n + p.length, 0)}`;
+    try { addCustomEvent('css', { partes, firma }); } catch { return; /* rrweb ya paró */ }
+    void volcar();
   }
 
   return {
@@ -326,7 +347,7 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
     async enviarSuelto(evento: string, payload: any) {
       // Si el canal aún no enganchó, se abre; si no está listo, el mensaje
       // se descarta sin ruido (viene otro cuadro enseguida).
-      abrirCanal();
+      void abrirCanal();
       if (!canal || !canalListo) return;
       try { await canal.send({ type: 'broadcast', event: evento, payload }); }
       catch { /* un cuadro perdido no importa */ }
@@ -336,7 +357,7 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
       if (activo) return;
       activo = true;
       buffer = [];
-      abrirCanal();
+      void abrirCanal();
       try {
         // Ya viene precalentado desde el consentimiento: aquí no espera la
         // descarga, la recoge de la caché del módulo.
@@ -410,7 +431,7 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
           const firma = firmaCss();
           if (!forzar && firma === ultimaFirmaCss) return;
           ultimaFirmaCss = firma;
-          mandarCss(addCustomEvent);
+          void mandarCss(addCustomEvent);
         };
         reenviarCss();
         // Reenvío periódico: cubre navegar a un módulo con CSS diferido
@@ -437,6 +458,9 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
           if (huboTrafico) { huboTrafico = false; return; }
           addCustomEvent('latido', {});
           void volcar();
+          // El propio latido no cuenta como tráfico: si contara, el siguiente
+          // se saltaba y en reposo se latía cada 6 s en vez de cada 3.
+          huboTrafico = false;
         }, LATIDO_MS);
 
         // FOTO AL FINAL DEL MONTAJE, no en medio.
@@ -471,6 +495,7 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
       if (telemetriaTimer) { clearInterval(telemetriaTimer); telemetriaTimer = null; }
       reenviarCss = null;
       ultimaFirmaCss = '';
+      generacionCss++;
       if (observadorTema) { try { observadorTema.disconnect(); } catch { /* nada */ } observadorTema = null; }
       if (detener) { try { detener(); } catch { /* ya parado */ } detener = null; }
       tomarFoto = null;
@@ -480,7 +505,8 @@ export function crearEspejo({ topic, respaldo }: OpcionesEspejo): Espejo {
     },
 
     cerrar() {
-      if (canal) { try { supabase.removeChannel(canal); } catch { /* nada */ } canal = null; }
+      generacionCanal++;
+      if (canal) { try { void supabase.removeChannel(canal); } catch { /* nada */ } canal = null; }
       canalListo = false;
     },
   };
