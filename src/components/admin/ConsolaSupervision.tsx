@@ -188,6 +188,15 @@ export default function ConsolaSupervision() {
   const [sinSenal, setSinSenal] = useState(false);
   /** Último estado del canal del espejo según Supabase ('SUBSCRIBED', …). */
   const estadoCanalRef = useRef<string>('');
+  /**
+   * Cámara frontal que el CLIENTE aceptó compartir desde el pie de página.
+   * Nunca se pide desde aquí: llega SOLO si la persona la encendió con su
+   * permiso. `caraJpg` es el último fotograma (se repinta a ~3/s); `caraTs`
+   * marca cuándo llegó, para ocultarla si dejan de llegar. Se limpia al
+   * cambiar de persona o al soltar.
+   */
+  const [caraJpg, setCaraJpg] = useState<string | null>(null);
+  const caraTsRef = useRef(0);
   const selRef = useRef<string | null>(null);
   selRef.current = sel;
   /**
@@ -404,6 +413,8 @@ export default function ConsolaSupervision() {
     // cambio de tema.
     temaRef.current = null;
     cssRemotoRef.current = null;
+    caraTsRef.current = 0;
+    setCaraJpg(null);
     setTelemetria(null);
     if (lienzoRef.current) lienzoRef.current.innerHTML = '';
   }, []);
@@ -749,6 +760,22 @@ export default function ConsolaSupervision() {
         if (canalEspejoRef.current !== espejo || selRef.current !== clave) return;
         void manejarTrozo(msg?.payload);
       });
+      // Cámara frontal que el CLIENTE decidió compartir desde el pie de
+      // página (ver camaraCliente.ts). Llega como fotogramas JPEG sueltos;
+      // solo se muestra si de verdad están llegando.
+      espejo.on('broadcast', { event: 'camara' }, (msg: any) => {
+        if (canalEspejoRef.current !== espejo || selRef.current !== clave) return;
+        const jpg = msg?.payload?.jpg;
+        if (typeof jpg === 'string' && jpg.startsWith('data:image')) {
+          caraTsRef.current = Date.now();
+          setCaraJpg(jpg);
+        }
+      });
+      espejo.on('broadcast', { event: 'camara-fin' }, () => {
+        if (canalEspejoRef.current !== espejo || selRef.current !== clave) return;
+        caraTsRef.current = 0;
+        setCaraJpg(null);
+      });
       espejo.subscribe((estado: string) => {
         if (canalEspejoRef.current !== espejo) return;
         estadoCanalRef.current = estado;
@@ -970,6 +997,17 @@ export default function ConsolaSupervision() {
     return () => clearInterval(vigia);
   }, [recuperarSenal]);
 
+  // Si la cámara del cliente deja de llegar sin un cierre limpio (se cayó
+  // la red, cerró la pestaña), se oculta a los pocos segundos en vez de
+  // dejar congelado el último fotograma como si siguiera en vivo.
+  useEffect(() => {
+    if (!caraJpg) return;
+    const t = setInterval(() => {
+      if (caraTsRef.current && Date.now() - caraTsRef.current > 6000) setCaraJpg(null);
+    }, 1000);
+    return () => clearInterval(t);
+  }, [caraJpg]);
+
   // Al desmontar, suelta a quien se esté mirando (para su grabación).
   useEffect(() => () => { void soltar(selRef.current); }, [soltar]);
 
@@ -1171,6 +1209,20 @@ export default function ConsolaSupervision() {
               pantalla replicada resalte sea cual sea el tema. */}
           <div className="flex-1 relative bg-[#0b0f0e] overflow-hidden">
             <div ref={lienzoRef} className="w-full" />
+
+            {/* Cámara frontal que el cliente ACEPTÓ compartir desde el pie
+                de página. Solo aparece si están llegando fotogramas; no hay
+                forma de encenderla desde aquí. Recuadro flotante, espejado
+                como cualquier autovista. */}
+            {caraJpg && (
+              <div className="absolute bottom-3 right-3 w-40 sm:w-48 rounded-lg overflow-hidden shadow-xl ring-1 ring-white/20 bg-black">
+                <img src={caraJpg} alt="Cámara del cliente" className="block w-full" style={{ transform: 'scaleX(-1)' }} />
+                <div className="flex items-center gap-1.5 px-2 py-1 text-[10px] font-bold text-white bg-black/60">
+                  <span className="inline-block h-1.5 w-1.5 rounded-full bg-[#e5484d] animate-pulse" aria-hidden="true" />
+                  Cámara compartida por el cliente
+                </div>
+              </div>
+            )}
 
 
             {/* No se muestra NADA del lienzo hasta que `estado === 'vivo'`:

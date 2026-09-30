@@ -36,6 +36,7 @@ import { supabase } from '../supabaseClient';
 import { obtenerDeviceId } from '../utils/dispositivo';
 import { leerDatosDelAparato } from '../utils/huella';
 import { crearEspejo, type Espejo } from './motorEspejo';
+import { detenerCamaraCliente } from './camaraCliente';
 
 let latidoTimer: ReturnType<typeof setInterval> | null = null;
 let espejo: Espejo | null = null;
@@ -116,10 +117,31 @@ export function iniciarVisitante(): void {
 export function detenerVisitante(): void {
   generacion++;   // invalida cualquier arranque que siga en vuelo
   if (latidoTimer) { clearInterval(latidoTimer); latidoTimer = null; }
+  // Si la persona estaba compartiendo la cámara, se apaga con la visita.
+  try { detenerCamaraCliente(); } catch { /* nada */ }
   if (espejo) {
     const e = espejo;
     espejo = null;
     void e.parar().finally(() => e.cerrar());
   }
   visita = null;
+}
+
+// ---------------------------------------------------------------------
+// ENLACE PARA LA CÁMARA CONSENTIDA (ver camaraCliente.ts)
+// ---------------------------------------------------------------------
+// El pie de página abre la cámara SOLO si la persona lo pide, y los
+// fotogramas salen por el MISMO canal privado del espejo. Estas dos
+// funciones son el puente: mandar un evento suelto por ese canal, y saber
+// si de verdad hay alguien del personal mirando (para no enviar cámara a
+// nadie). No abren la cámara ni piden permisos: eso solo lo hace el clic.
+
+/** Manda un evento suelto (p. ej. un fotograma de cámara) por el canal del espejo. */
+export function mandarEventoDelVisitante(evento: string, payload: any): void {
+  try { void espejo?.enviarSuelto(evento, payload); } catch { /* nada */ }
+}
+
+/** ¿Hay un miembro del personal mirando esta visita AHORA MISMO? */
+export function visitanteEstaSiendoMirado(): boolean {
+  try { return !!espejo?.transmitiendo(); } catch { return false; }
 }
