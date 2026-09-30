@@ -1613,3 +1613,10 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
    ========================================================================== */
 .tv-scroll[data-pantalla='completa'] > .tv-container { height: 100%; }
 .tv-scroll[data-pantalla='completa'] .tv-tab-panel:not([hidden]) { height: 100%; }
+
+/* Doble check de "visto" en el chat: celeste, como lo reconoce cualquiera,
+   para que se distinga del check de "enviado" sin tener que leer nada.
+   Sobre la burbuja verde oscuro (claro) va celeste claro; sobre la verde
+   menta (oscuro), azul profundo. */
+.tv-tick-visto { color: #7DD3FC; opacity: 1; }
+.dark .tv-tick-visto { color: #0B4F8A; }

@@ -1,7 +1,7 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Clock } from 'lucide-react';
 import { ChatConversation } from '../../types';
-import { selloDeLista } from './formatoChat';
+import { selloDeLista, estaEnLinea } from './formatoChat';
 import type { ChatStatusFilter, ResolvedRange } from './ChatCRM';
 
 interface ChatInboxProps {
@@ -53,6 +53,10 @@ export default function ChatInbox({
   onResolvedRangeChange,
   onSelect
 }: ChatInboxProps) {
+  // Reloj para que el punto verde se apague solo cuando el visitante deja
+  // de avisar (sin eventos nuevos no habría nada que repinte la lista).
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 15000); return () => clearInterval(t); }, []);
   return (
     <>
       <div className="border-b border-[var(--border-color)]/60" id="chat-inbox-filters">
@@ -115,6 +119,13 @@ export default function ChatInbox({
                 <div className="w-10 h-10 rounded-full bg-[var(--accent)]/15 text-[var(--brand-gold-dark)] flex items-center justify-center font-display font-bold text-sm">
                   {conv.customerName?.charAt(0).toUpperCase() || '?'}
                 </div>
+                {estaEnLinea(conv.customerLastSeenAt, ahora) && (
+                  <span
+                    title="En línea"
+                    aria-label="En línea"
+                    className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[var(--ok)] border-2 border-[var(--bg-elevated)]"
+                  />
+                )}
                 {conv.assignedAdminEmail && (
                   <span
                     title={`Asignado a ${conv.assignedAdminEmail}`}

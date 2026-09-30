@@ -10,7 +10,7 @@ import { supabase } from '../../supabaseClient';
 import ChatActionsMenu from './ChatActionsMenu';
 import AdjuntarMenu from './AdjuntarMenu';
 import { useToast } from '../ui/Overlays';
-import { etiquetaDeDia, abreDiaNuevo, soloHora } from './formatoChat';
+import { etiquetaDeDia, abreDiaNuevo, soloHora, estaEnLinea, haceCuanto } from './formatoChat';
 import VideoMensaje from './VideoMensaje';
 import AudioMensaje from './AudioMensaje';
 import ImagenMensaje from './ImagenMensaje';
@@ -25,26 +25,17 @@ interface ChatThreadProps {
   onResolve: (convId: string) => Promise<void>;
 }
 
-/** "hace 5 min", "hace 2 h", "ayer"… para la última conexión del visitante. */
-function haceCuanto(iso?: string): string | null {
-  if (!iso) return null;
-  const ms = Date.now() - new Date(iso).getTime();
-  if (!Number.isFinite(ms) || ms < 0) return null;
-  const min = Math.floor(ms / 60000);
-  if (min < 1) return 'hace un momento';
-  if (min < 60) return `hace ${min} min`;
-  const h = Math.floor(min / 60);
-  if (h < 24) return `hace ${h} h`;
-  const d = Math.floor(h / 24);
-  return d === 1 ? 'ayer' : `hace ${d} días`;
-}
-
 export default function ChatThread({ conversation, staffEmails, onBack, onSendMessage, onAssign, onChangeStatus, onResolve }: ChatThreadProps) {
   const toast = useToast();
   // Hasta qué momento leyó el visitante: un mensaje del personal anterior o
   // igual a esta marca ya fue visto por él. Alimenta el doble check.
   const leidoHasta = conversation.customerLastReadAt ? new Date(conversation.customerLastReadAt).getTime() : 0;
-  const ultimaConexion = haceCuanto(conversation.customerLastSeenAt);
+  // Reloj propio: sin él, "En línea" se quedaría fijo cuando el visitante
+  // se va (al dejar de avisar no llega ningún evento que repinte).
+  const [ahora, setAhora] = useState(() => Date.now());
+  useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 15000); return () => clearInterval(t); }, []);
+  const enLinea = estaEnLinea(conversation.customerLastSeenAt, ahora);
+  const ultimaConexion = haceCuanto(conversation.customerLastSeenAt, ahora);
   const [inputText, setInputText] = useState('');
   const [noteMode, setNoteMode] = useState(false);
   const [uploading, setUploading] = useState(false);
@@ -228,7 +219,11 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           <div className="min-w-0">
             <h4 className="font-display font-bold text-[13.5px] text-[var(--text-primary)] truncate leading-tight">{conversation.customerName || 'Cliente'}</h4>
             <p className="text-[11px] text-[var(--text-secondary)] truncate">
-              {ultimaConexion
+              {enLinea ? (
+                <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--ok)]">
+                  <span className="w-2 h-2 rounded-full bg-[var(--ok)]" aria-hidden="true" /> En línea
+                </span>
+              ) : ultimaConexion
                 ? <>Última vez conectado: {ultimaConexion}</>
                 : conversation.customerEmail}
             </p>
@@ -374,7 +369,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                             solo check = entregado, aún sin leer. */}
                         {isSupport && !msg.isInternalNote && (
                           leidoHasta && new Date(msg.timestamp).getTime() <= leidoHasta
-                            ? <CheckCheck className="w-3.5 h-3.5" aria-label="Visto por el cliente" />
+                            ? <CheckCheck className="w-3.5 h-3.5 tv-tick-visto" aria-label="Visto por el cliente" />
                             : <Check className="w-3.5 h-3.5 opacity-80" aria-label="Enviado" />
                         )}
                       </span>

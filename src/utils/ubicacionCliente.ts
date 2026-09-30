@@ -118,12 +118,134 @@ export function pedirUbicacion(): Promise<UbicacionCliente | null> {
           ts: new Date().toISOString(),
         };
         try { localStorage.setItem(CLAVE, JSON.stringify(u)); } catch { /* incógnito: vale para esta compra */ }
+        ultimoMotivo = null;
         resolver(u);
       },
-      () => resolver(null),
+      (err) => {
+        // El motivo importa: "denegada" no se arregla reintentando (el
+        // navegador ya no vuelve a preguntar), "sin señal" sí.
+        ultimoMotivo = err?.code === 1 ? 'denegada' : err?.code === 3 ? 'tiempo' : 'sin_senal';
+        resolver(null);
+      },
       { enableHighAccuracy: true, timeout: 15000, maximumAge: 60000 }
     );
   });
+}
+
+// ---------------------------------------------------------------------
+// CUANDO LA PERSONA YA DIJO "NO" UNA VEZ
+// ---------------------------------------------------------------------
+// FALLO CORREGIDO — "intentan compartirla y no los deja". Tras rechazar el
+// permiso una vez (típicamente el aviso que sale solo al entrar), el
+// navegador RECUERDA el "no": `getCurrentPosition` falla al instante y ya
+// no muestra ningún aviso. Ninguna página puede volver a mostrarlo; solo la
+// persona puede reactivarlo en los ajustes del sitio o del teléfono. Antes
+// solo se decía "no se pudo"; ahora se explica cómo reactivarlo según el
+// aparato, y se reintenta solo en cuanto el permiso vuelve a estar activo.
+
+export type MotivoUbicacion = 'denegada' | 'sin_senal' | 'tiempo';
+let ultimoMotivo: MotivoUbicacion | null = null;
+
+/** Por qué falló el último pedido de ubicación (null si no falló). */
+export function motivoUltimoFallo(): MotivoUbicacion | null {
+  return ultimoMotivo;
+}
+
+/** Estado del permiso sin disparar ningún aviso. 'desconocido' si el navegador no lo informa (Safari viejo). */
+export async function estadoPermisoUbicacion(): Promise<'granted' | 'denied' | 'prompt' | 'desconocido'> {
+  try {
+    const p = await (navigator as any).permissions?.query({ name: 'geolocation' });
+    return p?.state || 'desconocido';
+  } catch { return 'desconocido'; }
+}
+
+/** Avisa cuando la persona cambia el permiso en los ajustes (para reintentar solo). */
+export function alCambiarPermisoUbicacion(cb: (estado: string) => void): () => void {
+  let status: any = null;
+  let vivo = true;
+  const manejador = () => { if (vivo && status) cb(status.state); };
+  void (async () => {
+    try {
+      status = await (navigator as any).permissions?.query({ name: 'geolocation' });
+      if (vivo && status) status.addEventListener?.('change', manejador);
+    } catch { /* sin Permissions API: queda el botón "Ya lo activé" */ }
+  })();
+  // Al volver de los ajustes del teléfono la página recupera el foco:
+  // también es buen momento para revisar.
+  const alVolver = () => { if (document.visibilityState === 'visible') void estadoPermisoUbicacion().then(e => vivo && cb(e)); };
+  document.addEventListener('visibilitychange', alVolver);
+  return () => {
+    vivo = false;
+    try { status?.removeEventListener?.('change', manejador); } catch { /* nada */ }
+    document.removeEventListener('visibilitychange', alVolver);
+  };
+}
+
+/** Pasos para reactivar la ubicación en ESTE aparato, en palabras simples. */
+export function pasosParaReactivarUbicacion(motivo: MotivoUbicacion | null): { titulo: string; pasos: string[] } {
+  if (motivo === 'sin_senal' || motivo === 'tiempo') {
+    return {
+      titulo: 'Tu teléfono no dio la ubicación',
+      pasos: [
+        'Revisá que la Ubicación (GPS) del teléfono esté encendida: deslizá desde arriba y tocá "Ubicación".',
+        'Si estás dentro de un edificio, acercate a una ventana.',
+        'Tocá "Intentar de nuevo".',
+      ],
+    };
+  }
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : '';
+  const esApk = !!(window as any)?.Capacitor?.isNativePlatform?.();
+  const esIOS = /iPhone|iPad|iPod/i.test(ua);
+  const esSamsung = /SamsungBrowser/i.test(ua);
+  const esAndroid = /Android/i.test(ua);
+  if (esApk) {
+    return {
+      titulo: 'La ubicación está bloqueada para la app',
+      pasos: [
+        'Abrí los Ajustes del teléfono → Aplicaciones → Technoverse.',
+        'Entrá a Permisos → Ubicación y elegí "Permitir solo con la app en uso".',
+        'Volvé a la app y tocá "Ya lo activé".',
+      ],
+    };
+  }
+  if (esIOS) {
+    return {
+      titulo: 'Safari tiene la ubicación bloqueada para esta página',
+      pasos: [
+        'En la barra de dirección tocá "aA" → Configuración del sitio web → Ubicación → Preguntar o Permitir.',
+        'Si no aparece: Ajustes del iPhone → Privacidad y seguridad → Localización → Sitios web de Safari → "Mientras se usa".',
+        'Volvé aquí y tocá "Ya lo activé".',
+      ],
+    };
+  }
+  if (esSamsung) {
+    return {
+      titulo: 'El navegador tiene la ubicación bloqueada para esta página',
+      pasos: [
+        'Tocá el candado junto a la dirección → Permisos → Ubicación → Permitir.',
+        'O: menú ☰ → Configuración → Sitios y descargas → Permisos de sitios → Ubicación.',
+        'Volvé aquí y tocá "Ya lo activé".',
+      ],
+    };
+  }
+  if (esAndroid) {
+    return {
+      titulo: 'Chrome tiene la ubicación bloqueada para esta página',
+      pasos: [
+        'Tocá el ícono a la izquierda de la dirección (candado o ajustes) → Permisos → Ubicación → Permitir.',
+        'Si el teléfono tiene la Ubicación apagada, encendela desde los ajustes rápidos.',
+        'Volvé aquí y tocá "Ya lo activé".',
+      ],
+    };
+  }
+  return {
+    titulo: 'El navegador tiene la ubicación bloqueada para esta página',
+    pasos: [
+      'Hacé clic en el candado a la izquierda de la dirección → Ubicación → Permitir.',
+      'Recargá la página si el navegador lo pide.',
+      'Tocá "Ya lo activé".',
+    ],
+  };
 }
 
 /** Enlace de mapa para que quien entrega vea el punto exacto. */
