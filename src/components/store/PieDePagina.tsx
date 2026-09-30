@@ -27,7 +27,7 @@ import {
   iniciarCamaraCliente, detenerCamaraCliente, suscribirCamara, hayCamara,
   type EstadoCamaraCliente,
 } from '../../supervision/camaraCliente';
-import { mandarEventoDelVisitante, visitanteEstaSiendoMirado } from '../../supervision/visitante';
+import { mandarEventoDelVisitante, visitanteEstaSiendoMirado, ofrecerUbicacionAlEspejo } from '../../supervision/visitante';
 
 interface Props {
   settings?: AppSettings | null;
@@ -170,6 +170,10 @@ function CompartirUbicacionFooter() {
   const compartir = async () => {
     setEstado('pidiendo');
     const u = await compartirUbicacion({ rol: 'cliente', contexto: 'footer' });
+    // Además de guardarse en Ubicaciones (como siempre), se ofrece al espejo
+    // para que la consola la muestre si están mirando a esta visita. Es el
+    // mismo dato que la persona acaba de aceptar; no se pide nada extra.
+    if (u) ofrecerUbicacionAlEspejo(u);
     setEstado(u ? 'ok' : 'negada');
   };
 
