@@ -8,10 +8,11 @@
 // saltar— aquí no se abre nada.
 //
 // Además, mientras comparte:
-//   · Ve SU PROPIA cámara en pantalla todo el tiempo (autovista), así sabe
-//     que está encendida y qué se está enviando.
-//   · Puede tocar "Dejar de compartir" en cualquier momento y se apaga en
-//     el acto (se sueltan las pistas de la cámara del sistema).
+//   · NO ve su propia imagen (no hay autovista/espejo: la persona pidió no
+//     verse). En su lugar queda un aviso FIJO en toda la pantalla
+//     (components/store/AvisoCamaraEnVivo) de que la cámara está en vivo.
+//   · Puede tocar "Detener" en ese aviso —o en el pie— en cualquier
+//     momento y se apaga en el acto (se sueltan las pistas del sistema).
 //
 // Y una capa más de recato: los fotogramas SOLO se envían mientras un
 // miembro del personal está de verdad mirando esta visita en la consola de
@@ -26,7 +27,8 @@ export type EstadoCamara = 'idle' | 'pidiendo' | 'activa' | 'negada' | 'error';
 
 export interface EstadoCamaraCliente {
   estado: EstadoCamara;
-  /** La transmisión local, para que el pie de página muestre la autovista. */
+  /** La transmisión local. Ya no se pinta (no hay autovista); se conserva
+   *  por si un control necesita saber que hay un stream vivo. */
   stream: MediaStream | null;
   mensaje: string | null;
 }
@@ -37,11 +39,13 @@ export interface EnlaceCamara {
   estanMirando: () => boolean;
 }
 
-// Fotograma chico y liviano: 320 px de ancho, 3 por segundo, calidad media.
-// Es una autovista de soporte, no una videollamada en HD; así pesa unos
-// pocos KB por cuadro y no castiga los datos ni la batería del cliente.
-const ANCHO_ENVIO = 320;
-const FOTOGRAMAS_POR_SEG = 3;
+// Fotograma chico y liviano. Es soporte en vivo, no una videollamada HD:
+// cada cuadro pesa unos pocos KB y no castiga los datos ni la batería.
+// Se sube a 6 cuadros/seg para que la consola se vea más fluida (menos
+// "saltos") manteniendo el cuadro chico; 360 px da un poco más de nitidez
+// sin disparar el tamaño del mensaje en el canal de broadcast.
+const ANCHO_ENVIO = 360;
+const FOTOGRAMAS_POR_SEG = 6;
 const CALIDAD_JPEG = 0.5;
 
 let stream: MediaStream | null = null;

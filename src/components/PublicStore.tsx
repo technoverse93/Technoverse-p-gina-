@@ -39,6 +39,7 @@ import { IconoEditable } from '../cms/IconoEditable';
 import BannerPrincipal from './store/BannerPrincipal';
 import { BannerDivisor, TarjetasBannerGrid, PopupPromocional } from './store/BannersTienda';
 import PieDePagina from './store/PieDePagina';
+import AvisoCamaraEnVivo from './store/AvisoCamaraEnVivo';
 
 const DEFAULT_CAABYS = '8399000000000';
 
@@ -1934,6 +1935,11 @@ export default function PublicStore({
         settings={dbInstance?.settings}
         onIrASoporte={() => { setActiveTab('repairs'); window.scrollTo({ top: 0, behavior: 'smooth' }); }}
       />
+
+      {/* Aviso FIJO mientras la cámara está compartiéndose en vivo. Va suelto
+          del pie a propósito: debe verse en cualquier página y aunque el pie
+          quede fuera de la pantalla. Reemplaza a la antigua autovista espejo. */}
+      <AvisoCamaraEnVivo />
 
       {/* Centered Cart & Checkout Modal */}
       {isCartOpen && (

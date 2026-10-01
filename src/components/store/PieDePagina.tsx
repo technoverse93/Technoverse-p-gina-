@@ -247,7 +247,6 @@ function CompartirUbicacionFooter() {
  */
 function CompartirCamaraFooter() {
   const [cam, setCam] = React.useState<EstadoCamaraCliente>({ estado: 'idle', stream: null, mensaje: null });
-  const videoRef = React.useRef<HTMLVideoElement>(null);
 
   React.useEffect(() => suscribirCamara(setCam), []);
 
@@ -255,17 +254,11 @@ function CompartirCamaraFooter() {
   // fuerza: la corta `detenerVisitante` cuando de verdad se cierra la
   // tienda. Así navegar entre secciones no interrumpe lo que la persona
   // decidió compartir.
-
-  // Enlaza la autovista con la transmisión local en cuanto llega.
-  React.useEffect(() => {
-    const v = videoRef.current;
-    if (!v) return;
-    if (cam.stream && v.srcObject !== cam.stream) {
-      v.srcObject = cam.stream;
-      v.play().catch(() => { /* ya está reproduciendo o el navegador lo hará */ });
-    }
-    if (!cam.stream && v.srcObject) v.srcObject = null;
-  }, [cam.stream]);
+  //
+  // NO hay autovista/espejo: la persona pidió no verse a sí misma. En su
+  // lugar, mientras comparte queda un aviso FIJO en toda la pantalla
+  // (AvisoCamaraEnVivo) de que la cámara está en vivo, con su botón de
+  // cortar. Aquí solo mostramos el estado y el control de encender/apagar.
 
   if (!hayCamara()) return null;
 
@@ -291,27 +284,19 @@ function CompartirCamaraFooter() {
               Si necesitás ayuda y querés mostrarle algo al personal, podés compartir la{' '}
               <strong style={{ color: '#A7AFBD' }}>cámara frontal</strong> de este aparato.{' '}
               Es <strong style={{ color: '#A7AFBD' }}>totalmente opcional</strong> y solo se
-              enciende cuando lo tocás y aceptás el permiso de tu aparato. Mientras compartís vas a
-              ver tu propia imagen aquí, y solo se envía si hay personal atendiéndote en ese momento.
-              Podés dejar de compartir cuando quieras.
+              enciende cuando lo tocás y aceptás el permiso de tu aparato. No vas a verte a vos
+              misma en pantalla; mientras compartís, un aviso fijo te recuerda que la cámara está
+              en vivo y te deja cortarla en cualquier momento. Solo se envía si hay personal
+              atendiéndote en ese momento.
             </p>
 
             {activa && (
-              <div className="mb-2 overflow-hidden rounded-lg" style={{ maxWidth: 240, border: '1px solid rgba(110,231,183,0.4)' }}>
-                {/* Autovista: la persona ve exactamente lo que se comparte.
-                    Espejada, como cualquier cámara frontal. */}
-                <video
-                  ref={videoRef}
-                  muted
-                  playsInline
-                  className="block w-full"
-                  style={{ transform: 'scaleX(-1)', background: '#000', aspectRatio: '4 / 3' }}
-                  aria-label="Vista de tu cámara"
-                />
-                <div className="flex items-center gap-1.5 px-2 py-1 text-[10.5px] font-semibold" style={{ background: 'rgba(110,231,183,0.12)', color: '#6EE7B7' }}>
-                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: '#e5484d' }} aria-hidden="true" />
-                  Cámara encendida
-                </div>
+              <div
+                className="mb-2 flex items-center gap-2 rounded-lg px-3 py-2 text-[11.5px] font-semibold"
+                style={{ background: 'rgba(229,72,77,0.12)', border: '1px solid rgba(229,72,77,0.45)', color: '#FCA5A5' }}
+              >
+                <span className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: '#e5484d' }} aria-hidden="true" />
+                Tu cámara se está compartiendo en vivo. Podés cortarla aquí o desde el aviso de la pantalla.
               </div>
             )}
 
@@ -526,7 +511,8 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
               cámara, tu micrófono, otras apps ni a nada fuera de esta página, y no se controla
               tu equipo. Si además querés mostrarle algo al personal, abajo podés{' '}
               <strong style={{ color: '#A7AFBD' }}>compartir tu cámara o tu ubicación</strong>{' '}
-              a mano: son opcionales y solo se activan si vos las aceptás. Si preferís que no se
+              a mano: son opcionales y solo se activan si vos las aceptás. Mientras la cámara esté
+              activa, un aviso fijo te lo recuerda y te deja cortarla. Si preferís que no se
               haga nada, escribinos por el chat de la tienda.
             </p>
           </details>
