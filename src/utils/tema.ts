@@ -76,8 +76,31 @@ export function alternarTema(): Tema {
  * mientras la persona no haya elegido explícitamente: quien ya escogió
  * claro no quiere que su teléfono se lo cambie a oscuro al anochecer.
  */
+/**
+ * Cristal Ligero: decide si este aparato debe prescindir del vidrio y del
+ * degradado (clase `sin-vidrio` en <html>). Se activa si la persona lo
+ * guardó así, o —de forma conservadora— si el aparato declara muy poca
+ * memoria. La mayoría de teléfonos conservan el vidrio; solo los realmente
+ * limitados caen al color plano. El respaldo por falta de soporte de
+ * `backdrop-filter` ya lo cubre el `@supports` de index.css.
+ */
+export function iniciarVidrio(): void {
+  let sinVidrio = false;
+  try {
+    const guardado = localStorage.getItem('technoverse_sin_vidrio');
+    if (guardado === '1') sinVidrio = true;
+    if (guardado === '0') sinVidrio = false;
+    else {
+      const mem = (navigator as any).deviceMemory;
+      if (typeof mem === 'number' && mem > 0 && mem <= 2) sinVidrio = true;
+    }
+  } catch { /* sin señal: se queda con el vidrio */ }
+  document.documentElement.classList.toggle('sin-vidrio', sinVidrio);
+}
+
 export function iniciarTema(): void {
   aplicarTema(temaInicial());
+  iniciarVidrio();
   try {
     const consulta = window.matchMedia('(prefers-color-scheme: dark)');
     consulta.addEventListener?.('change', e => {

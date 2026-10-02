@@ -64,6 +64,10 @@ import type { LucideIcon } from 'lucide-react';
  */
 export const ContextoPestanaActiva = React.createContext(true);
 
+/** El ícono del módulo al que pertenece la pantalla: lo pone el armazón por
+ *  pestaña y lo usa `PageHead` para la baldosa de la cabecera. */
+export const ContextoIconoModulo = React.createContext<LucideIcon | null>(null);
+
 function usePortalEn(id: string): HTMLElement | null {
   const activa = React.useContext(ContextoPestanaActiva);
   const [nodo, setNodo] = React.useState<HTMLElement | null>(null);
@@ -80,23 +84,20 @@ function usePortalEn(id: string): HTMLElement | null {
 // ---------------------------------------------------------------------
 
 /**
- * Ya NO dibuja un bloque de título.
+ * Cabecera de la pantalla: baldosa con el ícono del módulo, el nombre, la
+ * pista de una línea y, a la derecha, las acciones de la pantalla.
  *
- * Antes pintaba un título de 23px, un subtítulo y una fila de acciones:
- * entre 60 y 85 px de alto en cada módulo para repetir el nombre que la
- * miga de pan ya decía justo encima. Medido sobre el panel real, esa
- * repetición era una de las cinco capas que dejaban el contenido de
- * Inventario empezando a los 330 px.
+ * Cristal Ligero: la dibuja el propio módulo, dentro de su contenido, y se
+ * desplaza con él. Antes mandaba las acciones a la regleta y la pista a una
+ * línea fija por portal; ahora todo vive junto, como en la maqueta aprobada,
+ * y la regleta queda solo para las pestañas.
  *
- * Ahora reparte lo suyo donde corresponde: el nombre lo pone la regleta
- * a partir del módulo activo, las acciones viajan a la regleta y el
- * subtítulo —que sí aporta, porque explica qué se hace en la pantalla—
- * queda como una línea fina de pista bajo las carpetas.
- *
- * Se conserva la misma firma para no tener que tocar ni un solo sitio
- * de llamada.
+ * Conserva la misma firma (`title`, `subtitle`, `actions`) para no tocar
+ * ningún sitio de llamada. Las pestañas de fondo, aunque sigan montadas, no
+ * la pintan (ver `ContextoPestanaActiva`).
  */
 export function PageHead({
+  title,
   subtitle,
   actions,
 }: {
@@ -104,14 +105,25 @@ export function PageHead({
   subtitle?: string;
   actions?: React.ReactNode;
 }) {
-  const destinoAcciones = usePortalEn('tv-regleta-acciones');
-  const destinoPista = usePortalEn('tv-pista-slot');
+  const Icono = React.useContext(ContextoIconoModulo);
+  // Una pestaña de fondo (oculta) no necesita pintarla: ahorra trabajo y evita
+  // dos cabeceras a la vez si el módulo se monta en más de un lugar.
+  const activa = React.useContext(ContextoPestanaActiva);
+  if (!activa) return null;
 
   return (
-    <>
-      {actions && destinoAcciones ? createPortal(<div className="tv-row">{actions}</div>, destinoAcciones) : null}
-      {subtitle && destinoPista ? createPortal(<>{subtitle}</>, destinoPista) : null}
-    </>
+    <div className="tv-cabecera">
+      {Icono && (
+        <em className="tv-cabecera-ic" aria-hidden="true">
+          <Icono className="w-[22px] h-[22px]" />
+        </em>
+      )}
+      <div className="tv-cabecera-tx">
+        <div className="tv-cabecera-t" role="heading" aria-level={1}>{title}</div>
+        {subtitle && <div className="tv-pista">{subtitle}</div>}
+      </div>
+      {actions && <div className="tv-regleta-acciones"><div className="tv-row">{actions}</div></div>}
+    </div>
   );
 }
 

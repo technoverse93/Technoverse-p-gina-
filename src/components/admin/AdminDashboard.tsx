@@ -139,13 +139,13 @@ function AdminDashboard({
   // cuando se escribió, pero el tema oscuro volvió después y nadie
   // regresó aquí. En oscuro la rejilla salía en gris casi blanco y el
   // globo de datos con fondo blanco y letra negra sobre el panel oscuro.
-  const ejes = esOscuro ? '#6F7D77' : '#8792A8';
-  const rejilla = esOscuro ? '#202724' : '#EEF1F6';
+  const ejes = esOscuro ? '#6F7D77' : '#7B9096';
+  const rejilla = esOscuro ? '#202724' : '#E9F0F1';
   const globo = {
     background: esOscuro ? '#1A211E' : '#FFFFFF',
-    border: `1px solid ${esOscuro ? '#272F2B' : '#E4E8EF'}`,
-    borderRadius: '10px',
-    color: esOscuro ? '#E6EDE9' : '#0F172A',
+    border: `1px solid ${esOscuro ? '#272F2B' : '#DDE8E9'}`,
+    borderRadius: '14px',
+    color: esOscuro ? '#E6EDE9' : '#12262B',
     fontSize: '12px',
     fontWeight: 600,
     boxShadow: '0 10px 26px -14px rgba(0,0,0,0.35)',

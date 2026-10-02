@@ -34,7 +34,7 @@ import { PageHead, Card, Btn, Field, Chip, TableShell, Empty } from './admin/Adm
 import { resolverModulo, PESTANA_NUEVA } from './admin/adminNav';
 import NuevaPestana from './admin/NuevaPestana';
 import { usePestanas, useScrollPorPestana } from './admin/usePestanas';
-import { ContextoPestanaActiva } from './admin/AdminKit';
+import { ContextoPestanaActiva, ContextoIconoModulo } from './admin/AdminKit';
 import { esAdminSupremo } from '../utils/securityPin';
 
 // Cargados solo cuando se visita su pestaña: reduce el JS que el A12 tiene
@@ -1781,7 +1781,9 @@ export default function AdminPanel({
                   veían las acciones de Cobros y las de Inventario a la vez,
                   y los dos subtítulos pegados en la misma línea. */}
               <ContextoPestanaActiva.Provider value={esActiva}>
-                {renderModulo(pestanas.tabDe(modulo))}
+                <ContextoIconoModulo.Provider value={resolverModulo(modulo).icon}>
+                  {renderModulo(pestanas.tabDe(modulo))}
+                </ContextoIconoModulo.Provider>
               </ContextoPestanaActiva.Provider>
             </div>
           </Activity>

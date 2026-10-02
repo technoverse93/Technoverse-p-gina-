@@ -37,7 +37,7 @@
      global del panel, así que puede permitirse ser fina. La barra de
      56 px de antes convivía con una miga de pan, un título de módulo y
      una fila de sub-pestañas que decían lo mismo. */
-  --tv-regleta-h: 36px;
+  --tv-regleta-h: 42px;
   --tv-dock-h: 62px;
 
   /* -------------------------------------------------------------------
@@ -54,7 +54,7 @@
      Toda regla nueva que necesite una esquina debe usar estos tokens y
      no un número suelto; si no, queda fuera del sistema y se nota. */
   --tv-radius: 18px;
-  --tv-radius-sm: 6px;
+  --tv-radius-sm: 12px;
   /* Píldora, reservada a lo que es ETIQUETA y no control: chips de
      estado, insignias, contadores. Es el contraste que sostiene la
      variación. */
@@ -92,7 +92,10 @@
   --tv-warn: #9A5B14;
   --tv-warn-soft: rgba(154, 91, 20, 0.12);
 
-  background: var(--tv-canvas);
+  /* Cristal Ligero: el panel comparte el degradado estático de toda la app
+     (definido en index.css), con el color base de respaldo debajo. */
+  background-color: var(--bg-base);
+  background-image: var(--app-bg);
 }
 
 /* Los tres colores de estado, en tema oscuro.
@@ -183,8 +186,14 @@
   min-height: var(--tv-regleta-h);
   flex-shrink: 0;
   padding: 0 8px;
-  background: var(--tv-panel);
-  border-bottom: 1px solid var(--tv-hairline);
+  /* Cristal Ligero: la barra de pestañas es la capa flotante de vidrio.
+     Está POR ENCIMA del scroll (no lo tapa), así que el desenfoque solo ve
+     el degradado estático del fondo y no se repinta al desplazar: barato
+     incluso en gama baja. */
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  border-bottom: 1px solid var(--glass-border);
   /* En teléfono las acciones de la pantalla bajan a su propia línea (ver
      más abajo): la regleta tiene que poder crecer para alojarlas. */
   flex-wrap: wrap;
@@ -302,22 +311,25 @@
   flex-shrink: 0;
   height: 28px;
   max-width: 190px;
-  padding-left: 9px;
-  padding-right: 4px;
-  border-radius: var(--tv-radius-sm);
+  padding-left: 11px;
+  padding-right: 6px;
+  /* Cristal Ligero: las pestañas son cápsulas; la activa es una "gota" de
+     vidrio clara que se desliza bajo el dedo. */
+  border-radius: var(--tv-radius-pill);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
   scroll-snap-align: start;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.tv-tab:hover { background: var(--bg-sunken); color: var(--text-primary); }
+.tv-tab:hover { background: rgba(var(--accent-rgb), 0.08); color: var(--text-primary); }
 
 .tv-tab[data-activa] {
-  background: var(--tv-accent-soft);
-  border-color: var(--tv-accent-line);
+  background: var(--glass-strong);
+  border-color: var(--glass-border);
   color: var(--tv-accent);
+  box-shadow: 0 2px 8px rgba(30, 70, 80, 0.14);
 }
 
 .tv-tab-btn {
@@ -626,7 +638,7 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: var(--tv-radius-sm);
+  border-radius: var(--tv-radius-pill);
   color: var(--text-secondary);
   flex-shrink: 0;
   cursor: pointer;
@@ -1118,7 +1130,12 @@
    PIEZAS DE CONTENIDO
    --------------------------------------------------------------------- */
 
-/* AQUÍ VIVÍA EL BLOQUE DE TÍTULO DE PANTALLA (.tv-page-head /
+/* NOTA (Cristal Ligero): el diseño aprobado SÍ lleva una cabecera por pantalla,
+   pero distinta: la baldosa de ícono + nombre + pista + acciones que dibuja
+   `PageHead` con `.tv-cabecera` (al final de este archivo). Lo de abajo explica
+   por qué se había quitado el bloque anterior.
+
+   AQUÍ VIVÍA EL BLOQUE DE TÍTULO DE PANTALLA (.tv-page-head /
    .tv-page-title / .tv-page-sub) y se eliminó a propósito.
 
    Dibujaba, dentro del contenido de cada módulo, un título de 20-23px y
@@ -1300,6 +1317,8 @@
 
 .tv-btn[data-variant='danger']:hover { background: var(--tv-danger-soft); }
 
+.tv-btn { gap: 6px; }
+@media (pointer: coarse) { .tv-btn { height: 40px; } }
 .tv-btn[data-variant='ghost'] { background: transparent; border-color: transparent; color: var(--text-secondary); }
 .tv-btn[data-variant='ghost']:hover { background: var(--bg-sunken); color: var(--text-primary); }
 
@@ -1517,7 +1536,7 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
    ===================================================================== */
 
 /* --- Controles: casi rectos ----------------------------------------- */
-#admin-panel-root button:not(.tv-pestana):not(.tv-menu-item):not(.tv-chip),
+#admin-panel-root button:not(.tv-pestana):not(.tv-menu-item):not(.tv-chip):not(.tv-btn):not(.tv-folder):not(.tv-lanzador):not(.tv-tab-nueva):not(.tv-tab-x):not(.tv-icon-btn):not(.tv-avatar):not(.tv-limpiar),
 #admin-panel-root input:not([type="checkbox"]):not([type="radio"]),
 #admin-panel-root select,
 #admin-panel-root textarea {
@@ -1620,3 +1639,277 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
    menta (oscuro), azul profundo. */
 .tv-tick-visto { color: #7DD3FC; opacity: 1; }
 .dark .tv-tick-visto { color: #0B4F8A; }
+
+
+/* ==========================================================================
+   CRISTAL LIGERO · PANEL
+   --------------------------------------------------------------------------
+   Barra de pestañas flotante en cápsula de vidrio, con la "gota" en la
+   pestaña activa; cabecera con baldosa de ícono; tarjetas de 18 px con
+   borde fino y sin sombra; botones y etiquetas en cápsula; métricas con el
+   número como protagonista. Al final del archivo a propósito: estas reglas
+   ganan por orden a las de arriba, sin tener que duplicar selectores.
+   El vidrio vive SOLO en la regleta; todo lo demás es sólido y plano.
+   ========================================================================== */
+
+/* ---- Regleta: cápsula flotante ---- */
+#admin-panel-root .tv-regleta {
+  margin: calc(8px + env(safe-area-inset-top, 0px)) 10px 0;
+  padding: 4px 5px;
+  gap: 4px;
+  min-height: var(--tv-regleta-h);
+  flex-wrap: nowrap;
+  border-radius: 999px;
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg-surface); }
+
+/* La regla táctil global fuerza 40-44 px a todo botón con ícono. Dentro de la
+   cápsula (más baja) eso desbordaba; con el id del panel se acota. */
+#admin-panel-root .tv-regleta button {
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
+#admin-panel-root .tv-lanzador {
+  width: 32px;
+  height: 32px;
+  border-radius: 999px;
+}
+#admin-panel-root .tv-regleta .tv-icon-btn { width: 32px; height: 32px; }
+@media (pointer: coarse) {
+  #admin-panel-root .tv-lanzador,
+  #admin-panel-root .tv-regleta .tv-icon-btn { width: 38px; height: 38px; }
+}
+#admin-panel-root .tv-lanzador:hover { background: rgba(var(--accent-rgb), 0.10); color: var(--text-primary); }
+
+/* ---- Pestañas: cápsulas; la activa es una gota ---- */
+#admin-panel-root .tv-tabs { gap: 2px; }
+#admin-panel-root .tv-tab {
+  height: 32px;
+  max-width: 190px;
+  padding-left: 12px;
+  padding-right: 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+  color: var(--text-secondary);
+}
+#admin-panel-root .tv-tab:hover { background: rgba(var(--accent-rgb), 0.08); color: var(--text-primary); }
+#admin-panel-root .tv-tab[data-activa] {
+  background: var(--gota-bg);
+  border-color: transparent;
+  color: var(--gota-ink);
+  box-shadow: var(--gota-shadow);
+}
+#admin-panel-root .tv-tab-btn {
+  font-family: var(--font-sans);
+  font-size: 12.5px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+#admin-panel-root .tv-tab-x { border-radius: 50%; }
+@media (pointer: coarse) { #admin-panel-root .tv-tab { height: 38px; } }
+#admin-panel-root .tv-tab-nueva {
+  width: 30px !important;
+  height: 30px !important;
+  border-radius: 50%;
+  border: 0;
+}
+#admin-panel-root .tv-tab-nueva:hover { background: rgba(var(--accent-rgb), 0.10); color: var(--tv-accent); }
+#admin-panel-root .tv-icon-btn:hover { background: rgba(var(--accent-rgb), 0.10); color: var(--text-primary); }
+#admin-panel-root .tv-avatar {
+  width: 30px;
+  height: 30px;
+  background: var(--accent);
+  color: var(--accent-ink);
+  border: 0;
+}
+
+/* ---- Menú de cuenta ---- */
+#admin-panel-root .tv-menu { border-radius: 16px; border-color: var(--card-border); min-width: 208px; padding: 5px; }
+#admin-panel-root .tv-menu-item { padding: 7px 9px; font-size: 12.5px; gap: 8px; border-radius: 10px; min-height: 0 !important; justify-content: flex-start !important; }
+
+/* ---- Cabecera de la pantalla (la dibuja `PageHead` dentro del módulo) ---- */
+.tv-cabecera {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 6px 10px;
+  padding: 0;
+}
+.tv-cabecera-ic {
+  display: grid;
+  place-items: center;
+  flex: none;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
+  background: var(--bg-surface);
+  border: 1px solid var(--card-border);
+  color: var(--accent);
+}
+.tv-cabecera-tx { flex: 1 1 200px; min-width: 0; }
+.tv-cabecera-t {
+  font-size: 19px;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+  line-height: 1.2;
+  color: var(--text-primary);
+}
+.tv-cabecera .tv-pista:not(:empty) {
+  padding: 0;
+  margin-top: 1px;
+  font-size: 12.5px;
+  line-height: 1.35;
+  color: var(--text-secondary);
+}
+.tv-cabecera .tv-regleta-acciones {
+  flex: 0 1 auto;
+  margin-left: auto;
+  max-width: 100%;
+  justify-content: flex-end;
+  flex-wrap: wrap;
+  overflow: visible;
+}
+.tv-cabecera .tv-regleta-acciones:empty { display: none; }
+@media (max-width: 639px) {
+  .tv-cabecera-ic { display: none; }
+  .tv-cabecera-t { font-size: 18px; }
+}
+
+/* ---- Carpetas: píldoras segmentadas (como los chips de la tienda) ---- */
+.tv-carpetas-bar { background: transparent; }
+.tv-carpetas-bar:has(.tv-folders),
+.tv-carpetas-bar[data-con-carpetas='true'] {
+  padding: 8px var(--tv-gap) 6px;
+  border-bottom: 0;
+}
+@media (min-width: 1024px) {
+  .tv-carpetas-bar:has(.tv-folders),
+  .tv-carpetas-bar[data-con-carpetas='true'] { padding: 8px var(--tv-gap-lg) 6px; }
+}
+.tv-folders { gap: 6px; align-items: center; padding-bottom: 0; }
+.tv-folder {
+  margin-right: 0;
+  padding: 5px 12px;
+  border: 1px solid var(--card-border);
+  border-radius: 999px;
+  background: var(--pill-bg);
+  clip-path: none;
+  color: var(--text-secondary);
+  font-size: 12.5px;
+  font-weight: 500;
+  box-shadow: none;
+}
+.tv-folder:hover { color: var(--text-primary); background: var(--bg-surface); }
+.tv-folder[data-active='true'] {
+  background: var(--chip-on-bg);
+  border-color: var(--chip-on-bg);
+  color: var(--chip-on-ink);
+  font-weight: 600;
+  box-shadow: none;
+}
+.tv-folder[data-active='true']::before { display: none; }
+.tv-folder-count { background: rgba(var(--accent-rgb), 0.12); border-color: transparent; color: var(--text-secondary); }
+.tv-folder[data-active='true'] .tv-folder-count { background: rgba(255, 255, 255, 0.2); color: var(--chip-on-ink); }
+.dark .tv-folder[data-active='true'] .tv-folder-count { background: rgba(0, 0, 0, 0.14); }
+
+/* ---- Tarjetas: 18 px, borde fino, sin sombra ---- */
+.tv-card {
+  background: var(--bg-surface);
+  border-color: var(--card-border);
+  border-radius: 18px;
+}
+.tv-card-head { border-bottom-color: var(--border-soft); padding: 10px 14px; }
+.tv-card-body { padding: 14px; }
+.tv-card-title {
+  font-size: 14px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-primary);
+}
+
+/* ---- Métricas ---- */
+.tv-stat { display: flex; flex-direction: column; gap: 1px; padding: 11px 14px; }
+.tv-stat-label {
+  font-size: 12px;
+  font-weight: 500;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-secondary);
+}
+.tv-stat-value {
+  margin-top: 1px;
+  font-family: var(--font-sans);
+  font-size: 21px;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+.tv-stat-foot { margin-top: 0; font-size: 11.5px; font-weight: 500; color: var(--accent); }
+
+/* ---- Etiquetas de estado: cápsula con tinte ---- */
+.tv-chip {
+  padding: 2px 9px;
+  border-color: transparent;
+  background: var(--bg-sunken);
+  font-size: 11px;
+  font-weight: 600;
+  letter-spacing: 0;
+}
+
+/* ---- Botones: cápsula ---- */
+/* 34 px de alto (40 en pantalla táctil): cómodo sin acaparar la fila. */
+.tv-btn {
+  height: 34px;
+  padding: 0 14px;
+  border-radius: 999px;
+  border: 1px solid var(--card-border);
+  background: var(--bg-surface);
+  font-size: 12.5px;
+  font-weight: 600;
+}
+.tv-btn:hover { background: var(--bg-sunken); }
+.tv-btn[data-variant='primary'] { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
+.tv-btn[data-variant='primary']:hover { background: var(--accent-hover); border-color: var(--accent-hover); }
+.tv-btn[data-variant='ghost'] { background: transparent; border-color: transparent; }
+.tv-btn[data-variant='ghost']:hover { background: rgba(var(--accent-rgb), 0.10); }
+
+/* ---- Campos ---- */
+.tv-label {
+  font-size: 12px;
+  font-weight: 600;
+  letter-spacing: 0;
+  text-transform: none;
+  color: var(--text-secondary);
+}
+.tv-input { height: 36px; font-size: 13px; background: var(--bg-surface); border-color: var(--border-color); }
+
+/* ---- Tablas ---- */
+.tv-table thead th { background: var(--bg-surface); border-bottom-color: var(--border-color); padding: 8px 12px; }
+.tv-table tbody td { padding: 9px 12px; }
+.tv-table tbody td { border-bottom-color: var(--border-soft); }
+.tv-table tbody tr:hover td { background: rgba(var(--accent-rgb), 0.05); }
+
+/* Un ícono dentro de la etiqueta de un botón va EN LÍNEA con el texto. Tailwind
+   pone `svg { display: block }`, y dentro de un <span> eso mandaba la flecha a
+   una segunda línea (p. ej. "Abrir taller →"). */
+.tv-btn-label svg { display: inline-block; vertical-align: -2px; margin-left: 4px; }
+
+/* En teléfono, la pestaña activa cede ancho a los controles fijos y recorta su
+   nombre con puntos suspensivos en vez de quedar cortada a medias. */
+@media (max-width: 640px) {
+  /* "Ver la tienda" ya está en el menú de la cuenta: en teléfono se libera ese
+     lugar en la barra para que la pestaña activa muestre su nombre completo.
+     (La regla táctil global fuerza `display: inline-flex !important`; el id le gana.) */
+  #admin-panel-root .tv-regleta-fijos .tv-icon-btn[aria-label="Ver la tienda"] { display: none !important; }
+  #admin-panel-root .tv-tab[data-activa] { max-width: max(100px, calc(100vw - 214px)); }
+}
+
+/* Las burbujas del chat flotan abajo a la derecha: se deja aire al final del
+   contenido para que, al llegar abajo, nada quede tapado por ellas. */
+.tv-scroll:not([data-pantalla='completa']) { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tv-gap) + 56px); }
+@media (min-width: 1024px) { .tv-scroll:not([data-pantalla='completa']) { padding-bottom: calc(var(--tv-gap-lg) + 56px); } }

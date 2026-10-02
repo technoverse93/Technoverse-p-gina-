@@ -22,6 +22,7 @@
 // =====================================================================
 
 import React, { useCallback, useEffect, useRef, useState } from 'react';
+import { PageHead, Btn } from './AdminKit';
 import { MonitorPlay, Smartphone, Monitor, RefreshCw, Radio, Ban, BatteryFull, BatteryMedium, BatteryLow, BatteryCharging, Wifi, MapPin } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { soloHora } from '../chat/formatoChat';
@@ -1106,32 +1107,18 @@ export default function ConsolaSupervision() {
 
   return (
     <div className="tv-stack">
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-[var(--accent)]/12 text-[var(--accent)] flex items-center justify-center shrink-0">
-            <MonitorPlay className="w-[18px] h-[18px]" />
-          </div>
-          <div>
-            <h2 className="font-display font-bold text-[15px] text-[var(--text-primary)] leading-tight">Supervisión</h2>
-            <p className="text-[11.5px] text-[var(--text-secondary)]">Espejo en vivo de la sesión del personal.</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
+      <PageHead
+        title="Supervisión"
+        subtitle="Espejo en vivo de la sesión del personal."
+        actions={<>
           {aviso && (
-            <span className="hidden sm:block text-[11px] text-[var(--text-secondary)] max-w-[280px] truncate">{aviso}</span>
+            <span className="hidden sm:block text-[12px] text-[var(--text-secondary)] max-w-[280px] truncate">{aviso}</span>
           )}
-          <button
-            type="button"
-            onClick={() => void actualizar()}
-            disabled={refrescando}
-            className="h-8 px-2.5 rounded-lg flex items-center gap-1.5 border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition disabled:opacity-60"
-            aria-label="Actualizar"
-          >
-            <RefreshCw className={`w-4 h-4 ${refrescando ? 'animate-spin' : ''}`} />
-            <span className="text-[11.5px] font-semibold">Actualizar</span>
-          </button>
-        </div>
-      </div>
+          <Btn icon={RefreshCw} onClick={() => void actualizar()} disabled={refrescando} aria-label="Actualizar">
+            Actualizar
+          </Btn>
+        </>}
+      />
 
       {aviso && (
         <p className="sm:hidden text-[11.5px] text-[var(--text-secondary)] -mt-1">{aviso}</p>

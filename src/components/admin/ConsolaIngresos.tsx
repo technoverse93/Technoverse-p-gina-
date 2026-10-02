@@ -12,6 +12,7 @@
 // =====================================================================
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
+import { PageHead, Btn } from './AdminKit';
 import { ShieldCheck, Smartphone, Monitor, RefreshCw, Globe } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { etiquetaDeDia, soloHora } from '../chat/formatoChat';
@@ -90,33 +91,19 @@ export default function ConsolaIngresos() {
   return (
     <div className="tv-stack">
       {/* Encabezado + resumen */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="flex items-center gap-2.5">
-          <div className="w-9 h-9 rounded-xl bg-[var(--accent)]/12 text-[var(--accent)] flex items-center justify-center shrink-0">
-            <ShieldCheck className="w-[18px] h-[18px]" />
-          </div>
-          <div>
-            <h2 className="font-display font-bold text-[15px] text-[var(--text-primary)] leading-tight">Ingresos</h2>
-            <p className="text-[11.5px] text-[var(--text-secondary)]">Cada autenticación exitosa, en vivo.</p>
-          </div>
-        </div>
-        <div className="flex items-center gap-2">
-          <span className="flex items-center gap-1.5 text-[11px] font-bold px-2.5 py-1 rounded-full bg-[var(--ok-soft)] text-[var(--ok)]">
+      <PageHead
+        title="Ingresos"
+        subtitle="Cada autenticación exitosa, en vivo."
+        actions={<>
+          <span className="flex items-center gap-1.5 text-[11.5px] font-bold px-2.5 py-1 rounded-full bg-[var(--ok-soft)] text-[var(--ok)]">
             <span className="w-1.5 h-1.5 rounded-full bg-[var(--ok)] animate-pulse" /> En vivo
           </span>
-          <span className="text-[11px] font-mono text-[var(--text-secondary)]">
+          <span className="text-[12px] font-mono text-[var(--text-secondary)]">
             <b className="text-[var(--text-primary)]">{hoy}</b> hoy
           </span>
-          <button
-            type="button"
-            onClick={cargar}
-            className="w-8 h-8 rounded-lg flex items-center justify-center border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition"
-            aria-label="Recargar"
-          >
-            <RefreshCw className={`w-4 h-4 ${cargando ? 'animate-spin' : ''}`} />
-          </button>
-        </div>
-      </div>
+          <Btn icon={RefreshCw} onClick={cargar} aria-label="Recargar">Recargar</Btn>
+        </>}
+      />
 
       {error && (
         <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] p-4 text-[13px] text-[var(--text-secondary)]">

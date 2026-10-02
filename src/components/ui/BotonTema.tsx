@@ -44,7 +44,7 @@ export default function BotonTema({ className = '' }: Props) {
       onClick={() => alternarTema()}
       aria-label={vaAOscuro ? 'Cambiar a tema oscuro' : 'Cambiar a tema claro'}
       title={vaAOscuro ? 'Tema oscuro' : 'Tema claro'}
-      className={`flex-shrink-0 inline-flex items-center justify-center rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition cursor-pointer ${className}`}
+      className={`flex-shrink-0 inline-flex items-center justify-center rounded-full border border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition cursor-pointer ${className}`}
     >
       {vaAOscuro ? <Moon className="w-4 h-4" /> : <Sun className="w-4 h-4" />}
     </button>

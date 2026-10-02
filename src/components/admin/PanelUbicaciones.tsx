@@ -128,7 +128,7 @@ export default function PanelUbicaciones({ currentUser }: { currentUser: User | 
     for (const r of registros) {
       if (!Number.isFinite(r.lat) || !Number.isFinite(r.lon)) continue;
       const esAdmin = r.rol === 'administrador';
-      const color = esAdmin ? '#2563EB' : '#0E6B4F';
+      const color = esAdmin ? '#2563EB' : '#0C6C78';
 
       // Círculo de precisión (si el aparato la reportó), tenue.
       if (r.precisionM && r.precisionM > 0 && r.precisionM < 5000) {
@@ -264,7 +264,7 @@ export default function PanelUbicaciones({ currentUser }: { currentUser: User | 
                     >
                       <span
                         className="mt-0.5 w-7 h-7 rounded-full flex items-center justify-center shrink-0"
-                        style={{ background: esAdmin ? '#2563EB22' : '#0E6B4F22', color: esAdmin ? '#2563EB' : '#0E6B4F' }}
+                        style={{ background: esAdmin ? '#2563EB22' : '#0C6C7822', color: esAdmin ? '#2563EB' : '#0C6C78' }}
                       >
                         {esAdmin ? <ShieldCheck className="w-4 h-4" /> : <UserIcon className="w-4 h-4" />}
                       </span>
