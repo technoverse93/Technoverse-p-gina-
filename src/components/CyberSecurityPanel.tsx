@@ -15,7 +15,8 @@ import {
 import { AuditLog } from '../types';
 import { PaginatedTbody } from './PaginationHelper';
 import { useToast, useConfirm } from './ui/Overlays';
-import { PageHead, Carpetas, Btn } from './admin/AdminKit';
+import { Btn } from './admin/AdminKit';
+import { Glifo } from './security/Glifos';
 import MapaModal from './ui/MapaModal';
 
 // =====================================================================
@@ -229,6 +230,71 @@ function minutosRestantes(hasta?: string | null): number {
   return ms > 0 ? Math.ceil(ms / 60000) : 0;
 }
 
+// ---- Forma propia de Ciberseguridad (riel, glifos, libro, diario) ----
+const GLIFO_SECCION: Record<Seccion, string> = {
+  resumen: 'pulso', accesos: 'libro', dispositivos: 'cred', bloqueos: 'cuenta', blanca: 'pase',
+  biometria: 'boveda', bitacora: 'diario', visitantes: 'dir', penalizados: 'exp', aparatos: 'etq',
+};
+const PISTA_SECCION: Record<Seccion, string> = {
+  resumen: 'Panorama de las últimas 24 horas',
+  accesos: 'Quién entró y quién lo intentó',
+  dispositivos: 'Los aparatos que ya conocemos',
+  bloqueos: 'Conexiones frenadas y el tiempo que les queda',
+  blanca: 'Conexiones de confianza que nunca se bloquean',
+  biometria: 'Huella, cara y PIN de respaldo',
+  bitacora: 'Lo que se hizo en el sistema',
+  visitantes: 'Aparatos que pasaron por la tienda',
+  penalizados: 'Cuentas con baneo total',
+  aparatos: 'Bloqueo por identificador de aparato',
+};
+/** Minutos que dura cada nivel de castigo (30 min, 2 h, 24 h). Con eso el
+ *  reloj de Bloqueos dibuja qué parte del castigo queda por cumplir. */
+const DURACION_NIVEL: Record<number, number> = { 0: 30, 1: 30, 2: 120, 3: 1440 };
+const POR_PAGINA_ACCESOS = 12;
+const POR_PAGINA_BITACORA = 10;
+const COLORES_MODULO = ['#2B7C86', '#6D5BD0', '#C07A1E', '#2B6CB0', '#B83280', '#2F7D63'];
+function colorModulo(clave?: string | null): string {
+  let h = 0;
+  for (const ch of clave || '') h = (h * 31 + ch.charCodeAt(0)) >>> 0;
+  return COLORES_MODULO[h % COLORES_MODULO.length];
+}
+/** "Hoy", "Ayer" o la fecha corta: encabeza cada día del libro y del diario. */
+function diaDe(iso: string): string {
+  const d = new Date(iso);
+  const hoy = new Date();
+  const ayer = new Date(); ayer.setDate(hoy.getDate() - 1);
+  const mismo = (x: Date, y: Date) => x.toDateString() === y.toDateString();
+  if (mismo(d, hoy)) return 'Hoy';
+  if (mismo(d, ayer)) return 'Ayer';
+  return d.toLocaleDateString('es-CR', { weekday: 'long', day: 'numeric', month: 'long' });
+}
+function horaDe(iso: string): string {
+  try { return new Date(iso).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit', hour12: false }); } catch { return ''; }
+}
+function esMovil(ua?: string | null, origen?: string | null): boolean {
+  return origen === 'apk' || /Android|iPhone|iPad|iPod|Mobile/i.test(ua || '');
+}
+function Vacio({ g, texto }: { g: string; texto: string }) {
+  return (
+    <div className="sg-card sg-vac2">
+      <span className="sg-em"><Glifo n={g} /></span>
+      <p style={{ maxWidth: '44ch', margin: 0 }}>{texto}</p>
+    </div>
+  );
+}
+function Paginador({ pagina, total, porPagina, onCambiar }: { pagina: number; total: number; porPagina: number; onCambiar: (p: number) => void }) {
+  const paginas = Math.max(1, Math.ceil(total / porPagina));
+  return (
+    <div className="sg-pag">
+      <span className="tabular-nums">{(pagina - 1) * porPagina + 1}–{Math.min(pagina * porPagina, total)} de {total}</span>
+      <div>
+        <button type="button" aria-label="Página anterior" disabled={pagina <= 1} onClick={() => onCambiar(pagina - 1)}>‹</button>
+        <button type="button" aria-label="Página siguiente" disabled={pagina >= paginas} onClick={() => onCambiar(pagina + 1)}>›</button>
+      </div>
+    </div>
+  );
+}
+
 function CyberSecurityPanel({
   auditLog,
   currentUserEmail,
@@ -357,6 +423,39 @@ function CyberSecurityPanel({
     if (filtro === 'bloqueados') return accesos.filter(a => a.bloqueado);
     return accesos;
   }, [accesos, filtro]);
+
+  // En el teléfono el riel es un mosaico deslizable: el apartado abierto
+  // se trae a la vista para que no quede escondido a un costado.
+  useEffect(() => {
+    document.querySelector('#view-ciberseguridad .sg-ri.sg-on')?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [seccion]);
+
+  const [paginaAccesos, setPaginaAccesos] = useState(1);
+  const accesosPagina = useMemo(
+    () => accesosFiltrados.slice((paginaAccesos - 1) * POR_PAGINA_ACCESOS, paginaAccesos * POR_PAGINA_ACCESOS),
+    [accesosFiltrados, paginaAccesos]);
+  const [paginaBitacora, setPaginaBitacora] = useState(1);
+  const bitacoraPagina = useMemo(
+    () => auditLog.slice((paginaBitacora - 1) * POR_PAGINA_BITACORA, paginaBitacora * POR_PAGINA_BITACORA),
+    [auditLog, paginaBitacora]);
+
+  /** Las últimas 24 horas en 24 casillas (la última es la hora en curso).
+   *  Cada casilla toma el color de lo peor que pasó en ella. */
+  const horas24 = useMemo(() => {
+    const ahora = Date.now();
+    const casillas = Array.from({ length: 24 }, () => ({ total: 0, clase: '' as '' | 'o' | 'f' | 'b' }));
+    for (const a of accesos) {
+      const hace = ahora - new Date(a.ocurrido_en).getTime();
+      if (hace < 0 || hace >= 24 * 3600000) continue;
+      const c = casillas[23 - Math.floor(hace / 3600000)];
+      c.total++;
+      const t = a.bloqueado ? 'b' : a.exito ? 'o' : 'f';
+      const peso = { '': 0, o: 1, f: 2, b: 3 };
+      if (peso[t] > peso[c.clase]) c.clase = t;
+    }
+    return casillas;
+  }, [accesos]);
+  const maxHora = Math.max(1, ...horas24.map(h => h.total));
 
   // ---- Acciones -----------------------------------------------------
   const desbloquear = async (ip: string) => {
@@ -494,6 +593,7 @@ function CyberSecurityPanel({
     return [...mapa.values()].sort((a, b) => b.ultima.localeCompare(a.ultima));
   }, [visitantes]);
 
+  const maxVisitas = useMemo(() => Math.max(1, ...visitantesAgrupados.map(g => g.visitas)), [visitantesAgrupados]);
   const gruposFiltrados = useMemo(() => {
     const q = buscarVisitante.trim().toLowerCase();
     if (!q) return visitantesAgrupados;
@@ -853,441 +953,355 @@ function CyberSecurityPanel({
   return (
     <div className="space-y-5" id="view-ciberseguridad">
 
-      {/* El título "Centro de Ciberseguridad" y las dos tarjetas de
-          vertiente se eliminaron: el primero repetía el nombre que ya da
-          la regleta, y las segundas eran un filtro disfrazado de tarjeta
-          que costaba 80 px y escondía tres vistas.
+      {/* Ciberseguridad tiene su propia forma: un riel de apartados con
+          glifos de dos tonos (en teléfono, mosaico deslizable) y cada
+          apartado con un formato distinto. No reutiliza las carpetas ni
+          los íconos de los demás módulos, a propósito. */}
+      <div className="sg-cx">
+        <nav className="sg-riel" aria-label="Apartados de Ciberseguridad">
+          <div className="sg-cab">Apartados</div>
+          {carpetas.map(c => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => abrirCarpeta(c.id)}
+              aria-current={seccion === c.id ? 'page' : undefined}
+              className={`sg-ri ${seccion === c.id ? 'sg-on' : ''} ${(c.id === 'bloqueos' || c.id === 'penalizados' || c.id === 'aparatos') && c.contador ? 'sg-alerta' : ''}`}
+            >
+              <Glifo n={GLIFO_SECCION[c.id as Seccion]} />
+              <span>{c.label}</span>
+              {!!c.contador && <em>{c.contador}</em>}
+            </button>
+          ))}
+        </nav>
 
-          Lo único que sube a la regleta es el botón de recargar. */}
-      <PageHead
-        title="Ciberseguridad"
-        actions={
-          <Btn variant="default" icon={RefreshCw} onClick={cargar} disabled={cargando}>
-            {cargando ? 'Actualizando…' : 'Actualizar'}
-          </Btn>
-        }
-      />
+        <div className="sg-zona">
+          <div className="sg-tit">
+            <span className="sg-em"><Glifo n={GLIFO_SECCION[seccion]} className="sg-lg" /></span>
+            <div className="sg-tx">
+              <h2 role="heading" aria-level={1}>{carpetas.find(c => c.id === seccion)?.label}</h2>
+              <p>{PISTA_SECCION[seccion]}</p>
+            </div>
+            <Btn variant="default" onClick={cargar} disabled={cargando}>
+              {cargando ? 'Actualizando…' : 'Actualizar'}
+            </Btn>
+          </div>
 
-      <Carpetas items={carpetas} activa={seccion} onElegir={abrirCarpeta} />
+          <div className="sg-cuerpo">
 
-      {/* =============== RESUMEN =============== */}
+      {/* =============== RESUMEN: el pulso del día =============== */}
       {seccion === 'resumen' && (
-        <div className="space-y-5">
-          <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-            {[
-              { etiqueta: 'Intentos (24 h)',   valor: resumen.intentos24h,     color: 'text-[var(--text-primary)]' },
-              { etiqueta: 'Ingresos correctos', valor: resumen.exitosos24h,    color: 'text-[var(--ok)]' },
-              { etiqueta: 'Intentos fallidos',  valor: resumen.fallidos24h,    color: 'text-amber-500' },
-              { etiqueta: 'Bloqueos activos',   valor: resumen.bloqueosActivos, color: 'text-rose-500' },
-            ].map(c => (
-              <div key={c.etiqueta} className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-4">
-                <div className="text-[10px] uppercase font-bold text-[var(--text-secondary)] tracking-wide">{c.etiqueta}</div>
-                <div className={`text-3xl font-bold font-mono mt-1 ${c.color}`}>{c.valor}</div>
-              </div>
-            ))}
-          </div>
-
-          {/* Último ingreso correcto, con ubicación */}
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-3 flex items-center gap-1.5 border-b border-[var(--border-color)]/50 pb-2">
-              <MapPin className="w-4 h-4" /> Último ingreso correcto
-            </h4>
-            {resumen.ultimoExito ? (
-              <div className="space-y-1.5 text-sm">
-                <div className="font-bold text-[var(--text-primary)]">{resumen.ultimoExito.email || '—'}</div>
-                <div className="text-[var(--text-secondary)] text-xs">{fechaCorta(resumen.ultimoExito.ocurrido_en)}</div>
-                <div className="text-[var(--text-primary)] text-xs flex items-center gap-1.5">
-                  <span className="text-base leading-none">{bandera(resumen.ultimoExito.codigo_pais)}</span>
-                  {ubicacionTexto(resumen.ultimoExito)}
-                </div>
-                <div className="text-[var(--text-secondary)] text-[11px] font-mono">
-                  {resumen.ultimoExito.ip || 'IP desconocida'}
-                  {resumen.ultimoExito.proveedor ? ` · ${resumen.ultimoExito.proveedor}` : ''}
-                </div>
-                <div className="text-[var(--text-secondary)] text-[11px] flex items-center gap-1">
-                  {resumen.ultimoExito.origen === 'apk'
-                    ? <Smartphone className="w-3 h-3" />
-                    : <Monitor className="w-3 h-3" />}
-                  {resumirDispositivo(resumen.ultimoExito.user_agent)}
-                  {resumen.ultimoExito.origen ? ` · ${resumen.ultimoExito.origen}` : ''}
-                </div>
-                <div className="flex flex-wrap gap-1.5 pt-1">
-                  {resumen.ultimoExito.dispositivo_conocido === false && (
-                    <span className="text-[9px] uppercase font-bold bg-amber-500/10 border border-amber-500/40 text-amber-500 px-2 py-0.5 rounded">
-                      Aparato nuevo
-                    </span>
-                  )}
-                  {resumen.ultimoExito.dispositivo_conocido === true && (
-                    <span className="text-[9px] uppercase font-bold bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] px-2 py-0.5 rounded">
-                      Aparato conocido
-                    </span>
-                  )}
-                  {resumen.ultimoExito.gps_latitud != null && (
-                    <button
-                      type="button"
-                      onClick={() => setMapa({ lat: Number(resumen.ultimoExito!.gps_latitud), lon: Number(resumen.ultimoExito!.gps_longitud), titulo: 'Lugar exacto (GPS)', etiqueta: `${resumen.ultimoExito!.email || ''} · ${ubicacionTexto(resumen.ultimoExito!)}` })}
-                      className="text-[9px] uppercase font-bold bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] px-2 py-0.5 rounded hover:brightness-110"
-                    >
-                      Lugar exacto (GPS)
-                    </button>
-                  )}
-                </div>
-              </div>
-            ) : (
-              <p className="text-xs text-[var(--text-secondary)] italic">
-                Todavía no hay ningún ingreso registrado. El primero quedará anotado la próxima vez que inicie sesión.
+        <>
+          <div className="sg-card sg-pulso">
+            <div>
+              <span className="sg-k">Hoy, {new Date().toLocaleDateString('es-CR', { day: 'numeric', month: 'long' })}</span>
+              <h3 style={{ marginTop: 4 }}>
+                {resumen.intentos24h === 0
+                  ? 'Ningún intento de ingreso en las últimas 24 horas'
+                  : `${resumen.exitosos24h} de ${resumen.intentos24h} intento${resumen.intentos24h === 1 ? '' : 's'} fueron correctos`}
+              </h3>
+              <p className="sg-sub">
+                {resumen.fallidos24h === 0 ? 'Ningún fallo' : resumen.fallidos24h === 1 ? 'Un solo fallo' : `${resumen.fallidos24h} fallos`}
+                {resumen.bloqueosActivos === 0 ? ' y ningún bloqueo activo. Todo en calma.' : ` y ${resumen.bloqueosActivos} bloqueo${resumen.bloqueosActivos === 1 ? '' : 's'} activo${resumen.bloqueosActivos === 1 ? '' : 's'}.`}
               </p>
-            )}
-          </div>
-
-          {/* Esta conexión */}
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-3 flex items-center gap-1.5 border-b border-[var(--border-color)]/50 pb-2">
-              <Globe className="w-4 h-4" /> Esta conexión (el dispositivo que está usando ahora)
-            </h4>
-            {miIp ? (
-              <div className="flex flex-wrap items-center justify-between gap-3">
-                <div className="space-y-1 text-xs">
-                  <div className="font-mono font-bold text-[var(--text-primary)] text-sm">{miIp}</div>
-                  <div className="text-[var(--text-secondary)] flex items-center gap-1.5">
-                    <span className="text-base leading-none">{bandera(miGeo?.codigo_pais)}</span>
-                    {ubicacionTexto(miGeo || {})}
-                  </div>
-                  {miGeo?.proveedor && <div className="text-[var(--text-secondary)]">{miGeo.proveedor}</div>}
-                </div>
-                {confianza.some(c => c.ip === miIp) ? (
-                  <span className="text-[10px] bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] font-bold px-3 py-1.5 rounded-xl uppercase">
-                    Ya está en la lista blanca
-                  </span>
-                ) : (
-                  <button
-                    onClick={() => agregarConfianza(miIp, 'Conexión del administrador')}
-                    className="bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] hover:brightness-110 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Marcar como conexión de confianza
-                  </button>
-                )}
+            </div>
+            {/* Una barra por hora de las últimas 24 h: el color dice lo
+                peor que pasó en esa hora y el alto, cuántos intentos. */}
+            <div>
+              <div className="sg-reloj" role="img" aria-label="Intentos de ingreso por hora en las últimas 24 horas">
+                {horas24.map((h, i) => (
+                  <i
+                    key={i}
+                    className={`${h.clase ? 'sg-' + h.clase : ''} ${i === 23 ? 'sg-now' : ''}`}
+                    style={h.total ? { height: `${30 + Math.round((h.total / maxHora) * 70)}%` } : undefined}
+                    title={h.total ? `${h.total} intento(s)` : undefined}
+                  />
+                ))}
               </div>
-            ) : (
-              <p className="text-xs text-[var(--text-secondary)] italic">Averiguando la dirección de esta conexión…</p>
-            )}
-            {/* Advertencia honesta: en datos móviles la IP cambia sola. */}
-            <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed mt-3 pt-3 border-t border-[var(--border-color)]/40">
-              Tenga presente que en datos móviles la dirección IP cambia con frecuencia, y varias personas del mismo
-              operador comparten una misma dirección. La lista blanca sirve de verdad para una conexión fija (la casa o
-              el local); en el celular puede dejar de coincidir de un día para otro.
-            </p>
+              <div className="sg-eje" style={{ marginTop: 6 }}><span>hace 24 h</span><span>hace 12 h</span><span>ahora</span></div>
+            </div>
+            <div className="sg-leyenda">
+              <span><i style={{ background: 'var(--ok)' }} />Correcto</span>
+              <span><i style={{ background: 'var(--tv-warn)' }} />Fallido</span>
+              <span><i style={{ background: 'var(--tv-danger)' }} />Rechazado</span>
+              <span><i style={{ background: 'var(--bg-sunken)' }} />Sin actividad</span>
+            </div>
           </div>
 
-          {/* Cómo funciona */}
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-3 border-b border-[var(--border-color)]/50 pb-2">
-              Reglas activas
-            </h4>
-            <ul className="text-xs text-[var(--text-secondary)] space-y-1.5 leading-relaxed">
-              <li>· <strong className="text-[var(--text-primary)]">3 intentos fallidos en 15 minutos</strong> bloquean la conexión.</li>
-              <li>· El castigo sube solo: <strong className="text-[var(--text-primary)]">30 minutos</strong>, luego <strong className="text-[var(--text-primary)]">2 horas</strong>, luego <strong className="text-[var(--text-primary)]">24 horas</strong>.</li>
-              <li>· Un ingreso correcto reinicia el contador.</li>
-              <li>· Los errores de contraseña de <strong className="text-[var(--text-primary)]">clientes de la tienda</strong> se registran pero no bloquean, para no dejar sin comprar a quienes comparten IP con ellos.</li>
-              <li>· Si el sistema de vigilancia se cae, el acceso sigue funcionando: nunca lo deja fuera de su propio panel.</li>
-              <li>· Se reconoce el <strong className="text-[var(--text-primary)]">aparato</strong>: si entran desde uno nunca visto, sale marcado como aparato nuevo.</li>
-              <li>· Al entrar una cuenta administrativa se pide permiso de ubicación, y si se acepta se guarda el <strong className="text-[var(--text-primary)]">lugar exacto por GPS</strong>. A los clientes de la tienda nunca se les pide.</li>
-              <li>· La ubicación por IP <strong className="text-[var(--text-primary)]">solo dice la ciudad</strong>, no el lugar. Eso no se puede mejorar: una IP no contiene la dirección de nadie.</li>
-              <li>· Una IP bloqueada no puede ni <strong className="text-[var(--text-primary)]">abrir el sitio web</strong>: se le corta en Cloudflare antes de entregarle la página. Cada bloqueo se puede bajar a "solo login" desde su ficha.</li>
-              <li>· El bloqueo del sitio <strong className="text-[var(--text-primary)]">no aplica a la APK</strong>, que es de uso interno.</li>
-            </ul>
+          <div className="sg-fichas">
+            <div className="sg-ficha"><Glifo n="libro" /><span>Intentos (24 h)</span><b className="tabular-nums">{resumen.intentos24h}</b></div>
+            <div className="sg-ficha sg-ok"><Glifo n="ok" /><span>Ingresos correctos</span><b className="tabular-nums">{resumen.exitosos24h}</b></div>
+            <div className="sg-ficha sg-wa"><Glifo n="alerta" /><span>Intentos fallidos</span><b className="tabular-nums">{resumen.fallidos24h}</b></div>
+            <div className="sg-ficha sg-ba"><Glifo n="prohibido" /><span>Bloqueos activos</span><b className="tabular-nums">{resumen.bloqueosActivos}</b></div>
           </div>
-        </div>
+
+          <div className="sg-card sg-pasaporte">
+            <div>
+              <span className="sg-k">Último ingreso correcto</span>
+              {resumen.ultimoExito ? (
+                <>
+                  <b style={{ fontSize: 16 }}>{resumen.ultimoExito.email || '—'}</b>
+                  <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{fechaCorta(resumen.ultimoExito.ocurrido_en)}</span>
+                  <span>{bandera(resumen.ultimoExito.codigo_pais)} {ubicacionTexto(resumen.ultimoExito)}</span>
+                  <span className="sg-mono" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    {resumen.ultimoExito.ip || 'IP desconocida'}{resumen.ultimoExito.proveedor ? ` · ${resumen.ultimoExito.proveedor}` : ''}
+                  </span>
+                  <span className="sg-row" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                    <Glifo n={resumen.ultimoExito.origen === 'apk' ? 'cel' : 'pc'} />
+                    {resumirDispositivo(resumen.ultimoExito.user_agent)}{resumen.ultimoExito.origen ? ` · ${resumen.ultimoExito.origen}` : ''}
+                  </span>
+                  <div className="sg-row">
+                    {resumen.ultimoExito.dispositivo_conocido === false && <span className="sg-badge" data-t="wa">Aparato nuevo</span>}
+                    {resumen.ultimoExito.dispositivo_conocido === true && <span className="sg-badge" data-t="ok">Aparato conocido</span>}
+                    {resumen.ultimoExito.gps_latitud != null && (
+                      <button
+                        type="button"
+                        className="sg-badge"
+                        data-t="ok"
+                        onClick={() => setMapa({ lat: Number(resumen.ultimoExito!.gps_latitud), lon: Number(resumen.ultimoExito!.gps_longitud), titulo: 'Lugar exacto (GPS)', etiqueta: `${resumen.ultimoExito!.email || ''} · ${ubicacionTexto(resumen.ultimoExito!)}` })}
+                      >
+                        <Glifo n="lugar" /> Lugar exacto (GPS)
+                      </button>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="sg-txt">Todavía no hay ningún ingreso registrado. El primero quedará anotado la próxima vez que inicie sesión.</p>
+              )}
+            </div>
+            <div>
+              <span className="sg-k">Esta conexión</span>
+              {miIp ? (
+                <>
+                  <span className="sg-mono" style={{ fontWeight: 500, fontSize: 17 }}>{miIp}</span>
+                  <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                    {bandera(miGeo?.codigo_pais)} {ubicacionTexto(miGeo || {})}{miGeo?.proveedor ? ` · ${miGeo.proveedor}` : ''}
+                  </span>
+                  <div className="sg-row" style={{ marginTop: 4 }}>
+                    {confianza.some(c => c.ip === miIp) ? (
+                      <span className="sg-badge" data-t="ok"><Glifo n="ok" /> Ya está en la lista blanca</span>
+                    ) : (
+                      <Btn className="sg-btn-ok sg-btn-sm" onClick={() => agregarConfianza(miIp, 'Conexión del administrador')}>
+                        Marcar como conexión de confianza
+                      </Btn>
+                    )}
+                  </div>
+                </>
+              ) : (
+                <p className="sg-txt">Averiguando la dirección de esta conexión…</p>
+              )}
+              <p className="sg-fino" style={{ marginTop: 6 }}>
+                En datos móviles la dirección IP cambia con frecuencia, y varias personas del mismo operador comparten una
+                misma dirección. La lista blanca sirve de verdad para una conexión fija (la casa o el local); en el celular
+                puede dejar de coincidir de un día para otro.
+              </p>
+            </div>
+          </div>
+
+          <div className="sg-card">
+            <h4>Reglas activas</h4>
+            <div className="sg-escalera">
+              <div><b>30 min</b><span>1.er castigo</span></div>
+              <div><b>2 horas</b><span>2.º castigo</span></div>
+              <div><b>24 horas</b><span>3.er castigo</span></div>
+            </div>
+            <div className="sg-reglas">
+              <p><Glifo n="reloj" /><span><b>3 intentos fallidos en 15 minutos</b> bloquean la conexión. El castigo sube solo.</span></p>
+              <p><Glifo n="ok" /><span>Un ingreso correcto <b>reinicia el contador</b>.</span></p>
+              <p><Glifo n="dir" /><span>Los errores de contraseña de <b>clientes de la tienda</b> se registran pero no bloquean, para no dejar sin comprar a quienes comparten IP con ellos.</span></p>
+              <p><Glifo n="escudo" /><span>Si el sistema de vigilancia se cae, el acceso sigue funcionando: nunca lo deja fuera de su propio panel.</span></p>
+              <p><Glifo n="cred" /><span>Se reconoce el <b>aparato</b>: si entran desde uno nunca visto, sale marcado como aparato nuevo.</span></p>
+              <p><Glifo n="lugar" /><span>Al entrar una cuenta administrativa se pide permiso de ubicación, y si se acepta se guarda el <b>lugar exacto por GPS</b>. A los clientes de la tienda nunca se les pide. La ubicación por IP <b>solo dice la ciudad</b>.</span></p>
+              <p><Glifo n="prohibido" /><span>Una IP bloqueada no puede ni <b>abrir el sitio web</b>: se le corta en Cloudflare antes de entregarle la página. Cada bloqueo se puede bajar a "solo login". Este bloqueo <b>no aplica a la APK</b>, que es de uso interno.</span></p>
+            </div>
+          </div>
+        </>
       )}
 
-      {/* =============== ACCESOS =============== */}
+      {/* =============== ACCESOS: libro de registro por día =============== */}
       {seccion === 'accesos' && (
-        <div className="space-y-4">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div className="flex gap-1.5 flex-wrap">
+        <>
+          <div className="sg-filtros2">
+            <div className="sg-seg" role="group" aria-label="Filtrar accesos">
               {([
                 { id: 'todos',      label: 'Todos' },
                 { id: 'exitosos',   label: 'Correctos' },
                 { id: 'fallidos',   label: 'Fallidos' },
                 { id: 'bloqueados', label: 'Rechazados' },
               ] as { id: FiltroAccesos; label: string }[]).map(f => (
-                <button
-                  key={f.id}
-                  onClick={() => setFiltro(f.id)}
-                  className={`px-3 py-1.5 rounded-lg text-[11px] font-bold uppercase transition border ${
-                    filtro === f.id
-                      ? 'bg-[var(--brand-gold-mid)]/15 border-[var(--brand-gold-mid)]/50 text-[var(--brand-gold-mid)]'
-                      : 'bg-transparent border-[var(--border-color)]/60 text-[var(--text-secondary)]'
-                  }`}
-                >
+                <button key={f.id} type="button" data-on={filtro === f.id ? '' : undefined} onClick={() => { setFiltro(f.id); setPaginaAccesos(1); }}>
                   {f.label}
                 </button>
               ))}
             </div>
-            <button
-              onClick={() => purgarHistorial(90)}
-              disabled={limpiando}
-              className="text-[11px] text-rose-400 hover:text-rose-300 font-bold px-3 py-1.5 rounded-lg border border-[var(--border-color)]/60 hover:bg-rose-500/10 transition flex items-center gap-1.5 disabled:opacity-50"
-            >
-              <Trash2 className="w-3.5 h-3.5" /> Depurar +90 días
-            </button>
+            <Btn className="sg-btn-ba sg-btn-sm" onClick={() => purgarHistorial(90)} disabled={limpiando}>Depurar +90 días</Btn>
           </div>
 
           {accesosFiltrados.length === 0 ? (
-            <div className="bg-[var(--bg-surface)] border border-dashed border-[var(--border-color)]/60 rounded-2xl py-12 text-center text-xs text-[var(--text-secondary)] italic">
-              {cargando ? 'Cargando el registro de accesos…' : 'No hay intentos registrados con este filtro.'}
-            </div>
+            <Vacio g="libro" texto={cargando ? 'Cargando el registro de accesos…' : 'No hay intentos registrados con este filtro.'} />
           ) : (
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
-              <div className="overflow-x-auto overflow-y-auto max-h-[520px]">
-                <table className="w-full min-w-[760px] text-left text-sm border-collapse leading-relaxed">
-                  <thead>
-                    <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)]">
-                      <th className="p-3 text-[10px] uppercase">Resultado</th>
-                      <th className="p-3 text-[10px] uppercase">Fecha</th>
-                      <th className="p-3 text-[10px] uppercase">Correo</th>
-                      <th className="p-3 text-[10px] uppercase">Ubicación</th>
-                      <th className="p-3 text-[10px] uppercase">IP / Operador</th>
-                      <th className="p-3 text-[10px] uppercase">Dispositivo</th>
-                    </tr>
-                  </thead>
-                  <PaginatedTbody
-                    items={accesosFiltrados}
-                    itemsPerPage={12}
-                    renderItem={(a: Acceso) => (
-                      <tr
-                        key={a.id}
-                        onClick={() => setDetalle(a)}
-                        className="hover:bg-[var(--bg-base)] cursor-pointer border-b border-[var(--border-color)]/30"
-                      >
-                        <td className="p-3">
-                          {a.bloqueado ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase bg-rose-500/10 border border-rose-500/40 text-rose-500 px-2 py-0.5 rounded">
-                              <Ban className="w-3 h-3" /> Rechazado
-                            </span>
-                          ) : a.exito ? (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] px-2 py-0.5 rounded">
-                              <CheckCircle className="w-3 h-3" /> Correcto
-                            </span>
-                          ) : (
-                            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase bg-amber-500/10 border border-amber-500/40 text-amber-500 px-2 py-0.5 rounded">
-                              <XCircle className="w-3 h-3" /> Fallido
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3 text-[11px] text-[var(--text-secondary)] whitespace-nowrap">{fechaCorta(a.ocurrido_en)}</td>
-                        <td className="p-3 text-[11px] text-[var(--text-primary)] max-w-[180px] truncate">{a.email || '—'}</td>
-                        <td className="p-3 text-[11px] text-[var(--text-primary)]">
-                          <span className="mr-1.5 text-sm leading-none">{bandera(a.codigo_pais)}</span>
-                          {ubicacionTexto(a)}
-                        </td>
-                        <td className="p-3 text-[10px] font-mono text-[var(--text-secondary)]">
-                          <div className="text-[var(--text-primary)]">{a.ip || '—'}</div>
-                          {a.proveedor && <div className="truncate max-w-[150px]">{a.proveedor}</div>}
-                        </td>
-                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">
-                          <div>{resumirDispositivo(a.user_agent)}</div>
-                          {/* Esta es la señal que de verdad delata a un extraño:
-                              la ubicación por IP solo llega a la ciudad, pero un
-                              aparato que nunca se había usado sí es noticia. */}
-                          {a.dispositivo_conocido === false && (
-                            <span className="inline-block mt-1 text-[9px] font-bold uppercase bg-amber-500/10 border border-amber-500/40 text-amber-500 px-1.5 py-0.5 rounded">
-                              Aparato nuevo
-                            </span>
-                          )}
-                          {a.gps_latitud != null && (
-                            <span className="inline-block mt-1 ml-1 text-[9px] font-bold uppercase bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] px-1.5 py-0.5 rounded">
-                              GPS
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    )}
-                  />
-                </table>
-              </div>
+            <div className="sg-card sg-libro">
+              {accesosPagina.map((a, i) => {
+                const dia = diaDe(a.ocurrido_en);
+                const nuevoDia = i === 0 || diaDe(accesosPagina[i - 1].ocurrido_en) !== dia;
+                const t = a.bloqueado ? 'b' : a.exito ? 'o' : 'f';
+                const hora = horaDe(a.ocurrido_en);
+                return (
+                  <React.Fragment key={a.id}>
+                    {nuevoDia && <div className="sg-dia2">{dia}</div>}
+                    <div
+                      className="sg-lr"
+                      role="button"
+                      tabIndex={0}
+                      onClick={() => setDetalle(a)}
+                      onKeyDown={e => { if (e.key === 'Enter') setDetalle(a); }}
+                    >
+                      <span className="sg-h">{hora}</span>
+                      <span className={`sg-sello ${t === 'o' ? '' : 'sg-' + t}`}>
+                        <Glifo n={t === 'b' ? 'prohibido' : t === 'f' ? 'alerta' : 'ok'} />
+                      </span>
+                      <div style={{ minWidth: 0 }}>
+                        <b>{a.email || '—'}</b>
+                        <span className="sg-s">
+                          {bandera(a.codigo_pais)} {ubicacionTexto(a)} · <span className="sg-mono" style={{ fontSize: 11 }}>{a.ip || '—'}{a.proveedor ? ` · ${a.proveedor}` : ''}</span>
+                        </span>
+                      </div>
+                      <div className="sg-ls">{resumirDispositivo(a.user_agent)}</div>
+                      <div className="sg-row" style={{ gap: 4, justifyContent: 'flex-end' }}>
+                        <span className="sg-hh">{hora}</span>
+                        {a.dispositivo_conocido === false && <span className="sg-badge" data-t="wa">Aparato nuevo</span>}
+                        {a.gps_latitud != null && <span className="sg-badge" data-t="ok">GPS</span>}
+                        <span className="sg-badge" data-t={t === 'b' ? 'ba' : t === 'f' ? 'wa' : 'ok'}>
+                          {t === 'b' ? 'Rechazado' : t === 'f' ? 'Fallido' : 'Correcto'}
+                        </span>
+                      </div>
+                    </div>
+                  </React.Fragment>
+                );
+              })}
+              <Paginador pagina={paginaAccesos} total={accesosFiltrados.length} porPagina={POR_PAGINA_ACCESOS} onCambiar={setPaginaAccesos} />
             </div>
           )}
-        </div>
+        </>
       )}
 
-      {/* =============== DISPOSITIVOS =============== */}
+      {/* =============== DISPOSITIVOS: credenciales =============== */}
       {seccion === 'dispositivos' && (
-        <div className="space-y-4">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5">
-            <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
+        <>
+          <div className="sg-callout">
+            <span className="sg-nodo"><Glifo n="info" /></span>
+            <span>
               Cada celular o computadora desde el que se entró correctamente queda marcado aquí. Si un día aparece un{' '}
-              <strong className="text-amber-500">aparato nuevo</strong> que usted no reconoce, esa es la señal de
-              alarma de verdad — mucho más confiable que la ubicación, porque la IP solo llega a decir la ciudad.
-            </p>
-            <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed mt-3 pt-3 border-t border-[var(--border-color)]/40">
-              Dos advertencias honestas: si usted borra los datos del navegador o entra en modo incógnito, su propio
-              aparato va a salir como nuevo. Y la marca la manda el navegador, así que en teoría se puede falsear:
-              tómelo como una alerta que vale la pena revisar, no como una cerradura.
-            </p>
+              <b>aparato nuevo</b> que usted no reconoce, esa es la señal de alarma de verdad, mucho más confiable que la
+              ubicación, porque la IP solo llega a decir la ciudad.
+              <br />
+              <span style={{ fontSize: 11.5, opacity: 0.85 }}>
+                Si borra los datos del navegador o entra en modo incógnito, su propio aparato saldrá como nuevo. Y la marca
+                la manda el navegador, así que en teoría se puede falsear: tómelo como una alerta que vale la pena revisar,
+                no como una cerradura.
+              </span>
+            </span>
           </div>
 
           {dispositivos.length === 0 ? (
-            <div className="bg-[var(--bg-surface)] border border-dashed border-[var(--border-color)]/60 rounded-2xl py-12 text-center text-xs text-[var(--text-secondary)] italic">
-              {cargando ? 'Cargando…' : 'Todavía no hay aparatos registrados. El suyo aparecerá la próxima vez que inicie sesión.'}
-            </div>
+            <Vacio g="cred" texto={cargando ? 'Cargando…' : 'Todavía no hay aparatos registrados. El suyo aparecerá la próxima vez que inicie sesión.'} />
           ) : (
-            <div className="space-y-2">
+            <div className="sg-cred">
               {dispositivos.map(d => (
-                <div
-                  key={d.device_id}
-                  className={`bg-[var(--bg-surface)] border rounded-2xl p-4 space-y-2 ${
-                    d.confiable ? 'border-[var(--border-color)]/60' : 'border-amber-500/50'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="min-w-0">
-                      <div className="font-bold text-sm text-[var(--text-primary)] truncate">
-                        {d.etiqueta || resumirDispositivo(d.user_agent)}
+                <div key={d.device_id} className={`sg-card sg-cr ${d.confiable ? '' : 'sg-al'}`}>
+                  <div className="sg-top">
+                    <span className="sg-sil"><Glifo n={esMovil(d.user_agent, d.origen) ? 'cel' : 'pc'} /></span>
+                    <div style={{ minWidth: 0 }}>
+                      <h5>
+                        <span style={{ overflowWrap: 'anywhere' }}>{d.etiqueta || resumirDispositivo(d.user_agent)}</span>
+                        {d.confiable
+                          ? <span className="sg-badge" data-t="ok">Reconocido</span>
+                          : <span className="sg-badge" data-t="wa">No reconocido</span>}
+                      </h5>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                        {resumirDispositivo(d.user_agent)}{d.origen ? ` · ${d.origen}` : ''} · {d.ingresos} ingreso(s)
                       </div>
-                      <div className="text-[11px] text-[var(--text-secondary)]">
-                        {resumirDispositivo(d.user_agent)}
-                        {d.origen ? ` · ${d.origen}` : ''} · {d.ingresos} ingreso(s)
-                      </div>
-                      <div className="text-[10px] text-[var(--text-secondary)]">
-                        Primera vez: {fechaCorta(d.primer_visto)}
-                      </div>
-                      <div className="text-[10px] text-[var(--text-secondary)]">
-                        Última vez: {fechaCorta(d.ultimo_visto)}
-                        {d.ultimo_email ? ` · ${d.ultimo_email}` : ''}
-                      </div>
-                      <div className="text-[9px] text-[var(--text-muted)] font-mono truncate mt-1">{d.device_id}</div>
+                      <div className="sg-id" style={{ overflowWrap: 'anywhere' }}>{d.device_id}</div>
                     </div>
-                    {!d.confiable && (
-                      <span className="flex-shrink-0 text-[9px] uppercase font-bold bg-amber-500/10 border border-amber-500/40 text-amber-500 px-2 py-0.5 rounded">
-                        No reconocido
-                      </span>
-                    )}
                   </div>
-                  <div className="flex flex-wrap gap-2 pt-2 border-t border-[var(--border-color)]/40">
-                    <button
-                      onClick={() => renombrarDispositivo(d)}
-                      className="bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--text-primary)] text-[11px] font-bold px-3 py-1.5 rounded-lg transition hover:bg-[var(--bg-surface)]"
-                    >
-                      Ponerle nombre
-                    </button>
-                    <button
-                      onClick={() => cambiarConfianzaDispositivo(d)}
-                      className={`text-[11px] font-bold px-3 py-1.5 rounded-lg transition border ${
-                        d.confiable
-                          ? 'bg-amber-500/10 border-amber-500/40 text-amber-500 hover:bg-amber-500/20'
-                          : 'bg-[var(--ok-soft)] border-[var(--ok)] text-[var(--ok)] hover:brightness-110'
-                      }`}
-                    >
+                  <div className="sg-dat">
+                    <div>Primera vez<b>{fechaCorta(d.primer_visto)}</b></div>
+                    <div>Última vez<b>{fechaCorta(d.ultimo_visto)}</b>{d.ultimo_email && <span style={{ fontSize: 11 }}>{d.ultimo_email}</span>}</div>
+                  </div>
+                  <div className="sg-pie">
+                    <Btn className="sg-btn-sm" onClick={() => renombrarDispositivo(d)}>Ponerle nombre</Btn>
+                    <Btn className={`sg-btn-sm ${d.confiable ? 'sg-btn-wa' : 'sg-btn-ok'}`} onClick={() => cambiarConfianzaDispositivo(d)}>
                       {d.confiable ? 'No lo reconozco' : 'Sí es mío'}
-                    </button>
-                    <button
-                      onClick={() => olvidarDispositivo(d)}
-                      className="bg-rose-500/10 border border-rose-500/40 text-rose-400 text-[11px] font-bold px-3 py-1.5 rounded-lg transition hover:bg-rose-500/20"
-                    >
-                      Olvidar
-                    </button>
+                    </Btn>
+                    <Btn className="sg-btn-sm sg-btn-ba" onClick={() => olvidarDispositivo(d)}>Olvidar</Btn>
                   </div>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </>
       )}
 
-      {/* =============== BLOQUEOS =============== */}
+      {/* =============== BLOQUEOS: cuenta regresiva =============== */}
       {seccion === 'bloqueos' && (
-        <div className="space-y-4">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border-color)]/50 pb-2">
-              Bloquear una conexión a mano
-            </h4>
-            <div className="flex flex-wrap gap-2">
-              <input
-                type="text"
-                value={nuevaIpBloqueo}
-                onChange={e => setNuevaIpBloqueo(e.target.value)}
-                placeholder="Dirección IP (ej. 190.10.20.30)"
-                className="flex-1 min-w-[200px] bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none placeholder:text-[var(--text-muted)]"
-              />
-              <button
-                onClick={() => bloquearManual(nuevaIpBloqueo, false)}
-                className="bg-amber-500/10 border border-amber-500/40 text-amber-500 hover:bg-amber-500/20 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5"
-              >
-                <Lock className="w-3.5 h-3.5" /> 30 minutos
-              </button>
-              <button
-                onClick={() => bloquearManual(nuevaIpBloqueo, true)}
-                className="bg-rose-500/10 border border-rose-500/40 text-rose-500 hover:bg-rose-500/20 text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5"
-              >
-                <Ban className="w-3.5 h-3.5" /> Permanente
-              </button>
-            </div>
+        <>
+          <div className="sg-accion2">
+            <input
+              type="text"
+              value={nuevaIpBloqueo}
+              onChange={e => setNuevaIpBloqueo(e.target.value)}
+              placeholder="Dirección IP (ej. 190.10.20.30)"
+              aria-label="Dirección IP a bloquear"
+              className="sg-input sg-mono"
+            />
+            <button type="button" className="sg-opc sg-wa" onClick={() => bloquearManual(nuevaIpBloqueo, false)}>
+              <Glifo n="reloj" /><span>30 minutos<small>Bloqueo temporal</small></span>
+            </button>
+            <button type="button" className="sg-opc sg-ba" onClick={() => bloquearManual(nuevaIpBloqueo, true)}>
+              <Glifo n="prohibido" /><span>Permanente<small>Hasta que lo quite</small></span>
+            </button>
           </div>
 
           {bloqueos.length === 0 ? (
-            <div className="bg-[var(--bg-surface)] border border-dashed border-[var(--border-color)]/60 rounded-2xl py-12 text-center text-xs text-[var(--text-secondary)] italic">
-              {cargando ? 'Cargando…' : 'No hay ninguna conexión bloqueada. Todo tranquilo.'}
-            </div>
+            <Vacio g="cuenta" texto={cargando ? 'Cargando…' : 'No hay ninguna conexión bloqueada. Todo tranquilo.'} />
           ) : (
-            <div className="space-y-2">
+            <div style={{ display: 'grid', gap: 10 }}>
               {bloqueos.map(b => {
                 const restantes = minutosRestantes(b.bloqueado_hasta);
                 const activo = !b.desbloqueado_en && (b.permanente || restantes > 0);
+                const total = DURACION_NIVEL[b.nivel] || 30;
+                const pct = b.permanente ? 100 : activo ? Math.max(4, Math.min(100, Math.round((restantes / total) * 100))) : 0;
+                const nivel = Math.min(3, Math.max(b.nivel || 0, b.permanente ? 3 : 0));
                 return (
-                  <div
-                    key={b.ip}
-                    className={`bg-[var(--bg-surface)] border rounded-2xl p-4 flex flex-wrap items-center justify-between gap-3 ${
-                      activo ? 'border-rose-500/40' : 'border-[var(--border-color)]/60 opacity-70'
-                    }`}
-                  >
-                    <div className="space-y-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className="font-mono font-bold text-sm text-[var(--text-primary)]">{b.ip}</span>
-                        {activo ? (
-                          <span className="text-[9px] uppercase font-bold bg-rose-500/10 border border-rose-500/40 text-rose-500 px-2 py-0.5 rounded">
-                            {b.permanente ? 'Permanente' : `${restantes} min restantes`}
-                          </span>
-                        ) : (
-                          <span className="text-[9px] uppercase font-bold bg-[var(--bg-base)] border border-[var(--border-color)]/60 text-[var(--text-secondary)] px-2 py-0.5 rounded">
-                            {b.desbloqueado_en ? 'Levantado' : 'Vencido'}
-                          </span>
-                        )}
-                        {b.nivel > 0 && !b.permanente && (
-                          <span className="text-[9px] uppercase font-bold text-[var(--text-secondary)]">Nivel {b.nivel}</span>
-                        )}
-                        <span className={`text-[9px] uppercase font-bold px-2 py-0.5 rounded border ${
-                          b.bloqueo_total
-                            ? 'bg-rose-500/10 border-rose-500/40 text-rose-500'
-                            : 'bg-amber-500/10 border-amber-500/40 text-amber-500'
-                        }`}>
-                          {b.bloqueo_total ? 'Sitio completo' : 'Solo login'}
+                  <div key={b.ip} className="sg-card sg-cuenta" style={activo ? undefined : { opacity: 0.7 }}>
+                    <div className={`sg-dial ${activo ? '' : 'sg-fin'}`} style={{ ['--p' as any]: pct }}>
+                      <b className="tabular-nums">
+                        {b.permanente && activo ? '∞' : activo ? (restantes >= 120 ? Math.round(restantes / 60) : restantes) : '—'}
+                        <small>{b.permanente && activo ? 'permanente' : activo ? (restantes >= 120 ? 'horas' : 'min') : b.desbloqueado_en ? 'levantado' : 'vencido'}</small>
+                      </b>
+                    </div>
+                    <div style={{ minWidth: 0 }}>
+                      <h5>
+                        <span style={{ overflowWrap: 'anywhere' }}>{b.ip}</span>
+                        <span className="sg-niv" title={`Nivel ${b.nivel}`}>
+                          {[1, 2, 3].map(i => <i key={i} className={i <= nivel ? 'sg-on' : ''} />)}
                         </span>
+                      </h5>
+                      <div className="sg-row" style={{ marginTop: 4 }}>
+                        <span className="sg-badge" data-t={b.bloqueo_total ? 'ba' : 'wa'}>{b.bloqueo_total ? 'Sitio completo' : 'Solo login'}</span>
+                        {b.nivel > 0 && !b.permanente && <span className="sg-badge">Nivel {b.nivel}</span>}
+                        {b.permanente && <span className="sg-badge" data-t="ba">Permanente</span>}
                       </div>
-                      <div className="text-[11px] text-[var(--text-secondary)]">
-                        {ubicacionTexto(b)} · {b.intentos_fallidos} intento(s)
-                      </div>
-                      {b.ultimo_email && (
-                        <div className="text-[10px] text-[var(--text-secondary)] font-mono truncate max-w-[280px]">
-                          Último correo probado: {b.ultimo_email}
-                        </div>
-                      )}
-                      <div className="text-[10px] text-[var(--text-secondary)]">{b.motivo} · {fechaCorta(b.actualizado_en)}</div>
+                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5 }}>{ubicacionTexto(b)} · {b.intentos_fallidos} intento(s)</div>
+                      {b.ultimo_email && <div className="sg-mono" style={{ fontSize: 11, color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>Último correo probado: {b.ultimo_email}</div>}
+                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{b.motivo} · {fechaCorta(b.actualizado_en)}</div>
                     </div>
                     {activo && (
-                      <div className="flex flex-wrap gap-2 flex-shrink-0">
-                        <button
-                          onClick={() => cambiarAlcanceBloqueo(b)}
-                          className="bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--text-primary)] text-[11px] font-bold px-3 py-2 rounded-xl transition hover:bg-[var(--bg-surface)]"
-                        >
+                      <div className="sg-act">
+                        <Btn className="sg-btn-sm" onClick={() => cambiarAlcanceBloqueo(b)}>
                           {b.bloqueo_total ? 'Dejar solo el login' : 'Bloquear el sitio entero'}
-                        </button>
-                        <button
-                          onClick={() => desbloquear(b.ip)}
-                          className="bg-[var(--bg-base)] border border-[var(--border-color)]/80 text-[var(--ok)] hover:bg-[var(--ok-soft)] text-xs font-bold px-3 py-2 rounded-xl transition flex items-center gap-1.5"
-                        >
-                          <Unlock className="w-3.5 h-3.5" /> Desbloquear
-                        </button>
+                        </Btn>
+                        <Btn className="sg-btn-sm sg-btn-ok" onClick={() => desbloquear(b.ip)}>Desbloquear</Btn>
                       </div>
                     )}
                   </div>
@@ -1295,662 +1309,399 @@ function CyberSecurityPanel({
               })}
             </div>
           )}
-        </div>
+        </>
       )}
 
-      {/* =============== LISTA BLANCA =============== */}
+      {/* =============== LISTA BLANCA: pases =============== */}
       {seccion === 'blanca' && (
-        <div className="space-y-4">
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-5 space-y-3">
-            <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] border-b border-[var(--border-color)]/50 pb-2">
-              Agregar conexión de confianza
-            </h4>
-            <div className="flex flex-wrap gap-2">
+        <>
+          <div className="sg-card">
+            <h4>Agregar conexión de confianza</h4>
+            <div className="sg-pad sg-row" style={{ gap: 8 }}>
               <input
                 type="text"
                 value={nuevaIpBlanca}
                 onChange={e => setNuevaIpBlanca(e.target.value)}
                 placeholder={miIp ? `Su IP actual: ${miIp}` : 'Dirección IP'}
-                className="flex-1 min-w-[180px] bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] font-mono focus:outline-none placeholder:text-[var(--text-muted)]"
+                aria-label="Dirección IP de confianza"
+                className="sg-input sg-mono"
               />
               <input
                 type="text"
                 value={nuevaDescripcion}
                 onChange={e => setNuevaDescripcion(e.target.value)}
                 placeholder="Descripción (ej. casa, local)"
-                className="flex-1 min-w-[180px] bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-sm text-[var(--text-primary)] focus:outline-none placeholder:text-[var(--text-muted)]"
+                aria-label="Descripción"
+                className="sg-input"
               />
-              <button
-                onClick={() => agregarConfianza(nuevaIpBlanca || miIp || '', nuevaDescripcion)}
-                className="bg-[var(--ok-soft)] border border-[var(--ok)] text-[var(--ok)] hover:brightness-110 text-xs font-bold px-4 py-2 rounded-xl transition flex items-center gap-1.5"
-              >
-                <Plus className="w-3.5 h-3.5" /> Agregar
-              </button>
+              <Btn className="sg-btn-ok" onClick={() => agregarConfianza(nuevaIpBlanca || miIp || '', nuevaDescripcion)}>Agregar</Btn>
             </div>
           </div>
 
           {confianza.length === 0 ? (
-            <div className="bg-[var(--bg-surface)] border border-dashed border-[var(--border-color)]/60 rounded-2xl py-12 text-center text-xs text-[var(--text-secondary)] italic">
-              {cargando ? 'Cargando…' : 'No hay conexiones de confianza registradas.'}
-            </div>
+            <Vacio g="pase" texto={cargando ? 'Cargando…' : 'No hay conexiones de confianza registradas.'} />
           ) : (
-            <div className="space-y-2">
+            <div className="sg-pases2">
               {confianza.map(c => (
-                <div key={c.ip} className="bg-[var(--bg-surface)] border border-[var(--ok)]/40 rounded-2xl p-4 flex items-center justify-between gap-3">
-                  <div className="min-w-0">
-                    <div className="font-mono font-bold text-sm text-[var(--text-primary)]">{c.ip}</div>
-                    <div className="text-[11px] text-[var(--text-secondary)] truncate">{c.descripcion || 'Sin descripción'}</div>
-                    <div className="text-[10px] text-[var(--text-secondary)]">Agregada el {fechaCorta(c.creado_en)}</div>
+                <div key={c.ip} className="sg-pase2">
+                  <div className="sg-st"><Glifo n="ok" className="sg-lg" /></div>
+                  <div className="sg-tx">
+                    <b>{c.descripcion || 'Sin descripción'}</b>
+                    <code style={{ overflowWrap: 'anywhere' }}>{c.ip}</code>
+                    <span>Agregada el {fechaCorta(c.creado_en)}</span>
+                    <div className="sg-row" style={{ marginTop: 4 }}>
+                      <Btn className="sg-btn-sm sg-btn-ba" onClick={() => quitarConfianza(c.ip)}>Quitar de la lista blanca</Btn>
+                    </div>
                   </div>
-                  <button
-                    onClick={() => quitarConfianza(c.ip)}
-                    className="bg-rose-500/10 hover:bg-rose-500/20 text-rose-400 p-2 rounded-xl transition flex-shrink-0"
-                    title="Quitar de la lista blanca"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
                 </div>
               ))}
             </div>
           )}
-        </div>
+        </>
       )}
 
-      {/* =============== BITÁCORA OPERATIVA (absorbida) =============== */}
+      {/* =============== BITÁCORA: diario del sistema =============== */}
       {seccion === 'bitacora' && (
-        <div className="space-y-4">
-          <p className="text-[11px] text-[var(--text-secondary)] leading-snug">
-            Aquí queda lo que se <strong className="text-[var(--text-primary)]">hizo</strong> (ventas, ajustes,
-            inventario). En "Accesos" queda quién <strong className="text-[var(--text-primary)]">entró</strong>.
+        <>
+          <p className="sg-txt">
+            Aquí queda lo que se <strong>hizo</strong> (ventas, ajustes, inventario). En "Accesos" queda quién <strong>entró</strong>.
           </p>
-
-          {/* ---- Estado y limpieza del historial ---- */}
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/70 rounded-xl p-3 space-y-3">
-            <div className="grid grid-cols-3 gap-2 text-center">
-              {[
-                { etiqueta: 'Bitácora', valor: conteos?.bitacora_total ?? 0 },
-                { etiqueta: 'Accesos',  valor: conteos?.accesos_total ?? 0 },
-                { etiqueta: '+90 días', valor: conteos?.accesos_90 ?? 0 },
-              ].map(x => (
-                <div key={x.etiqueta} className="bg-[var(--bg-base)] border border-[var(--border-color)]/50 rounded-lg py-2">
-                  <div className="text-base font-bold text-[var(--text-primary)] font-mono">{x.valor}</div>
-                  <div className="text-[9px] uppercase tracking-wider text-[var(--text-secondary)]">{x.etiqueta}</div>
-                </div>
-              ))}
+          <div className="sg-mant">
+            <div className="sg-card">
+              <div><b className="tabular-nums">{conteos?.bitacora_total ?? 0}</b><span className="sg-l">en la bitácora</span></div>
+              <Btn className="sg-btn-sm sg-btn-ba" onClick={limpiarBitacora} disabled={limpiando}>Limpiar</Btn>
             </div>
-
-            <div className="flex flex-wrap gap-1.5">
-              <button
-                onClick={limpiarBitacora}
-                disabled={limpiando}
-                className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-lg border border-[var(--border-color)]/70 text-rose-400 hover:bg-rose-500/10 disabled:opacity-50"
-              >
-                Limpiar bitácora
-              </button>
-              <button
-                onClick={() => purgarHistorial(90)}
-                disabled={limpiando}
-                className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"
-              >
-                Accesos +90 días
-              </button>
-              <button
-                onClick={() => purgarHistorial(30)}
-                disabled={limpiando}
-                className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-[var(--text-primary)] disabled:opacity-50"
-              >
-                Accesos +30 días
-              </button>
-              <button
-                onClick={() => purgarHistorial(0)}
-                disabled={limpiando}
-                className="text-[10px] font-bold uppercase px-2.5 py-1.5 rounded-lg border border-rose-500/40 text-rose-400 hover:bg-rose-500/10 disabled:opacity-50"
-              >
-                Borrar todos los accesos
-              </button>
+            <div className="sg-card">
+              <div><b className="tabular-nums">{conteos?.accesos_total ?? 0}</b><span className="sg-l">accesos</span></div>
+              <Btn className="sg-btn-sm" onClick={() => purgarHistorial(30)} disabled={limpiando}>+30 días</Btn>
             </div>
-
-            {conteos?.accesos_90 === 0 && conteos?.accesos_total > 0 && (
-              <p className="text-[10px] text-[var(--text-secondary)] leading-snug">
-                Ningún acceso supera los 90 días — el más antiguo es del{' '}
-                {conteos?.accesos_mas_viejo ? new Date(conteos.accesos_mas_viejo).toLocaleDateString() : '—'}. Por eso
-                "Depurar +90 días" no borra nada todavía: no hay nada tan viejo, no es una avería.
-              </p>
-            )}
-          </div>
-
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto overflow-y-auto max-h-[500px]">
-              <table className="w-full min-w-[600px] text-left text-sm border-collapse font-mono leading-relaxed">
-                <thead>
-                  <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)]">
-                    <th className="p-3">ID / Fecha</th>
-                    <th className="p-3">Usuario</th>
-                    <th className="p-3 text-center">Módulo</th>
-                    <th className="p-3 text-center">Acción</th>
-                    <th className="p-3">Detalle Técnico</th>
-                  </tr>
-                </thead>
-                <PaginatedTbody
-                  items={auditLog}
-                  itemsPerPage={10}
-                  renderItem={(log: AuditLog) => (
-                    <tr key={log.id} className="hover:bg-[var(--bg-base)]">
-                      <td className="p-3">
-                        <div className="text-[10px] text-[var(--text-secondary)]">{log.id}</div>
-                        <div className="text-[9px] text-[var(--text-secondary)]">{new Date(log.timestamp).toLocaleString()}</div>
-                      </td>
-                      <td className="p-3 font-medium text-[var(--text-primary)]">{log.userEmail}</td>
-                      <td className="p-3 text-center">
-                        <span className="bg-blue-50 text-blue-600 border border-blue-100 px-2 py-0.5 rounded text-[10px] uppercase font-bold ">
-                          {log.module}
-                        </span>
-                      </td>
-                      <td className="p-3 text-center text-[var(--text-primary)] font-bold text-[10px] uppercase">{log.action}</td>
-                      <td className="p-3 text-[var(--text-primary)] max-w-sm"><div className="tv-text-scroll tv-text-scroll-sm">{log.detail}</div></td>
-                    </tr>
-                  )}
-                />
-              </table>
+            <div className="sg-card">
+              <div><b className="tabular-nums">{conteos?.accesos_90 ?? 0}</b><span className="sg-l">de más de 90 días</span></div>
+              <Btn className="sg-btn-sm" onClick={() => purgarHistorial(90)} disabled={limpiando}>+90 días</Btn>
             </div>
           </div>
-        </div>
-      )}
-
-      {/* =============== VISITANTES DE LA TIENDA =============== */}
-      {seccion === 'visitantes' && (
-        <div className="space-y-4">
-          {/* ---- Cabecera: tres cifras y el buscador ---- */}
-          <div className="flex flex-wrap items-end justify-between gap-3">
-            <div className="flex gap-5">
-              {[
-                { n: visitantesAgrupados.length, t: 'Aparatos' },
-                { n: visitantesAgrupados.reduce((a, g) => a + g.visitas, 0), t: 'Visitas' },
-                { n: visitantesAgrupados.filter(g => g.email).length, t: 'Identificados' },
-              ].map(x => (
-                <div key={x.t}>
-                  <div className="text-xl font-semibold text-[var(--text-primary)] leading-none tabular-nums">{x.n}</div>
-                  <div className="text-[10px] uppercase tracking-[0.08em] text-[var(--text-secondary)] mt-1">{x.t}</div>
-                </div>
-              ))}
-            </div>
-            <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-[var(--text-secondary)]" />
-              <input
-                value={buscarVisitante}
-                onChange={e => setBuscarVisitante(e.target.value)}
-                placeholder="Buscar"
-                className="bg-transparent border-b border-[var(--border-color)] focus:border-[var(--brand-gold-mid)] pl-8 pr-2 py-1.5 text-xs text-[var(--text-primary)] w-40 focus:outline-none transition-colors"
-              />
-            </div>
+          <div className="sg-row" style={{ justifyContent: 'space-between' }}>
+            <p className="sg-fino" style={{ flex: 1, minWidth: 200 }}>
+              {conteos?.accesos_90 === 0 && conteos?.accesos_total > 0 && (
+                <>Ningún acceso supera los 90 días: el más antiguo es del{' '}
+                {conteos?.accesos_mas_viejo ? new Date(conteos.accesos_mas_viejo).toLocaleDateString('es-CR') : '—'}. Por eso
+                "Depurar +90 días" no borra nada todavía; no es una avería.</>
+              )}
+            </p>
+            <Btn className="sg-btn-sm sg-btn-ba" onClick={() => purgarHistorial(0)} disabled={limpiando}>Borrar todos los accesos</Btn>
           </div>
 
-          {/* ---- Lista ----
-              Se pasó de tabla a lista de filas porque la tabla obligaba a
-              desplazarse en horizontal en un celular, que es justo donde
-              se revisa esto. Cada fila cabe en el ancho de la pantalla. */}
-          <div className="divide-y divide-[var(--border-color)]/40 border-y border-[var(--border-color)]/40">
-            {gruposFiltrados
-              .slice((paginaVisitantes - 1) * 10, paginaVisitantes * 10)
-              .map((g: GrupoVisitante) => {
-                const penalizado = !!g.email && emailsPenalizados.has(g.email.toLowerCase());
-                const bloqueado = g.huellas.some(h =>
-                  aparatos.some(a => a.device_uuid === h && !a.levantado_en));
+          {auditLog.length === 0 ? (
+            <Vacio g="diario" texto="La bitácora está vacía." />
+          ) : (
+            <div className="sg-card sg-diario">
+              {bitacoraPagina.map((log, i) => {
+                const dia = diaDe(log.timestamp);
+                const nuevoDia = i === 0 || diaDe(bitacoraPagina[i - 1].timestamp) !== dia;
+                const color = colorModulo(log.module);
                 return (
-                  <div key={g.clave} className="flex items-center gap-3 py-3 group">
-                    {/* Icono */}
-                    <div className="w-8 h-8 rounded-full bg-[var(--bg-base)] border border-[var(--border-color)]/60 flex items-center justify-center flex-shrink-0">
-                      {g.tipo === 'Escritorio'
-                        ? <Monitor className="w-3.5 h-3.5 text-[var(--text-secondary)]" />
-                        : <Smartphone className="w-3.5 h-3.5 text-[var(--text-secondary)]" />}
-                    </div>
-
-                    {/* Identidad */}
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[13px] font-medium text-[var(--text-primary)] truncate">
-                          {g.dispositivo || g.tipo || 'Sin identificar'}
-                        </span>
-                        {g.huellas.length > 1 && (
-                          <span
-                            title={`${g.huellas.length} identidades del mismo equipo`}
-                            className="text-[10px] text-[var(--text-secondary)] tabular-nums"
-                          >
-                            ×{g.huellas.length}
-                          </span>
-                        )}
-                        {bloqueado && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-rose-500 flex-shrink-0" title="Bloqueado" />
-                        )}
-                      </div>
-                      <div className="text-[11px] text-[var(--text-secondary)] truncate">
-                        {[
-                          [g.sistema, g.version_sistema].filter(Boolean).join(' '),
-                          g.navegador,
-                          g.email || 'Anónimo',
-                        ].filter(Boolean).join(' · ')}
-                        {penalizado && <span className="text-rose-400"> · cuenta baneada</span>}
+                  <React.Fragment key={log.id}>
+                    {nuevoDia && <div className="sg-dd">{dia}</div>}
+                    <div className="sg-ev">
+                      <span className="sg-pt" style={{ background: `${color}22`, color }}>{(log.module || '?').charAt(0).toUpperCase()}</span>
+                      <div className="sg-tx" style={{ minWidth: 0 }}>
+                        <b>{log.userEmail}</b> · {log.action}{' '}
+                        <span className="sg-badge" style={{ background: `${color}1f`, color }}>{log.module}</span>
+                        <span className="sg-tm">{horaDe(log.timestamp)}</span>
+                        {log.detail && <div className="sg-nota2" style={{ overflowWrap: 'anywhere' }}>{log.detail}</div>}
                       </div>
                     </div>
-
-                    {/* Cifras */}
-                    <div className="text-right flex-shrink-0 hidden sm:block">
-                      <div className="text-[13px] text-[var(--text-primary)] tabular-nums leading-none">{g.visitas}</div>
-                      <div className="text-[10px] text-[var(--text-secondary)] mt-0.5">{fechaCorta(g.ultima)}</div>
-                    </div>
-
-                    {/* Acciones: discretas hasta que se necesitan */}
-                    <div className="flex items-center gap-1 flex-shrink-0">
-                      <button
-                        onClick={() => setVisitanteDetalle(g.reciente)}
-                        title="Ver ficha"
-                        className="w-7 h-7 rounded-full flex items-center justify-center text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-base)] transition"
-                      >
-                        <Search className="w-3.5 h-3.5" />
-                      </button>
-                      {/* Disponible para TODOS los aparatos, tengan cuenta
-                          o no: se bloquea el equipo, y para eso no hace
-                          falta saber quién lo usa. */}
-                      {bloqueado ? (
-                        <button
-                          onClick={() => liberarAparato(g.huellas[0])}
-                          className="text-[10px] px-2 py-1 rounded-full border border-[var(--border-color)]/60 text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
-                        >
-                          Liberar
-                        </button>
-                      ) : (
-                        <button
-                          onClick={() => banearGrupo(g)}
-                          className="text-[10px] px-2 py-1 rounded-full border border-transparent text-[var(--text-secondary)] hover:text-rose-400 hover:border-rose-500/40 transition"
-                        >
-                          Banear
-                        </button>
-                      )}
-                    </div>
-                  </div>
+                  </React.Fragment>
                 );
               })}
+              <Paginador pagina={paginaBitacora} total={auditLog.length} porPagina={POR_PAGINA_BITACORA} onCambiar={setPaginaBitacora} />
+            </div>
+          )}
+        </>
+      )}
+
+      {/* =============== VISITANTES: directorio =============== */}
+      {seccion === 'visitantes' && (
+        <>
+          <div className="sg-row" style={{ justifyContent: 'space-between', alignItems: 'flex-end', gap: 12 }}>
+            <div className="sg-stats">
+              <div><b>{visitantesAgrupados.length}</b><span>Aparatos</span></div>
+              <div><b>{visitantesAgrupados.reduce((a, g) => a + g.visitas, 0)}</b><span>Visitas</span></div>
+              <div><b>{visitantesAgrupados.filter(g => g.email).length}</b><span>Identificados</span></div>
+            </div>
+            <label className="sg-buscar">
+              <Glifo n="lupa" />
+              <input value={buscarVisitante} onChange={e => setBuscarVisitante(e.target.value)} placeholder="Buscar" aria-label="Buscar visitante" />
+            </label>
           </div>
 
-          {gruposFiltrados.length > 10 && (
-            <div className="flex items-center justify-between text-[11px] text-[var(--text-secondary)]">
-              <span className="tabular-nums">
-                {(paginaVisitantes - 1) * 10 + 1}–{Math.min(paginaVisitantes * 10, gruposFiltrados.length)} de {gruposFiltrados.length}
-              </span>
-              <div className="flex gap-1">
-                <button
-                  onClick={() => setPaginaVisitantes(p => Math.max(1, p - 1))}
-                  disabled={paginaVisitantes === 1}
-                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-[var(--bg-base)] disabled:opacity-30 transition"
-                >
-                  ‹
-                </button>
-                <button
-                  onClick={() => setPaginaVisitantes(p =>
-                    Math.min(Math.ceil(gruposFiltrados.length / 10), p + 1))}
-                  disabled={paginaVisitantes >= Math.ceil(gruposFiltrados.length / 10)}
-                  className="w-7 h-7 rounded-full flex items-center justify-center hover:bg-[var(--bg-base)] disabled:opacity-30 transition"
-                >
-                  ›
-                </button>
-              </div>
+          {gruposFiltrados.length === 0 ? (
+            <Vacio g="dir" texto={visitantes.length === 0 ? 'Todavía no hay visitas registradas.' : 'Nada coincide con la búsqueda.'} />
+          ) : (
+            <div className="sg-card sg-dir">
+              <div className="sg-dh"><span>Aparato</span><span>Navegador</span><span>Frecuencia</span><span>Visitas</span><span /></div>
+              {gruposFiltrados
+                .slice((paginaVisitantes - 1) * 10, paginaVisitantes * 10)
+                .map((g: GrupoVisitante) => {
+                  const penalizado = !!g.email && emailsPenalizados.has(g.email.toLowerCase());
+                  const bloqueado = g.huellas.some(h => aparatos.some(a => a.device_uuid === h && !a.levantado_en));
+                  const nombre = g.dispositivo || g.tipo || 'Sin identificar';
+                  return (
+                    <div key={g.clave} className="sg-dr">
+                      <div className="sg-who">
+                        <span className="sg-mono2" style={{ background: colorModulo(g.clave) }}>{nombre.charAt(0).toUpperCase()}</span>
+                        <div style={{ minWidth: 0 }}>
+                          <div className="sg-nb">
+                            <span style={{ overflowWrap: 'anywhere' }}>{nombre}</span>
+                            {g.huellas.length > 1 && (
+                              <span title={`${g.huellas.length} identidades del mismo equipo`} style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>×{g.huellas.length}</span>
+                            )}
+                            {bloqueado && <span className="sg-badge" data-t="ba">Bloqueado</span>}
+                          </div>
+                          <div className="sg-s">
+                            {[[g.sistema, g.version_sistema].filter(Boolean).join(' '), g.email || 'Anónimo'].filter(Boolean).join(' · ')}
+                            {penalizado && <span style={{ color: 'var(--tv-danger)' }}> · cuenta baneada</span>}
+                          </div>
+                        </div>
+                      </div>
+                      <div className="sg-c2 sg-s">{g.navegador || '—'}</div>
+                      <div className="sg-c3" title="Visitas comparadas con el aparato que más visita">
+                        <div className="sg-frec"><i style={{ width: `${Math.max(6, Math.round((g.visitas / maxVisitas) * 100))}%` }} /></div>
+                      </div>
+                      <div className="sg-c4">
+                        <div className="sg-nv tabular-nums">{g.visitas}</div>
+                        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{fechaCorta(g.ultima)}</span>
+                      </div>
+                      <div className="sg-row" style={{ gap: 4, flexWrap: 'nowrap' }}>
+                        <button type="button" className="sg-ib" onClick={() => setVisitanteDetalle(g.reciente)} title="Ver ficha" aria-label="Ver ficha">
+                          <Glifo n="lupa" />
+                        </button>
+                        {bloqueado
+                          ? <Btn variant="ghost" className="sg-btn-sm" onClick={() => liberarAparato(g.huellas[0])}>Liberar</Btn>
+                          : <Btn variant="ghost" className="sg-btn-sm" onClick={() => banearGrupo(g)}>Banear</Btn>}
+                      </div>
+                    </div>
+                  );
+                })}
+              {gruposFiltrados.length > 10 && (
+                <Paginador pagina={paginaVisitantes} total={gruposFiltrados.length} porPagina={10} onCambiar={setPaginaVisitantes} />
+              )}
             </div>
           )}
 
-          {gruposFiltrados.length === 0 && (
-            <p className="text-center text-xs text-[var(--text-secondary)] py-10">
-              {visitantes.length === 0
-                ? 'Todavía no hay visitas registradas.'
-                : 'Nada coincide con la búsqueda.'}
-            </p>
-          )}
-
-          <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
+          <p className="sg-fino">
             Un renglón por aparato, no por visita. No se registra ubicación: a los clientes no se les pide GPS.
             {visitantesAgrupados.length < visitantes.length && (
-              <> Se agruparon {visitantes.length} identidades en {visitantesAgrupados.length} aparatos — un mismo
+              <> Se agruparon {visitantes.length} identidades en {visitantesAgrupados.length} aparatos: un mismo
               teléfono genera una identidad nueva cuando el navegador borra sus datos, y Safari lo hace a los siete
               días sin visitas. Al bloquear un renglón se bloquean todas las suyas.</>
             )}
           </p>
-        </div>
+        </>
       )}
 
+      {/* =============== PENALIZADOS: expedientes =============== */}
       {seccion === 'penalizados' && (
-        <div className="space-y-4">
-          <p className="text-xs text-[var(--text-secondary)] max-w-2xl leading-relaxed">
+        <>
+          <p className="sg-txt">
             El baneo total hace tres cosas a la vez: marca la cuenta, bloquea todas las IPs desde las que se le vio y
-            desactiva su perfil de cliente. Deja de poder entrar, ver el catálogo y comprar — la aplicación le muestra
-            una pantalla de acceso denegado.{' '}
-            <strong className="text-[var(--text-primary)]">Los pedidos y facturas anteriores no se tocan</strong>,
-            porque son parte de la contabilidad.
+            desactiva su perfil de cliente. Deja de poder entrar, ver el catálogo y comprar; la aplicación le muestra
+            una pantalla de acceso denegado. <strong>Los pedidos y facturas anteriores no se tocan</strong>, porque son
+            parte de la contabilidad.
           </p>
-
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[760px] text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)] uppercase text-[10px] tracking-wide">
-                    <th className="p-3">Cuenta</th>
-                    <th className="p-3">Motivo</th>
-                    <th className="p-3 text-center">IPs bloqueadas</th>
-                    <th className="p-3">Aplicado</th>
-                    <th className="p-3 text-center">Estado</th>
-                    <th className="p-3 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <PaginatedTbody
-                  items={penalizados}
-                  itemsPerPage={10}
-                  renderItem={(x: Penalizado) => {
-                    const vigente = !x.levantado_en;
-                    return (
-                      <tr key={x.email} className="border-b border-[var(--border-color)]/40 hover:bg-[var(--bg-base)]">
-                        <td className="p-3">
-                          <div className="font-bold text-[var(--text-primary)] truncate max-w-[200px]">{x.email}</div>
-                          {x.nombre && <div className="text-[10px] text-[var(--text-secondary)]">{x.nombre}</div>}
-                        </td>
-                        <td className="p-3 text-[var(--text-primary)] max-w-[220px]">
-                          <div className="line-clamp-2">{x.motivo || '—'}</div>
-                          {x.bloquear_user_agent && (
-                            <div className="text-[9px] uppercase font-bold text-amber-500 mt-1">+ navegador bloqueado</div>
-                          )}
-                        </td>
-                        <td className="p-3 text-center font-mono text-[var(--text-primary)]">
-                          {x.ips_bloqueadas?.length || 0}
-                        </td>
-                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">
-                          <div>{fechaCorta(x.creado_en)}</div>
-                          {x.creado_por && <div className="text-[10px] truncate max-w-[150px]">{x.creado_por}</div>}
-                        </td>
-                        <td className="p-3 text-center">
-                          {vigente ? (
-                            <span className="text-[9px] uppercase font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded">
-                              Vigente
-                            </span>
-                          ) : (
-                            <span className="text-[9px] uppercase font-bold border border-[var(--border-color)]/70 text-[var(--text-secondary)] px-2 py-0.5 rounded">
-                              Levantado
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3 text-right">
-                          {vigente ? (
-                            <button
-                              onClick={() => levantarBaneo(x.email)}
-                              className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-primary)] hover:bg-[var(--bg-surface)] inline-flex items-center gap-1"
-                            >
-                              <Unlock className="w-3 h-3" /> Levantar
-                            </button>
-                          ) : (
-                            <span className="text-[10px] text-[var(--text-secondary)]">
-                              {fechaCorta(x.levantado_en)}
-                            </span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  }}
-                />
-              </table>
+          {penalizados.length === 0 ? (
+            <Vacio g="exp" texto="No hay ninguna cuenta penalizada. El baneo total se aplica desde la lista de visitantes o desde la ficha del cliente." />
+          ) : (
+            <div style={{ display: 'grid', gap: 14 }}>
+              {penalizados.map(x => {
+                const vigente = !x.levantado_en;
+                return (
+                  <div key={x.email} className={`sg-exp ${vigente ? '' : 'sg-old'}`} data-t={vigente ? 'Expediente · vigente' : 'Expediente · levantado'}>
+                    <span className="sg-sello2">{vigente ? 'Vigente' : 'Levantado'}</span>
+                    <h5 style={{ overflowWrap: 'anywhere', paddingRight: 96 }}>{x.email}</h5>
+                    {x.nombre && <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{x.nombre}</div>}
+                    <p style={{ margin: '8px 0 4px', fontSize: 12.5 }}><b>Motivo:</b> {x.motivo || '—'}</p>
+                    <div className="sg-row">
+                      {x.bloquear_user_agent && <span className="sg-badge" data-t="wa">+ navegador bloqueado</span>}
+                      <span className="sg-chip">{x.ips_bloqueadas?.length || 0} IP{(x.ips_bloqueadas?.length || 0) === 1 ? '' : 's'} bloqueada{(x.ips_bloqueadas?.length || 0) === 1 ? '' : 's'}</span>
+                    </div>
+                    <div className="sg-pie">
+                      <span>
+                        Aplicado el {fechaCorta(x.creado_en)}{x.creado_por ? ` · ${x.creado_por}` : ''}
+                        {!vigente && ` · Levantado el ${fechaCorta(x.levantado_en)}`}
+                      </span>
+                      {vigente && <Btn className="sg-btn-sm" onClick={() => levantarBaneo(x.email)}>Levantar</Btn>}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
-
-          {penalizados.length === 0 && (
-            <p className="text-center text-xs text-[var(--text-secondary)] py-8">
-              No hay ninguna cuenta penalizada. El baneo total se aplica desde la lista de visitantes o desde la ficha
-              del cliente.
-            </p>
           )}
-        </div>
+        </>
       )}
 
-      {/* =============== APARATOS BLOQUEADOS =============== */}
+      {/* =============== APARATOS BLOQUEADOS: etiquetas =============== */}
       {seccion === 'aparatos' && (
-        <div className="space-y-4">
-          <p className="text-xs text-[var(--text-secondary)] max-w-2xl leading-relaxed">
-            Esto <strong className="text-[var(--text-primary)]">sustituye al viejo bloqueo por dirección IP</strong>.
-            Una IP la comparte un edificio entero, un café o toda una red móvil: bloquearla castigaba a gente que no
-            tenía nada que ver, y a quien se quería bloquear le bastaba apagar el WiFi para volver a entrar. El
-            identificador de aparato no cambia al cambiar de red, así que el bloqueo sigue a la persona del WiFi a los
-            datos móviles.
-          </p>
-
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-4 space-y-2">
-            <h5 className="text-[10px] uppercase font-bold text-[var(--text-secondary)]">Bloquear un aparato a mano</h5>
-            <div className="flex flex-wrap gap-2">
+        <>
+          <div className="sg-callout">
+            <span className="sg-nodo"><Glifo n="info" /></span>
+            <span>
+              Esto <b>sustituye al viejo bloqueo por dirección IP</b>. Una IP la comparte un edificio entero, un café o
+              toda una red móvil: bloquearla castigaba a gente que no tenía nada que ver, y a quien se quería bloquear le
+              bastaba apagar el WiFi para volver a entrar. El identificador de aparato no cambia al cambiar de red, así
+              que el bloqueo sigue a la persona del WiFi a los datos móviles.
+            </span>
+          </div>
+          <div className="sg-card">
+            <h4>Bloquear un aparato a mano</h4>
+            <div className="sg-pad sg-row" style={{ gap: 8 }}>
               <input
                 value={nuevoAparato}
                 onChange={e => setNuevoAparato(e.target.value)}
                 placeholder="Identificador del aparato (columna Aparato en Visitantes)"
-                className="flex-1 min-w-[240px] bg-[var(--bg-base)] border border-[var(--border-color)]/80 rounded-xl px-3 py-2 text-xs text-[var(--text-primary)] font-mono focus:outline-none focus:border-[var(--brand-gold-mid)]"
+                aria-label="Identificador del aparato"
+                className="sg-input sg-mono"
               />
-              <button
-                onClick={() => banearAparato(nuevoAparato)}
-                className="bg-rose-600 hover:bg-rose-700 text-white text-xs font-bold px-4 py-2 rounded-xl flex items-center gap-1.5"
-              >
-                <Ban className="w-3.5 h-3.5" /> Bloquear
-              </button>
+              <Btn variant="danger" onClick={() => banearAparato(nuevoAparato)}>Bloquear</Btn>
             </div>
           </div>
-
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
-            <div className="overflow-x-auto">
-              <table className="w-full min-w-[700px] text-left text-xs border-collapse">
-                <thead>
-                  <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)] uppercase text-[10px] tracking-wide">
-                    <th className="p-3">Aparato</th>
-                    <th className="p-3">Motivo</th>
-                    <th className="p-3">Cuenta</th>
-                    <th className="p-3">Bloqueado</th>
-                    <th className="p-3 text-center">Estado</th>
-                    <th className="p-3 text-right">Acciones</th>
-                  </tr>
-                </thead>
-                <PaginatedTbody
-                  items={aparatos}
-                  itemsPerPage={10}
-                  renderItem={(a: AparatoBaneado) => {
-                    const vigente = !a.levantado_en;
-                    return (
-                      <tr key={a.device_uuid} className="border-b border-[var(--border-color)]/40 hover:bg-[var(--bg-base)]">
-                        <td className="p-3 font-mono text-[10px] text-[var(--text-primary)] break-all max-w-[200px]">
-                          {a.device_uuid}
-                        </td>
-                        <td className="p-3 text-[var(--text-primary)] max-w-[200px]">
-                          <div className="line-clamp-2">{a.motivo || '—'}</div>
-                        </td>
-                        <td className="p-3 text-[var(--text-secondary)] truncate max-w-[160px]">{a.email || 'Sin cuenta'}</td>
-                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">
-                          <div>{fechaCorta(a.creado_en)}</div>
-                          {a.creado_por && <div className="text-[10px] truncate max-w-[140px]">{a.creado_por}</div>}
-                        </td>
-                        <td className="p-3 text-center">
-                          {vigente ? (
-                            <span className="text-[9px] uppercase font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30 px-2 py-0.5 rounded">
-                              Bloqueado
-                            </span>
-                          ) : (
-                            <span className="text-[9px] uppercase font-bold border border-[var(--border-color)]/70 text-[var(--text-secondary)] px-2 py-0.5 rounded">
-                              Liberado
-                            </span>
-                          )}
-                        </td>
-                        <td className="p-3 text-right">
-                          {vigente ? (
-                            <button
-                              onClick={() => liberarAparato(a.device_uuid)}
-                              className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-primary)] hover:bg-[var(--bg-surface)] inline-flex items-center gap-1"
-                            >
-                              <Unlock className="w-3 h-3" /> Liberar
-                            </button>
-                          ) : (
-                            <span className="text-[10px] text-[var(--text-secondary)]">{fechaCorta(a.levantado_en)}</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  }}
-                />
-              </table>
+          {aparatos.length === 0 ? (
+            <Vacio g="etq" texto="No hay ningún aparato bloqueado." />
+          ) : (
+            <div className="sg-etq">
+              {aparatos.map(a => {
+                const vigente = !a.levantado_en;
+                return (
+                  <div key={a.device_uuid} className={`sg-et ${vigente ? 'sg-on' : ''}`} style={vigente ? undefined : { opacity: 0.75 }}>
+                    <div className="sg-code" style={{ overflowWrap: 'anywhere' }}>{a.device_uuid}</div>
+                    <div className="sg-row" style={{ marginTop: 6 }}>
+                      <span className="sg-badge" data-t={vigente ? 'ba' : undefined}>{vigente ? 'Bloqueado' : 'Liberado'}</span>
+                    </div>
+                    <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 6 }}>Motivo: {a.motivo || '—'}</div>
+                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
+                      Cuenta: {a.email || 'Sin cuenta'} · {fechaCorta(a.creado_en)}{a.creado_por ? ` · ${a.creado_por}` : ''}
+                      {!vigente && ` · liberado el ${fechaCorta(a.levantado_en)}`}
+                    </div>
+                    {vigente && (
+                      <div className="sg-row">
+                        <Btn className="sg-btn-sm sg-btn-ok" onClick={() => liberarAparato(a.device_uuid)}>Liberar</Btn>
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
             </div>
-          </div>
-
-          {aparatos.length === 0 && (
-            <p className="text-center text-xs text-[var(--text-secondary)] py-8">
-              No hay ningún aparato bloqueado.
-            </p>
           )}
-
-          <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
-            Hay que ser honesto con el alcance: la marca del aparato vive en el navegador, y quien borre los datos del
-            navegador aparecerá como equipo nuevo. Por eso esta capa evita que el bloqueado pueda siquiera{' '}
-            <strong className="text-[var(--text-primary)]">ver</strong> la página, mientras la cerradura de verdad —la
-            que impide entrar a la cuenta y leer datos— es el baneo de cuenta, que no tiene nada que borrar.
+          <p className="sg-fino">
+            Alcance honesto: la marca del aparato vive en el navegador, y quien borre sus datos aparecerá como equipo
+            nuevo. Por eso esta capa evita que el bloqueado pueda siquiera <strong style={{ color: 'var(--text-primary)' }}>ver</strong> la
+            página, mientras la cerradura de verdad (la que impide entrar a la cuenta y leer datos) es el baneo de cuenta.
           </p>
-        </div>
+        </>
       )}
 
-      {/* =============== MI ACCESO BIOMÉTRICO =============== */}
+      {/* =============== BIOMETRÍA: la bóveda =============== */}
       {seccion === 'biometria' && (
-        <div className="space-y-4">
+        <>
+          <div className="sg-card sg-boveda">
+            <div className="sg-dialb"><div className="sg-disco"><Glifo n="huella" /></div></div>
+            <div className="sg-bt">
+              <div>
+                <span className="sg-k">Acceso biométrico de este aparato</span>
+                <b style={{ fontSize: 18, display: 'block' }}>Face ID, Touch ID o huella</b>
+                <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                  Para entrar sin escribir la contraseña. El PIN o patrón de abajo queda como respaldo cuando el lector falla.
+                </span>
+              </div>
+              {/* Se muestra si hay lector O si ya se activó en este teléfono:
+                  un chequeo de hardware que falla un instante no debe
+                  esconder los controles de algo que ya está activado. */}
+              {(hayBiometria || (esApk && huellaActivada)) ? (
+                <div className="sg-row">
+                  {huellaActivada && <span className="sg-badge" data-t="ok"><Glifo n="ok" /> Activado en este aparato</span>}
+                  <Btn variant="primary" onClick={activarBiometria} disabled={registrandoLlave}>
+                    {registrandoLlave ? 'Esperando al aparato…' : huellaActivada ? 'Volver a activar' : 'Activar en este aparato'}
+                  </Btn>
+                  {esApk && huellaActivada && (
+                    <Btn
+                      onClick={async () => {
+                        await desactivarBiometriaNativa();
+                        setHuellaActivada(false);
+                        toast.success('Acceso con huella retirado de este teléfono.');
+                      }}
+                    >
+                      Quitar de este teléfono
+                    </Btn>
+                  )}
+                </div>
+              ) : (
+                <p className="sg-txt">
+                  Este aparato no ofrece acceso biométrico. Ocurre cuando el equipo no tiene lector, cuando el sitio no se
+                  abrió por HTTPS, o dentro de la APK si el contenido no se sirve desde el dominio real.
+                </p>
+              )}
+            </div>
+          </div>
+
           {/* PIN o patrón: alternativa a la huella, y el único método en
               aparatos sin lector (tablets) o en el navegador. */}
           <ConfigurarDesbloqueoLocal email={currentUserEmail || ''} />
 
-          <p className="text-xs text-[var(--text-secondary)] max-w-2xl leading-relaxed">
-            Face ID, Touch ID o huella para entrar sin escribir la contraseña.{' '}
-            <strong className="text-[var(--text-primary)]">Aquí no se guarda ninguna cara ni ninguna huella</strong>: el
-            teléfono no se las entrega al navegador. Lo que se guarda es una llave pública que solo sirve para
-            comprobar firmas, y la llave privada nunca sale del chip seguro del aparato.
-          </p>
-
-          <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl p-4 space-y-3">
-            {/* FALLO CORREGIDO: esto se gateaba SOLO por `hayBiometria`, un
-                chequeo de hardware en vivo (`isAvailable()`) que en algunos
-                sensores en pantalla puede fallar de forma transitoria. Con
-                eso, un teléfono que YA tenía la huella activada perdía sus
-                controles —incluido "Quitar de este teléfono"— y mostraba el
-                mensaje de "este aparato no ofrece acceso biométrico", que es
-                justo el "me hace reconfigurar todo de cero" reportado: no
-                era que se hubiera desactivado, era que la pantalla dejaba de
-                mostrar que SÍ estaba activada. `huellaActivada` no depende
-                de ningún chequeo de hardware —es la marca guardada—, así que
-                si ya se activó una vez en este teléfono, los controles se
-                quedan visibles sin importar lo que responda el chequeo en
-                vivo en este instante. */}
-            {(hayBiometria || (esApk && huellaActivada)) ? (
-              <div className="flex flex-wrap gap-2">
-                <button
-                  onClick={activarBiometria}
-                  disabled={registrandoLlave}
-                  className="bg-sky-500 hover:bg-sky-600 text-white text-xs font-bold px-4 py-2.5 rounded-xl flex items-center gap-2 disabled:opacity-60"
-                >
-                  <Fingerprint className="w-4 h-4" />
-                  {registrandoLlave
-                    ? 'Esperando al aparato…'
-                    : huellaActivada ? 'Volver a activar' : 'Activar en este aparato'}
-                </button>
-                {esApk && huellaActivada && (
-                  <button
-                    onClick={async () => {
-                      await desactivarBiometriaNativa();
-                      setHuellaActivada(false);
-                      toast.success('Acceso con huella retirado de este teléfono.');
-                    }}
-                    className="border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-[var(--text-primary)] text-xs font-bold px-4 py-2.5 rounded-xl"
-                  >
-                    Quitar de este teléfono
-                  </button>
-                )}
-              </div>
-            ) : (
-              <p className="text-xs text-[var(--text-secondary)] leading-relaxed">
-                Este aparato no ofrece acceso biométrico. Ocurre cuando el equipo no tiene lector, cuando el sitio no
-                se abrió por HTTPS, o dentro de la APK si el contenido no se sirve desde el dominio real.
-              </p>
-            )}
+          <div className="sg-card">
+            <h4>Cómo funciona</h4>
+            <div className="sg-pad sg-pasos">
+              <div data-n="1"><span><b>Aquí no se guarda ninguna cara ni ninguna huella.</b> El teléfono no se las entrega al navegador; se guarda una llave pública que solo sirve para comprobar firmas.</span></div>
+              <div data-n="2"><span>La llave privada <b>nunca sale del chip seguro</b> del aparato.</span></div>
+              <div data-n="3"><span>Las llaves de esta lista son solo suyas. Ni siquiera el dueño puede ver ni usar las de otra cuenta.</span></div>
+            </div>
           </div>
 
           {llaves.length > 0 && (
-            <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-2xl overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full min-w-[560px] text-left text-xs border-collapse">
-                  <thead>
-                    <tr className="border-b border-[var(--border-color)]/80 bg-[var(--bg-base)] text-[var(--text-secondary)] uppercase text-[10px] tracking-wide">
-                      <th className="p-3">Aparato</th>
-                      <th className="p-3">Activado</th>
-                      <th className="p-3">Último uso</th>
-                      <th className="p-3 text-right">Acciones</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {llaves.map(l => (
-                      <tr key={l.id} className="border-b border-[var(--border-color)]/40 hover:bg-[var(--bg-base)]">
-                        <td className="p-3 text-[var(--text-primary)] max-w-[240px]">
-                          <div className="truncate">{l.etiqueta || 'Aparato sin nombre'}</div>
-                        </td>
-                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">{fechaCorta(l.creado_en)}</td>
-                        <td className="p-3 text-[11px] text-[var(--text-secondary)]">
-                          {l.ultimo_uso ? fechaCorta(l.ultimo_uso) : 'Nunca'}
-                        </td>
-                        <td className="p-3 text-right">
-                          <button
-                            onClick={() => quitarLlave(l.id)}
-                            className="text-[10px] font-bold uppercase px-2 py-1 rounded-lg border border-[var(--border-color)]/70 text-[var(--text-secondary)] hover:text-rose-400 hover:border-rose-500/40 inline-flex items-center gap-1"
-                          >
-                            <Trash2 className="w-3 h-3" /> Quitar
-                          </button>
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+            <div className="sg-card">
+              <h4>Llaves registradas <small>{llaves.length}</small></h4>
+              {llaves.map(l => (
+                <div key={l.id} className="sg-llave">
+                  <span className="sg-ll"><Glifo n="huella" /></span>
+                  <div style={{ flex: 1, minWidth: 0 }}>
+                    <b style={{ overflowWrap: 'anywhere' }}>{l.etiqueta || 'Aparato sin nombre'}</b>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      Activado {fechaCorta(l.creado_en)} · Último uso: {l.ultimo_uso ? fechaCorta(l.ultimo_uso) : 'nunca'}
+                    </div>
+                  </div>
+                  <Btn className="sg-btn-sm sg-btn-ba" onClick={() => quitarLlave(l.id)}>Quitar</Btn>
+                </div>
+              ))}
             </div>
           )}
 
           {esApk && (
-            <div className="bg-[var(--bg-base)] border border-[var(--border-color)]/60 rounded-2xl p-4">
-              <h5 className="text-[11px] uppercase font-bold text-[var(--text-secondary)] mb-2">
-                En la aplicación funciona distinto
-              </h5>
-              <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
-                El navegador interno de Android no soporta el sistema de llaves que usa la web, así que aquí se usa el
-                lector del propio teléfono: la huella libera una sesión guardada en el almacén cifrado del sistema.
-              </p>
-              <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed mt-2">
-                Es lo que hacen las aplicaciones de banco, y es seguro, pero conviene saber la diferencia: en la web se
-                guarda una llave que <strong className="text-[var(--text-primary)]">solo sirve para firmar</strong> y no
-                funcionaría en otro aparato; aquí se guarda un pase. Sacarlo del almacén cifrado exige un teléfono
-                alterado, pero no es imposible.
-              </p>
+            <div className="sg-callout">
+              <span className="sg-nodo"><Glifo n="info" /></span>
+              <span>
+                <b>En la aplicación funciona distinto.</b> El navegador interno de Android no soporta el sistema de llaves
+                que usa la web, así que aquí se usa el lector del propio teléfono: la huella libera una sesión guardada en
+                el almacén cifrado del sistema. Es lo que hacen las aplicaciones de banco y es seguro, pero en la web se
+                guarda una llave que <b>solo sirve para firmar</b>; aquí se guarda un pase. Sacarlo del almacén cifrado
+                exige un teléfono alterado, pero no es imposible.
+              </span>
             </div>
           )}
 
-          <div className="bg-amber-500/10 border border-amber-500/30 rounded-2xl p-4">
-            <h5 className="text-[11px] uppercase font-bold text-amber-500 mb-2">Un límite que conviene tener claro</h5>
-            <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed">
-              Si en un mismo teléfono hay <strong className="text-[var(--text-primary)]">dos caras registradas en Face
-              ID</strong> (o dos huellas), las dos desbloquean ese teléfono, y por lo tanto las dos pueden usar las
-              llaves que guarda. Eso lo decide iOS o Android, no esta aplicación, y no hay forma de impedirlo desde
-              acá.
-            </p>
-            <p className="text-[11px] text-[var(--text-secondary)] leading-relaxed mt-2">
-              O sea: el aislamiento entre cuentas es total{' '}
-              <strong className="text-[var(--text-primary)]">entre aparatos distintos</strong>. Si dos personas van a
-              tener cuentas separadas de verdad, cada una debe activar su biometría en su propio teléfono y no enrolar
-              su cara en el del otro.
-            </p>
+          <div className="sg-callout" data-t="wa">
+            <span className="sg-nodo"><Glifo n="alerta" /></span>
+            <span>
+              <b>Un límite que conviene tener claro.</b> Si en un mismo teléfono hay dos caras registradas en Face ID (o
+              dos huellas), las dos desbloquean ese teléfono y pueden usar las llaves que guarda. Eso lo decide iOS o
+              Android, no esta aplicación. El aislamiento entre cuentas es total <b>entre aparatos distintos</b>: cada
+              persona debe activar su biometría en su propio teléfono.
+            </span>
           </div>
-
-          <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed">
-            Las llaves de esta lista son solo suyas. Ni siquiera el dueño puede ver ni usar las de otra cuenta: la
-            llave privada vive en el aparato de esa persona y aquí únicamente queda la parte pública, que no sirve para
-            entrar.
-          </p>
-        </div>
+        </>
       )}
+
+          </div>
+        </div>
+      </div>
 
       {/* =============== DETALLE DE UN VISITANTE =============== */}
       {visitanteDetalle && (
