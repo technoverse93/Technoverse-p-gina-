@@ -1141,3 +1141,87 @@ input, select, textarea { max-width: 100%; }
 
 /* ---- Ficha de producto: la foto va en una baldosa tintada ---- */
 .tv-ficha-foto { background: var(--tile); }
+
+/* ==========================================================================
+   CRISTAL LIGERO · RED DE COLOR (un solo acento)
+   --------------------------------------------------------------------------
+   Restos de temas viejos (azul/celeste, esmeralda, pizarra) repartidos por
+   los módulos se reconducen a los tokens del sistema: azules e índigos al
+   ACENTO turquesa, verdes al OK, grises a los neutros. Los fondos de modal
+   (scrims translúcidos oscuros) se dejan intactos. Misma técnica que ya se
+   usaba para ámbar y rosa, extendida al resto de familias.
+   Generado desde las clases realmente presentes en el código.
+   ========================================================================== */
+#admin-panel-root .bg-blue-100, #store-page-root .bg-blue-100 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-blue-50, #store-page-root .bg-blue-50 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-blue-500, #store-page-root .bg-blue-500 { background-color: var(--accent) !important; }
+#admin-panel-root .bg-blue-600, #store-page-root .bg-blue-600 { background-color: var(--accent) !important; }
+#admin-panel-root .bg-emerald-400, #store-page-root .bg-emerald-400 { background-color: var(--ok) !important; }
+#admin-panel-root .bg-emerald-50, #store-page-root .bg-emerald-50 { background-color: var(--ok-soft) !important; }
+#admin-panel-root .bg-emerald-500, #store-page-root .bg-emerald-500 { background-color: var(--ok) !important; }
+#admin-panel-root .bg-emerald-500\/15, #store-page-root .bg-emerald-500\/15 { background-color: var(--ok-soft) !important; }
+#admin-panel-root .bg-emerald-950, #store-page-root .bg-emerald-950 { background-color: var(--ok) !important; }
+#admin-panel-root .bg-indigo-950\/40, #store-page-root .bg-indigo-950\/40 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-purple-50, #store-page-root .bg-purple-50 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-purple-500\/20, #store-page-root .bg-purple-500\/20 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-purple-600, #store-page-root .bg-purple-600 { background-color: var(--accent) !important; }
+#admin-panel-root .bg-sky-50, #store-page-root .bg-sky-50 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-sky-500, #store-page-root .bg-sky-500 { background-color: var(--accent) !important; }
+#admin-panel-root .bg-sky-600, #store-page-root .bg-sky-600 { background-color: var(--accent) !important; }
+#admin-panel-root .bg-slate-200, #store-page-root .bg-slate-200 { background-color: var(--bg-sunken) !important; }
+#admin-panel-root .bg-slate-400, #store-page-root .bg-slate-400 { background-color: var(--bg-sunken) !important; }
+#admin-panel-root .border-blue-100, #store-page-root .border-blue-100 { border-color: var(--accent) !important; }
+#admin-panel-root .border-blue-500, #store-page-root .border-blue-500 { border-color: var(--accent) !important; }
+#admin-panel-root .border-emerald-200, #store-page-root .border-emerald-200 { border-color: var(--ok) !important; }
+#admin-panel-root .border-emerald-500, #store-page-root .border-emerald-500 { border-color: var(--ok) !important; }
+#admin-panel-root .border-emerald-500\/40, #store-page-root .border-emerald-500\/40 { border-color: var(--ok) !important; }
+#admin-panel-root .border-emerald-500\/50, #store-page-root .border-emerald-500\/50 { border-color: var(--ok) !important; }
+#admin-panel-root .border-indigo-500\/30, #store-page-root .border-indigo-500\/30 { border-color: var(--accent) !important; }
+#admin-panel-root .border-purple-500, #store-page-root .border-purple-500 { border-color: var(--accent) !important; }
+#admin-panel-root .border-purple-500\/30, #store-page-root .border-purple-500\/30 { border-color: var(--accent) !important; }
+#admin-panel-root .border-sky-100, #store-page-root .border-sky-100 { border-color: var(--accent) !important; }
+#admin-panel-root .border-sky-200, #store-page-root .border-sky-200 { border-color: var(--accent) !important; }
+#admin-panel-root .border-sky-500, #store-page-root .border-sky-500 { border-color: var(--accent) !important; }
+#admin-panel-root .border-sky-500\/40, #store-page-root .border-sky-500\/40 { border-color: var(--accent) !important; }
+#admin-panel-root .border-slate-50, #store-page-root .border-slate-50 { border-color: var(--border-color) !important; }
+#admin-panel-root .disabled\:bg-slate-200:disabled, #store-page-root .disabled\:bg-slate-200:disabled { background-color: var(--bg-sunken) !important; }
+#admin-panel-root .file\:bg-sky-500::file-selector-button, #store-page-root .file\:bg-sky-500::file-selector-button { background-color: var(--accent) !important; }
+#admin-panel-root .file\:text-sky-400::file-selector-button, #store-page-root .file\:text-sky-400::file-selector-button { color: var(--accent) !important; }
+#admin-panel-root .focus\:border-blue-500:focus, #store-page-root .focus\:border-blue-500:focus { border-color: var(--accent) !important; }
+#admin-panel-root .focus\:border-emerald-500:focus, #store-page-root .focus\:border-emerald-500:focus { border-color: var(--ok) !important; }
+#admin-panel-root .focus\:border-sky-500:focus, #store-page-root .focus\:border-sky-500:focus { border-color: var(--accent) !important; }
+#admin-panel-root .focus\:ring-blue-500:focus, #store-page-root .focus\:ring-blue-500:focus { --tw-ring-color: var(--accent) !important; }
+#admin-panel-root .focus\:ring-emerald-500:focus, #store-page-root .focus\:ring-emerald-500:focus { --tw-ring-color: var(--ok) !important; }
+#admin-panel-root .hover\:bg-blue-50:hover, #store-page-root .hover\:bg-blue-50:hover { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .hover\:bg-emerald-500\/25:hover, #store-page-root .hover\:bg-emerald-500\/25:hover { background-color: var(--ok-soft) !important; }
+#admin-panel-root .hover\:bg-emerald-600:hover, #store-page-root .hover\:bg-emerald-600:hover { background-color: var(--ok) !important; }
+#admin-panel-root .hover\:bg-purple-100:hover, #store-page-root .hover\:bg-purple-100:hover { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .hover\:bg-purple-500:hover, #store-page-root .hover\:bg-purple-500:hover { background-color: var(--accent) !important; }
+#admin-panel-root .hover\:bg-sky-500:hover, #store-page-root .hover\:bg-sky-500:hover { background-color: var(--accent) !important; }
+#admin-panel-root .hover\:bg-sky-600:hover, #store-page-root .hover\:bg-sky-600:hover { background-color: var(--accent) !important; }
+#admin-panel-root .hover\:bg-sky-700:hover, #store-page-root .hover\:bg-sky-700:hover { background-color: var(--accent) !important; }
+#admin-panel-root .hover\:bg-slate-200:hover, #store-page-root .hover\:bg-slate-200:hover { background-color: var(--bg-sunken) !important; }
+#admin-panel-root .hover\:bg-slate-300:hover, #store-page-root .hover\:bg-slate-300:hover { background-color: var(--bg-sunken) !important; }
+#admin-panel-root .hover\:border-emerald-500:hover, #store-page-root .hover\:border-emerald-500:hover { border-color: var(--ok) !important; }
+#admin-panel-root .hover\:border-sky-500:hover, #store-page-root .hover\:border-sky-500:hover { border-color: var(--accent) !important; }
+#admin-panel-root .hover\:file\:bg-sky-500:hover::file-selector-button, #store-page-root .hover\:file\:bg-sky-500:hover::file-selector-button { background-color: var(--accent) !important; }
+#admin-panel-root .hover\:text-blue-600:hover, #store-page-root .hover\:text-blue-600:hover { color: var(--accent) !important; }
+#admin-panel-root .hover\:text-blue-800:hover, #store-page-root .hover\:text-blue-800:hover { color: var(--accent) !important; }
+#admin-panel-root .hover\:text-purple-300:hover, #store-page-root .hover\:text-purple-300:hover { color: var(--accent) !important; }
+#admin-panel-root .hover\:text-sky-300:hover, #store-page-root .hover\:text-sky-300:hover { color: var(--accent) !important; }
+#admin-panel-root .text-blue-500, #store-page-root .text-blue-500 { color: var(--accent) !important; }
+#admin-panel-root .text-blue-600, #store-page-root .text-blue-600 { color: var(--accent) !important; }
+#admin-panel-root .text-blue-700, #store-page-root .text-blue-700 { color: var(--accent) !important; }
+#admin-panel-root .text-emerald-400, #store-page-root .text-emerald-400 { color: var(--ok) !important; }
+#admin-panel-root .text-emerald-500, #store-page-root .text-emerald-500 { color: var(--ok) !important; }
+#admin-panel-root .text-emerald-600, #store-page-root .text-emerald-600 { color: var(--ok) !important; }
+#admin-panel-root .text-indigo-300, #store-page-root .text-indigo-300 { color: var(--accent) !important; }
+#admin-panel-root .text-indigo-400, #store-page-root .text-indigo-400 { color: var(--accent) !important; }
+#admin-panel-root .text-purple-400, #store-page-root .text-purple-400 { color: var(--accent) !important; }
+#admin-panel-root .text-purple-600, #store-page-root .text-purple-600 { color: var(--accent) !important; }
+#admin-panel-root .text-sky-300, #store-page-root .text-sky-300 { color: var(--accent) !important; }
+#admin-panel-root .text-sky-400, #store-page-root .text-sky-400 { color: var(--accent) !important; }
+#admin-panel-root .text-sky-500, #store-page-root .text-sky-500 { color: var(--accent) !important; }
+#admin-panel-root .text-sky-600, #store-page-root .text-sky-600 { color: var(--accent) !important; }
+#admin-panel-root .text-slate-950, #store-page-root .text-slate-950 { color: var(--text-primary) !important; }
+#admin-panel-root .to-blue-600, #store-page-root .to-blue-600 { --tw-gradient-to: var(--accent) !important; }
