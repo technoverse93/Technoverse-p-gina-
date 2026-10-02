@@ -92,7 +92,11 @@
   --tv-warn: #9A5B14;
   --tv-warn-soft: rgba(154, 91, 20, 0.12);
 
-  background: var(--tv-canvas);
+  /* Cristal Ligero: el panel comparte el degradado estático de toda la app
+     (definido en index.css), con el color base de respaldo debajo. */
+  background-color: var(--bg-base);
+  background-image: var(--app-bg);
+  background-attachment: fixed;
 }
 
 /* Los tres colores de estado, en tema oscuro.
@@ -183,8 +187,14 @@
   min-height: var(--tv-regleta-h);
   flex-shrink: 0;
   padding: 0 8px;
-  background: var(--tv-panel);
-  border-bottom: 1px solid var(--tv-hairline);
+  /* Cristal Ligero: la barra de pestañas es la capa flotante de vidrio.
+     Está POR ENCIMA del scroll (no lo tapa), así que el desenfoque solo ve
+     el degradado estático del fondo y no se repinta al desplazar: barato
+     incluso en gama baja. */
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  border-bottom: 1px solid var(--glass-border);
   /* En teléfono las acciones de la pantalla bajan a su propia línea (ver
      más abajo): la regleta tiene que poder crecer para alojarlas. */
   flex-wrap: wrap;
@@ -302,22 +312,25 @@
   flex-shrink: 0;
   height: 28px;
   max-width: 190px;
-  padding-left: 9px;
-  padding-right: 4px;
-  border-radius: var(--tv-radius-sm);
+  padding-left: 11px;
+  padding-right: 6px;
+  /* Cristal Ligero: las pestañas son cápsulas; la activa es una "gota" de
+     vidrio clara que se desliza bajo el dedo. */
+  border-radius: var(--tv-radius-pill);
   border: 1px solid transparent;
   background: transparent;
   color: var(--text-secondary);
   scroll-snap-align: start;
-  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease;
+  transition: background 0.15s ease, color 0.15s ease, border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
-.tv-tab:hover { background: var(--bg-sunken); color: var(--text-primary); }
+.tv-tab:hover { background: rgba(var(--accent-rgb), 0.08); color: var(--text-primary); }
 
 .tv-tab[data-activa] {
-  background: var(--tv-accent-soft);
-  border-color: var(--tv-accent-line);
+  background: var(--glass-strong);
+  border-color: var(--glass-border);
   color: var(--tv-accent);
+  box-shadow: 0 2px 8px rgba(30, 70, 80, 0.14);
 }
 
 .tv-tab-btn {
@@ -626,7 +639,7 @@
   justify-content: center;
   width: 36px;
   height: 36px;
-  border-radius: var(--tv-radius-sm);
+  border-radius: var(--tv-radius-pill);
   color: var(--text-secondary);
   flex-shrink: 0;
   cursor: pointer;

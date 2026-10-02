@@ -65,22 +65,22 @@
        después naranja, y ahora el verde botella del diseño aprobado.
        `-dark` tiene que ser más oscuro que `-mid` porque varios botones lo
        usan como color de hover. */
-    --brand-gold-dark: #0A5540;
-    --brand-gold-mid: #0E6B4F;
-    --brand-gold-light: #3FA07C;
-    --brand-gold-rgb: 14, 107, 79;
-    --gold-soft: #E8F5EF;
-    --gold-line: #C4E3D5;
+    --brand-gold-dark: #0A5862;
+    --brand-gold-mid: #0C6C78;
+    --brand-gold-light: #3FA0AD;
+    --brand-gold-rgb: 12, 108, 120;
+    --gold-soft: #E2F0F2;
+    --gold-line: #BEDEE2;
 
     /* Acento funcional: lo que pinta botones, focos y estados activos.
        Verde botella. Se escoge un tono profundo a propósito: sobre fondo
        claro un verde vivo no alcanza contraste de lectura. Este da 6,5:1
        contra blanco, así que sirve tanto de fondo de botón con tinta blanca
        como de color de texto. */
-    --accent: #0E6B4F;
-    --accent-hover: #0A5540;
+    --accent: #0C6C78;
+    --accent-hover: #0A5862;
     --accent-ink: #FFFFFF;
-    --accent-rgb: 14, 107, 79;
+    --accent-rgb: 12, 108, 120;
 
     /* Verde de ÉXITO. Se deja EXACTAMENTE como estaba: da 4,8:1 sobre
        `--ok-soft` y aclararlo para separarlo del acento lo bajaba a 3,7:1,
@@ -106,8 +106,26 @@
        blanco, con la sombra suave, la burbuja se despega de verdad. */
     --bubble-in: #FFFFFF;
     --bubble-in-ink: #0F172A;
-    --bubble-out: #0E6B4F;
+    --bubble-out: #0C6C78;
     --bubble-out-ink: #FFFFFF;
+
+    /* ================= CRISTAL LIGERO (tema claro) =================
+       El fondo de toda la plataforma es un degradado suave y ESTÁTICO:
+       dos manchas (turquesa arriba-izquierda, durazno arriba-derecha)
+       sobre una base casi blanca. El contenido —tarjetas, listas— va
+       sólido y plano encima; el vidrio se reserva para los controles
+       flotantes (la barra de pestañas y las burbujas de chat). */
+    --app-bg:
+      radial-gradient(1100px 520px at 6% -12%, #A9DCE6 0%, rgba(169,220,230,0) 46%),
+      radial-gradient(980px 460px at 99% -4%, #F7CDAD 0%, rgba(247,205,173,0) 42%),
+      linear-gradient(168deg, #E6F2F3 0%, #F1F4EA 56%, #F8F0E7 100%);
+    /* Vidrio: relleno translúcido + borde de luz. El blur se mantiene
+       chico (10 px) y NUNCA se anima; el respaldo sólido está más abajo. */
+    --glass-bg: rgba(255,255,255,0.56);
+    --glass-strong: rgba(255,255,255,0.74);
+    --glass-border: rgba(255,255,255,0.90);
+    --glass-blur: 10px;
+    --glass-shadow: 0 6px 18px rgba(30,70,80,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
   }
 
   /* ======================================================================
@@ -138,17 +156,17 @@
     --brand-navy-hover: #1E3550;
     /* Mismo criterio que en claro: `-dark` es el hover, así que debe ser
        MÁS claro que `-mid` en tema oscuro (el hover aclara, no oscurece). */
-    --brand-gold-dark: #5AD3A9;
-    --brand-gold-mid: #3FBF92;
-    --brand-gold-light: #7FE0BF;
-    --brand-gold-rgb: 63, 191, 146;
-    --gold-soft: #12271F;
-    --gold-line: #23453A;
+    --brand-gold-dark: #5AD3CA;
+    --brand-gold-mid: #4FD1C5;
+    --brand-gold-light: #7FE6DE;
+    --brand-gold-rgb: 79, 209, 197;
+    --gold-soft: #0E2A2C;
+    --gold-line: #1E4247;
 
-    --accent: #3FBF92;
-    --accent-hover: #5AD3A9;
-    --accent-ink: #04120C;
-    --accent-rgb: 63, 191, 146;
+    --accent: #4FD1C5;
+    --accent-hover: #5AD3CA;
+    --accent-ink: #04140F;
+    --accent-rgb: 79, 209, 197;
 
     --ok: #3FCB93;
     --ok-soft: #0F2A1E;
@@ -162,8 +180,22 @@
 
     --bubble-in: #1D2421;
     --bubble-in-ink: #E6EDE9;
-    --bubble-out: #3FBF92;
-    --bubble-out-ink: #04120C;
+    --bubble-out: #4FD1C5;
+    --bubble-out-ink: #04140F;
+
+    /* ================= CRISTAL LIGERO (tema oscuro) =================
+       Mismo esquema: manchas profundas (verde-azulado y cálida) sobre un
+       carbón casi negro, nunca negro puro. El vidrio toma tinte oscuro y
+       el borde de luz se vuelve apenas visible. */
+    --app-bg:
+      radial-gradient(1100px 520px at 6% -12%, #113A40 0%, rgba(17,58,64,0) 46%),
+      radial-gradient(980px 460px at 99% -4%, #2B2420 0%, rgba(43,36,32,0) 42%),
+      linear-gradient(168deg, #0C1413 0%, #0E1211 58%, #121311 100%);
+    --glass-bg: rgba(22,27,25,0.52);
+    --glass-strong: rgba(26,33,30,0.72);
+    --glass-border: rgba(255,255,255,0.09);
+    --glass-blur: 10px;
+    --glass-shadow: 0 8px 20px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.06);
 
     color-scheme: dark;
   }
@@ -177,6 +209,10 @@ html {
 
 body {
   background-color: var(--bg-base);
+  /* Cristal Ligero: el degradado estático detrás de toda la app. Va con
+     color sólido debajo como respaldo y sin `fixed` (en gama baja un
+     fondo fijo se repinta en cada fotograma de scroll). */
+  background-image: var(--app-bg);
   color: var(--text-primary);
   font-family: var(--font-sans);
   overflow-x: hidden;
@@ -185,6 +221,9 @@ body {
 
 #store-page-root,
 #admin-panel-root { isolation: isolate; }
+/* La tienda crece hacia abajo con su propio scroll: el degradado la cubre
+   entera y el color base rellena lo que quede más abajo de las manchas. */
+#store-page-root { background-color: var(--bg-base); background-image: var(--app-bg); background-repeat: no-repeat; }
 
 /* Ninguna imagen puede desbordar su contenedor. */
 img, svg, video, canvas { max-width: 100%; }
@@ -197,6 +236,49 @@ img, svg, video, canvas { max-width: 100%; }
   opacity: 0.4;
 }
 ::-webkit-scrollbar-thumb:hover { background: var(--text-secondary); }
+
+/* ==========================================================================
+   CRISTAL LIGERO · superficie de vidrio reutilizable + respaldos
+   --------------------------------------------------------------------------
+   `.cristal-vidrio` es el relleno translúcido con borde de luz y brillo
+   superior que usan los controles flotantes (barra de pestañas del panel y
+   burbujas de chat). El blur es chico y estático; se anima solo opacidad o
+   transform, nunca el desenfoque.
+   ========================================================================== */
+.cristal-vidrio {
+  background: var(--glass-bg);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+/* RESPALDO AUTOMÁTICO — navegador sin backdrop-filter (p. ej. WebView viejo
+   de Android). Los tokens de vidrio pasan a color sólido, así el texto
+   nunca queda sobre un panel semitransparente sin desenfocar. */
+@supports not ((backdrop-filter: blur(1px)) or (-webkit-backdrop-filter: blur(1px))) {
+  :root, .dark {
+    --glass-bg: var(--bg-surface);
+    --glass-strong: var(--bg-surface);
+  }
+}
+
+/* RESPALDO MANUAL / GAMA BAJA — con la clase `sin-vidrio` en <html> se quita
+   todo desenfoque y el degradado, dejando color plano. Lo activa un aparato
+   muy limitado o la preferencia guardada (ver tema.ts). */
+html.sin-vidrio {
+  --glass-bg: var(--bg-surface);
+  --glass-strong: var(--bg-surface);
+  --app-bg: none;
+}
+html.sin-vidrio body,
+html.sin-vidrio #store-page-root { background-image: none; }
+html.sin-vidrio .cristal-vidrio,
+html.sin-vidrio .glass-nav,
+html.sin-vidrio .tv-regleta {
+  -webkit-backdrop-filter: none !important;
+  backdrop-filter: none !important;
+}
 
 /* ==========================================================================
    Superficies
@@ -217,8 +299,13 @@ img, svg, video, canvas { max-width: 100%; }
 }
 
 .glass-nav {
-  background: var(--bg-surface);
-  border-bottom: 1px solid var(--border-color);
+  /* Cristal Ligero: barra de la tienda translúcida. Alfa alto para que el
+     texto siga legible incluso sin soporte de blur, y así el repintado al
+     hacer scroll pesa poco. */
+  background: var(--glass-strong);
+  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  backdrop-filter: blur(var(--glass-blur)) saturate(140%);
+  border-bottom: 1px solid var(--glass-border);
   /* La barra es la única herramienta fija de la tienda: sin este relleno,
      `viewport-fit=cover` deja que el notch/Dynamic Island la tape en vez
      de solo despejar el alto de la barra de estado. */

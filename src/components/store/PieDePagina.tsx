@@ -131,7 +131,7 @@ function Pregunta({ p, r }: PreguntaProps): React.ReactElement {
           <ChevronDown
             aria-hidden="true"
             className={`h-4 w-4 transition-transform duration-300 ${abierta ? 'rotate-180' : ''}`}
-            style={{ color: '#6EE7B7' }}
+            style={{ color: '#4FD1C5' }}
           />
         </span>
       </button>
@@ -188,7 +188,7 @@ function CompartirUbicacionFooter() {
             className="flex cursor-pointer list-none items-center gap-2 font-semibold"
             style={{ color: '#A7AFBD' }}
           >
-            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#6EE7B7' }} aria-hidden="true" />
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#4FD1C5' }} aria-hidden="true" />
             ¿Para qué usamos tu ubicación?
           </summary>
           <div className="mt-2 pl-5">
@@ -200,7 +200,7 @@ function CompartirUbicacionFooter() {
             </p>
             {estado === 'ok' ? (
               <div className="flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 font-semibold" style={{ color: '#6EE7B7' }}>
+                <span className="inline-flex items-center gap-1.5 font-semibold" style={{ color: '#4FD1C5' }}>
                   <Check className="h-4 w-4" aria-hidden="true" /> Ubicación compartida. ¡Gracias!
                 </span>
                 <button
@@ -276,7 +276,7 @@ function CompartirCamaraFooter() {
             className="flex cursor-pointer list-none items-center gap-2 font-semibold"
             style={{ color: '#A7AFBD' }}
           >
-            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#6EE7B7' }} aria-hidden="true" />
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#4FD1C5' }} aria-hidden="true" />
             Compartir mi cámara con soporte (opcional)
           </summary>
           <div className="mt-2 pl-5">
@@ -338,7 +338,7 @@ function Titulo({ children }: { children: React.ReactNode }) {
   return (
     <h3
       className="mb-3 text-[11px] font-black uppercase tracking-[0.14em]"
-      style={{ color: '#6EE7B7' }}
+      style={{ color: '#4FD1C5' }}
     >
       {children}
     </h3>
@@ -457,7 +457,7 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
               {ubicaciones.map(u => (
                 <li key={u.etiqueta}>
                   <div className="mb-1 flex items-start gap-2">
-                    <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: '#6EE7B7' }} aria-hidden="true" />
+                    <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: '#4FD1C5' }} aria-hidden="true" />
                     <div className="min-w-0">
                       <div className="text-[12.5px] font-bold" style={{ color: '#E9ECF1' }}>{u.etiqueta}</div>
                       <div className="text-[12px] leading-relaxed" style={{ color: '#A7AFBD' }}>{u.direccion}</div>
@@ -501,7 +501,7 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
               className="flex cursor-pointer list-none items-center gap-2 font-semibold"
               style={{ color: '#A7AFBD' }}
             >
-              <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#6EE7B7' }} aria-hidden="true" />
+              <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#4FD1C5' }} aria-hidden="true" />
               Privacidad y soporte: personal autorizado puede ver la pantalla de esta página
             </summary>
             <p className="mt-2 pl-5 leading-relaxed" style={{ color: '#8C97A8' }}>
