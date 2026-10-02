@@ -5,7 +5,7 @@
 // de por defecto). Dentro del modo edición, aparece un botón de muestra:
 // al tocarlo se abre el selector de color nativo y, al elegir, se guarda.
 //
-//   <ColorEditable clave="tienda.titulo_color" defecto="#0E6B4F" prop="color">
+//   <ColorEditable clave="tienda.titulo_color" defecto="#0C6C78" prop="color">
 //     <TextoEditable clave="tienda.titulo">…</TextoEditable>
 //   </ColorEditable>
 //

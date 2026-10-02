@@ -28,16 +28,17 @@ import { Z } from '../ui/Overlays';
 import ChatInbox from './ChatInbox';
 import ChatThread from './ChatThread';
 import { useChatAdmin } from './useChatAdmin';
-import { colorDe, estaEnLinea, inicialDe, nombreLegible } from './formatoChat';
+import { estaEnLinea, inicialDe, nombreLegible } from './formatoChat';
 
 type ChatAdmin = ReturnType<typeof useChatAdmin>;
 
 /** Cuántas cabezas se muestran; el resto se ve desde el globo de la lista. */
 const MAX_CABEZAS = 4;
 
-/** El panel redondea los botones a 6 px con una regla más específica que
- *  `rounded-full`; en línea gana y las burbujas quedan redondas. */
-const REDONDA = { borderRadius: '9999px' } as const;
+/** Forma de las burbujas (Cristal Ligero): cuadrado de esquinas de 18 px, no
+ *  círculo. El panel redondea todos los botones con una regla de id; el radio
+ *  en línea le gana y fija la forma de la maqueta. */
+const REDONDA = { borderRadius: 18 } as const;
 
 function ultimoDelCliente(c: ChatConversation) {
   for (let i = c.messages.length - 1; i >= 0; i--) {
@@ -135,7 +136,7 @@ export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdm
           aria-label={`Todas las conversaciones${totalSinLeer ? `, ${totalSinLeer} mensajes sin leer` : ''}`}
           aria-expanded={abierta === 'lista'}
           style={REDONDA}
-          className="relative w-12 h-12 sm:w-[52px] sm:h-[52px] rounded-full bg-[var(--accent)] text-[var(--accent-ink)] shadow-lg flex items-center justify-center transition active:scale-95 hover:brightness-110"
+          className="relative w-12 h-12 sm:w-[52px] sm:h-[52px] bg-[var(--accent)] text-[var(--accent-ink)] shadow-lg flex items-center justify-center transition active:scale-95 hover:brightness-110"
         >
           <MessageSquare className="w-5 h-5" />
           {sobrantes > 0 && (
@@ -157,7 +158,7 @@ export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdm
                 <button
                   type="button"
                   onClick={() => abrirConversacion(c.id)}
-                  className="absolute right-full mr-2.5 max-w-[220px] rounded-2xl rounded-br-md border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-2 text-left shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-2"
+                  className="absolute right-full mr-2.5 max-w-[220px] rounded-[18px] border border-[var(--border-color)] bg-[var(--bg-surface)] px-3 py-2 text-left shadow-lg motion-safe:animate-in motion-safe:fade-in motion-safe:slide-in-from-right-2"
                 >
                   <span className="block text-[11px] font-bold text-[var(--text-primary)] truncate">{nombre}</span>
                   <span className="block text-[12px] text-[var(--text-secondary)] truncate">{textoCorto(ultimoDelCliente(c))}</span>
@@ -170,12 +171,12 @@ export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdm
                 onMouseLeave={() => setAsomando(a => (a === c.id ? null : a))}
                 aria-label={`Chat con ${nombre}${c.unreadCount ? `, ${c.unreadCount} sin leer` : ''}${enLinea ? ', en línea' : ''}`}
                 aria-expanded={activa}
-                className={`relative w-12 h-12 sm:w-[52px] sm:h-[52px] rounded-full text-white font-display font-bold text-[17px] flex items-center justify-center shadow-lg transition active:scale-95 ${activa ? 'ring-[3px] ring-[var(--accent)] ring-offset-2 ring-offset-[var(--bg-base)]' : 'ring-2 ring-[var(--bg-surface)]'}`}
-                style={{ ...REDONDA, background: colorDe(c.id) }}
+                className={`cristal-vidrio relative w-12 h-12 sm:w-[52px] sm:h-[52px] text-[var(--gota-ink)] font-display font-bold text-[17px] flex items-center justify-center transition active:scale-95 ${activa ? 'ring-[3px] ring-[var(--accent)]' : ''}`}
+                style={REDONDA}
               >
                 {inicialDe(c.customerName)}
                 {enLinea && (
-                  <span className="absolute bottom-0 right-0 w-3.5 h-3.5 rounded-full bg-[var(--ok)] ring-2 ring-[var(--bg-surface)]" aria-hidden="true" />
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[var(--ok)] ring-2 ring-[var(--bg-surface)]" aria-hidden="true" />
                 )}
                 {(c.unreadCount || 0) > 0 && (
                   <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-[#e5484d] text-white text-[10.5px] font-bold flex items-center justify-center tabular-nums ring-2 ring-[var(--bg-surface)]">
@@ -192,7 +193,7 @@ export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdm
           ocupa el ancho que dejan libre las burbujas. */}
       {abierta && (
         <div
-          className="fixed flex flex-col glass-panel-strong rounded-2xl overflow-hidden shadow-2xl border border-[var(--border-color)]
+          className="fixed flex flex-col glass-panel-strong rounded-[22px] overflow-hidden shadow-2xl border border-[var(--border-color)]
                      left-2 right-[68px] top-16 bottom-4
                      sm:left-auto sm:top-auto sm:right-[88px] sm:bottom-5 sm:w-[380px] sm:h-[min(72vh,620px)]"
           style={{ zIndex: Z.floating }}

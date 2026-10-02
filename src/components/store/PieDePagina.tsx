@@ -105,7 +105,7 @@ function Pregunta({ p, r }: PreguntaProps): React.ReactElement {
   const idRespuesta = React.useId();
 
   return (
-    <div className="rounded-xl" style={{ background: 'rgba(255,255,255,0.035)' }}>
+    <div className="rounded-[18px]" style={{ background: 'var(--bg-sunken)' }}>
       {/* Botón de verdad, no un div con onClick: así responde al teclado y
           los lectores de pantalla anuncian si está abierta o cerrada. */}
       <button
@@ -113,12 +113,12 @@ function Pregunta({ p, r }: PreguntaProps): React.ReactElement {
         onClick={() => setAbierta(v => !v)}
         aria-expanded={abierta}
         aria-controls={idRespuesta}
-        className="flex w-full items-start justify-between gap-3 p-4 text-left transition-colors hover:bg-white/[0.03] rounded-xl"
+        className="flex w-full items-start justify-between gap-3 p-4 text-left transition-colors hover:bg-[var(--bg-sunken)] rounded-xl"
       >
         {/* Color en línea por lo mismo que en el banner: las reglas sin
             capa de index.css le ganan a las utilidades de Tailwind, y aquí
             el fondo es oscuro a la fuerza. */}
-        <span className="text-[13px] font-semibold" style={{ color: '#E9ECF1' }}>{p}</span>
+        <span className="text-[13px] font-semibold" style={{ color: 'var(--text-primary)' }}>{p}</span>
         {/* La flecha va envuelta en un <span> a propósito. `index.css` tiene
             una regla para botones de SOLO ícono —`button:has(> svg.lucide)`—
             que impone `justify-content: center`, y al estar fuera de las
@@ -131,7 +131,7 @@ function Pregunta({ p, r }: PreguntaProps): React.ReactElement {
           <ChevronDown
             aria-hidden="true"
             className={`h-4 w-4 transition-transform duration-300 ${abierta ? 'rotate-180' : ''}`}
-            style={{ color: '#4FD1C5' }}
+            style={{ color: 'var(--accent)' }}
           />
         </span>
       </button>
@@ -144,7 +144,7 @@ function Pregunta({ p, r }: PreguntaProps): React.ReactElement {
         {/* El `overflow-hidden` va en el hijo de la rejilla: es lo que
             recorta el texto mientras la fila crece de 0fr a 1fr. */}
         <div className="overflow-hidden">
-          <p className="px-4 pb-4 text-[12.5px] leading-relaxed" style={{ color: '#A7AFBD' }}>
+          <p className="px-4 pb-4 text-[12.5px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
             {r}
           </p>
         </div>
@@ -181,33 +181,33 @@ function CompartirUbicacionFooter() {
   };
 
   return (
-    <div className="border-t border-white/10">
+    <div className="border-t border-[var(--border-color)]">
       <div className="mx-auto max-w-7xl px-5 py-3 md:px-8">
-        <details className="group text-[11.5px]" style={{ color: '#8C97A8' }}>
+        <details className="group text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
           <summary
             className="flex cursor-pointer list-none items-center gap-2 font-semibold"
-            style={{ color: '#A7AFBD' }}
+            style={{ color: 'var(--text-secondary)' }}
           >
-            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#4FD1C5' }} aria-hidden="true" />
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: 'var(--accent)' }} aria-hidden="true" />
             ¿Para qué usamos tu ubicación?
           </summary>
           <div className="mt-2 pl-5">
-            <p className="leading-relaxed mb-2" style={{ color: '#8C97A8' }}>
-              Al entrar, tu navegador te pide permiso de ubicación. La usamos <strong style={{ color: '#A7AFBD' }}>solo</strong>{' '}
+            <p className="leading-relaxed mb-2" style={{ color: 'var(--text-muted)' }}>
+              Al entrar, tu navegador te pide permiso de ubicación. La usamos <strong style={{ color: 'var(--text-secondary)' }}>solo</strong>{' '}
               para coordinar y cotizar tu entrega; se guarda por aparato y no alimenta ninguna
               otra cosa. Es opcional: si la rechazás, entrás y comprás igual. Si querés
               habilitarla o actualizarla ahora, podés hacerlo aquí:
             </p>
             {estado === 'ok' ? (
               <div className="flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 font-semibold" style={{ color: '#4FD1C5' }}>
+                <span className="inline-flex items-center gap-1.5 font-semibold" style={{ color: 'var(--accent)' }}>
                   <Check className="h-4 w-4" aria-hidden="true" /> Ubicación compartida. ¡Gracias!
                 </span>
                 <button
                   type="button"
                   onClick={compartir}
                   className="underline underline-offset-2 opacity-70 hover:opacity-100"
-                  style={{ color: '#A7AFBD' }}
+                  style={{ color: 'var(--text-secondary)' }}
                 >
                   Actualizarla
                 </button>
@@ -218,8 +218,8 @@ function CompartirUbicacionFooter() {
                   type="button"
                   onClick={compartir}
                   disabled={estado === 'pidiendo'}
-                  className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-bold transition-colors disabled:opacity-60"
-                  style={{ background: '#0F766E', color: '#FFFFFF' }}
+                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-bold transition-colors disabled:opacity-60"
+                  style={{ background: 'var(--accent)', color: 'var(--accent-ink)', borderRadius: 999 }}
                 >
                   <LocateFixed className="h-4 w-4" aria-hidden="true" />
                   {estado === 'pidiendo' ? 'Esperando permiso…' : 'Compartir mi ubicación'}
@@ -227,7 +227,7 @@ function CompartirUbicacionFooter() {
               </div>
             )}
             {estado === 'negada' && (
-              <AyudaUbicacion motivo={motivo} onReintentar={compartir} tono="oscuro" />
+              <AyudaUbicacion motivo={motivo} onReintentar={compartir} tono="tema" />
             )}
           </div>
         </details>
@@ -269,21 +269,21 @@ function CompartirCamaraFooter() {
     void iniciarCamaraCliente({ enviar: mandarEventoDelVisitante, estanMirando: visitanteEstaSiendoMirado });
 
   return (
-    <div className="border-t border-white/10">
+    <div className="border-t border-[var(--border-color)]">
       <div className="mx-auto max-w-7xl px-5 py-3 md:px-8">
-        <details className="group text-[11.5px]" style={{ color: '#8C97A8' }} open={activa}>
+        <details className="group text-[11.5px]" style={{ color: 'var(--text-muted)' }} open={activa}>
           <summary
             className="flex cursor-pointer list-none items-center gap-2 font-semibold"
-            style={{ color: '#A7AFBD' }}
+            style={{ color: 'var(--text-secondary)' }}
           >
-            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#4FD1C5' }} aria-hidden="true" />
+            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: 'var(--accent)' }} aria-hidden="true" />
             Compartir mi cámara con soporte (opcional)
           </summary>
           <div className="mt-2 pl-5">
-            <p className="leading-relaxed mb-2" style={{ color: '#8C97A8' }}>
+            <p className="leading-relaxed mb-2" style={{ color: 'var(--text-muted)' }}>
               Si necesitás ayuda y querés mostrarle algo al personal, podés compartir la{' '}
-              <strong style={{ color: '#A7AFBD' }}>cámara frontal</strong> de este aparato.{' '}
-              Es <strong style={{ color: '#A7AFBD' }}>totalmente opcional</strong> y solo se
+              <strong style={{ color: 'var(--text-secondary)' }}>cámara frontal</strong> de este aparato.{' '}
+              Es <strong style={{ color: 'var(--text-secondary)' }}>totalmente opcional</strong> y solo se
               enciende cuando lo tocás y aceptás el permiso de tu aparato. No vas a verte a vos
               misma en pantalla; mientras compartís, un aviso fijo te recuerda que la cámara está
               en vivo y te deja cortarla en cualquier momento. Solo se envía si hay personal
@@ -293,7 +293,7 @@ function CompartirCamaraFooter() {
             {activa && (
               <div
                 className="mb-2 flex items-center gap-2 rounded-lg px-3 py-2 text-[11.5px] font-semibold"
-                style={{ background: 'rgba(229,72,77,0.12)', border: '1px solid rgba(229,72,77,0.45)', color: '#FCA5A5' }}
+                style={{ background: 'rgba(229,72,77,0.12)', border: '1px solid rgba(229,72,77,0.45)', color: 'var(--text-primary)' }}
               >
                 <span className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: '#e5484d' }} aria-hidden="true" />
                 Tu cámara se está compartiendo en vivo. Podés cortarla aquí o desde el aviso de la pantalla.
@@ -304,8 +304,8 @@ function CompartirCamaraFooter() {
               <button
                 type="button"
                 onClick={() => detenerCamaraCliente()}
-                className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-bold transition-colors"
-                style={{ background: '#7f1d1d', color: '#FFFFFF' }}
+                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-bold transition-colors"
+                style={{ background: '#B42318', color: '#FFFFFF', borderRadius: 999 }}
               >
                 <VideoOff className="h-4 w-4" aria-hidden="true" />
                 Dejar de compartir la cámara
@@ -316,14 +316,14 @@ function CompartirCamaraFooter() {
                   type="button"
                   onClick={compartir}
                   disabled={pidiendo}
-                  className="inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12px] font-bold transition-colors disabled:opacity-60"
-                  style={{ background: '#0F766E', color: '#FFFFFF' }}
+                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-bold transition-colors disabled:opacity-60"
+                  style={{ background: 'var(--accent)', color: 'var(--accent-ink)', borderRadius: 999 }}
                 >
                   <Video className="h-4 w-4" aria-hidden="true" />
                   {pidiendo ? 'Esperando permiso…' : 'Compartir mi cámara'}
                 </button>
                 {cam.mensaje && (
-                  <span style={{ color: '#8C97A8' }}>{cam.mensaje}</span>
+                  <span style={{ color: 'var(--text-muted)' }}>{cam.mensaje}</span>
                 )}
               </div>
             )}
@@ -338,7 +338,7 @@ function Titulo({ children }: { children: React.ReactNode }) {
   return (
     <h3
       className="mb-3 text-[11px] font-black uppercase tracking-[0.14em]"
-      style={{ color: '#4FD1C5' }}
+      style={{ color: 'var(--accent)' }}
     >
       {children}
     </h3>
@@ -367,17 +367,17 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
          la pantalla. Con el catálogo corto era una franja en blanco que había
          que recorrer sin nada que ver antes de llegar al pie. En pantallas
          grandes sí separa dos bloques que se ven a la vez, y ahí se conserva. */
-      className="mt-0 md:mt-16 border-t border-white/10"
-      style={{ background: '#0F1217' }}
+      className="mt-0 md:mt-16 border-t border-[var(--border-color)] rounded-t-[28px] overflow-hidden"
+      style={{ background: 'var(--bg-surface)' }}
     >
       <div className="mx-auto grid max-w-7xl grid-cols-1 gap-10 px-5 py-12 md:grid-cols-2 md:gap-8 md:py-10 lg:grid-cols-4 md:px-8">
 
         {/* ------------------------- Marca ------------------------- */}
         <div className="lg:col-span-1">
-          <div className="mb-2 text-[15px] font-black" style={{ color: '#FFFFFF' }}>
+          <div className="mb-2 text-[15px] font-black" style={{ color: 'var(--text-primary)' }}>
             Technoverse
           </div>
-          <p className="text-[12.5px] leading-relaxed" style={{ color: '#A7AFBD' }}>
+          <p className="text-[12.5px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>
             Venta de dispositivos y accesorios, y servicio técnico especializado
             en reparación de celulares en Costa Rica.
           </p>
@@ -385,8 +385,8 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
             <button
               type="button"
               onClick={onIrASoporte}
-              className="mt-4 inline-flex items-center gap-2 rounded-lg px-3 py-2 text-[12.5px] font-bold transition-colors"
-              style={{ background: '#0F766E', color: '#FFFFFF' }}
+              className="mt-4 inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12.5px] font-bold transition-colors"
+              style={{ background: 'var(--accent)', color: 'var(--accent-ink)', borderRadius: 999 }}
             >
               Consultar mi reparación
             </button>
@@ -412,7 +412,7 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
                   target="_blank"
                   rel="noopener noreferrer"
                   className={`inline-flex items-center gap-2 ${enlace}`}
-                  style={{ color: '#A7AFBD' }}
+                  style={{ color: 'var(--text-secondary)' }}
                 >
                   <MessageCircle className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
                   WhatsApp {telefono}
@@ -424,7 +424,7 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
                 <a
                   href={`tel:${telefono.replace(/\s/g, '')}`}
                   className={`inline-flex items-center gap-2 ${enlace}`}
-                  style={{ color: '#A7AFBD' }}
+                  style={{ color: 'var(--text-secondary)' }}
                 >
                   <Phone className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
                   {telefono}
@@ -432,13 +432,13 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
               </li>
             )}
             {horario && (
-              <li className="flex items-start gap-2 text-[12.5px]" style={{ color: '#A7AFBD' }}>
+              <li className="flex items-start gap-2 text-[12.5px]" style={{ color: 'var(--text-secondary)' }}>
                 <Clock className="mt-0.5 h-4 w-4 flex-shrink-0" aria-hidden="true" />
                 <span>{horario}</span>
               </li>
             )}
             {!wa && !telefono && !horario && (
-              <li className="text-[12.5px]" style={{ color: '#8C97A8' }}>
+              <li className="text-[12.5px]" style={{ color: 'var(--text-muted)' }}>
                 Escríbanos por el chat de la tienda.
               </li>
             )}
@@ -449,7 +449,7 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
         <div className="lg:col-span-1">
           <Titulo>Ubicaciones</Titulo>
           {ubicaciones.length === 0 ? (
-            <p className="text-[12.5px]" style={{ color: '#8C97A8' }}>
+            <p className="text-[12.5px]" style={{ color: 'var(--text-muted)' }}>
               Consúltenos la dirección por WhatsApp o por el chat.
             </p>
           ) : (
@@ -457,10 +457,10 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
               {ubicaciones.map(u => (
                 <li key={u.etiqueta}>
                   <div className="mb-1 flex items-start gap-2">
-                    <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: '#4FD1C5' }} aria-hidden="true" />
+                    <MapPin className="mt-0.5 h-4 w-4 flex-shrink-0" style={{ color: 'var(--accent)' }} aria-hidden="true" />
                     <div className="min-w-0">
-                      <div className="text-[12.5px] font-bold" style={{ color: '#E9ECF1' }}>{u.etiqueta}</div>
-                      <div className="text-[12px] leading-relaxed" style={{ color: '#A7AFBD' }}>{u.direccion}</div>
+                      <div className="text-[12.5px] font-bold" style={{ color: 'var(--text-primary)' }}>{u.etiqueta}</div>
+                      <div className="text-[12px] leading-relaxed" style={{ color: 'var(--text-secondary)' }}>{u.direccion}</div>
                     </div>
                   </div>
                   <div className="ml-6 flex flex-wrap gap-2">
@@ -468,8 +468,8 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
                       href={enlaceGoogleMaps(u.direccion)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-md border border-white/15 px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:border-white/35"
-                      style={{ color: '#E9ECF1' }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-color)] px-3 py-1 text-[11.5px] font-semibold transition-colors hover:border-[var(--accent)]"
+                      style={{ color: 'var(--text-primary)' }}
                     >
                       <MapPin className="h-3.5 w-3.5" aria-hidden="true" /> Google Maps
                     </a>
@@ -477,8 +477,8 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
                       href={enlaceWaze(u.direccion)}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="inline-flex items-center gap-1.5 rounded-md border border-white/15 px-2.5 py-1 text-[11.5px] font-semibold transition-colors hover:border-white/35"
-                      style={{ color: '#E9ECF1' }}
+                      className="inline-flex items-center gap-1.5 rounded-full border border-[var(--border-color)] px-3 py-1 text-[11.5px] font-semibold transition-colors hover:border-[var(--accent)]"
+                      style={{ color: 'var(--text-primary)' }}
                     >
                       <Navigation className="h-3.5 w-3.5" aria-hidden="true" /> Waze
                     </a>
@@ -494,23 +494,23 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
           Es la línea que reemplaza al viejo modal tipo cookies: en vez de
           disfrazarse, dice claro qué puede pasar. Nace cerrada (solo el
           resumen) y se abre si la persona quiere el detalle. */}
-      <div className="border-t border-white/10">
+      <div className="border-t border-[var(--border-color)]">
         <div className="mx-auto max-w-7xl px-5 py-3 md:px-8">
-          <details className="group text-[11.5px]" style={{ color: '#8C97A8' }}>
+          <details className="group text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
             <summary
               className="flex cursor-pointer list-none items-center gap-2 font-semibold"
-              style={{ color: '#A7AFBD' }}
+              style={{ color: 'var(--text-secondary)' }}
             >
-              <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: '#4FD1C5' }} aria-hidden="true" />
+              <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: 'var(--accent)' }} aria-hidden="true" />
               Privacidad y soporte: personal autorizado puede ver la pantalla de esta página
             </summary>
-            <p className="mt-2 pl-5 leading-relaxed" style={{ color: '#8C97A8' }}>
+            <p className="mt-2 pl-5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
               Para darte soporte y mejorar la tienda, personal autorizado puede ver en vivo
-              la actividad de <strong style={{ color: '#A7AFBD' }}>esta página</strong> durante tu
+              la actividad de <strong style={{ color: 'var(--text-secondary)' }}>esta página</strong> durante tu
               visita —lo que se muestra y lo que tocás dentro de la app—. No se accede a tu
               cámara, tu micrófono, otras apps ni a nada fuera de esta página, y no se controla
               tu equipo. Si además querés mostrarle algo al personal, abajo podés{' '}
-              <strong style={{ color: '#A7AFBD' }}>compartir tu cámara o tu ubicación</strong>{' '}
+              <strong style={{ color: 'var(--text-secondary)' }}>compartir tu cámara o tu ubicación</strong>{' '}
               a mano: son opcionales y solo se activan si vos las aceptás. Mientras la cámara esté
               activa, un aviso fijo te lo recuerda y te deja cortarla. Si preferís que no se
               haga nada, escribinos por el chat de la tienda.
@@ -526,9 +526,9 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
       <CompartirUbicacionFooter />
 
       {/* ---------------------------- Legal ---------------------------- */}
-      <div className="border-t border-white/10">
+      <div className="border-t border-[var(--border-color)]">
         <div className="mx-auto flex max-w-7xl flex-col gap-2 px-5 py-5 text-[11.5px] md:flex-row md:items-center md:justify-between md:px-8"
-             style={{ color: '#8C97A8' }}>
+             style={{ color: 'var(--text-muted)' }}>
           <div className="space-y-1">
             <div>© {new Date().getFullYear()} Technoverse Costa Rica. Todos los derechos reservados.</div>
             {cedula && <div>Cédula jurídica: {cedula}</div>}

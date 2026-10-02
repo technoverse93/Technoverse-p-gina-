@@ -756,7 +756,7 @@ export default function LiveChat() {
       {!isOpen && (
         <button
           onClick={() => { setIsOpen(true); void pedirPermisoNotificaciones(); }}
-          className="fixed bottom-24 right-6 z-[45] w-12 h-12 max-w-12 max-h-12 rounded-full flex items-center justify-center transition hover:scale-105 active:scale-95 shadow-[var(--float-shadow-lg)] text-[var(--accent-ink)] bg-gradient-to-br from-[var(--brand-gold-dark)] to-[var(--brand-gold-mid)] border-2 border-[var(--bg-surface)]"
+          className="fixed bottom-24 right-6 z-[45] w-12 h-12 max-w-12 max-h-12 rounded-[18px] flex items-center justify-center transition hover:scale-105 active:scale-95 shadow-[var(--float-shadow-lg)] text-[var(--accent-ink)] bg-gradient-to-br from-[var(--brand-gold-dark)] to-[var(--brand-gold-mid)] border-2 border-[var(--bg-surface)]"
           id="btn-floating-chat"
         >
           <MessageSquare className="w-5 h-5" />
@@ -777,7 +777,7 @@ export default function LiveChat() {
           - 100dvh (viewport dinámico) para respetar la barra del navegador
             móvil y el teclado en APK. */}
       {isOpen && (
-        <div className="fixed bottom-6 right-4 sm:right-6 z-[45] w-[calc(100vw-2rem)] sm:w-96 h-[600px] max-h-[calc(100dvh-7rem)] bg-[var(--bg-base)] border border-[var(--border-color)] rounded-2xl shadow-[var(--float-shadow-lg)] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300" id="floating-chat-window">
+        <div className="fixed bottom-6 right-4 sm:right-6 z-[45] w-[calc(100vw-2rem)] sm:w-96 h-[600px] max-h-[calc(100dvh-7rem)] bg-[var(--bg-base)] border border-[var(--border-color)] rounded-[22px] shadow-[var(--float-shadow-lg)] flex flex-col overflow-hidden animate-in fade-in slide-in-from-bottom-4 duration-300" id="floating-chat-window">
           {/* Header */}
           <div className="p-3.5 bg-gradient-to-r from-[var(--brand-gold-dark)] to-[var(--brand-gold-mid)] text-[var(--accent-ink)] flex items-center justify-between gap-2 shrink-0">
             <div className="flex items-center gap-2.5 min-w-0">

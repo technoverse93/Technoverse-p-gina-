@@ -47,9 +47,9 @@ export default function MapaModal({ abierto, onClose, lat, lon, precisionM, titu
       L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(mapa);
 
       if (precisionM && precisionM > 0 && precisionM < 5000) {
-        L.circle(centro, { radius: precisionM, color: '#0E6B4F', weight: 1, opacity: 0.4, fillColor: '#0E6B4F', fillOpacity: 0.1 }).addTo(mapa);
+        L.circle(centro, { radius: precisionM, color: '#0C6C78', weight: 1, opacity: 0.4, fillColor: '#0C6C78', fillOpacity: 0.1 }).addTo(mapa);
       }
-      L.circleMarker(centro, { radius: 8, color: '#FFFFFF', weight: 2, fillColor: '#0E6B4F', fillOpacity: 1 }).addTo(mapa);
+      L.circleMarker(centro, { radius: 8, color: '#FFFFFF', weight: 2, fillColor: '#0C6C78', fillOpacity: 1 }).addTo(mapa);
 
       mapaRef.current = mapa;
       // El modal anima su entrada; Leaflet midió el contenedor antes de que

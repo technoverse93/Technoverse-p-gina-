@@ -253,12 +253,6 @@ export default function AdminShell({
             onNueva={abrirNuevaPestana}
           />
 
-          {/* Hueco de las acciones de la pantalla activa. Lo llena cada
-              módulo por portal (ver `PageHead` en AdminKit). Va antes de
-              los botones fijos para que lo propio de la pantalla quede
-              más cerca del contenido que lo global. */}
-          <div className="tv-regleta-acciones" id="tv-regleta-acciones" />
-
           <div className="tv-regleta-fijos">
             <BotonTema className="tv-icon-btn" />
 
@@ -393,11 +387,6 @@ export default function AdminShell({
             />
           )}
         </div>
-
-        {/* Pista de una línea: lo que antes era el subtítulo del bloque de
-            título. Se conserva porque explica qué se hace en la pantalla,
-            pero cuesta una línea y no un bloque de 85 px. */}
-        <div className="tv-pista" id="tv-pista-slot" />
 
         {/* El scroll vive aquí y es UNO solo, compartido por todas las
             pestañas. Por eso la posición se guarda y se restaura por

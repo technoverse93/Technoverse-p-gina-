@@ -6,7 +6,7 @@ import {
   ShoppingBag, Trash2, ArrowRight,
   MapPin, CheckCircle, Smartphone, Wrench, Settings,
   MessageSquare, Sparkles, AlertCircle, FileDown, Heart, ShieldAlert,
-  User as UserIcon, X, LogOut, Fingerprint
+  User as UserIcon, X, LogOut, Fingerprint, Search as SearchIcon
 } from 'lucide-react';
 import { ProductCard } from './ProductCard';
 import { CustomSelect } from './CustomSelect';
@@ -171,6 +171,9 @@ export default function PublicStore({
 
   // App state
   const [selectedCategory, setSelectedCategory] = useState<string | null>(null);
+  // Buscador de la tienda (por nombre, marca, categoría o SKU). Va en la maqueta
+  // Cristal Ligero como una píldora sobre los chips de categoría.
+  const [busqueda, setBusqueda] = useState('');
   const [activeTab, setActiveTab] = useState<'store' | 'repairs'>('store');
   
   // Shopping cart state
@@ -1236,6 +1239,11 @@ export default function PublicStore({
   // aligerando el hilo principal en equipos como el Galaxy A12.
   // (checkCategoryMatch y SPARE_PART_CATEGORIES son puros/constantes; se omiten
   // de las dependencias a propósito.)
+  const quitarTildes = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+  const terminosBusqueda = useMemo(
+    () => quitarTildes(busqueda).split(/\s+/).filter(Boolean),
+    [busqueda],
+  );
   const filteredProducts = useMemo(() => products.filter(p => { if (!p) return false;
     // 0. Hidden/Inactive filter
     if (p.active === false) return false;
@@ -1253,8 +1261,13 @@ export default function PublicStore({
         return false;
       }
     }
+    // 2. Búsqueda: sin tildes ni mayúsculas, todas las palabras deben aparecer.
+    if (terminosBusqueda.length > 0) {
+      const pajar = quitarTildes(`${p.name || ''} ${p.brand || ''} ${p.category || ''} ${p.sku || ''}`);
+      if (!terminosBusqueda.every(t => pajar.includes(t))) return false;
+    }
     return true;
-  }), [products, selectedCategory]);
+  }), [products, selectedCategory, terminosBusqueda]);
   // 12 y no 10: la rejilla llega a 6 columnas en pantalla ancha, y 12 es
   // divisible entre 2, 3, 4 y 6 — o sea, la última fila siempre queda
   // completa en todos los tamaños. Con 10 quedaba una fila coja de 4
@@ -1304,7 +1317,7 @@ export default function PublicStore({
           (`hidden sm:block`) y en la APK no había forma de buscar un
           producto salvo entrando categoría por categoría. */}
       <header className="fixed top-0 left-0 right-0 z-40 glass-nav">
-        <div className="h-14 sm:h-16 flex items-center justify-between px-4 md:px-6">
+        <div className="h-14 sm:h-16 flex items-center justify-between pl-3.5 pr-2.5 md:pl-5 md:pr-3">
         <div className="flex items-center gap-4 lg:gap-8">
           <button 
             onClick={() => { setActiveTab('store'); setSelectedCategory(null); }}
@@ -1359,7 +1372,7 @@ export default function PublicStore({
               }}
               aria-label="Mi Cuenta"
               title="Mi Cuenta"
-              className={`relative flex-shrink-0 inline-flex items-center justify-center rounded-xl border transition cursor-pointer w-10 h-10 md:w-9 md:h-9 ${
+              className={`relative flex-shrink-0 inline-flex items-center justify-center rounded-full border transition cursor-pointer w-10 h-10 md:w-9 md:h-9 ${
                 isAccountDropdownOpen
                   ? 'border-[var(--accent)] bg-[var(--bg-surface)] text-[var(--accent)]'
                   : 'border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
@@ -1421,7 +1434,7 @@ export default function PublicStore({
                       <button
                         type="submit"
                         disabled={entrandoSesion}
-                        className="w-full btn-glass-primary font-bold text-sm py-3.5 rounded-xl active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait"
+                        className="w-full btn-glass-primary font-bold text-sm py-3.5 rounded-full active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait"
                       >
                         {entrandoSesion ? 'Verificando acceso…' : 'Iniciar Sesión'}
                       </button>
@@ -1526,7 +1539,7 @@ export default function PublicStore({
               }}
               aria-label="Carrito"
               title="Carrito"
-              className={`relative flex-shrink-0 inline-flex items-center justify-center rounded-xl border transition cursor-pointer w-10 h-10 md:w-9 md:h-9 ${
+              className={`relative flex-shrink-0 inline-flex items-center justify-center rounded-full border transition cursor-pointer w-10 h-10 md:w-9 md:h-9 ${
                 isCartDropdownOpen
                   ? 'border-[var(--accent)] bg-[var(--bg-surface)] text-[var(--accent)]'
                   : 'border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
@@ -1534,7 +1547,7 @@ export default function PublicStore({
             >
               <ShoppingBag className="w-4 h-4" />
               {cart.length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-rose-600 text-white text-[9px] font-black min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-[var(--bg-surface)] px-1 shadow-sm">
+                <span className="absolute -top-1.5 -right-1.5 bg-[var(--accent)] text-[var(--accent-ink)] text-[9px] font-black min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-[var(--bg-surface)] px-1 shadow-sm">
                   {cart.reduce((sum, it) => sum + it.quantity, 0)}
                 </span>
               )}
@@ -1617,7 +1630,7 @@ export default function PublicStore({
                           setCheckoutStep(0);
                           setIsCartDropdownOpen(false);
                         }}
-                        className="w-full btn-glass-primary font-bold py-4 rounded-xl flex items-center justify-center gap-2 active:scale-[0.98]"
+                        className="w-full btn-glass-primary font-bold py-4 rounded-full flex items-center justify-center gap-2 active:scale-[0.98]"
                       >
                         Finalizar Compra <ArrowRight className="w-4 h-4" />
                       </button>
@@ -1640,7 +1653,7 @@ export default function PublicStore({
           notch el catálogo quedaría tapado bajo la barra. Sin barra
           inferior fija, tampoco hace falta el pb-28/pb-20 que antes le
           reservaba espacio. */}
-      <main className="pt-[calc(3.5rem+env(safe-area-inset-top)+1rem)] sm:pt-[calc(4rem+env(safe-area-inset-top)+1.5rem)] pb-8 px-4 md:px-6 max-w-7xl mx-auto space-y-12">
+      <main className="pt-[calc(5.5rem+env(safe-area-inset-top))] sm:pt-[calc(6rem+env(safe-area-inset-top))] pb-8 px-4 md:px-6 max-w-7xl mx-auto space-y-12">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -1718,6 +1731,26 @@ export default function PublicStore({
                 en una categoría vacía sin saberlo. En pantallas estrechas
                 la fila se desplaza en horizontal (`tv-chip-row`) en vez de
                 partirse en varias líneas. */}
+            {/* Buscador en píldora (Cristal Ligero). Filtra el catálogo por
+                nombre, marca, categoría o SKU, sin tildes ni mayúsculas. */}
+            <div className="tv-buscador" role="search">
+              <SearchIcon className="w-4 h-4 flex-shrink-0" aria-hidden="true" />
+              <input
+                type="search"
+                value={busqueda}
+                onChange={e => setBusqueda(e.target.value)}
+                placeholder="Buscar productos y accesorios"
+                aria-label="Buscar productos"
+                enterKeyHint="search"
+                autoComplete="off"
+              />
+              {busqueda && (
+                <button type="button" className="tv-limpiar" onClick={() => setBusqueda('')} aria-label="Borrar búsqueda">
+                  <X className="w-3.5 h-3.5" aria-hidden="true" />
+                </button>
+              )}
+            </div>
+
             <div className="tv-chip-row mb-6 pb-1" role="tablist" aria-label="Filtrar por categoría">
               {CATEGORIES.map(cat => {
                 if (!cat) return null;
@@ -1730,14 +1763,10 @@ export default function PublicStore({
                     role="tab"
                     aria-selected={activa}
                     onClick={() => setSelectedCategory(cat === 'Todos' ? null : cat)}
-                    className={`inline-flex items-center gap-1.5 rounded-full border px-3.5 py-2 text-[12.5px] font-semibold whitespace-nowrap transition cursor-pointer ${
-                      activa
-                        ? 'bg-[var(--accent)] border-[var(--accent)] text-[var(--accent-ink)]'
-                        : 'bg-[var(--bg-surface)] border-[var(--border-color)] text-[var(--text-secondary)] hover:border-[var(--accent)] hover:text-[var(--accent)]'
-                    }`}
+                    className={`tv-pildora ${activa ? 'tv-pildora--on' : ''}`}
                   >
                     {cat}
-                    <span className={`text-[10.5px] font-mono ${activa ? 'opacity-70' : 'opacity-55'}`}>{n}</span>
+                    <span className="tv-pildora-n">{n}</span>
                   </button>
                 );
               })}
@@ -1750,7 +1779,7 @@ export default function PublicStore({
                   ? `Explorando: ${selectedCategory}`
                   : <>
                       <IconoEditable clave="tienda.titulo_icono" defecto="Sparkles" className="w-5 h-5 text-[var(--accent)]" />
-                      <ColorEditable clave="tienda.titulo_color" defecto="#0E6B4F">
+                      <ColorEditable clave="tienda.titulo_color" defecto="#0C6C78">
                         <TextoEditable clave="tienda.titulo_catalogo">Nuestros Productos Disponibles</TextoEditable>
                       </ColorEditable>
                     </>}
@@ -1797,7 +1826,7 @@ export default function PublicStore({
                    dan de sí. Por debajo de eso se quedan DOS columnas a
                    propósito: con tres, en un teléfono de 360 px la tarjeta
                    baja de 100 px de ancho y el nombre deja de leerse. */
-                <div id="product-bento-grid" className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-2 sm:gap-3">
+                <div id="product-bento-grid" className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3">
                   {/* Tarjetas promocionales (formato 'grid'): se mezclan en
                       la MISMA rejilla, así miden como un producto. Solo en la
                       vista general, no cuando se está filtrando una categoría. */}
@@ -1885,7 +1914,7 @@ export default function PublicStore({
 
                 <button
                   type="submit"
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[var(--accent-ink)] font-extrabold text-sm py-3 rounded-xl uppercase tracking-wider transition shadow-sm cursor-pointer"
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[var(--accent-ink)] font-extrabold text-sm py-3 rounded-full transition shadow-sm cursor-pointer"
                 >
                   Abrir Ticket de Reparación Oficial
                 </button>
@@ -2365,7 +2394,7 @@ export default function PublicStore({
                         setCheckoutStep(1);
                       }}
                       disabled={cart.length === 0}
-                      className="tv-cta w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[var(--accent-ink)] font-bold text-sm py-3 rounded-xl uppercase transition cursor-pointer"
+                      className="tv-cta w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[var(--accent-ink)] font-bold text-sm py-3 rounded-full transition cursor-pointer"
                     >
                       Continuar a Contacto <ArrowRight className="w-4 h-4" />
                     </button>
@@ -2388,7 +2417,7 @@ export default function PublicStore({
                         }
                         setCheckoutStep(2);
                       }}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] text-[var(--accent-ink)] font-bold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition cursor-pointer"
+                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] text-[var(--accent-ink)] font-bold text-sm py-3 rounded-full flex items-center justify-center gap-1.5 transition cursor-pointer"
                     >
                       Continuar al Pago <ArrowRight className="w-4 h-4" />
                     </button>
@@ -2398,7 +2427,7 @@ export default function PublicStore({
                     <button
                       onClick={handleConfirmOrder}
                       disabled={isSubmittingOrder}
-                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] disabled:opacity-60 text-[var(--accent-ink)] font-extrabold text-sm py-3 rounded-xl flex items-center justify-center gap-1.5 uppercase transition shadow-sm cursor-pointer"
+                      className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] disabled:opacity-60 text-[var(--accent-ink)] font-extrabold text-sm py-3 rounded-full flex items-center justify-center gap-1.5 transition shadow-sm cursor-pointer"
                     >
                       {isSubmittingOrder ? 'Procesando...' : 'Confirmar Pago y Generar Comprobante'}
                     </button>
@@ -2518,7 +2547,7 @@ export default function PublicStore({
 
                 <button
                   type="submit"
-                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[var(--accent-ink)] font-bold text-sm py-2.5 rounded-xl uppercase tracking-wider transition shadow-sm mt-2 cursor-pointer"
+                  className="w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--brand-gold-dark)] text-[var(--accent-ink)] font-bold text-sm py-2.5 rounded-full transition shadow-sm mt-2 cursor-pointer"
                 >
                   Registrarse y Entrar
                 </button>
@@ -2553,7 +2582,7 @@ export default function PublicStore({
         <div className="fixed inset-0 z-[100] flex items-center justify-center p-4 bg-slate-900/50 animate-in fade-in duration-200">
           <div 
             data-overlay-panel
-            className="glass-panel-strong rounded-3xl shadow-sm overflow-hidden w-full max-w-xl max-h-[90dvh] flex flex-col md:flex-row animate-in zoom-in-95 duration-250"
+            className="glass-panel-strong rounded-[28px] shadow-sm overflow-hidden w-full max-w-xl max-h-[90dvh] flex flex-col md:flex-row animate-in zoom-in-95 duration-250"
             id="product-detail-modal"
           >
             {/* Left side: Photo.
@@ -2565,7 +2594,7 @@ export default function PublicStore({
                 tamaño de escritorio en `md:`, donde la foto ya comparte la
                 mitad de un modal más ancho) resuelve el achique sin tocar
                 nada del layout de escritorio. */}
-            <div className="product-media md:w-1/2 flex flex-col p-4 md:p-6 min-h-[140px] md:min-h-[220px]">
+            <div className="product-media tv-ficha-foto md:w-1/2 flex flex-col p-4 md:p-6 m-3 md:m-4 rounded-[22px] min-h-[140px] md:min-h-[220px]">
               {/* CATEGORÍA — ARRIBA A LA IZQUIERDA DE LA COLUMNA DE LA FOTO,
                   EN FLUJO NORMAL. No lleva `absolute`: aquí no funcionaría.
                   `index.css` declara `.product-media > * { position: relative }`
@@ -2579,7 +2608,7 @@ export default function PublicStore({
                   `self-start` la mantiene pegada a la izquierda sin estirarse,
                   y `max-w-full` + elipsis cubren el caso de una categoría de
                   nombre muy largo. */}
-              <span className="self-start max-w-full mb-2 flex-shrink-0 bg-[var(--gold-soft)] border border-[var(--gold-line)] text-[var(--brand-gold-dark)] px-2.5 py-0.5 rounded-full text-[9px] font-mono uppercase tracking-wider tv-ellipsis">
+              <span className="self-start max-w-full mb-2 flex-shrink-0 bg-[var(--bg-surface)] border border-[var(--card-border)] text-[var(--text-secondary)] px-3 py-1 rounded-full text-[11px] font-semibold tv-ellipsis">
                 {selectedProductDetail.category}
               </span>
               <div className="flex-1 min-h-0 flex items-center justify-center">
@@ -2587,7 +2616,7 @@ export default function PublicStore({
                   <img
                     src={selectedProductDetail.imageUrl}
                     alt={selectedProductDetail.name}
-                    className="max-h-36 md:max-h-56 max-w-full object-contain rounded-xl"
+                    className="max-h-36 md:max-h-56 max-w-full object-contain"
                     referrerPolicy="no-referrer"
                     loading="lazy"
                     decoding="async"
@@ -2596,7 +2625,7 @@ export default function PublicStore({
                 ) : (
                   <div className="flex flex-col items-center justify-center text-[var(--text-primary)]">
                     <Smartphone className="w-16 h-16 text-[var(--text-secondary)] mb-2" />
-                    <span className="text-sm font-mono">Sin Imagen</span>
+                    <span className="text-sm">Sin imagen</span>
                   </div>
                 )}
               </div>
@@ -2619,15 +2648,15 @@ export default function PublicStore({
                 <div className="space-y-1 min-w-0">
                   {/* Dos líneas como máximo: un nombre largo se recorta en
                       vez de empujar el resto de la ficha hacia abajo. */}
-                  <h3 className="tv-clamp-2 font-extrabold text-base text-[var(--text-primary)] leading-tight">
+                  <h3 className="tv-clamp-2 font-bold text-[var(--text-primary)] leading-tight">
                     {selectedProductDetail.name}
                   </h3>
                   {/* `flex-wrap` + `tv-break`: un SKU largo baja de línea en
                       vez de ensanchar la columna y provocar barrido lateral. */}
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] text-[var(--text-primary)] font-mono min-w-0">
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[11.5px] text-[var(--text-muted)] min-w-0">
                     <span className="tv-break">SKU: {selectedProductDetail.sku}</span>
                     <span aria-hidden="true">•</span>
-                    <span className="text-[var(--brand-gold-mid)]">Garantía: {selectedProductDetail.warranty || '90 días'}</span>
+                    <span className="text-[var(--accent)] font-semibold">Garantía: {selectedProductDetail.warranty || '90 días'}</span>
                   </div>
                 </div>
 
@@ -2643,7 +2672,7 @@ export default function PublicStore({
 
                 {/* Stock tracker */}
                 <div className="flex items-center gap-2">
-                  <div className={`w-2.5 h-2.5 rounded-full ${selectedProductDetail.stock === 0 ? 'bg-rose-500' : 'bg-emerald-500 '}`} />
+                  <div className={`w-2.5 h-2.5 rounded-full ${selectedProductDetail.stock === 0 ? 'bg-rose-500' : 'bg-[var(--ok)]'}`} />
                   <span className="text-sm font-bold text-[var(--text-primary)]">
                     {selectedProductDetail.stock === 0 
                       ? 'Agotado' 
@@ -2653,27 +2682,27 @@ export default function PublicStore({
 
                 {/* Price Display */}
                 <div>
-                  <div className="text-[10px] uppercase font-mono text-[var(--text-primary)] tracking-wider">Precio Final:</div>
+                  <div className="text-[11.5px] text-[var(--text-muted)]">Precio final</div>
                   <div className="flex items-baseline gap-2">
                     {(() => {
                       const discountedPrice = getProductDiscountedPrice(selectedProductDetail);
                       const isDiscounted = discountedPrice < selectedProductDetail.price;
                       return isDiscounted ? (
                         <>
-                          <span className="text-xl font-black text-blue-600 font-mono">
+                          <span className="tv-prod-precio" style={{ fontSize: 24, color: 'var(--accent)' }}>
                             ₡{discountedPrice.toLocaleString()}
                           </span>
-                          <span className="text-sm text-[var(--text-primary)] line-through font-mono">
+                          <span className="tv-prod-tachado" style={{ fontSize: 13 }}>
                             ₡{selectedProductDetail.price.toLocaleString()}
                           </span>
                         </>
                       ) : (
-                        <span className="text-xl font-black text-[var(--text-primary)] font-mono">
+                        <span className="tv-prod-precio" style={{ fontSize: 24 }}>
                           ₡{selectedProductDetail.price.toLocaleString()}
                         </span>
                       );
                     })()}
-                    <span className="text-[9px] text-[var(--text-primary)]">IVA incluido</span>
+                    <span className="text-[11px] text-[var(--text-muted)]">IVA incluido</span>
                   </div>
                 </div>
               </div>
@@ -2689,14 +2718,14 @@ export default function PublicStore({
                     <span className="text-sm font-bold text-[var(--text-primary)] tv-ellipsis">Cantidad:</span>
                     {/* `flex-shrink-0`: el selector conserva su forma aunque
                         la etiqueta de al lado se recorte. */}
-                    <div className="flex-shrink-0 flex items-center border border-[var(--border-color)] rounded-xl overflow-hidden bg-[var(--bg-surface)]">
+                    <div className="flex-shrink-0 flex items-center border border-[var(--card-border)] rounded-full overflow-hidden bg-[var(--bg-surface)]">
                       <button
                         onClick={() => setDetailQuantity(Math.max(1, detailQuantity - 1))}
                         className="px-3 py-1 text-[var(--text-primary)] hover:bg-[var(--bg-base)] font-extrabold cursor-pointer transition text-sm"
                       >
                         -
                       </button>
-                      <span className="px-4 py-1 text-sm font-bold text-[var(--text-primary)] font-mono">
+                      <span className="px-4 py-1 text-sm font-bold text-[var(--text-primary)] tabular-nums">
                         {detailQuantity}
                       </span>
                       <button
@@ -2725,17 +2754,17 @@ export default function PublicStore({
                   <button
                     onClick={() => handleAddToCartWithQty(selectedProductDetail, detailQuantity)}
                     disabled={selectedProductDetail.stock === 0}
-                    className={`tv-ellipsis w-full px-3 py-2.5 rounded-xl font-bold text-sm uppercase tracking-wider text-center transition cursor-pointer shadow-sm ${
+                    className={`tv-ellipsis w-full px-3 py-3 rounded-full font-semibold text-sm text-center transition cursor-pointer ${
                       selectedProductDetail.stock === 0
-                        ? 'bg-slate-200 text-[var(--text-primary)] cursor-not-allowed'
-                        : 'bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] text-[var(--accent-ink)] '
+                        ? 'bg-[var(--bg-sunken)] text-[var(--text-muted)] cursor-not-allowed'
+                        : 'bg-[var(--accent)] hover:bg-[var(--accent-hover)] text-[var(--accent-ink)] '
                     }`}
                   >
                     Añadir al carrito
                   </button>
                   <button
                     onClick={() => setSelectedProductDetail(null)}
-                    className="tv-ellipsis w-full bg-[var(--bg-base)] hover:bg-slate-200 text-[var(--text-primary)] font-bold text-sm px-3 py-2.5 rounded-xl uppercase tracking-wider text-center transition cursor-pointer"
+                    className="tv-ellipsis w-full bg-[var(--bg-sunken)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-semibold text-sm px-3 py-3 rounded-full text-center transition cursor-pointer"
                   >
                     Cancelar
                   </button>
