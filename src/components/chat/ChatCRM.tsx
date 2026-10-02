@@ -25,8 +25,8 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
     // recibe el alto disponible (ver `[data-pantalla='completa']` en
     // admin.css). El mínimo es un piso para ventanas muy bajas — por debajo
     // de eso el panel se recorre en vez de aplastar la conversación.
-    <div className="flex flex-col md:flex-row h-full min-h-[420px] gap-4" id="chat-crm-root">
-      <div className={`${chat.selectedConvId ? 'hidden md:flex' : 'flex'} md:w-[30%] md:min-w-[300px] md:max-w-sm flex-col glass-panel rounded-2xl overflow-hidden`}>
+    <div className="flex flex-col md:flex-row h-full min-h-[420px] gap-3" id="chat-crm-root">
+      <div className={`${chat.selectedConvId ? 'hidden md:flex' : 'flex flex-1 md:flex-none'} md:w-[30%] md:min-w-[280px] md:max-w-[320px] flex-col glass-panel rounded-[22px] overflow-hidden`}>
         <ChatInbox
           conversations={chat.filteredConversations}
           selectedConvId={chat.selectedConvId}
@@ -37,7 +37,7 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
           onSelect={chat.setSelectedConvId}
         />
       </div>
-      <div className={`${chat.selectedConvId ? 'flex' : 'hidden md:flex'} flex-1 flex-col glass-panel rounded-2xl overflow-hidden`}>
+      <div className={`${chat.selectedConvId ? 'flex' : 'hidden md:flex'} flex-1 min-w-0 flex-col glass-panel rounded-[22px] overflow-hidden`}>
         {chat.selectedConv ? (
           <ChatThread
             conversation={chat.selectedConv}

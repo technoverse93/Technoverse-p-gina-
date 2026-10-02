@@ -28,7 +28,7 @@ export default function ChatActionsMenu({ conversation, staffEmails, onClose, on
   }, [onClose]);
 
   return (
-    <div ref={rootRef} className="absolute right-0 top-full mt-1.5 w-64 z-[70] glass-panel rounded-xl shadow-sm overflow-hidden text-xs" id="chat-actions-menu">
+    <div ref={rootRef} className="absolute right-0 top-full mt-1.5 tv-chat-pop w-64 z-[70] text-xs" id="chat-actions-menu">
       <div className="p-2 border-b border-[var(--border-color)]/50">
         <button
           type="button"
@@ -65,7 +65,7 @@ export default function ChatActionsMenu({ conversation, staffEmails, onClose, on
           disabled={conversation.status === 'nuevo'}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-surface)] text-[var(--text-primary)] disabled:opacity-40"
         >
-          {isResolved ? <RotateCcw className="w-3 h-3" /> : <span className="w-2 h-2 rounded-full bg-blue-500" />} Nuevo
+          {isResolved ? <RotateCcw className="w-3 h-3" /> : <span className="w-2 h-2 rounded-full bg-[var(--accent)]" />} Nuevo
         </button>
         <button
           type="button"
@@ -73,7 +73,7 @@ export default function ChatActionsMenu({ conversation, staffEmails, onClose, on
           disabled={conversation.status === 'pendiente'}
           className="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg hover:bg-[var(--bg-surface)] text-[var(--text-primary)] disabled:opacity-40"
         >
-          {isResolved ? <RotateCcw className="w-3 h-3" /> : <span className="w-2 h-2 rounded-full bg-orange-500" />} Pendiente
+          {isResolved ? <RotateCcw className="w-3 h-3" /> : <span className="w-2 h-2 rounded-full bg-[var(--warn)]" />} Pendiente
         </button>
       </div>
       <div className="p-2">
@@ -87,7 +87,7 @@ export default function ChatActionsMenu({ conversation, staffEmails, onClose, on
             <button
               type="button"
               onClick={() => { onResolve(); onClose(); }}
-              className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-rose-500/10 text-rose-500 font-bold"
+              className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[var(--bg-sunken)] text-[var(--bad,#c2363b)] font-bold"
             >
               <CheckCircle2 className="w-4 h-4" /> Marcar como Resuelto
             </button>

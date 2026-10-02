@@ -10,7 +10,7 @@ import { supabase } from '../../supabaseClient';
 import ChatActionsMenu from './ChatActionsMenu';
 import AdjuntarMenu from './AdjuntarMenu';
 import { useToast } from '../ui/Overlays';
-import { etiquetaDeDia, abreDiaNuevo, soloHora, estaEnLinea, haceCuanto, inicialDe } from './formatoChat';
+import { etiquetaDeDia, abreDiaNuevo, soloHora, estaEnLinea, haceCuanto, inicialDe, colorDe } from './formatoChat';
 import VideoMensaje from './VideoMensaje';
 import AudioMensaje from './AudioMensaje';
 import ImagenMensaje from './ImagenMensaje';
@@ -208,17 +208,17 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
 
   return (
     <>
-      <div className="p-3 border-b border-[var(--border-color)] flex items-center justify-between gap-2 relative bg-[var(--bg-elevated)]" id="chat-thread-header">
+      <div className="tv-chat-cab" id="chat-thread-header">
         <div className="flex items-center gap-2.5 min-w-0">
-          <button type="button" onClick={onBack} className="md:hidden p-1 -ml-1 text-[var(--text-secondary)]">
+          <button type="button" onClick={onBack} className="tv-chat-ib md:hidden" aria-label="Volver a la bandeja">
             <ArrowLeft className="w-4 h-4" />
           </button>
-          <div className="w-9 h-9 rounded-full bg-[var(--accent)]/15 text-[var(--brand-gold-dark)] flex items-center justify-center font-display font-bold text-sm shrink-0">
+          <div className="tv-chat-ava tv-chat-ava--cab" style={{ background: colorDe(conversation.id) }}>
             {inicialDe(conversation.customerName)}
           </div>
           <div className="min-w-0">
-            <h4 className="font-display font-bold text-[13.5px] text-[var(--text-primary)] truncate leading-tight">{conversation.customerName || 'Cliente'}</h4>
-            <p className="text-[11px] text-[var(--text-secondary)] truncate">
+            <h4 className="font-display font-bold text-[15px] text-[var(--text-primary)] truncate leading-tight">{conversation.customerName || 'Cliente'}</h4>
+            <p className="text-[12px] text-[var(--text-secondary)] truncate">
               {enLinea ? (
                 <span className="inline-flex items-center gap-1.5 font-semibold text-[var(--ok)]">
                   <span className="w-2 h-2 rounded-full bg-[var(--ok)]" aria-hidden="true" /> En línea
@@ -231,16 +231,16 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
         </div>
         <div className="flex items-center gap-2 shrink-0">
           {conversation.status === 'resuelto' && (
-            <span className="text-[9.5px] font-bold px-2.5 py-1 rounded-full bg-[var(--ok-soft)] text-[var(--ok)] hidden sm:inline">
+            <span className="tv-chat-etq hidden sm:inline">
               Resuelto
             </span>
           )}
           {conversation.assignedAdminEmail && (
-            <span className="text-[9.5px] font-bold px-2.5 py-1 rounded-full bg-[var(--ok-soft)] text-[var(--ok)] hidden sm:inline truncate max-w-[140px]">
+            <span className="tv-chat-etq hidden sm:inline truncate max-w-[160px]">
               {conversation.assignedAdminEmail}
             </span>
           )}
-          <button type="button" onClick={() => setShowMenu(v => !v)} className="p-1.5 rounded-lg hover:bg-[var(--bg-surface)] text-[var(--text-secondary)]" aria-label="Más opciones">
+          <button type="button" onClick={() => setShowMenu(v => !v)} className="tv-chat-ib" aria-label="Más opciones">
             <MoreVertical className="w-4 h-4" />
           </button>
           {showMenu && (
@@ -257,13 +257,13 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
         </div>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-4 space-y-3 bg-[var(--bg-base)]" id="chat-thread-messages">
+      <div className="tv-chat-msgs" id="chat-thread-messages">
         {hayMensajesAnteriores && (
           <div className="flex justify-center pb-1">
             <button
               type="button"
               onClick={() => setCantidadVisible(v => v + TANDA_MENSAJES)}
-              className="text-[10.5px] font-bold px-3 py-1.5 rounded-full bg-[var(--bg-surface)] border border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--text-primary)] transition"
+              className="tv-chat-mas"
             >
               Ver mensajes anteriores
             </button>
@@ -274,7 +274,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           // una nota también puede ser lo primero de un día.
           const separador = abreDiaNuevo(msg.timestamp, mensajesVisibles[i - 1]?.timestamp) ? (
             <div key={`dia-${msg.id}`} className="flex justify-center py-1">
-              <span className="text-[10px] font-bold uppercase tracking-[0.08em] px-3 py-1 rounded-full bg-[var(--bg-sunken)] text-[var(--text-muted)]">
+              <span className="tv-chat-dia">
                 {etiquetaDeDia(msg.timestamp)}
               </span>
             </div>
@@ -285,7 +285,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
               <React.Fragment key={msg.id}>
                 {separador}
                 <div className="flex justify-center">
-                  <div className="max-w-[min(88%,32rem)] rounded-2xl px-3.5 py-2.5 text-[12.5px] bg-amber-400/12 border border-amber-500/35 text-amber-700 flex items-start gap-1.5">
+                  <div className="tv-chat-nota max-w-[min(88%,32rem)] px-3.5 py-2.5 text-[12.5px] flex items-start gap-1.5">
                     <StickyNote className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                     <div>
                       {msg.text && <p className="tv-break whitespace-pre-wrap leading-[1.5]">{msg.text}</p>}
@@ -313,7 +313,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                   al volver. En móvil manda el 78% y nada cambia. */}
               <div className={`relative flex gap-2 max-w-[min(78%,32rem)] ${isSupport ? 'ml-auto flex-row-reverse' : ''}`}>
                 {!isSupport && (
-                  <div className="w-6 h-6 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0 self-end font-display font-bold text-[10px]">
+                  <div className="tv-chat-ava tv-chat-ava--mini shrink-0 self-end" style={{ background: colorDe(conversation.id) }}>
                     {isBot ? <Bot className="w-3 h-3" /> : inicial}
                   </div>
                 )}
@@ -334,13 +334,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                     tabIndex={0}
                     onClick={() => setMenuMsgId(id => id === msg.id ? null : msg.id)}
                     onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); setMenuMsgId(id => id === msg.id ? null : msg.id); } }}
-                    className={`cursor-pointer px-3.5 py-2 text-[13px] rounded-2xl ${
-                    isSupport
-                      ? 'rounded-br-[4px] bg-[var(--bubble-out)] text-[var(--bubble-out-ink)] shadow-[0_2px_10px_-4px_rgba(var(--accent-rgb),0.5)]'
-                      : isBot
-                      ? 'rounded-bl-[4px] bg-[var(--bubble-in)] text-[var(--bubble-in-ink)] border border-[var(--border-color)]'
-                      : 'rounded-bl-[4px] bg-[var(--bubble-in)] text-[var(--bubble-in-ink)] shadow-[0_1px_2px_rgba(15,21,18,0.06),0_6px_16px_-12px_rgba(15,21,18,0.3)]'
-                  }`}>
+                    className={`tv-chat-burbuja cursor-pointer px-3.5 py-2 text-[13px] ${isSupport ? 'tv-chat-burbuja--out' : 'tv-chat-burbuja--in'}`}>
                     {msg.imageUrl && (
                       <ImagenMensaje src={msg.imageUrl} alto="max-h-64" />
                     )}
@@ -389,7 +383,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                     moderación, no un "deshacer lo mío". */}
                 {menuMsgId === msg.id && (
                   <div
-                    className={`absolute z-30 top-full mt-1 ${isSupport ? 'right-0' : 'left-0'} w-52 rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] shadow-lg overflow-hidden`}
+                    className={`tv-chat-pop absolute z-30 top-full mt-1 ${isSupport ? 'right-0' : 'left-0'} w-52`}
                   >
                     <button
                       type="button"
@@ -419,7 +413,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
         <div ref={messagesEndRef} />
       </div>
 
-      <form onSubmit={handleSendText} className={`p-3 border-t border-[var(--border-color)] flex items-center gap-2 transition-colors ${noteMode ? 'bg-amber-400/10' : 'bg-[var(--bg-elevated)]'}`} id="chat-thread-input">
+      <form onSubmit={handleSendText} className="tv-chat-red" data-nota={noteMode ? '' : undefined} id="chat-thread-input">
         <input ref={fileInputRef} type="file" accept={ACEPTA_ADJUNTOS} className="hidden" onChange={handleImagePick} />
         {/* Input exclusivo de la cámara en el navegador (`capture="environment"`
             abre la cámara trasera directo). En la APK manda el plugin nativo. */}
@@ -443,6 +437,14 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
             de separación), el menú necesita ese mismo desplazamiento para
             seguir quedando debajo del botón correcto: `anchorOffsetClass`
             en vez del `left-0` por defecto (ver AdjuntarMenu.tsx). */}
+        <div className="tv-chat-pildora">
+        <input
+          type="text"
+          value={inputText}
+          onChange={(e) => setInputText(e.target.value)}
+          placeholder={noteMode ? 'Nota interna (solo el equipo la ve)' : 'Responder…'}
+          className="tv-chat-campo"
+        />
         <div className="relative" id="div-menu-admin">
           <div
             className={`grid transition-[grid-template-columns] duration-200 ease-out ${
@@ -454,7 +456,8 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                 type="button"
                 onClick={() => setNoteMode(v => !v)}
                 title="Nota interna"
-                className={`w-9 h-9 rounded-full flex items-center justify-center transition shrink-0 border ${noteMode ? 'bg-amber-500 border-amber-500 text-white' : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-amber-500 hover:border-amber-500'}`}
+                data-on={noteMode ? '' : undefined}
+                className="tv-chat-herr shrink-0"
               >
                 <StickyNote className="w-4 h-4" />
               </button>
@@ -464,7 +467,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                 disabled={uploading}
                 title="Adjuntar"
                 aria-label="Adjuntar"
-                className="w-9 h-9 rounded-full flex items-center justify-center border border-[var(--border-color)] bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)] transition shrink-0 disabled:opacity-40"
+                className="tv-chat-herr shrink-0 disabled:opacity-40"
               >
                 {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
               </button>
@@ -473,13 +476,10 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                   type="button"
                   onClick={() => void alternarGrabacion()}
                   disabled={uploading}
-                  title={grabacion ? 'Tocá para enviar la nota de voz' : 'Grabar una nota de voz'}
+                  title={grabacion ? 'Toca para enviar la nota de voz' : 'Grabar una nota de voz'}
                   aria-label={grabacion ? 'Enviar nota de voz' : 'Grabar nota de voz'}
-                  className={`w-9 h-9 rounded-full flex items-center justify-center border transition shrink-0 disabled:opacity-40 ${
-                    grabacion
-                      ? 'bg-red-500 border-red-500 text-white animate-pulse'
-                      : 'bg-[var(--bg-sunken)] border-[var(--border-color)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
-                  }`}
+                  data-grabando={grabacion ? '' : undefined}
+                  className="tv-chat-herr shrink-0 disabled:opacity-40"
                 >
                   <Mic className="w-4 h-4" />
                 </button>
@@ -491,19 +491,13 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
               onClose={() => setMenuAdjuntoAbierto(false)}
               onCamara={() => void handleCamara()}
               onGaleria={() => fileInputRef.current?.click()}
-              anchorOffsetClass="left-11"
+              anchorOffsetClass="right-0"
             />
           )}
         </div>
 
-        <input
-          type="text"
-          value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
-          placeholder={noteMode ? 'Nota interna (solo visible para el equipo)...' : 'Escribe tu respuesta...'}
-          className="flex-1 min-w-0 bg-[var(--bg-sunken)] border border-[var(--border-color)] rounded-full px-4 py-2.5 text-[13px] text-[var(--text-primary)] focus:outline-none focus:border-[var(--accent)] focus:ring-2 focus:ring-[var(--accent)]/15 transition"
-        />
-        <button type="submit" className="w-9 h-9 rounded-full flex items-center justify-center bg-[var(--accent)] hover:bg-[var(--accent-hover)] hover:scale-105 active:scale-95 text-[var(--accent-ink)] transition shrink-0 shadow-[0_4px_10px_-4px_rgba(var(--accent-rgb),0.6)]" aria-label="Enviar">
+        </div>
+        <button type="submit" className="tv-chat-env" aria-label="Enviar">
           <Send className="w-3.5 h-3.5" />
         </button>
       </form>

@@ -77,7 +77,7 @@ export default function AdjuntarMenu({ onClose, onCamara, onGaleria, anchorOffse
   return (
     <div
       ref={rootRef}
-      className={`absolute ${anchorOffsetClass} bottom-full mb-1.5 w-48 z-[70] rounded-xl border border-[var(--border-color)] bg-[var(--bg-surface)] shadow-lg overflow-hidden animate-in fade-in slide-in-from-bottom-1 duration-150`}
+      className={`absolute ${anchorOffsetClass} bottom-full mb-1.5 tv-chat-pop w-52 z-[70] animate-in fade-in slide-in-from-bottom-1 duration-150`}
       id="menu-adjuntar-chat"
     >
       <button
@@ -85,7 +85,7 @@ export default function AdjuntarMenu({ onClose, onCamara, onGaleria, anchorOffse
         onClick={() => { onCamara(); onClose(); }}
         className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-sunken)] transition"
       >
-        <span className="w-7 h-7 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0">
+        <span className="w-7 h-7 rounded-[9px] bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0">
           <Camera className="w-3.5 h-3.5" />
         </span>
         Tomar foto
@@ -95,7 +95,7 @@ export default function AdjuntarMenu({ onClose, onCamara, onGaleria, anchorOffse
         onClick={() => { onGaleria(); onClose(); }}
         className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-sunken)] transition border-t border-[var(--border-color)]/60"
       >
-        <span className="w-7 h-7 rounded-full bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0">
+        <span className="w-7 h-7 rounded-[9px] bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0">
           <ImagePlus className="w-3.5 h-3.5" />
         </span>
         Elegir de la galería
