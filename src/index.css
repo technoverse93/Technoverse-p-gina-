@@ -90,6 +90,8 @@
        "Pagado", "Resuelto") y el acento solo como relleno de botón. */
     --ok: #197A4B;
     --ok-soft: #E8F6EF;
+    --warn: #9A5B14;
+    --warn-soft: #FBF0DF;
 
     --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
     --float-shadow: 0 1px 2px rgba(15, 23, 42, 0.05), 0 10px 26px -14px rgba(15, 23, 42, 0.20);
@@ -182,6 +184,8 @@
 
     --ok: #3FCB93;
     --ok-soft: #0F2A1E;
+    --warn: #E8A85C;
+    --warn-soft: #2B2113;
 
     /* En oscuro una sombra no se ve: la elevación se marca subiendo el
        tono de la superficie. Se conservan sombras muy tenues solo para
@@ -1141,3 +1145,144 @@ input, select, textarea { max-width: 100%; }
 
 /* ---- Ficha de producto: la foto va en una baldosa tintada ---- */
 .tv-ficha-foto { background: var(--tile); }
+
+/* ==========================================================================
+   CRISTAL LIGERO · RED DE COLOR (un solo acento)
+   --------------------------------------------------------------------------
+   Restos de temas viejos (azul/celeste, esmeralda, pizarra) repartidos por
+   los módulos se reconducen a los tokens del sistema: azules e índigos al
+   ACENTO turquesa, verdes al OK, grises a los neutros. Los fondos de modal
+   (scrims translúcidos oscuros) se dejan intactos. Misma técnica que ya se
+   usaba para ámbar y rosa, extendida al resto de familias.
+   Generado desde las clases realmente presentes en el código.
+   ========================================================================== */
+#admin-panel-root .bg-blue-100, #store-page-root .bg-blue-100 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-blue-50, #store-page-root .bg-blue-50 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-blue-500, #store-page-root .bg-blue-500 { background-color: var(--accent) !important; }
+#admin-panel-root .bg-blue-600, #store-page-root .bg-blue-600 { background-color: var(--accent) !important; }
+#admin-panel-root .bg-emerald-400, #store-page-root .bg-emerald-400 { background-color: var(--ok) !important; }
+#admin-panel-root .bg-emerald-50, #store-page-root .bg-emerald-50 { background-color: var(--ok-soft) !important; }
+#admin-panel-root .bg-emerald-500, #store-page-root .bg-emerald-500 { background-color: var(--ok) !important; }
+#admin-panel-root .bg-emerald-500\/15, #store-page-root .bg-emerald-500\/15 { background-color: var(--ok-soft) !important; }
+#admin-panel-root .bg-emerald-950, #store-page-root .bg-emerald-950 { background-color: var(--ok) !important; }
+#admin-panel-root .bg-indigo-950\/40, #store-page-root .bg-indigo-950\/40 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-purple-50, #store-page-root .bg-purple-50 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-purple-500\/20, #store-page-root .bg-purple-500\/20 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-purple-600, #store-page-root .bg-purple-600 { background-color: var(--accent) !important; }
+#admin-panel-root .bg-sky-50, #store-page-root .bg-sky-50 { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .bg-sky-500, #store-page-root .bg-sky-500 { background-color: var(--accent) !important; }
+#admin-panel-root .bg-sky-600, #store-page-root .bg-sky-600 { background-color: var(--accent) !important; }
+#admin-panel-root .bg-slate-200, #store-page-root .bg-slate-200 { background-color: var(--bg-sunken) !important; }
+#admin-panel-root .bg-slate-400, #store-page-root .bg-slate-400 { background-color: var(--bg-sunken) !important; }
+#admin-panel-root .border-blue-100, #store-page-root .border-blue-100 { border-color: var(--accent) !important; }
+#admin-panel-root .border-blue-500, #store-page-root .border-blue-500 { border-color: var(--accent) !important; }
+#admin-panel-root .border-emerald-200, #store-page-root .border-emerald-200 { border-color: var(--ok) !important; }
+#admin-panel-root .border-emerald-500, #store-page-root .border-emerald-500 { border-color: var(--ok) !important; }
+#admin-panel-root .border-emerald-500\/40, #store-page-root .border-emerald-500\/40 { border-color: var(--ok) !important; }
+#admin-panel-root .border-emerald-500\/50, #store-page-root .border-emerald-500\/50 { border-color: var(--ok) !important; }
+#admin-panel-root .border-indigo-500\/30, #store-page-root .border-indigo-500\/30 { border-color: var(--accent) !important; }
+#admin-panel-root .border-purple-500, #store-page-root .border-purple-500 { border-color: var(--accent) !important; }
+#admin-panel-root .border-purple-500\/30, #store-page-root .border-purple-500\/30 { border-color: var(--accent) !important; }
+#admin-panel-root .border-sky-100, #store-page-root .border-sky-100 { border-color: var(--accent) !important; }
+#admin-panel-root .border-sky-200, #store-page-root .border-sky-200 { border-color: var(--accent) !important; }
+#admin-panel-root .border-sky-500, #store-page-root .border-sky-500 { border-color: var(--accent) !important; }
+#admin-panel-root .border-sky-500\/40, #store-page-root .border-sky-500\/40 { border-color: var(--accent) !important; }
+#admin-panel-root .border-slate-50, #store-page-root .border-slate-50 { border-color: var(--border-color) !important; }
+#admin-panel-root .disabled\:bg-slate-200:disabled, #store-page-root .disabled\:bg-slate-200:disabled { background-color: var(--bg-sunken) !important; }
+#admin-panel-root .file\:bg-sky-500::file-selector-button, #store-page-root .file\:bg-sky-500::file-selector-button { background-color: var(--accent) !important; }
+#admin-panel-root .file\:text-sky-400::file-selector-button, #store-page-root .file\:text-sky-400::file-selector-button { color: var(--accent) !important; }
+#admin-panel-root .focus\:border-blue-500:focus, #store-page-root .focus\:border-blue-500:focus { border-color: var(--accent) !important; }
+#admin-panel-root .focus\:border-emerald-500:focus, #store-page-root .focus\:border-emerald-500:focus { border-color: var(--ok) !important; }
+#admin-panel-root .focus\:border-sky-500:focus, #store-page-root .focus\:border-sky-500:focus { border-color: var(--accent) !important; }
+#admin-panel-root .focus\:ring-blue-500:focus, #store-page-root .focus\:ring-blue-500:focus { --tw-ring-color: var(--accent) !important; }
+#admin-panel-root .focus\:ring-emerald-500:focus, #store-page-root .focus\:ring-emerald-500:focus { --tw-ring-color: var(--ok) !important; }
+#admin-panel-root .hover\:bg-blue-50:hover, #store-page-root .hover\:bg-blue-50:hover { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .hover\:bg-emerald-500\/25:hover, #store-page-root .hover\:bg-emerald-500\/25:hover { background-color: var(--ok-soft) !important; }
+#admin-panel-root .hover\:bg-emerald-600:hover, #store-page-root .hover\:bg-emerald-600:hover { background-color: var(--ok) !important; }
+#admin-panel-root .hover\:bg-purple-100:hover, #store-page-root .hover\:bg-purple-100:hover { background-color: rgba(var(--accent-rgb),0.12) !important; }
+#admin-panel-root .hover\:bg-purple-500:hover, #store-page-root .hover\:bg-purple-500:hover { background-color: var(--accent) !important; }
+#admin-panel-root .hover\:bg-sky-500:hover, #store-page-root .hover\:bg-sky-500:hover { background-color: var(--accent) !important; }
+#admin-panel-root .hover\:bg-sky-600:hover, #store-page-root .hover\:bg-sky-600:hover { background-color: var(--accent) !important; }
+#admin-panel-root .hover\:bg-sky-700:hover, #store-page-root .hover\:bg-sky-700:hover { background-color: var(--accent) !important; }
+#admin-panel-root .hover\:bg-slate-200:hover, #store-page-root .hover\:bg-slate-200:hover { background-color: var(--bg-sunken) !important; }
+#admin-panel-root .hover\:bg-slate-300:hover, #store-page-root .hover\:bg-slate-300:hover { background-color: var(--bg-sunken) !important; }
+#admin-panel-root .hover\:border-emerald-500:hover, #store-page-root .hover\:border-emerald-500:hover { border-color: var(--ok) !important; }
+#admin-panel-root .hover\:border-sky-500:hover, #store-page-root .hover\:border-sky-500:hover { border-color: var(--accent) !important; }
+#admin-panel-root .hover\:file\:bg-sky-500:hover::file-selector-button, #store-page-root .hover\:file\:bg-sky-500:hover::file-selector-button { background-color: var(--accent) !important; }
+#admin-panel-root .hover\:text-blue-600:hover, #store-page-root .hover\:text-blue-600:hover { color: var(--accent) !important; }
+#admin-panel-root .hover\:text-blue-800:hover, #store-page-root .hover\:text-blue-800:hover { color: var(--accent) !important; }
+#admin-panel-root .hover\:text-purple-300:hover, #store-page-root .hover\:text-purple-300:hover { color: var(--accent) !important; }
+#admin-panel-root .hover\:text-sky-300:hover, #store-page-root .hover\:text-sky-300:hover { color: var(--accent) !important; }
+#admin-panel-root .text-blue-500, #store-page-root .text-blue-500 { color: var(--accent) !important; }
+#admin-panel-root .text-blue-600, #store-page-root .text-blue-600 { color: var(--accent) !important; }
+#admin-panel-root .text-blue-700, #store-page-root .text-blue-700 { color: var(--accent) !important; }
+#admin-panel-root .text-emerald-400, #store-page-root .text-emerald-400 { color: var(--ok) !important; }
+#admin-panel-root .text-emerald-500, #store-page-root .text-emerald-500 { color: var(--ok) !important; }
+#admin-panel-root .text-emerald-600, #store-page-root .text-emerald-600 { color: var(--ok) !important; }
+#admin-panel-root .text-indigo-300, #store-page-root .text-indigo-300 { color: var(--accent) !important; }
+#admin-panel-root .text-indigo-400, #store-page-root .text-indigo-400 { color: var(--accent) !important; }
+#admin-panel-root .text-purple-400, #store-page-root .text-purple-400 { color: var(--accent) !important; }
+#admin-panel-root .text-purple-600, #store-page-root .text-purple-600 { color: var(--accent) !important; }
+#admin-panel-root .text-sky-300, #store-page-root .text-sky-300 { color: var(--accent) !important; }
+#admin-panel-root .text-sky-400, #store-page-root .text-sky-400 { color: var(--accent) !important; }
+#admin-panel-root .text-sky-500, #store-page-root .text-sky-500 { color: var(--accent) !important; }
+#admin-panel-root .text-sky-600, #store-page-root .text-sky-600 { color: var(--accent) !important; }
+#admin-panel-root .text-slate-950, #store-page-root .text-slate-950 { color: var(--text-primary) !important; }
+#admin-panel-root .to-blue-600, #store-page-root .to-blue-600 { --tw-gradient-to: var(--accent) !important; }
+
+
+/* =====================================================================
+   CHAT · diseño Cristal (bandeja, conversación, redactor y menús)
+   Global a propósito: lo comparten la pestaña Chat y la burbuja flotante.
+   ===================================================================== */
+.tv-chat-busca { margin: 12px 12px 8px; display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 12px; border-radius: 999px; background: var(--tile); color: var(--text-muted); font-size: 13px; }
+.tv-chat-busca input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--text-primary); font-size: 13px; }
+.tv-chat-busca input::placeholder { color: var(--text-muted); }
+.tv-chat-busca:focus-within { box-shadow: 0 0 0 2px var(--accent); }
+.tv-chat-filtros { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; }
+.tv-chat-filtro { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border: 1px solid var(--border-color); background: transparent; white-space: nowrap; }
+.tv-chat-filtro[data-on] { background: var(--text-primary); color: var(--bg-surface); border-color: var(--text-primary); }
+.tv-chat-rango { display: flex; gap: 4px; align-items: center; padding: 0 12px 8px; color: var(--text-muted); }
+.tv-chat-rango button { font-size: 11.5px; padding: 3px 10px; border-radius: 999px; background: var(--bg-sunken); color: var(--text-secondary); }
+.tv-chat-rango button[data-on] { background: rgba(var(--accent-rgb), .14); color: var(--accent); font-weight: 700; }
+
+.tv-chat-conv { width: 100%; text-align: left; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 12px; margin: 0 6px; width: calc(100% - 12px); border-radius: 16px; transition: background .15s; }
+.tv-chat-conv:hover { background: var(--bg-sunken); }
+.tv-chat-conv[data-activa] { background: rgba(var(--accent-rgb), .12); }
+.tv-chat-ava { width: 44px; height: 44px; border-radius: 15px; display: grid; place-items: center; font: 700 16px var(--font-display, inherit); color: #fff; flex: none; }
+.tv-chat-ava--cab { width: 40px; height: 40px; border-radius: 14px; font-size: 15px; }
+.tv-chat-ava--mini { width: 26px; height: 26px; border-radius: 9px; font-size: 11px; display: grid; place-items: center; font-weight: 700; color: #fff; }
+.tv-chat-punto { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--ok); border: 2px solid var(--bg-surface); }
+.tv-chat-cuenta { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
+
+.tv-chat-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border-color); position: relative; flex: none; }
+.tv-chat-ib { width: 36px; height: 36px; border-radius: 12px; display: inline-grid; place-items: center; color: var(--text-secondary); background: var(--tile); flex: none; }
+.tv-chat-ib:hover { color: var(--text-primary); }
+.tv-chat-etq { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); }
+.tv-chat-msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; background: color-mix(in srgb, var(--tile) 50%, transparent); }
+.tv-chat-msgs > * { flex: none; }
+.tv-chat-dia { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 11px; border-radius: 999px; background: var(--bg-surface); color: var(--text-muted); }
+.tv-chat-mas { font-size: 11.5px; font-weight: 600; padding: 6px 13px; border-radius: 999px; background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-secondary); }
+.tv-chat-burbuja { border-radius: 18px; }
+.tv-chat-burbuja--in { background: var(--bubble-in); color: var(--bubble-in-ink); border: 1px solid var(--border-color); border-bottom-left-radius: 6px; }
+.tv-chat-burbuja--out { background: var(--bubble-out); color: var(--bubble-out-ink); border-bottom-right-radius: 6px; }
+.tv-chat-nota { border-radius: 16px; background: var(--warn-soft); color: var(--warn); border: 1px solid color-mix(in srgb, var(--warn) 30%, transparent); }
+.tv-chat-pop { background: var(--bg-surface); border: 1px solid var(--border-color); border-radius: 18px; box-shadow: 0 18px 44px rgba(0,0,0,.26); overflow: hidden; }
+
+.tv-chat-red { display: flex; align-items: center; gap: 8px; padding: 10px 12px 12px; flex: none; }
+.tv-chat-pildora { flex: 1; min-width: 0; display: flex; align-items: center; gap: 4px; min-height: 48px; padding: 0 5px 0 16px; border-radius: 24px; background: var(--glass-bg); border: 1px solid var(--glass-border); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur)); transition: box-shadow .15s, background .15s; }
+.tv-chat-pildora:focus-within { box-shadow: 0 0 0 2px var(--accent); }
+.tv-chat-red[data-nota] .tv-chat-pildora { background: var(--warn-soft); border-color: color-mix(in srgb, var(--warn) 40%, transparent); }
+.tv-chat-campo { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; font-size: 13.5px; color: var(--text-primary); height: 44px; }
+.tv-chat-campo::placeholder { color: var(--text-muted); }
+.tv-chat-herr { width: 40px; height: 40px; border-radius: 50%; display: inline-grid; place-items: center; color: var(--text-secondary); background: transparent; border: 0; transition: background .15s, color .15s; }
+.tv-chat-herr:hover { background: var(--bg-sunken); color: var(--text-primary); }
+.tv-chat-herr[data-on] { background: var(--warn); color: #fff; }
+.tv-chat-herr[data-grabando] { background: var(--bad, #c2363b); color: #fff; animation: tv-chat-pulso 1.1s ease-in-out infinite; }
+.tv-chat-env { width: 48px; height: 48px; border-radius: 17px; display: inline-grid; place-items: center; background: var(--accent); color: var(--accent-ink); flex: none; }
+.tv-chat-env:active { transform: scale(.95); }
+@keyframes tv-chat-pulso { 50% { opacity: .65; } }
+@media (prefers-reduced-motion: reduce) { .tv-chat-herr[data-grabando] { animation: none; } }
+html.sin-vidrio .tv-chat-pildora { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg-surface); }
+.tv-chat-pop button { justify-content: flex-start !important; text-align: left; }
+.tv-chat-pop button:has(> svg.lucide) { min-height: 40px; }

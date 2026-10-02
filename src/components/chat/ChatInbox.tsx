@@ -1,7 +1,7 @@
-import React, { useEffect, useState } from 'react';
-import { Clock } from 'lucide-react';
+import React, { useEffect, useMemo, useState } from 'react';
+import { Clock, Search } from 'lucide-react';
 import { ChatConversation } from '../../types';
-import { selloDeLista, estaEnLinea, inicialDe } from './formatoChat';
+import { selloDeLista, estaEnLinea, inicialDe, colorDe } from './formatoChat';
 import type { ChatStatusFilter, ResolvedRange } from './ChatCRM';
 
 interface ChatInboxProps {
@@ -15,10 +15,10 @@ interface ChatInboxProps {
 }
 
 const FILTERS: { id: ChatStatusFilter; label: string; dot: string }[] = [
-  { id: 'nuevo', label: 'Nuevos', dot: 'bg-blue-500' },
-  { id: 'pendiente', label: 'Pendientes', dot: 'bg-orange-500' },
-  { id: 'todos', label: 'Todos', dot: 'bg-slate-400' },
-  { id: 'resueltos', label: 'Resueltos', dot: 'bg-emerald-500' }
+  { id: 'nuevo', label: 'Nuevos', dot: 'bg-[var(--accent)]' },
+  { id: 'pendiente', label: 'Pendientes', dot: 'bg-[var(--warn)]' },
+  { id: 'todos', label: 'Todos', dot: 'bg-[var(--text-muted)]' },
+  { id: 'resueltos', label: 'Resueltos', dot: 'bg-[var(--ok)]' }
 ];
 
 // Componente propietario (sin <select> nativo del OS/navegador): pills en
@@ -56,45 +56,51 @@ export default function ChatInbox({
   // Reloj para que el punto verde se apague solo cuando el visitante deja
   // de avisar (sin eventos nuevos no habría nada que repinte la lista).
   const [ahora, setAhora] = useState(() => Date.now());
+  const [buscar, setBuscar] = useState('');
   useEffect(() => { const t = setInterval(() => setAhora(Date.now()), 15000); return () => clearInterval(t); }, []);
+  const lista = useMemo(() => {
+    const q = buscar.trim().toLowerCase();
+    if (!q) return conversations;
+    return conversations.filter(c =>
+      (c.customerName || '').toLowerCase().includes(q) ||
+      c.messages.some(m => !m.isInternalNote && (m.text || '').toLowerCase().includes(q)));
+  }, [conversations, buscar]);
   return (
     <>
-      <div className="border-b border-[var(--border-color)]/60" id="chat-inbox-filters">
-        {/* Dos columnas, no cuatro en fila. La bandeja mide como mucho
-            `max-w-sm`: repartida entre cuatro, a cada filtro le quedaban unos
-            60px y "Pendientes" y "Resueltos" salían cortados como "Pe..." y
-            "Re...", que es justo lo que no se puede leer de un vistazo. En dos
-            columnas cada etiqueta cabe entera en cualquier ancho. */}
-        <div className="p-3 grid grid-cols-2 gap-1.5">
+      <div id="chat-inbox-filters">
+        <label className="tv-chat-busca">
+          <Search className="w-4 h-4 shrink-0" aria-hidden="true" />
+          <input
+            type="search"
+            value={buscar}
+            onChange={(e) => setBuscar(e.target.value)}
+            placeholder="Buscar cliente o mensaje"
+            aria-label="Buscar cliente o mensaje"
+          />
+        </label>
+        <div className="tv-chat-filtros">
           {FILTERS.map(f => (
             <button
               key={f.id}
               type="button"
               onClick={() => onFilterChange(f.id)}
-              className={`text-[11.5px] font-bold px-2.5 py-1.5 rounded-lg transition flex items-center justify-center gap-1.5 ${
-                statusFilter === f.id
-                  ? 'bg-[var(--text-primary)] text-[var(--bg-surface)]'
-                  : 'bg-[var(--bg-sunken)] text-[var(--text-secondary)] hover:text-[var(--text-primary)]'
-              }`}
+              data-on={statusFilter === f.id ? '' : undefined}
+              className="tv-chat-filtro"
             >
               <span className={`w-1.5 h-1.5 rounded-full flex-shrink-0 ${f.dot}`} />
-              <span className="tv-ellipsis">{f.label}</span>
+              {f.label}
             </button>
           ))}
         </div>
         {statusFilter === 'resueltos' && (
-          <div className="px-3 pb-3 flex items-center gap-1.5 flex-wrap" id="chat-resolved-range">
-            <Clock className="w-3.5 h-3.5 text-[var(--text-muted)] shrink-0" />
+          <div className="tv-chat-rango" id="chat-resolved-range">
+            <Clock className="w-3.5 h-3.5 shrink-0" />
             {RESOLVED_RANGES.map(r => (
               <button
                 key={r.id}
                 type="button"
                 onClick={() => onResolvedRangeChange(r.id)}
-                className={`text-[10px] font-bold px-2.5 py-1 rounded-full border transition ${
-                  resolvedRange === r.id
-                    ? 'bg-emerald-500/15 border-emerald-500/50 text-emerald-600 '
-                    : 'bg-transparent border-[var(--border-color)] text-[var(--text-muted)] hover:text-[var(--text-secondary)]'
-                }`}
+                data-on={resolvedRange === r.id ? '' : undefined}
               >
                 {r.label}
               </button>
@@ -102,59 +108,43 @@ export default function ChatInbox({
           </div>
         )}
       </div>
-      <div className="flex-1 overflow-y-auto divide-y divide-[var(--border-color)]/40" id="chat-inbox-list">
-        {conversations.length === 0 ? (
-          <p className="text-xs text-[var(--text-muted)] italic text-center py-10 px-4">No hay conversaciones en esta categoría.</p>
+      <div className="flex-1 overflow-y-auto py-1" id="chat-inbox-list">
+        {lista.length === 0 ? (
+          <p className="text-xs text-[var(--text-muted)] italic text-center py-10 px-4">
+            {buscar.trim() ? 'Nada coincide con tu búsqueda.' : 'No hay conversaciones en esta categoría.'}
+          </p>
         ) : (
-          conversations.map(conv => (
+          lista.map(conv => (
             <button
               key={conv.id}
               type="button"
               onClick={() => onSelect(conv.id)}
-              className={`w-full text-left p-3 flex items-center gap-3 transition ${
-                selectedConvId === conv.id ? 'bg-[var(--accent)]/10' : 'hover:bg-[var(--bg-sunken)]'
-              }`}
+              data-activa={selectedConvId === conv.id ? '' : undefined}
+              className="tv-chat-conv"
             >
               <div className="relative shrink-0">
-                <div className="w-10 h-10 rounded-full bg-[var(--accent)]/15 text-[var(--brand-gold-dark)] flex items-center justify-center font-display font-bold text-sm">
+                <div className="tv-chat-ava" style={{ background: colorDe(conv.id) }}>
                   {inicialDe(conv.customerName)}
                 </div>
                 {estaEnLinea(conv.customerLastSeenAt, ahora) && (
-                  <span
-                    title="En línea"
-                    aria-label="En línea"
-                    className="absolute -top-0.5 -right-0.5 w-3 h-3 rounded-full bg-[var(--ok)] border-2 border-[var(--bg-elevated)]"
-                  />
+                  <span title="En línea" aria-label="En línea" className="tv-chat-punto" />
                 )}
+              </div>
+              <div className="min-w-0">
+                <span className="block font-semibold text-[13.5px] text-[var(--text-primary)] truncate">{conv.customerName || 'Cliente'}</span>
+                <span className="block text-[12.5px] text-[var(--text-secondary)] truncate">{lastPreview(conv)}</span>
                 {conv.assignedAdminEmail && (
-                  <span
-                    title={`Asignado a ${conv.assignedAdminEmail}`}
-                    className="absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full bg-[var(--ok)] border-2 border-[var(--bg-elevated)] flex items-center justify-center text-[7px] font-bold text-white"
-                  >
-                    {conv.assignedAdminEmail.charAt(0).toUpperCase()}
+                  <span className="block text-[10.5px] text-[var(--text-muted)] truncate" title={`Asignado a ${conv.assignedAdminEmail}`}>
+                    Atiende: {conv.assignedAdminEmail.split('@')[0]}
                   </span>
                 )}
               </div>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center justify-between gap-2">
-                  <span className="font-semibold text-[13px] text-[var(--text-primary)] truncate">{conv.customerName || 'Cliente'}</span>
-                  <span className="flex items-center gap-1.5 shrink-0">
-                    {/* Sello del último mensaje: en una bandeja es lo que
-                        ordena de un vistazo qué está fresco y qué lleva días
-                        parado, sin abrir la conversación. */}
-                    {ultimoVisible(conv) && (
-                      <span className="text-[10px] tabular-nums text-[var(--text-muted)]">
-                        {selloDeLista(ultimoVisible(conv).timestamp)}
-                      </span>
-                    )}
-                    {conv.unreadCount > 0 && (
-                      <span className="w-2 h-2 rounded-full bg-rose-500 animate-pulse" />
-                    )}
-                  </span>
-                </div>
-                <p className="text-xs text-[var(--text-secondary)] truncate mt-0.5">{lastPreview(conv)}</p>
+              <div className="grid justify-items-end gap-1 text-[11.5px] text-[var(--text-muted)]">
+                {ultimoVisible(conv) && <span className="tabular-nums">{selloDeLista(ultimoVisible(conv).timestamp)}</span>}
+                {conv.unreadCount > 0
+                  ? <span className="tv-chat-cuenta">{conv.unreadCount > 99 ? '99+' : conv.unreadCount}</span>
+                  : <span className={`w-2 h-2 rounded-full ${conv.status === 'nuevo' ? 'bg-[var(--accent)]' : conv.status === 'pendiente' ? 'bg-[var(--warn)]' : 'bg-[var(--text-muted)]'}`} />}
               </div>
-              <span className={`w-2 h-2 rounded-full shrink-0 ${conv.status === 'nuevo' ? 'bg-blue-500' : conv.status === 'pendiente' ? 'bg-orange-500' : 'bg-slate-400'}`} />
             </button>
           ))
         )}
