@@ -324,9 +324,9 @@ html.sin-vidrio .tv-regleta {
      el texto siga legible aun sin blur; el desenfoque es chico y estático.
      Se posiciona con `top/left/right` propios (sin capa) y por eso ganan a
      las utilidades `top-0 left-0 right-0` del marcado, que sí van en capa. */
-  top: calc(10px + env(safe-area-inset-top, 0px));
-  left: 12px;
-  right: 12px;
+  top: calc(8px + env(safe-area-inset-top, 0px));
+  left: 10px;
+  right: 10px;
   max-width: 1232px;
   margin-inline: auto;
   border-radius: 999px;
@@ -461,12 +461,12 @@ h5, .text-lg {
    cada tarjeta de la rejilla. Con seis productos en pantalla eso son seis
    veces el mismo exceso, y la tercera fila ya no cabía. */
 .tv-nombre-producto {
-  font-size: 13px !important;
+  font-size: 12.5px !important;
   line-height: 1.25 !important;
   letter-spacing: 0;
 }
 @media (min-width: 640px) {
-  .tv-nombre-producto { font-size: 12.5px !important; line-height: 1.3 !important; }
+  .tv-nombre-producto { font-size: 12px !important; line-height: 1.3 !important; }
 }
 
 /* Cifras alineadas en columnas de precios y totales. */
@@ -1011,15 +1011,26 @@ input, select, textarea { max-width: 100%; }
    archivo a propósito: estas reglas deben ganar a las genéricas de arriba.
    ========================================================================== */
 
+/* ---- Botones de la barra (tema, cuenta, carrito) ----
+   La regla táctil global fuerza 40-44 px a todo botón con ícono; dentro de la
+   cápsula, que es más baja, eso desbordaba. Con dos clases gana sin discusión. */
+.glass-nav .tv-hbtn {
+  min-width: 0 !important;
+  min-height: 0 !important;
+  width: 34px;
+  height: 34px;
+}
+@media (pointer: coarse) { .glass-nav .tv-hbtn { width: 38px; height: 38px; } }
+
 /* ---- Buscador ---- */
 .tv-buscador {
   display: flex;
   align-items: center;
   gap: 10px;
-  height: 46px;
-  padding: 0 14px 0 16px;
-  margin-bottom: 12px;
-  max-width: 640px;
+  height: 40px;
+  padding: 0 12px 0 14px;
+  margin-bottom: 10px;
+  max-width: 520px;
   border-radius: 999px;
   background: var(--bg-surface);
   border: 1px solid var(--card-border);
@@ -1039,16 +1050,16 @@ input, select, textarea { max-width: 100%; }
   outline: 0;
   box-shadow: none;
   font: inherit;
-  font-size: 14px;
+  font-size: 13px;
   color: var(--text-primary);
 }
 .tv-buscador input::placeholder { color: var(--text-muted); }
 .tv-buscador input::-webkit-search-cancel-button { display: none; }
 .tv-buscador > button.tv-limpiar {
-  min-width: 28px !important;
-  min-height: 28px !important;
-  width: 28px;
-  height: 28px;
+  min-width: 24px !important;
+  min-height: 24px !important;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--bg-sunken);
   color: var(--text-secondary);
@@ -1058,13 +1069,13 @@ input, select, textarea { max-width: 100%; }
 .tv-pildora {
   display: inline-flex;
   align-items: center;
-  gap: 7px;
-  padding: 8px 14px;
+  gap: 6px;
+  padding: 6px 12px;
   border-radius: 999px;
   background: var(--pill-bg);
   border: 1px solid var(--card-border);
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   white-space: nowrap;
   cursor: pointer;
@@ -1078,25 +1089,25 @@ input, select, textarea { max-width: 100%; }
   font-weight: 600;
 }
 .tv-pildora--on:hover { color: var(--chip-on-ink); border-color: var(--chip-on-bg); }
-.tv-pildora-n { font-size: 11px; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.tv-pildora-n { font-size: 10.5px; opacity: 0.6; font-variant-numeric: tabular-nums; }
 
 /* ---- Tarjeta de producto ---- */
 .tv-prod {
   background: var(--bg-surface);
   border: 1px solid var(--card-border);
-  border-radius: 18px;
-  padding: 10px;
+  border-radius: 16px;
+  padding: 8px;
   transition: border-color 0.15s ease, transform 0.18s cubic-bezier(0.16, 1, 0.3, 1);
 }
 @media (hover: hover) {
   .tv-prod:hover { border-color: rgba(var(--accent-rgb), 0.45); transform: translateY(-2px); }
 }
 .tv-prod:focus-visible { outline: 3px solid rgba(var(--accent-rgb), 0.5); outline-offset: 2px; }
-.tv-prod-foto { background: var(--tile); border-radius: 12px; }
+.tv-prod-foto { background: var(--tile); border-radius: 10px; }
 .tv-prod-insignia {
-  padding: 3px 9px;
+  padding: 2px 8px;
   border-radius: 999px;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   line-height: 1.3;
 }
@@ -1104,23 +1115,23 @@ input, select, textarea { max-width: 100%; }
 .tv-prod-insignia--acento { background: var(--accent); color: var(--accent-ink); }
 .tv-prod-insignia--neutra { background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border-color); }
 .tv-prod-precio {
-  font-size: 18px;
+  font-size: 15.5px;
   font-weight: 700;
   line-height: 1.1;
   letter-spacing: -0.01em;
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
-.tv-prod-moneda { font-size: 12px; font-weight: 600; margin-right: 1px; }
-.tv-prod-meta { font-size: 11.5px; line-height: 1.3; color: var(--text-muted); }
+.tv-prod-moneda { font-size: 11px; font-weight: 600; margin-right: 1px; }
+.tv-prod-meta { font-size: 11px; line-height: 1.3; color: var(--text-muted); }
 .tv-prod-tachado { font-size: 11px; color: var(--text-muted); text-decoration: line-through; font-variant-numeric: tabular-nums; }
 .tv-prod-boton {
-  margin-top: 6px;
-  padding: 9px 12px;
+  margin-top: 4px;
+  padding: 6px 10px;
   border-radius: 999px;
   background: var(--accent);
   color: var(--accent-ink);
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   text-align: center;
   transition: background 0.15s ease;

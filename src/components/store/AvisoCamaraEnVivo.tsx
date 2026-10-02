@@ -31,10 +31,11 @@ export default function AvisoCamaraEnVivo() {
     <div
       role="status"
       aria-live="polite"
-      className="fixed inset-x-0 z-[2147483000] flex justify-center px-3"
+      className="fixed inset-x-0 z-[2147483000] flex justify-start px-3"
       style={{
-        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 12px)',
-        // Se queda a la izquierda de la burbuja de chat flotante para no taparla.
+        bottom: 'calc(env(safe-area-inset-bottom, 0px) + 14px)',
+        // Deja libre el costado derecho: ahí flota el botón del chat.
+        paddingRight: 68,
         pointerEvents: 'none',
       }}
     >
@@ -44,7 +45,7 @@ export default function AvisoCamaraEnVivo() {
           pointerEvents: 'auto',
           background: '#111827',
           border: '1px solid rgba(229,72,77,0.55)',
-          maxWidth: 'min(92vw, 560px)',
+          maxWidth: 'min(100%, 520px)',
         }}
       >
         <span className="relative flex h-3 w-3 flex-shrink-0" aria-hidden="true">

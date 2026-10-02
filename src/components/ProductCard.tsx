@@ -100,11 +100,11 @@ export const ProductCard = React.memo(function ProductCard({ prod, onClick, onAd
       </div>
 
       {/* ---------------------------- Detalle ----------------------------- */}
-      <div className="flex min-w-0 flex-1 flex-col gap-1 px-0.5 pt-2">
+      <div className="flex min-w-0 flex-1 flex-col gap-1 px-0.5 pt-1.5">
         {/* Alto RESERVADO de dos líneas: con line-clamp a secas un nombre de
             una línea deja la tarjeta más baja que su vecina y la fila de la
             rejilla queda desalineada. */}
-        <h4 className="tv-nombre-producto tv-clamp-2 min-h-[2.1rem] font-semibold text-[var(--text-primary)]">
+        <h4 className="tv-nombre-producto tv-clamp-2 min-h-[1.9rem] font-semibold text-[var(--text-primary)]">
           {prod.name}
         </h4>
 

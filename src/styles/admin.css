@@ -37,7 +37,7 @@
      global del panel, así que puede permitirse ser fina. La barra de
      56 px de antes convivía con una miga de pan, un título de módulo y
      una fila de sub-pestañas que decían lo mismo. */
-  --tv-regleta-h: 50px;
+  --tv-regleta-h: 42px;
   --tv-dock-h: 62px;
 
   /* -------------------------------------------------------------------
@@ -1317,6 +1317,8 @@
 
 .tv-btn[data-variant='danger']:hover { background: var(--tv-danger-soft); }
 
+.tv-btn { gap: 6px; }
+@media (pointer: coarse) { .tv-btn { height: 40px; } }
 .tv-btn[data-variant='ghost'] { background: transparent; border-color: transparent; color: var(--text-secondary); }
 .tv-btn[data-variant='ghost']:hover { background: var(--bg-sunken); color: var(--text-primary); }
 
@@ -1652,9 +1654,9 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
 
 /* ---- Regleta: cápsula flotante ---- */
 #admin-panel-root .tv-regleta {
-  margin: calc(10px + env(safe-area-inset-top, 0px)) 12px 0;
-  padding: 5px 6px;
-  gap: 6px;
+  margin: calc(8px + env(safe-area-inset-top, 0px)) 10px 0;
+  padding: 4px 5px;
+  gap: 4px;
   min-height: var(--tv-regleta-h);
   flex-wrap: nowrap;
   border-radius: 999px;
@@ -1666,20 +1668,31 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
 }
 html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg-surface); }
 
+/* La regla táctil global fuerza 40-44 px a todo botón con ícono. Dentro de la
+   cápsula (más baja) eso desbordaba; con el id del panel se acota. */
+#admin-panel-root .tv-regleta button {
+  min-width: 0 !important;
+  min-height: 0 !important;
+}
 #admin-panel-root .tv-lanzador {
-  width: 40px;
-  height: 40px;
+  width: 32px;
+  height: 32px;
   border-radius: 999px;
+}
+#admin-panel-root .tv-regleta .tv-icon-btn { width: 32px; height: 32px; }
+@media (pointer: coarse) {
+  #admin-panel-root .tv-lanzador,
+  #admin-panel-root .tv-regleta .tv-icon-btn { width: 38px; height: 38px; }
 }
 #admin-panel-root .tv-lanzador:hover { background: rgba(var(--accent-rgb), 0.10); color: var(--text-primary); }
 
 /* ---- Pestañas: cápsulas; la activa es una gota ---- */
 #admin-panel-root .tv-tabs { gap: 2px; }
 #admin-panel-root .tv-tab {
-  height: 40px;
-  max-width: 200px;
-  padding-left: 16px;
-  padding-right: 8px;
+  height: 32px;
+  max-width: 190px;
+  padding-left: 12px;
+  padding-right: 6px;
   border-radius: 999px;
   border: 1px solid transparent;
   color: var(--text-secondary);
@@ -1693,52 +1706,54 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 }
 #admin-panel-root .tv-tab-btn {
   font-family: var(--font-sans);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
   letter-spacing: 0;
 }
 #admin-panel-root .tv-tab-x { border-radius: 50%; }
+@media (pointer: coarse) { #admin-panel-root .tv-tab { height: 38px; } }
 #admin-panel-root .tv-tab-nueva {
-  width: 36px !important;
-  height: 36px !important;
+  width: 30px !important;
+  height: 30px !important;
   border-radius: 50%;
   border: 0;
 }
 #admin-panel-root .tv-tab-nueva:hover { background: rgba(var(--accent-rgb), 0.10); color: var(--tv-accent); }
 #admin-panel-root .tv-icon-btn:hover { background: rgba(var(--accent-rgb), 0.10); color: var(--text-primary); }
 #admin-panel-root .tv-avatar {
-  width: 34px;
-  height: 34px;
+  width: 30px;
+  height: 30px;
   background: var(--accent);
   color: var(--accent-ink);
   border: 0;
 }
 
 /* ---- Menú de cuenta ---- */
-#admin-panel-root .tv-menu { border-radius: 18px; border-color: var(--card-border); }
+#admin-panel-root .tv-menu { border-radius: 16px; border-color: var(--card-border); min-width: 208px; padding: 5px; }
+#admin-panel-root .tv-menu-item { padding: 7px 9px; font-size: 12.5px; gap: 8px; border-radius: 10px; min-height: 0 !important; justify-content: flex-start !important; }
 
 /* ---- Cabecera de la pantalla (la dibuja `PageHead` dentro del módulo) ---- */
 .tv-cabecera {
   display: flex;
   align-items: center;
   flex-wrap: wrap;
-  gap: 8px 12px;
-  padding: 2px 0;
+  gap: 6px 10px;
+  padding: 0;
 }
 .tv-cabecera-ic {
   display: grid;
   place-items: center;
   flex: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 14px;
+  width: 36px;
+  height: 36px;
+  border-radius: 12px;
   background: var(--bg-surface);
   border: 1px solid var(--card-border);
   color: var(--accent);
 }
 .tv-cabecera-tx { flex: 1 1 200px; min-width: 0; }
 .tv-cabecera-t {
-  font-size: 22px;
+  font-size: 19px;
   font-weight: 700;
   letter-spacing: -0.01em;
   line-height: 1.2;
@@ -1746,9 +1761,9 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 }
 .tv-cabecera .tv-pista:not(:empty) {
   padding: 0;
-  margin-top: 2px;
-  font-size: 13px;
-  line-height: 1.4;
+  margin-top: 1px;
+  font-size: 12.5px;
+  line-height: 1.35;
   color: var(--text-secondary);
 }
 .tv-cabecera .tv-regleta-acciones {
@@ -1762,30 +1777,30 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 .tv-cabecera .tv-regleta-acciones:empty { display: none; }
 @media (max-width: 639px) {
   .tv-cabecera-ic { display: none; }
-  .tv-cabecera-t { font-size: 20px; }
+  .tv-cabecera-t { font-size: 18px; }
 }
 
 /* ---- Carpetas: píldoras segmentadas (como los chips de la tienda) ---- */
 .tv-carpetas-bar { background: transparent; }
 .tv-carpetas-bar:has(.tv-folders),
 .tv-carpetas-bar[data-con-carpetas='true'] {
-  padding: 6px var(--tv-gap) 8px;
+  padding: 8px var(--tv-gap) 6px;
   border-bottom: 0;
 }
 @media (min-width: 1024px) {
   .tv-carpetas-bar:has(.tv-folders),
-  .tv-carpetas-bar[data-con-carpetas='true'] { padding: 6px var(--tv-gap-lg) 8px; }
+  .tv-carpetas-bar[data-con-carpetas='true'] { padding: 8px var(--tv-gap-lg) 6px; }
 }
 .tv-folders { gap: 6px; align-items: center; padding-bottom: 0; }
 .tv-folder {
   margin-right: 0;
-  padding: 8px 14px;
+  padding: 5px 12px;
   border: 1px solid var(--card-border);
   border-radius: 999px;
   background: var(--pill-bg);
   clip-path: none;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 500;
   box-shadow: none;
 }
@@ -1808,9 +1823,10 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
   border-color: var(--card-border);
   border-radius: 18px;
 }
-.tv-card-head { border-bottom-color: var(--border-soft); }
+.tv-card-head { border-bottom-color: var(--border-soft); padding: 10px 14px; }
+.tv-card-body { padding: 14px; }
 .tv-card-title {
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 700;
   letter-spacing: 0;
   text-transform: none;
@@ -1818,41 +1834,42 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 }
 
 /* ---- Métricas ---- */
-.tv-stat { display: flex; flex-direction: column; gap: 2px; padding: 14px 16px; }
+.tv-stat { display: flex; flex-direction: column; gap: 1px; padding: 11px 14px; }
 .tv-stat-label {
-  font-size: 13px;
+  font-size: 12px;
   font-weight: 500;
   letter-spacing: 0;
   text-transform: none;
   color: var(--text-secondary);
 }
 .tv-stat-value {
-  margin-top: 2px;
+  margin-top: 1px;
   font-family: var(--font-sans);
-  font-size: 26px;
+  font-size: 21px;
   font-weight: 700;
   letter-spacing: -0.015em;
 }
-.tv-stat-foot { margin-top: 0; font-size: 12px; font-weight: 500; color: var(--accent); }
+.tv-stat-foot { margin-top: 0; font-size: 11.5px; font-weight: 500; color: var(--accent); }
 
 /* ---- Etiquetas de estado: cápsula con tinte ---- */
 .tv-chip {
-  padding: 4px 11px;
+  padding: 2px 9px;
   border-color: transparent;
   background: var(--bg-sunken);
-  font-size: 11.5px;
+  font-size: 11px;
   font-weight: 600;
   letter-spacing: 0;
 }
 
 /* ---- Botones: cápsula ---- */
+/* 34 px de alto (40 en pantalla táctil): cómodo sin acaparar la fila. */
 .tv-btn {
-  height: 40px;
-  padding: 0 18px;
+  height: 34px;
+  padding: 0 14px;
   border-radius: 999px;
   border: 1px solid var(--card-border);
   background: var(--bg-surface);
-  font-size: 13px;
+  font-size: 12.5px;
   font-weight: 600;
 }
 .tv-btn:hover { background: var(--bg-sunken); }
@@ -1863,16 +1880,17 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 
 /* ---- Campos ---- */
 .tv-label {
-  font-size: 12.5px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0;
   text-transform: none;
   color: var(--text-secondary);
 }
-.tv-input { height: 42px; background: var(--bg-surface); border-color: var(--border-color); }
+.tv-input { height: 36px; font-size: 13px; background: var(--bg-surface); border-color: var(--border-color); }
 
 /* ---- Tablas ---- */
-.tv-table thead th { background: var(--bg-surface); border-bottom-color: var(--border-color); }
+.tv-table thead th { background: var(--bg-surface); border-bottom-color: var(--border-color); padding: 8px 12px; }
+.tv-table tbody td { padding: 9px 12px; }
 .tv-table tbody td { border-bottom-color: var(--border-soft); }
 .tv-table tbody tr:hover td { background: rgba(var(--accent-rgb), 0.05); }
 
@@ -1890,3 +1908,8 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
   #admin-panel-root .tv-regleta-fijos .tv-icon-btn[aria-label="Ver la tienda"] { display: none !important; }
   #admin-panel-root .tv-tab[data-activa] { max-width: max(100px, calc(100vw - 214px)); }
 }
+
+/* Las burbujas del chat flotan abajo a la derecha: se deja aire al final del
+   contenido para que, al llegar abajo, nada quede tapado por ellas. */
+.tv-scroll:not([data-pantalla='completa']) { padding-bottom: calc(env(safe-area-inset-bottom, 0px) + var(--tv-gap) + 56px); }
+@media (min-width: 1024px) { .tv-scroll:not([data-pantalla='completa']) { padding-bottom: calc(var(--tv-gap-lg) + 56px); } }

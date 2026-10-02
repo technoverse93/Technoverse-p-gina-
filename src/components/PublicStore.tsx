@@ -1317,19 +1317,19 @@ export default function PublicStore({
           (`hidden sm:block`) y en la APK no había forma de buscar un
           producto salvo entrando categoría por categoría. */}
       <header className="fixed top-0 left-0 right-0 z-40 glass-nav">
-        <div className="h-14 sm:h-16 flex items-center justify-between pl-3.5 pr-2.5 md:pl-5 md:pr-3">
+        <div className="h-12 sm:h-[52px] flex items-center justify-between pl-3 pr-2 md:pl-4 md:pr-2.5">
         <div className="flex items-center gap-4 lg:gap-8">
           <button 
             onClick={() => { setActiveTab('store'); setSelectedCategory(null); }}
             className="flex items-center gap-2 cursor-pointer group"
           >
-            <div className="relative w-8 h-8 flex-shrink-0">
+            <div className="relative w-7 h-7 flex-shrink-0">
               <img 
                 src={storeLogo || "/logo.png"} 
                 alt="Technoverse Logo" 
-                width={32} 
-                height={32}
-                className="h-8 w-8 rounded-lg border border-[var(--border-color)] shadow-sm object-contain bg-[var(--bg-surface)] p-0.5" 
+                width={28} 
+                height={28}
+                className="h-7 w-7 rounded-lg border border-[var(--border-color)] shadow-sm object-contain bg-[var(--bg-surface)] p-0.5" 
               />
             </div>
             {/* Antes `hidden sm:block`: en la APK y el navegador móvil, el
@@ -1349,7 +1349,7 @@ export default function PublicStore({
               preferencia que la gente cambia según la luz del momento, no
               una vez y para siempre: escondida detrás de dos toques no se
               usa. En móvil se mantiene visible por el mismo motivo. */}
-          <BotonTema className="w-10 h-10 md:w-9 md:h-9" />
+          <BotonTema className="tv-hbtn" />
 
           {/* Cuenta / Perfil. Copia exactamente el diseño de BotonTema
               (mismas clases base, mismo tamaño w-10 h-10 md:w-9 md:h-9):
@@ -1372,7 +1372,7 @@ export default function PublicStore({
               }}
               aria-label="Mi Cuenta"
               title="Mi Cuenta"
-              className={`relative flex-shrink-0 inline-flex items-center justify-center rounded-full border transition cursor-pointer w-10 h-10 md:w-9 md:h-9 ${
+              className={`relative flex-shrink-0 inline-flex items-center justify-center rounded-full border transition cursor-pointer tv-hbtn ${
                 isAccountDropdownOpen
                   ? 'border-[var(--accent)] bg-[var(--bg-surface)] text-[var(--accent)]'
                   : 'border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
@@ -1413,7 +1413,7 @@ export default function PublicStore({
                             value={loginEmail}
                             onChange={(e) => setLoginEmail(e.target.value)}
                             placeholder="usuario@ejemplo.com"
-                            className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-4 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm text-[var(--text-secondary)] focus:outline-none transition-all font-medium"
+                            className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-4 focus:ring-blue-500 rounded-xl px-3.5 py-2 text-[13px] text-[var(--text-secondary)] focus:outline-none transition-all font-medium"
                           />
                         </div>
                         <div>
@@ -1426,7 +1426,7 @@ export default function PublicStore({
                             value={loginPassword}
                             onChange={(e) => setLoginPassword(e.target.value)}
                             placeholder="••••••••••••"
-                            className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-4 focus:ring-blue-500 rounded-xl px-4 py-3 text-sm text-[var(--text-secondary)] focus:outline-none transition-all"
+                            className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-4 focus:ring-blue-500 rounded-xl px-3.5 py-2 text-[13px] text-[var(--text-secondary)] focus:outline-none transition-all"
                           />
                         </div>
                       </div>
@@ -1434,7 +1434,7 @@ export default function PublicStore({
                       <button
                         type="submit"
                         disabled={entrandoSesion}
-                        className="w-full btn-glass-primary font-bold text-sm py-3.5 rounded-full active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait"
+                        className="w-full btn-glass-primary font-bold text-[13px] py-2.5 rounded-full active:scale-[0.98] disabled:opacity-60 disabled:cursor-wait"
                       >
                         {entrandoSesion ? 'Verificando acceso…' : 'Iniciar Sesión'}
                       </button>
@@ -1450,7 +1450,7 @@ export default function PublicStore({
                           type="button"
                           onClick={accederConBiometria}
                           disabled={entrandoBiometria || entrandoSesion}
-                          className="w-full mt-2 border border-[var(--border-color)] text-[var(--text-primary)] font-bold text-sm py-3 rounded-xl active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2 hover:bg-[var(--bg-surface)] transition"
+                          className="w-full mt-2 border border-[var(--border-color)] text-[var(--text-primary)] font-bold text-[13px] py-2.5 rounded-full active:scale-[0.98] disabled:opacity-60 flex items-center justify-center gap-2 hover:bg-[var(--bg-surface)] transition"
                         >
                           <Fingerprint className="w-4 h-4" />
                           {entrandoBiometria ? 'Verificando…' : 'Entrar con Face ID o huella'}
@@ -1539,7 +1539,7 @@ export default function PublicStore({
               }}
               aria-label="Carrito"
               title="Carrito"
-              className={`relative flex-shrink-0 inline-flex items-center justify-center rounded-full border transition cursor-pointer w-10 h-10 md:w-9 md:h-9 ${
+              className={`relative flex-shrink-0 inline-flex items-center justify-center rounded-full border transition cursor-pointer tv-hbtn ${
                 isCartDropdownOpen
                   ? 'border-[var(--accent)] bg-[var(--bg-surface)] text-[var(--accent)]'
                   : 'border-[var(--border-color)] bg-[var(--bg-surface)] text-[var(--text-secondary)] hover:text-[var(--accent)] hover:border-[var(--accent)]'
@@ -1653,7 +1653,7 @@ export default function PublicStore({
           notch el catálogo quedaría tapado bajo la barra. Sin barra
           inferior fija, tampoco hace falta el pb-28/pb-20 que antes le
           reservaba espacio. */}
-      <main className="pt-[calc(5.5rem+env(safe-area-inset-top))] sm:pt-[calc(6rem+env(safe-area-inset-top))] pb-8 px-4 md:px-6 max-w-7xl mx-auto space-y-12">
+      <main className="pt-[calc(4.5rem+env(safe-area-inset-top))] sm:pt-[calc(5rem+env(safe-area-inset-top))] pb-8 px-4 md:px-6 max-w-7xl mx-auto space-y-12">
         <AnimatePresence mode="wait">
           <motion.div
             key={activeTab}
@@ -2499,7 +2499,7 @@ export default function PublicStore({
                       value={regEmail}
                       onChange={(e) => setRegEmail(e.target.value)}
                       placeholder="maria@correo.cr"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-3.5 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none transition"
                     />
                   </div>
                   <div>
@@ -2510,7 +2510,7 @@ export default function PublicStore({
                       value={regPhone}
                       onChange={(e) => setRegPhone(e.target.value)}
                       placeholder="88884444"
-                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-4 py-3 text-sm text-[var(--text-primary)] focus:outline-none transition"
+                      className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-[var(--accent)] focus:ring-1 focus:ring-[var(--accent)] rounded-xl px-3.5 py-2 text-[13px] text-[var(--text-primary)] focus:outline-none transition"
                     />
                   </div>
                 </div>

@@ -38,7 +38,7 @@ const MAX_CABEZAS = 4;
 /** Forma de las burbujas (Cristal Ligero): cuadrado de esquinas de 18 px, no
  *  círculo. El panel redondea todos los botones con una regla de id; el radio
  *  en línea le gana y fija la forma de la maqueta. */
-const REDONDA = { borderRadius: 18 } as const;
+const REDONDA = { borderRadius: 14 } as const;
 
 function ultimoDelCliente(c: ChatConversation) {
   for (let i = c.messages.length - 1; i >= 0; i--) {
@@ -126,7 +126,7 @@ export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdm
     <>
       {/* La pila de burbujas: la más reciente arriba del globo de la lista. */}
       <div
-        className="fixed right-3 sm:right-5 bottom-4 sm:bottom-5 flex flex-col-reverse items-end gap-2.5"
+        className="fixed right-3 sm:right-5 bottom-4 sm:bottom-5 flex flex-col-reverse items-end gap-2"
         style={{ zIndex: Z.floating, marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
         aria-label="Chats"
       >
@@ -136,7 +136,7 @@ export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdm
           aria-label={`Todas las conversaciones${totalSinLeer ? `, ${totalSinLeer} mensajes sin leer` : ''}`}
           aria-expanded={abierta === 'lista'}
           style={REDONDA}
-          className="relative w-12 h-12 sm:w-[52px] sm:h-[52px] bg-[var(--accent)] text-[var(--accent-ink)] shadow-lg flex items-center justify-center transition active:scale-95 hover:brightness-110"
+          className="relative w-10 h-10 sm:w-11 sm:h-11 bg-[var(--accent)] text-[var(--accent-ink)] shadow-lg flex items-center justify-center transition active:scale-95 hover:brightness-110"
         >
           <MessageSquare className="w-5 h-5" />
           {sobrantes > 0 && (
@@ -171,7 +171,7 @@ export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdm
                 onMouseLeave={() => setAsomando(a => (a === c.id ? null : a))}
                 aria-label={`Chat con ${nombre}${c.unreadCount ? `, ${c.unreadCount} sin leer` : ''}${enLinea ? ', en línea' : ''}`}
                 aria-expanded={activa}
-                className={`cristal-vidrio relative w-12 h-12 sm:w-[52px] sm:h-[52px] text-[var(--gota-ink)] font-display font-bold text-[17px] flex items-center justify-center transition active:scale-95 ${activa ? 'ring-[3px] ring-[var(--accent)]' : ''}`}
+                className={`cristal-vidrio relative w-10 h-10 sm:w-11 sm:h-11 text-[var(--gota-ink)] font-display font-bold text-[15px] flex items-center justify-center transition active:scale-95 ${activa ? 'ring-[3px] ring-[var(--accent)]' : ''}`}
                 style={REDONDA}
               >
                 {inicialDe(c.customerName)}
@@ -179,7 +179,7 @@ export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdm
                   <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[var(--ok)] ring-2 ring-[var(--bg-surface)]" aria-hidden="true" />
                 )}
                 {(c.unreadCount || 0) > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[20px] h-5 px-1 rounded-full bg-[#e5484d] text-white text-[10.5px] font-bold flex items-center justify-center tabular-nums ring-2 ring-[var(--bg-surface)]">
+                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#e5484d] text-white text-[10px] font-bold flex items-center justify-center tabular-nums ring-2 ring-[var(--bg-surface)]">
                     {c.unreadCount > 99 ? '99+' : c.unreadCount}
                   </span>
                 )}
@@ -194,8 +194,8 @@ export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdm
       {abierta && (
         <div
           className="fixed flex flex-col glass-panel-strong rounded-[22px] overflow-hidden shadow-2xl border border-[var(--border-color)]
-                     left-2 right-[68px] top-16 bottom-4
-                     sm:left-auto sm:top-auto sm:right-[88px] sm:bottom-5 sm:w-[380px] sm:h-[min(72vh,620px)]"
+                     left-2 right-[60px] top-16 bottom-4
+                     sm:left-auto sm:top-auto sm:right-[72px] sm:bottom-5 sm:w-[360px] sm:h-[min(72vh,620px)]"
           style={{ zIndex: Z.floating }}
           role="dialog"
           aria-label={conversacionAbierta ? `Chat con ${nombreLegible(conversacionAbierta.customerName)}` : 'Conversaciones'}

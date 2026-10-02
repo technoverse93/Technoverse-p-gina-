@@ -756,7 +756,7 @@ export default function LiveChat() {
       {!isOpen && (
         <button
           onClick={() => { setIsOpen(true); void pedirPermisoNotificaciones(); }}
-          className="fixed bottom-24 right-6 z-[45] w-12 h-12 max-w-12 max-h-12 rounded-[18px] flex items-center justify-center transition hover:scale-105 active:scale-95 shadow-[var(--float-shadow-lg)] text-[var(--accent-ink)] bg-gradient-to-br from-[var(--brand-gold-dark)] to-[var(--brand-gold-mid)] border-2 border-[var(--bg-surface)]"
+          className="fixed bottom-5 right-4 sm:right-6 z-[45] w-11 h-11 max-w-11 max-h-11 rounded-[14px] flex items-center justify-center transition hover:scale-105 active:scale-95 shadow-[var(--float-shadow-lg)] text-[var(--accent-ink)] bg-gradient-to-br from-[var(--brand-gold-dark)] to-[var(--brand-gold-mid)] border-2 border-[var(--bg-surface)]"
           id="btn-floating-chat"
         >
           <MessageSquare className="w-5 h-5" />
