@@ -52,3 +52,8 @@ export const supabase = createClient(supabaseUrl, supabaseKey, {
     params: { eventsPerSecond: 200 },
   },
 });
+
+// Para las pocas llamadas que no pasan por supabase-js (la respuesta EN VIVO
+// del Asistente IA, que llega como flujo y `functions.invoke` no lo lee).
+export const SUPABASE_URL = supabaseUrl;
+export const SUPABASE_KEY = supabaseKey;
