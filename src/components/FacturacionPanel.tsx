@@ -101,10 +101,31 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
   const [tocado, setTocado] = useState({ nombre: false, correo: false });
   const autocompletado = useRef({ nombre: false, correo: false });
 
+  // FALLO CORREGIDO: el nombre solo se rellenaba si el cajero no había
+  // tocado el campo. Como «Nombre» iba ANTES que la cédula, lo normal era
+  // escribir algo ahí primero; después la consulta encontraba a la persona,
+  // la pantalla decía «Datos encontrados»… y el nombre no cambiaba nunca.
+  // Ahora la cédula va primero, un campo vacío se rellena siempre, y si ya
+  // hay otro nombre escrito se ofrece reemplazarlo con un toque.
+  const [sugerido, setSugerido] = useState<{ nombre?: string; correo?: string } | null>(null);
   const aplicarDatos = (d: DatosEncontrados) => {
     if (d.tipo) setIdTipo(d.tipo);
-    if (d.nombre && !tocado.nombre) { setNombre(d.nombre); autocompletado.current.nombre = true; }
-    if (d.correo && !tocado.correo) { setCorreo(d.correo); autocompletado.current.correo = true; }
+    const pendiente: { nombre?: string; correo?: string } = {};
+    if (d.nombre) {
+      if (!tocado.nombre || !nombre.trim()) { setNombre(d.nombre); autocompletado.current.nombre = true; }
+      else if (nombre.trim().toLowerCase() !== d.nombre.trim().toLowerCase()) pendiente.nombre = d.nombre;
+    }
+    if (d.correo) {
+      if (!tocado.correo || !correo.trim()) { setCorreo(d.correo); autocompletado.current.correo = true; }
+      else if (correo.trim().toLowerCase() !== d.correo.trim().toLowerCase()) pendiente.correo = d.correo;
+    }
+    setSugerido(pendiente.nombre || pendiente.correo ? pendiente : null);
+  };
+  const usarSugerido = () => {
+    if (!sugerido) return;
+    if (sugerido.nombre) { setNombre(sugerido.nombre); setTocado(t => ({ ...t, nombre: false })); autocompletado.current.nombre = true; }
+    if (sugerido.correo) { setCorreo(sugerido.correo); setTocado(t => ({ ...t, correo: false })); autocompletado.current.correo = true; }
+    setSugerido(null);
   };
 
   const consulta = useConsultaIdentificacion({
@@ -118,6 +139,7 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
     if (autocompletado.current.nombre && !tocado.nombre) setNombre('');
     if (autocompletado.current.correo && !tocado.correo) setCorreo('');
     autocompletado.current = { nombre: false, correo: false };
+    setSugerido(null);
     setIdValor(digitos);
     const deducido = detectarTipo(digitos);
     if (deducido) setIdTipo(deducido);
@@ -346,6 +368,7 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
     setNombre(''); setIdValor(''); setCorreo(''); setTelefono('');
     setTocado({ nombre: false, correo: false });
     autocompletado.current = { nombre: false, correo: false };
+    setSugerido(null);
     consulta.reiniciar();
     setDescripcion(''); setMonto(''); setGarantia('3'); setMedio('SINPE');
     setRepuestos([]); setInsumos([]);
@@ -585,9 +608,6 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
       <div className="tv-grid tv-grid-2">
         <Card title="Cliente">
           <div className="tv-stack">
-            <Field label="Nombre completo">
-              <input className="tv-input" value={nombre} onChange={e => { setNombre(e.target.value); setTocado(t => ({ ...t, nombre: true })); autocompletado.current.nombre = false; }} placeholder="Nombre y apellidos" />
-            </Field>
             <div className="tv-grid tv-grid-2">
               <Field label="Tipo de identificación">
                 <CustomSelect
@@ -640,6 +660,15 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
                 {consulta.resultado.estado === 'error' && consulta.resultado.mensaje}
               </p>
             )}
+            {sugerido && (
+              <div className="-mt-1 flex flex-wrap items-center gap-2 text-[12px] text-[var(--text-secondary)]">
+                <span>Hacienda lo tiene como <strong className="text-[var(--text-primary)]">{sugerido.nombre || sugerido.correo}</strong>.</span>
+                <Btn type="button" variant="default" onClick={usarSugerido}>Usar ese dato</Btn>
+              </div>
+            )}
+            <Field label="Nombre completo" hint="Se completa solo al escribir la cédula.">
+              <input className="tv-input" value={nombre} onChange={e => { setNombre(e.target.value); setTocado(t => ({ ...t, nombre: true })); autocompletado.current.nombre = false; }} placeholder="Nombre y apellidos" />
+            </Field>
             <Field label="Correo electrónico" hint="Aquí llega el comprobante en PDF.">
               <input className="tv-input font-mono" type="email" value={correo} onChange={e => { setCorreo(e.target.value); setTocado(t => ({ ...t, correo: true })); autocompletado.current.correo = false; }} placeholder="cliente@correo.com" />
             </Field>

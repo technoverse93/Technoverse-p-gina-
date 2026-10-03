@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { UserCog, CheckCircle2, AlertTriangle, RotateCcw, Trash2 } from 'lucide-react';
+import { UserCog, CheckCircle2, AlertTriangle, RotateCcw, Trash2, Lock, LockOpen } from 'lucide-react';
 import { ChatConversation } from '../../types';
 
 interface ChatActionsMenuProps {
@@ -11,9 +11,11 @@ interface ChatActionsMenuProps {
   onResolve: () => void;
   /** Cierra y BORRA esta conversación, para todos y al instante. */
   onCerrarYBorrar: () => void;
+  /** Solo llega cuando quien mira es superadmin; si no, el botón no existe. */
+  onExclusivo?: (exclusivo: boolean) => void;
 }
 
-export default function ChatActionsMenu({ conversation, staffEmails, onClose, onAssign, onChangeStatus, onResolve, onCerrarYBorrar }: ChatActionsMenuProps) {
+export default function ChatActionsMenu({ conversation, staffEmails, onClose, onAssign, onChangeStatus, onResolve, onCerrarYBorrar, onExclusivo }: ChatActionsMenuProps) {
   const [confirmando, setConfirmando] = useState(false);
   const isResolved = conversation.status === 'resuelto';
   const rootRef = useRef<HTMLDivElement>(null);
@@ -97,6 +99,26 @@ export default function ChatActionsMenu({ conversation, staffEmails, onClose, on
           </>
         )}
       </div>
+      {/* Exclusividad: solo el superadmin la ve y la usa. La misma barrera
+          de rol que Ubicaciones y Bloqueos, y la base la vuelve a exigir. */}
+      {onExclusivo && (
+        <div className="p-2 border-t border-[var(--border-color)]/50">
+          <button
+            type="button"
+            onClick={() => { onExclusivo(!conversation.exclusivoSuperadmin); onClose(); }}
+            className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[var(--bg-sunken)] text-[var(--text-primary)] font-semibold"
+          >
+            {conversation.exclusivoSuperadmin
+              ? <><LockOpen className="w-4 h-4" /> Quitar de exclusivo</>
+              : <><Lock className="w-4 h-4" /> Chat exclusivo de superadmin</>}
+          </button>
+          <p className="px-2 pt-1 text-[10px] text-[var(--text-muted)] leading-snug">
+            {conversation.exclusivoSuperadmin
+              ? 'Ahora solo tú lo ves. Al quitarlo vuelve a la bandeja de todo el personal.'
+              : 'Desaparece al instante para el resto del personal; el cliente sigue escribiendo igual.'}
+          </p>
+        </div>
+      )}
       {/* Cerrar y borrar ESTA conversación — la versión fina del botón
           nuclear. Pide un segundo toque a propósito: borra los mensajes de
           verdad y no hay vuelta atrás. */}

@@ -224,6 +224,7 @@ export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdm
                 onAssign={chat.handleAssign}
                 onChangeStatus={chat.handleChangeStatus}
                 onResolve={chat.handleResolve}
+            onExclusivo={chat.soySuper ? chat.handleExclusivo : undefined}
               />
             ) : (
               <ChatInbox

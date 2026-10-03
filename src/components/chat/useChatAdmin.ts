@@ -17,7 +17,8 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { ChatConversation, User } from '../../types';
-import { getDB, saveDB, addAuditLog, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../../utils/storage';
+import { getDB, saveDB, addAuditLog, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor, marcarChatExclusivo } from '../../utils/storage';
+import { esSuperadmin } from '../../utils/roles';
 import { supabase } from '../../supabaseClient';
 import { useToast, useConfirm } from '../ui/Overlays';
 import { pedirPermisoNotificaciones, notificarMensajeChat } from '../../mobile/notificaciones';
@@ -73,12 +74,16 @@ export function useChatAdmin(currentUser: User | null, onDataChanged?: () => voi
     void notificarMensajeChat(`${deQuien} — Technoverse`, cuerpo);
   }, [avisar]);
 
+  const soySuper = esSuperadmin(currentUser?.role);
   const loadConversations = useCallback(() => {
     const db = getDB();
-    const lista = db.chat_conversations || [];
+    // La base ya no le entrega los chats exclusivos a quien no es
+    // superadmin; este filtro es solo para el instante entre que alguien
+    // marca uno y llega la relectura.
+    const lista = (db.chat_conversations || []).filter(c => soySuper || !c.exclusivoSuperadmin);
     setConversations(lista);
     detectarMensajesDeClientes(lista);
-  }, [detectarMensajesDeClientes]);
+  }, [detectarMensajesDeClientes, soySuper]);
 
   useEffect(() => {
     loadConversations();
@@ -222,7 +227,27 @@ export function useChatAdmin(currentUser: User | null, onDataChanged?: () => voi
     }
   };
 
+  const handleExclusivo = async (convId: string, exclusivo: boolean) => {
+    if (!soySuper) return;
+    if (exclusivo) {
+      const ok = await confirm({
+        title: 'Chat exclusivo de superadmin',
+        message: 'El resto del personal deja de ver esta conversación al instante: no aparece en su bandeja ni le llegan los mensajes nuevos. El cliente sigue escribiendo igual. Puedes quitarlo cuando quieras.',
+        confirmText: 'Hacer exclusivo',
+      });
+      if (!ok) return;
+    }
+    try {
+      await marcarChatExclusivo(convId, exclusivo);
+      toast.success(exclusivo ? 'Chat exclusivo: solo tú lo ves.' : 'El chat vuelve a estar a la vista del personal.');
+      addAuditLog(currentUser?.email || 'superadmin', 'Soporte', exclusivo ? 'Chat exclusivo' : 'Chat no exclusivo', `Conversación ${convId}.`);
+    } catch (err: any) {
+      toast.error('No se pudo cambiar la exclusividad. ' + (err?.message || err));
+    }
+  };
+
   return {
+    soySuper, handleExclusivo,
     conversations, filteredConversations, selectedConv, selectedConvId, setSelectedConvId,
     statusFilter, setStatusFilter, resolvedRange, setResolvedRange, staffEmails, noLeidas,
     handleSendMessage, handleAssign, handleChangeStatus, handleResolve,

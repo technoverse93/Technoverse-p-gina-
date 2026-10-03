@@ -1,5 +1,5 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { ArrowLeft, MoreVertical, Send, StickyNote, RefreshCw, Bot, Trash2, Mic, Paperclip, Check, CheckCheck } from 'lucide-react';
+import { ArrowLeft, MoreVertical, Send, StickyNote, RefreshCw, Bot, Trash2, Mic, Paperclip, Check, CheckCheck, Lock } from 'lucide-react';
 import { subirAdjuntoChat, subirNotaDeVoz, ACEPTA_ADJUNTOS } from '../../utils/adjuntosChat';
 import { tomarFotoNativa, hayCamaraNativa } from '../../utils/camara';
 import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../../utils/grabadorVoz';
@@ -23,9 +23,11 @@ interface ChatThreadProps {
   onAssign: (convId: string, email: string) => Promise<void>;
   onChangeStatus: (convId: string, status: 'nuevo' | 'pendiente') => Promise<void>;
   onResolve: (convId: string) => Promise<void>;
+  /** Solo para el superadmin: marcar o quitar el chat exclusivo. */
+  onExclusivo?: (convId: string, exclusivo: boolean) => Promise<void>;
 }
 
-export default function ChatThread({ conversation, staffEmails, onBack, onSendMessage, onAssign, onChangeStatus, onResolve }: ChatThreadProps) {
+export default function ChatThread({ conversation, staffEmails, onBack, onSendMessage, onAssign, onChangeStatus, onResolve, onExclusivo }: ChatThreadProps) {
   const toast = useToast();
   // Hasta qué momento leyó el visitante: un mensaje del personal anterior o
   // igual a esta marca ya fue visto por él. Alimenta el doble check.
@@ -230,6 +232,11 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
           </div>
         </div>
         <div className="flex items-center gap-2 shrink-0">
+          {conversation.exclusivoSuperadmin && (
+            <span className="tv-chat-etq tv-chat-etq--excl inline-flex items-center gap-1" title="Solo el superadmin ve esta conversación">
+              <Lock className="w-3 h-3" /> Exclusivo
+            </span>
+          )}
           {conversation.status === 'resuelto' && (
             <span className="tv-chat-etq hidden sm:inline">
               Resuelto
@@ -252,6 +259,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
               onChangeStatus={(status) => onChangeStatus(conversation.id, status)}
               onResolve={() => onResolve(conversation.id)}
               onCerrarYBorrar={() => void cerrarYBorrar()}
+              onExclusivo={onExclusivo ? (x) => void onExclusivo(conversation.id, x) : undefined}
             />
           )}
         </div>

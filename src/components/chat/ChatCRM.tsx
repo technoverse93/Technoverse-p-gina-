@@ -47,6 +47,7 @@ function ChatCRM({ currentUser, onDataChanged }: ChatCRMProps) {
             onAssign={chat.handleAssign}
             onChangeStatus={chat.handleChangeStatus}
             onResolve={chat.handleResolve}
+            onExclusivo={chat.soySuper ? chat.handleExclusivo : undefined}
           />
         ) : (
           <div className="flex-1 flex flex-col items-center justify-center text-[var(--text-muted)] p-8">
