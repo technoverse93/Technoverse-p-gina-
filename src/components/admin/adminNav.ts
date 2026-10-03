@@ -349,3 +349,9 @@ export function grupoDe(tab: string): string {
 // Android y tapa la lista que se venía a leer. La «Nueva pestaña»
 // (`NuevaPestana.tsx`) que lo reemplaza no busca — enseña los once
 // módulos agrupados, que se leen de un vistazo.
+
+/** ¿Este módulo es exclusivo del superadmin? Sirve para no abrirlo ni
+ *  listarlo (pestañas, dirección, frecuentes) para el resto del personal. */
+export function esSoloSupremo(id: string): boolean {
+  return !!NAV_ITEMS.find(i => i.id === id)?.soloAdminSupremo;
+}

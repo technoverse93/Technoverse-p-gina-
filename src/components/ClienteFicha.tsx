@@ -1,3 +1,4 @@
+import { esAdminSupremo } from '../utils/securityPin';
 import React, { useState, useEffect, useMemo } from 'react';
 import {
   X, Key, Mail, Power, Download, Trash2, ShoppingBag, RefreshCw, Save, AlertTriangle, ShieldOff
@@ -504,7 +505,10 @@ export default function ClienteFicha({ cliente, pedidos, adminEmail, onCerrar, o
             </button>
           </section>
 
-          {/* ---- Baneo total ---- */}
+          {/* ---- Baneo total ----
+              Herramienta de bloqueo: solo la ve el superadmin, igual que
+              Bloqueos y Ubicaciones. */}
+          {esAdminSupremo(adminEmail) && (
           <section className={`border rounded-2xl p-4 space-y-3 ${
             penalizado
               ? 'bg-rose-500/10 border-rose-500/40'
@@ -552,6 +556,7 @@ export default function ClienteFicha({ cliente, pedidos, adminEmail, onCerrar, o
               Sus pedidos y facturas anteriores no se tocan: son parte de la contabilidad y tienen que conservarse.
             </p>
           </section>
+          )}
 
           {/* ---- Ley 8968 ---- */}
           <section className="bg-[var(--bg-base)] border border-[var(--border-color)]/60 rounded-2xl p-4 space-y-3">

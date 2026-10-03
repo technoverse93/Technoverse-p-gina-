@@ -17,6 +17,7 @@ import { PaginatedTbody } from './PaginationHelper';
 import { useToast, useConfirm } from './ui/Overlays';
 import { Btn } from './admin/AdminKit';
 import { Glifo } from './security/Glifos';
+import { esAdminSupremo } from '../utils/securityPin';
 import MapaModal from './ui/MapaModal';
 
 // =====================================================================
@@ -302,6 +303,10 @@ function CyberSecurityPanel({
 }: CyberSecurityPanelProps) {
   const toast = useToast();
   const confirm = useConfirm();
+  // Bloqueos y ubicación son exclusivos del superadmin (la misma regla que
+  // los módulos Bloqueos y Ubicaciones): al resto del personal ni se le
+  // muestran los apartados ni los botones.
+  const esSupremo = esAdminSupremo(currentUserEmail);
 
   const [vertiente, setVertiente] = useState<Vertiente>('admin');
   const [seccion, setSeccion] = useState<Seccion>('resumen');
@@ -933,6 +938,8 @@ function CyberSecurityPanel({
    * por una línea entre los dos bloques. La vertiente deja de ser una
    * pantalla aparte y pasa a ser lo que siempre fue: una agrupación.
    */
+  const SOLO_SUPREMO: Seccion[] = ['bloqueos', 'blanca', 'penalizados', 'aparatos'];
+  useEffect(() => { if (!esSupremo && SOLO_SUPREMO.includes(seccion)) setSeccion('resumen'); }, [esSupremo, seccion]); // eslint-disable-line react-hooks/exhaustive-deps
   const carpetas = useMemo(() => ([
     ...seccionesPorVertiente.admin.map(s => ({
       id: s.id as string, label: s.label, icon: s.icono, contador: s.contador, grupo: 'admin',
@@ -940,7 +947,7 @@ function CyberSecurityPanel({
     ...seccionesPorVertiente.trafico.map(s => ({
       id: s.id as string, label: s.label, icon: s.icono, contador: s.contador, grupo: 'trafico',
     })),
-  ]), [seccionesPorVertiente]);
+  ].filter(c => esSupremo || !SOLO_SUPREMO.includes(c.id as Seccion))), [seccionesPorVertiente, esSupremo]);
 
   /** Al elegir una carpeta se ajusta también su vertiente, que sigue
    *  gobernando qué datos se cargan y se refrescan. */
@@ -1053,7 +1060,7 @@ function CyberSecurityPanel({
                   <div className="sg-row">
                     {resumen.ultimoExito.dispositivo_conocido === false && <span className="sg-badge" data-t="wa">Aparato nuevo</span>}
                     {resumen.ultimoExito.dispositivo_conocido === true && <span className="sg-badge" data-t="ok">Aparato conocido</span>}
-                    {resumen.ultimoExito.gps_latitud != null && (
+                    {esSupremo && resumen.ultimoExito.gps_latitud != null && (
                       <button
                         type="button"
                         className="sg-badge"
@@ -1077,7 +1084,7 @@ function CyberSecurityPanel({
                   <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
                     {bandera(miGeo?.codigo_pais)} {ubicacionTexto(miGeo || {})}{miGeo?.proveedor ? ` · ${miGeo.proveedor}` : ''}
                   </span>
-                  <div className="sg-row" style={{ marginTop: 4 }}>
+                  {esSupremo && <div className="sg-row" style={{ marginTop: 4 }}>
                     {confianza.some(c => c.ip === miIp) ? (
                       <span className="sg-badge" data-t="ok"><Glifo n="ok" /> Ya está en la lista blanca</span>
                     ) : (
@@ -1085,7 +1092,7 @@ function CyberSecurityPanel({
                         Marcar como conexión de confianza
                       </Btn>
                     )}
-                  </div>
+                  </div>}
                 </>
               ) : (
                 <p className="sg-txt">Averiguando la dirección de esta conexión…</p>
@@ -1170,7 +1177,7 @@ function CyberSecurityPanel({
                       <div className="sg-row" style={{ gap: 4, justifyContent: 'flex-end' }}>
                         <span className="sg-hh">{hora}</span>
                         {a.dispositivo_conocido === false && <span className="sg-badge" data-t="wa">Aparato nuevo</span>}
-                        {a.gps_latitud != null && <span className="sg-badge" data-t="ok">GPS</span>}
+                        {esSupremo && a.gps_latitud != null && <span className="sg-badge" data-t="ok">GPS</span>}
                         <span className="sg-badge" data-t={t === 'b' ? 'ba' : t === 'f' ? 'wa' : 'ok'}>
                           {t === 'b' ? 'Rechazado' : t === 'f' ? 'Fallido' : 'Correcto'}
                         </span>
@@ -1243,7 +1250,7 @@ function CyberSecurityPanel({
       )}
 
       {/* =============== BLOQUEOS: cuenta regresiva =============== */}
-      {seccion === 'bloqueos' && (
+      {seccion === 'bloqueos' && esSupremo && (
         <>
           <div className="sg-accion2">
             <input
@@ -1313,7 +1320,7 @@ function CyberSecurityPanel({
       )}
 
       {/* =============== LISTA BLANCA: pases =============== */}
-      {seccion === 'blanca' && (
+      {seccion === 'blanca' && esSupremo && (
         <>
           <div className="sg-card">
             <h4>Agregar conexión de confianza</h4>
@@ -1476,9 +1483,9 @@ function CyberSecurityPanel({
                         <button type="button" className="sg-ib" onClick={() => setVisitanteDetalle(g.reciente)} title="Ver ficha" aria-label="Ver ficha">
                           <Glifo n="lupa" />
                         </button>
-                        {bloqueado
+                        {esSupremo && (bloqueado
                           ? <Btn variant="ghost" className="sg-btn-sm" onClick={() => liberarAparato(g.huellas[0])}>Liberar</Btn>
-                          : <Btn variant="ghost" className="sg-btn-sm" onClick={() => banearGrupo(g)}>Banear</Btn>}
+                          : <Btn variant="ghost" className="sg-btn-sm" onClick={() => banearGrupo(g)}>Banear</Btn>)}
                       </div>
                     </div>
                   );
@@ -1501,7 +1508,7 @@ function CyberSecurityPanel({
       )}
 
       {/* =============== PENALIZADOS: expedientes =============== */}
-      {seccion === 'penalizados' && (
+      {seccion === 'penalizados' && esSupremo && (
         <>
           <p className="sg-txt">
             El baneo total hace tres cosas a la vez: marca la cuenta, bloquea todas las IPs desde las que se le vio y
@@ -1541,7 +1548,7 @@ function CyberSecurityPanel({
       )}
 
       {/* =============== APARATOS BLOQUEADOS: etiquetas =============== */}
-      {seccion === 'aparatos' && (
+      {seccion === 'aparatos' && esSupremo && (
         <>
           <div className="sg-callout">
             <span className="sg-nodo"><Glifo n="info" /></span>
@@ -1756,7 +1763,7 @@ function CyberSecurityPanel({
       )}
 
       {/* =============== APLICAR BANEO TOTAL =============== */}
-      {baneoModal && (
+      {esSupremo && baneoModal && (
         <div
           className="fixed inset-0 z-[999] bg-black/60 backdrop-blur-sm flex items-end sm:items-center justify-center p-0 sm:p-4"
           onClick={() => !baneando && setBaneoModal(null)}
@@ -1854,10 +1861,10 @@ function CyberSecurityPanel({
               ['¿Aparato conocido?', detalle.dispositivo_conocido === null
                 ? 'sin dato'
                 : detalle.dispositivo_conocido ? 'Sí, ya se había usado antes' : 'NO — primera vez que se usa'],
-              ['Ubicación GPS', detalle.gps_latitud != null && detalle.gps_longitud != null
+              ...(!esSupremo ? [] : [['Ubicación GPS', detalle.gps_latitud != null && detalle.gps_longitud != null
                 ? `${detalle.gps_latitud.toFixed(6)}, ${detalle.gps_longitud.toFixed(6)}` +
                   (detalle.gps_precision_m != null ? ` (±${Math.round(detalle.gps_precision_m)} m)` : '')
-                : 'no autorizada'],
+                : 'no autorizada']]),
             ].map(([k, v]) => (
               <div key={k as string} className="flex justify-between gap-4 text-xs border-b border-[var(--border-color)]/30 pb-1.5">
                 <span className="text-[var(--text-secondary)] uppercase font-bold text-[10px] flex-shrink-0">{k}</span>
@@ -1869,7 +1876,7 @@ function CyberSecurityPanel({
                 siempre caía en el mismo punto: eran las coordenadas del
                 centro de la ciudad que devuelve el proveedor de IP, no un
                 lugar. Mezclar eso con el GPS real sería engañoso. */}
-            {detalle.gps_latitud != null && detalle.gps_longitud != null ? (
+            {!esSupremo ? null : detalle.gps_latitud != null && detalle.gps_longitud != null ? (
               <button
                 type="button"
                 onClick={() => setMapa({ lat: Number(detalle.gps_latitud), lon: Number(detalle.gps_longitud), titulo: 'Lugar exacto (GPS)', etiqueta: `${detalle.email || ''} · ${ubicacionTexto(detalle)}` })}
@@ -1887,7 +1894,7 @@ function CyberSecurityPanel({
               </button>
             ) : null}
 
-            {detalle.gps_latitud != null ? (
+            {!esSupremo ? null : detalle.gps_latitud != null ? (
               <p className="text-[10px] text-[var(--text-secondary)] leading-relaxed pt-1">
                 Esta ubicación viene del GPS del aparato y la autorizó la persona que entró, así que sí es el lugar
                 real, con un margen de pocos metros.

@@ -36,6 +36,7 @@ import NuevaPestana from './admin/NuevaPestana';
 import { usePestanas, useScrollPorPestana } from './admin/usePestanas';
 import { ContextoPestanaActiva, ContextoIconoModulo } from './admin/AdminKit';
 import { esAdminSupremo } from '../utils/securityPin';
+import { esSoloSupremo } from './admin/adminNav';
 
 // Cargados solo cuando se visita su pestaña: reduce el JS que el A12 tiene
 // que parsear/ejecutar en el arranque del panel.
@@ -121,6 +122,9 @@ export default function AdminPanel({
       // traducción, un enlace o un marcador viejo a esas rutas abriría el
       // panel en blanco, sin menú y sin ningún mensaje.
       if (tab === 'cumplimiento' || tab === 'logistica') return 'dashboard';
+      // Un módulo exclusivo del superadmin no se abre por dirección para
+      // nadie más: ni siquiera aparece su pestaña vacía.
+      if (esSoloSupremo(tab) && !esAdminSupremo(currentUser?.email)) return 'dashboard';
       return tab || 'dashboard';
     }
     return 'dashboard';
@@ -1059,10 +1063,11 @@ export default function AdminPanel({
    * espera salir del panel, no recorrer los doce módulos que visitó.
    */
   const irAModulo = useCallback((tab: string) => {
+    if (esSoloSupremo(tab) && !esAdminSupremo(currentUser?.email)) return;
     pestanas.abrir(tab);
     setActiveDropdown(null);
     try { window.history.replaceState(null, '', `/admin/${tab}`); } catch { /* la navegación funciona igual */ }
-  }, [pestanas.abrir]);
+  }, [pestanas.abrir, currentUser?.email]);
 
   // Antes era un arrow function inline en el JSX de Inventario: nuevo en
   // cada render, así que `InventarioControl` no podía memoizarse aunque
