@@ -1,7 +1,7 @@
 -- ===========================================================================
 -- VISITANTES OCULTOS AL PERSONAL (oct 2026)
 -- ===========================================================================
--- Se corre a mano en el SQL Editor de Supabase.
+-- YA EJECUTADO en la base (lo corrió el dueño en el SQL Editor; verificado).
 --
 -- El superadmin puede marcar un aparato de Visitantes como "oculto al
 -- personal": la política de lectura se lo esconde al resto de las cuentas
