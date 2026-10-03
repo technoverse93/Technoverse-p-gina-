@@ -2437,3 +2437,11 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
 #admin-panel-root .ai-ch .ai-menu:hover,#admin-panel-root .ai-ch .ai-chip:hover,#admin-panel-root .ai-ch .ai-cupo-pill:hover{background:var(--bg-sunken)}
 /* Enviar y el globo: círculos de 40 px, no cuadros estirados por la regla táctil. */
 #admin-panel-root .ai-caja .ai-env,#admin-panel-root .ai-caja .ai-ib{min-width:0!important;min-height:0!important;width:40px;height:40px;border-radius:999px}
+/* Mientras llega una conversación que no estaba en caché: tres barras
+   suaves en lugar del saludo (que hacía pensar que se había perdido). */
+.ai-esqueleto{display:grid;gap:12px;padding:4px 0}
+.ai-esqueleto i{display:block;height:14px;border-radius:7px;background:var(--bg-sunken);animation:ai-pulso 1.2s ease-in-out infinite}
+.ai-esqueleto i:nth-child(1){width:55%;justify-self:end;height:34px;border-radius:16px}
+.ai-esqueleto i:nth-child(2){width:90%}
+.ai-esqueleto i:nth-child(3){width:70%}
+@media (prefers-reduced-motion:reduce){.ai-esqueleto i{animation:none}}

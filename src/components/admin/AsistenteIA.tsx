@@ -55,9 +55,69 @@ function nombreModelo(m?: string | null): string {
   return m.replace(/-latest$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
 }
 
+// ---------------------------------------------------------------------
+// CACHÉ DE CONVERSACIONES
+// ---------------------------------------------------------------------
+// La base responde en ~50 ms, pero en el teléfono cada lectura son dos
+// viajes de red (la verificación CORS y la lectura) y en datos móviles eso
+// suma casi un segundo en el que la pantalla no cambiaba. Así que lo que ya
+// se leyó se guarda: al abrir una conversación conocida aparece AL INSTANTE
+// y se actualiza por detrás. Vive en memoria y en sessionStorage (se borra
+// al cerrar la app; nunca en localStorage, porque son conversaciones
+// privadas en un teléfono que puede ser compartido).
+const COLUMNAS_MSG = 'id,rol,texto,fuentes,consultas,tokens_in,tokens_out,proveedor,modelo,busco';
+const CLAVE_CACHE = 'tv_ia_cache';
+const MAX_EN_CACHE = 12;
+const cache = new Map<string, Mensaje[]>();
+const enVuelo = new Map<string, Promise<Mensaje[] | null>>();
+// La caché es de UNA cuenta: si en el mismo teléfono entra otra persona,
+// se vacía antes de mostrar nada (si no, vería conversaciones ajenas).
+let dueñoCache: string | null = null;
+const claveCache = () => `${CLAVE_CACHE}:${dueñoCache}`;
+function prepararCache(uid: string) {
+  if (dueñoCache === uid) return;
+  dueñoCache = uid;
+  cache.clear();
+  enVuelo.clear();
+  try {
+    const guardado = JSON.parse(sessionStorage.getItem(claveCache()) || '[]') as [string, Mensaje[]][];
+    for (const [id, ms] of guardado) cache.set(id, ms);
+  } catch { /* sin almacenamiento o dato viejo: se empieza vacío */ }
+}
+function persistir() {
+  try { sessionStorage.setItem(claveCache(), JSON.stringify([...cache.entries()])); } catch { /* lleno o bloqueado */ }
+}
+function guardarEnCache(id: string, ms: Mensaje[]) {
+  cache.delete(id);
+  cache.set(id, ms.filter(m => !m.pendiente));
+  while (cache.size > MAX_EN_CACHE) cache.delete(cache.keys().next().value as string);
+  persistir();
+}
+function quitarDeCache(id: string) {
+  cache.delete(id);
+  persistir();
+}
+/** Lee los mensajes de una conversación; si ya hay una lectura en curso, la reutiliza. */
+function leerMensajes(id: string): Promise<Mensaje[] | null> {
+  const ya = enVuelo.get(id);
+  if (ya) return ya;
+  const p = Promise.resolve(
+    supabase.from('ia_mensajes').select(COLUMNAS_MSG).eq('conversacion_id', id).order('creado_en', { ascending: true }),
+  ).then(({ data, error }) => {
+    if (error) return null;
+    const ms = (data as Mensaje[]) || [];
+    guardarEnCache(id, ms);
+    return ms;
+  }).finally(() => enVuelo.delete(id));
+  enVuelo.set(id, p);
+  return p;
+}
+
 const CLAVE_ACTIVA = 'tv_ia_conversacion';
-const leerActiva = () => { try { return sessionStorage.getItem(CLAVE_ACTIVA); } catch { return null; } };
-const guardarActiva = (id: string | null) => { try { if (id) sessionStorage.setItem(CLAVE_ACTIVA, id); else sessionStorage.removeItem(CLAVE_ACTIVA); } catch { /* sin almacenamiento */ } };
+const leerActiva = () => { try { return sessionStorage.getItem(`${CLAVE_ACTIVA}:${dueñoCache}`); } catch { return null; } };
+const guardarActiva = (id: string | null) => {
+  try { const k = `${CLAVE_ACTIVA}:${dueñoCache}`; if (id) sessionStorage.setItem(k, id); else sessionStorage.removeItem(k); } catch { /* sin almacenamiento */ }
+};
 
 /** Contexto de Gemini Flash: un millón de tokens. */
 const CONTEXTO = 1_000_000;
@@ -171,6 +231,34 @@ function TarjetaConsulta({ c }: { c: Consulta }) {
   );
 }
 
+/** Un mensaje del historial. Memoizado: escribir en la caja (que cambia el
+ *  estado del módulo en cada letra) ya no vuelve a formatear todo el
+ *  historial, que en un teléfono de gama de entrada se notaba. */
+const Burbuja = React.memo(function Burbuja({ m, onCopiar }: { m: Mensaje; onCopiar: (t: string) => void }) {
+  if (m.rol === 'user') return <div className="ai-yo">{m.texto}</div>;
+  return (
+    <div className="ai-ia">
+      {!!m.consultas?.length && <div className="ai-herrs">{m.consultas.map((c, i) => <React.Fragment key={i}><TarjetaConsulta c={c} /></React.Fragment>)}</div>}
+      <div className="ai-tx"><Formato texto={m.texto} /></div>
+      {!!m.fuentes?.length && (
+        <div className="ai-fuentes">
+          {m.fuentes.map((f, i) => (
+            <a key={i} href={f.url} target="_blank" rel="noopener noreferrer"><b>{i + 1}</b>{f.titulo || 'Fuente'}</a>
+          ))}
+        </div>
+      )}
+      <div className="ai-pie">
+        <button type="button" aria-label="Copiar respuesta" onClick={() => onCopiar(m.texto)}><Copy className="w-4 h-4" /></button>
+        <span className="ai-tok">↑ <i>{k(m.tokens_in || 0)}</i> · ↓ <i>{k(m.tokens_out || 0)}</i> tokens</span>
+        <span>{nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.busco ? ' · con búsqueda' : ''}{m.consultas?.length ? ` · consultó ${m.consultas.length} ${m.consultas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
+      </div>
+    </div>
+  );
+});
+const ListaMensajes = React.memo(function ListaMensajes({ mensajes, onCopiar }: { mensajes: Mensaje[]; onCopiar: (t: string) => void }) {
+  return <>{mensajes.map(m => <React.Fragment key={m.id}><Burbuja m={m} onCopiar={onCopiar} /></React.Fragment>)}</>;
+});
+
 function AnilloCupo({ cupo }: { cupo: Cupo | null }) {
   const r = 26, c = 2 * Math.PI * r;
   const sinLimite = !cupo || cupo.limite === null;
@@ -228,6 +316,8 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
   const toast = useToast();
   const confirm = useConfirm();
   const soySuper = esSuperadmin(currentUser?.role);
+  // Antes de leer nada guardado: la caché tiene que ser de esta cuenta.
+  prepararCache(currentUser?.id || currentUser?.email || 'anon');
 
   const [convs, setConvs] = useState<Conversacion[]>([]);
   // La conversación abierta sobrevive a cambiar de pestaña (el módulo se
@@ -239,6 +329,7 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
   const [texto, setTexto] = useState('');
   const [buscar, setBuscar] = useState(true);
   const [enviando, setEnviando] = useState(false);
+  const [cargandoConv, setCargandoConv] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: 'respaldo' | 'error'; texto: string } | null>(null);
   const [vista, setVista] = useState<'chat' | 'ajustes'>('chat');
   const [cajon, setCajon] = useState<null | 'historial' | 'cupo'>(null);
@@ -250,7 +341,10 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
 
   const cargarConvs = useCallback(async () => {
     const { data } = await supabase.from('ia_conversaciones').select('id,titulo,actualizado_en').order('actualizado_en', { ascending: false }).limit(60);
-    setConvs((data as Conversacion[]) || []);
+    const lista = (data as Conversacion[]) || [];
+    setConvs(lista);
+    // Precarga en segundo plano de las más recientes: abrirlas es instantáneo.
+    lista.slice(0, 3).forEach(c => { if (!cache.has(c.id)) void leerMensajes(c.id); });
   }, []);
   const cargarCupo = useCallback(async () => {
     const { data } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'cupo' } });
@@ -259,19 +353,26 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
   useEffect(() => { void cargarConvs(); void cargarCupo(); }, [cargarConvs, cargarCupo]);
 
   useEffect(() => {
-    if (!activa) { setMensajes([]); return; }
+    if (!activa) { setMensajes([]); setCargandoConv(false); return; }
     if (recienCreada.current === activa) { recienCreada.current = null; return; }
     let vivo = true;
-    void supabase.from('ia_mensajes')
-      .select('id,rol,texto,fuentes,consultas,tokens_in,tokens_out,proveedor,modelo,busco')
-      .eq('conversacion_id', activa).order('creado_en', { ascending: true })
-      .then(({ data, error }) => {
-        if (!vivo) return;
-        if (error) { setMensajes([]); return; }
-        setMensajes((data as Mensaje[]) || []);
-      });
+    const enCache = cache.get(activa);
+    // Conocida: se pinta ya y se refresca por detrás. Nueva: esqueleto (no
+    // el saludo ni la conversación anterior) hasta que llegue.
+    setMensajes(enCache || []);
+    setCargandoConv(!enCache);
+    void leerMensajes(activa).then(ms => {
+      if (!vivo) return;
+      setCargandoConv(false);
+      if (ms) setMensajes(ms);
+    });
     return () => { vivo = false; };
   }, [activa]);
+
+  // Lo que se ve de la conversación activa se guarda en caché al cambiar.
+  useEffect(() => {
+    if (activa && !cargandoConv && mensajes.length && !mensajes.some(m => m.pendiente)) guardarEnCache(activa, mensajes);
+  }, [activa, mensajes, cargandoConv]);
 
   useEffect(() => { finRef.current?.scrollIntoView({ block: 'end' }); }, [mensajes.length, enviando]);
 
@@ -343,13 +444,14 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
     if (!ok) return;
     const { error } = await supabase.from('ia_conversaciones').delete().eq('id', c.id);
     if (error) { toast.error('No se pudo borrar: ' + error.message); return; }
+    quitarDeCache(c.id);
     if (activa === c.id) nueva();
     void cargarConvs();
   };
 
-  const copiar = async (t: string) => {
+  const copiar = useCallback(async (t: string) => {
     try { await navigator.clipboard.writeText(t); toast.success('Copiado.'); } catch { toast.error('No se pudo copiar.'); }
-  };
+  }, [toast]);
 
   const listaConvs = (
     <>
@@ -364,7 +466,9 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
             <React.Fragment key={c.id}>
               {nuevoDia && <div className="ai-hk">{dia}</div>}
               <div className="ai-hi" data-on={activa === c.id || undefined}>
-                <button type="button" onClick={() => { setActiva(c.id); setVista('chat'); setCajon(null); setAviso(null); }}>{c.titulo}</button>
+                <button type="button"
+                  onPointerDown={() => { if (!cache.has(c.id)) void leerMensajes(c.id); }}
+                  onClick={() => { setActiva(c.id); setVista('chat'); setCajon(null); setAviso(null); }}>{c.titulo}</button>
                 <button type="button" className="ai-borrar" aria-label="Borrar conversación" onClick={() => void borrarConv(c)}><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             </React.Fragment>
@@ -404,7 +508,9 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
               </div>
             )}
             <div className="ai-msgs">
-              {agotado && mensajes.length === 0 ? (
+              {cargandoConv ? (
+                <div className="ai-esqueleto" aria-label="Cargando conversación"><i /><i /><i /></div>
+              ) : agotado && mensajes.length === 0 ? (
                 <div className="ai-agotado">
                   <span className="ai-logo" data-t="ba"><Clock className="w-7 h-7" /></span>
                   <h3>Se usó todo el cupo de hoy</h3>
@@ -421,26 +527,7 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
                     ))}
                   </div>
                 </div>
-              ) : mensajes.map(m => m.rol === 'user' ? (
-                <div key={m.id} className="ai-yo">{m.texto}</div>
-              ) : (
-                <div key={m.id} className="ai-ia">
-                  {!!m.consultas?.length && <div className="ai-herrs">{m.consultas.map((c, i) => <React.Fragment key={i}><TarjetaConsulta c={c} /></React.Fragment>)}</div>}
-                  <div className="ai-tx"><Formato texto={m.texto} /></div>
-                  {!!m.fuentes?.length && (
-                    <div className="ai-fuentes">
-                      {m.fuentes.map((f, i) => (
-                        <a key={i} href={f.url} target="_blank" rel="noopener noreferrer"><b>{i + 1}</b>{f.titulo || 'Fuente'}</a>
-                      ))}
-                    </div>
-                  )}
-                  <div className="ai-pie">
-                    <button type="button" aria-label="Copiar respuesta" onClick={() => void copiar(m.texto)}><Copy className="w-4 h-4" /></button>
-                    <span className="ai-tok">↑ <i>{k(m.tokens_in || 0)}</i> · ↓ <i>{k(m.tokens_out || 0)}</i> tokens</span>
-                    <span>{nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.busco ? ' · con búsqueda' : ''}{m.consultas?.length ? ` · consultó ${m.consultas.length} ${m.consultas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
-                  </div>
-                </div>
-              ))}
+              ) : <ListaMensajes mensajes={mensajes} onCopiar={copiar} />}
               {enviando && (
                 <div className="ai-ia"><div className="ai-buscando"><span className="ai-puntos"><i /><i /><i /></span>{buscar && busquedaPermitida ? 'Pensando y buscando en Google…' : conSistema ? 'Pensando y consultando el sistema…' : 'Pensando…'}</div></div>
               )}
