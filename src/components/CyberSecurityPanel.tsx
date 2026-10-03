@@ -89,6 +89,8 @@ interface Visitante {
   origen: string | null;
   email: string | null;
   ultima_ruta: string | null;
+  /** Marcado por el superadmin: el resto del personal no lo ve (RLS). */
+  oculto_personal?: boolean;
 }
 
 /** Una cuenta con baneo total vigente o ya levantado. */
@@ -429,6 +431,16 @@ function CyberSecurityPanel({
     return accesos;
   }, [accesos, filtro]);
 
+  /** Oculta (o vuelve a mostrar) un aparato de Visitantes al resto del
+   *  personal. La regla la hace cumplir la base: `visitante_ocultar` solo
+   *  acepta al superadmin y la política de lectura esconde la fila. */
+  const ocultarAlPersonal = async (g: GrupoVisitante, ocultar: boolean) => {
+    const { error } = await supabase.rpc('visitante_ocultar', { p_huellas: g.huellas, p_ocultar: ocultar });
+    if (error) { toast.error('No se pudo cambiar: ' + error.message); return; }
+    setVisitantes(prev => prev.map(v => g.huellas.includes(v.huella) ? { ...v, oculto_personal: ocultar } : v));
+    toast.success(ocultar ? 'El resto del personal ya no ve este aparato.' : 'El aparato vuelve a estar a la vista del personal.');
+  };
+
   // En el teléfono el riel es un mosaico deslizable: el apartado abierto
   // se trae a la vista para que no quede escondido a un costado.
   useEffect(() => {
@@ -551,6 +563,7 @@ function CyberSecurityPanel({
     primera: string;
     ultima: string;
     reciente: Visitante;
+    oculto: boolean;
   }
 
   const visitantesAgrupados = useMemo<GrupoVisitante[]>(() => {
@@ -576,11 +589,13 @@ function CyberSecurityPanel({
           primera: v.primera_visita,
           ultima: v.ultima_visita,
           reciente: v,
+          oculto: !!v.oculto_personal,
         });
         continue;
       }
 
       existente.huellas.push(v.huella);
+      if (v.oculto_personal) existente.oculto = true;
       existente.visitas += v.visitas || 1;
       if (v.primera_visita < existente.primera) existente.primera = v.primera_visita;
       // Los datos que se muestran son los de la visita más reciente: si el
@@ -1464,6 +1479,7 @@ function CyberSecurityPanel({
                               <span title={`${g.huellas.length} identidades del mismo equipo`} style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>×{g.huellas.length}</span>
                             )}
                             {bloqueado && <span className="sg-badge" data-t="ba">Bloqueado</span>}
+                            {esSupremo && g.oculto && <span className="sg-badge" data-t="ac" title="Solo tú ves este aparato">Oculto al personal</span>}
                           </div>
                           <div className="sg-s">
                             {[[g.sistema, g.version_sistema].filter(Boolean).join(' '), g.email || 'Anónimo'].filter(Boolean).join(' · ')}
@@ -1483,6 +1499,11 @@ function CyberSecurityPanel({
                         <button type="button" className="sg-ib" onClick={() => setVisitanteDetalle(g.reciente)} title="Ver ficha" aria-label="Ver ficha">
                           <Glifo n="lupa" />
                         </button>
+                        {esSupremo && (
+                          <Btn variant="ghost" className="sg-btn-sm" onClick={() => void ocultarAlPersonal(g, !g.oculto)}>
+                            {g.oculto ? 'Mostrar' : 'Ocultar'}
+                          </Btn>
+                        )}
                         {esSupremo && (bloqueado
                           ? <Btn variant="ghost" className="sg-btn-sm" onClick={() => liberarAparato(g.huellas[0])}>Liberar</Btn>
                           : <Btn variant="ghost" className="sg-btn-sm" onClick={() => banearGrupo(g)}>Banear</Btn>)}
