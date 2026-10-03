@@ -10,6 +10,15 @@
 // entrenar. Por eso NINGUNA consulta pide columnas de clientes (nombre,
 // correo, cédula, teléfono) y los textos libres pasan por `limpiar()`, que
 // tacha correos, teléfonos y números de identificación.
+//
+// DOS CARRILES (consultas del superadmin): seguridad, ingresos, visitantes y
+// ubicaciones tocan datos de personas reales (correos, IPs, coordenadas).
+// Esas consultas devuelven:
+//   · `datos`  → lo que lee la IA: solo conteos y resúmenes, sin personas.
+//   · `panel`  → el detalle COMPLETO, que va directo a la pantalla del
+//                superadmin como tabla (y mapa) y nunca pasa por Google.
+// Así el superadmin ve todo, al instante y sin filtros, y Google no recibe
+// datos personales.
 // =====================================================================
 
 // deno-lint-ignore no-explicit-any
@@ -21,13 +30,23 @@ export type Consulta = {
   filas: string;        // «4 productos», «23 facturas»
   detalle: string;      // lo que leyó la IA, resumido (se ve al abrir la tarjeta)
   sinPermiso?: boolean;
+  /** Carril de pantalla: detalle completo que NO se manda a la IA. */
+  panel?: Panel;
+};
+export type Panel = {
+  columnas: string[];
+  filas: (string | number | null)[][];
+  /** Coordenadas por fila (mismo índice), para «Ver en el mapa». */
+  puntos?: ({ lat: number; lon: number; etiqueta: string } | null)[];
 };
 export type Contexto = { db: Db; esSuper: boolean; hoy: string };
 type Salida = { datos: unknown; consulta: Consulta };
 
 type Herramienta = {
   nombre: string;
-  modulo: 'inventario' | 'facturacion' | 'taller' | 'errores';
+  modulo: 'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas';
+  /** Solo se le ofrece al superadmin (los demás ni la ven). */
+  soloSuper?: boolean;
   descripcion: string;
   parametros: Record<string, unknown>;
   ejecutar: (args: Record<string, unknown>, ctx: Contexto) => Promise<Salida>;
@@ -35,6 +54,21 @@ type Herramienta = {
 
 export const NOMBRE_MODULO: Record<string, string> = {
   inventario: 'Inventario', facturacion: 'Facturación', taller: 'Taller', errores: 'Errores del sistema',
+  seguridad: 'Ciberseguridad', finanzas: 'Finanzas',
+};
+const MAX_PANEL = 200;
+const fechaCorta = (v: unknown) => {
+  if (!v) return '—';
+  try { return new Date(String(v)).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', day: '2-digit', month: 'short', hour: '2-digit', minute: '2-digit' }); } catch { return String(v).slice(0, 16); }
+};
+const coord = (lat: unknown, lon: unknown, etiqueta: string) => {
+  const a = Number(lat), o = Number(lon);
+  return lat != null && lon != null && Number.isFinite(a) && Number.isFinite(o) ? { lat: a, lon: o, etiqueta } : null;
+};
+const contar = <T,>(xs: T[], f: (x: T) => string | null | undefined) => {
+  const r: Record<string, number> = {};
+  for (const x of xs) { const k = f(x) || 'sin dato'; r[k] = (r[k] || 0) + 1; }
+  return Object.fromEntries(Object.entries(r).sort((a, b) => b[1] - a[1]).slice(0, 12));
 };
 
 const MEDIO: Record<string, string> = { '01': 'Efectivo', '02': 'Tarjeta', '03': 'Cheque', '04': 'SINPE Móvil', '05': 'Recaudado por terceros', '06': 'SINPE Móvil', '07': 'Plataforma digital', '99': 'Otro' };
@@ -165,7 +199,7 @@ export const HERRAMIENTAS: Herramienta[] = [
       required: ['desde'],
     },
     async ejecutar(a, { db, hoy }) {
-      const hasta = fecha(a.hasta, hoy), desde = fecha(a.desde, restarDias(hasta, 6));
+      const hasta = fecha(a.hasta, hoy), desde = fecha(a.desde, restarDias(hasta, 6)); // resumen_ventas
       const rango = (q: Db) => q.gte('created_at', inicioDia(desde)).lt('created_at', inicioDia(diaSiguiente(hasta)));
       const [facturas, pedidos] = await Promise.all([
         todos(db, 'invoices', 'total,iva_total,medio_pago,tipo_doc', rango),
@@ -295,11 +329,11 @@ export const HERRAMIENTAS: Herramienta[] = [
       ]);
       const datos = {
         dias,
-        correos_de_factura: correos.map(f => ({ factura: f.consecutivo || f.numero_documento || f.id, estado: limpiar(f.email_status, 80), fecha: String(f.created_at).slice(0, 16) })),
-        pagos_fallidos: pagos.map(p => ({ metodo: p.metodo, estado: p.estado, motivo: limpiar(p.motivo_fallo), monto: Math.round(Number(p.monto_menor || 0) / 100), fecha: String(p.creado_en).slice(0, 16) })),
+        correos_de_factura: correos.map(f => ({ factura: f.consecutivo || f.numero_documento || f.id, estado: limpiar(f.email_status, 80), fecha: fechaCorta(f.created_at) })),
+        pagos_fallidos: pagos.map(p => ({ metodo: p.metodo, estado: p.estado, motivo: limpiar(p.motivo_fallo), monto: Math.round(Number(p.monto_menor || 0) / 100), fecha: fechaCorta(p.creado_en) })),
         publicaciones_con_error: publicaciones.map(m => ({ sku: m.product_sku, estado: m.status, error: limpiar(m.error_detail) })),
         rechazos_de_hacienda: hacienda.map(o => ({ pedido: o.id, estado: o.hda_status })),
-        bitacora: bitacora.slice(0, 20).map(b => ({ modulo: b.module, accion: limpiar(b.action, 60), detalle: limpiar(b.detail), fecha: String(b.created_at).slice(0, 16) })),
+        bitacora: bitacora.slice(0, 20).map(b => ({ modulo: b.module, accion: limpiar(b.action, 60), detalle: limpiar(b.detail), fecha: fechaCorta(b.created_at) })),
         ingresos_fallidos: ingresos.length,
       };
       const total = correos.length + pagos.length + publicaciones.length + hacienda.length + bitacora.length;
@@ -315,11 +349,225 @@ export const HERRAMIENTAS: Herramienta[] = [
       };
     },
   },
+  // ===================================================================
+  // SOLO SUPERADMIN — dos carriles (ver cabecera del archivo)
+  // ===================================================================
+  {
+    nombre: 'ingresos_cuentas',
+    modulo: 'seguridad',
+    soloSuper: true,
+    descripcion: 'Inicios de sesión al panel y a la app (intentos correctos, fallidos y bloqueados), con ciudad, país, origen (web o app) y si el equipo es conocido. Usa esto para «quién entró», «cuántas veces entró X», «intentos fallidos», «desde dónde». La tabla completa con correos e IPs le aparece al superadmin en pantalla; tú recibes los conteos.',
+    parametros: {
+      type: 'object',
+      properties: {
+        buscar: { type: 'string', description: 'Parte del correo, ciudad o equipo (opcional).' },
+        dias: { type: 'integer', description: 'Días hacia atrás (1-90, por defecto 1 = hoy).' },
+        solo_fallidos: { type: 'boolean', description: 'Solo intentos fallidos o bloqueados.' },
+      },
+    },
+    async ejecutar(a, { db, hoy }) {
+      const dias = num(a.dias, 1, 1, 90), buscar = patron(a.buscar).toLowerCase();
+      let filas = await todos(db, 'login_audit_logs', 'ocurrido_en,email,exito,bloqueado,motivo,ip,origen,pais,ciudad,region,latitud,longitud,gps_latitud,gps_longitud,device_id,dispositivo_conocido,user_agent', q =>
+        q.gte('ocurrido_en', inicioDia(restarDias(hoy, dias - 1))).order('ocurrido_en', { ascending: false }));
+      if (a.solo_fallidos) filas = filas.filter(f => !f.exito || f.bloqueado);
+      if (buscar) filas = filas.filter(f => [f.email, f.ciudad, f.pais, f.user_agent, f.device_id, f.ip].some(v => String(v || '').toLowerCase().includes(buscar)));
+      const correctos = filas.filter(f => f.exito && !f.bloqueado).length;
+      const datos = {
+        dias, total: filas.length, correctos, fallidos: filas.filter(f => !f.exito).length, bloqueados: filas.filter(f => f.bloqueado).length,
+        ultimo_hora_cr: fechaCorta(filas[0]?.ocurrido_en || null),
+        cuentas_distintas: new Set(filas.map(f => f.email)).size, equipos_nuevos: filas.filter(f => f.dispositivo_conocido === false).length,
+        por_origen: contar(filas, f => f.origen), por_ciudad: contar(filas, f => [f.ciudad, f.pais].filter(Boolean).join(', ')),
+        motivos_de_fallo: contar(filas.filter(f => !f.exito), f => limpiar(f.motivo, 60)),
+        nota: 'El detalle con correos, IPs y equipos se le muestra al superadmin en pantalla, no aquí.',
+      };
+      const vis = filas.slice(0, MAX_PANEL);
+      return {
+        datos,
+        consulta: {
+          modulo: 'Ciberseguridad', desc: `ingresos · ${dias === 1 ? 'hoy' : `${dias} días`}${buscar ? ` · «${buscar}»` : ''}`,
+          filas: `${filas.length} ingreso${filas.length === 1 ? '' : 's'}`,
+          detalle: `correctos ${correctos} · fallidos ${datos.fallidos} · bloqueados ${datos.bloqueados} · equipos nuevos ${datos.equipos_nuevos}`,
+          panel: {
+            columnas: ['Fecha', 'Cuenta', 'Resultado', 'Origen', 'Lugar', 'IP', 'Equipo'],
+            filas: vis.map(f => [fechaCorta(f.ocurrido_en), f.email, f.bloqueado ? 'Bloqueado' : f.exito ? 'Correcto' : `Fallido${f.motivo ? ` (${String(f.motivo).slice(0, 40)})` : ''}`, f.origen, [f.ciudad, f.pais].filter(Boolean).join(', ') || '—', f.ip, f.dispositivo_conocido === false ? 'Nuevo' : 'Conocido']),
+            puntos: vis.map(f => coord(f.gps_latitud ?? f.latitud, f.gps_longitud ?? f.longitud, `${f.email} · ${fechaCorta(f.ocurrido_en)}`)),
+          },
+        },
+      };
+    },
+  },
+  {
+    nombre: 'visitantes_tienda',
+    modulo: 'seguridad',
+    soloSuper: true,
+    descripcion: 'Visitantes y equipos que entran a la tienda en línea (incluye modelos como GFY-LX3): visitas, primera y última vez, sistema, navegador y página. Usa esto para «cuántas veces entró el equipo X», «quién visitó hoy». El detalle con IP y huella le aparece al superadmin en pantalla.',
+    parametros: {
+      type: 'object',
+      properties: {
+        buscar: { type: 'string', description: 'Modelo del equipo (p. ej. GFY-LX3), sistema o navegador (opcional).' },
+        dias: { type: 'integer', description: 'Días hacia atrás según la última visita (1-90, por defecto 1 = hoy).' },
+      },
+    },
+    async ejecutar(a, { db, hoy }) {
+      const dias = num(a.dias, 1, 1, 90), buscar = patron(a.buscar).toLowerCase();
+      const desde = inicioDia(restarDias(hoy, dias - 1));
+      const [huellas, sesiones] = await Promise.all([
+        todos(db, 'visitor_fingerprints', 'huella,visitas,primera_visita,ultima_visita,ip,dispositivo,sistema,version_sistema,navegador,tipo,origen,ultima_ruta,email', q => q.gte('ultima_visita', desde).order('ultima_visita', { ascending: false })),
+        todos(db, 'supervision_visitantes', 'visita,modelo,tipo,entorno,ruta,last_seen,lat,lon', q => q.gte('last_seen', desde).order('last_seen', { ascending: false })),
+      ]);
+      const coincide = (...vs: unknown[]) => !buscar || vs.some(v => String(v || '').toLowerCase().includes(buscar));
+      const h = huellas.filter(f => coincide(f.dispositivo, f.sistema, f.navegador, f.tipo, f.ultima_ruta));
+      const s2 = sesiones.filter(f => coincide(f.modelo, f.tipo, f.entorno, f.ruta));
+      const datos = {
+        dias, buscar: buscar || null,
+        equipos: h.length, visitas_acumuladas: h.reduce((t, f) => t + Number(f.visitas || 0), 0), sesiones_en_el_periodo: s2.length,
+        ultima_vez_hora_cr: fechaCorta(s2[0]?.last_seen || h[0]?.ultima_visita || null),
+        por_equipo: contar([...h.map(f => f.dispositivo), ...s2.map(f => f.modelo)], x => x),
+        por_sistema: contar(h, f => f.sistema), paginas: contar(s2, f => f.ruta),
+        nota: 'IPs, huellas y correos se le muestran al superadmin en pantalla, no aquí.',
+      };
+      const filasP = [
+        ...s2.map(f => ({ t: f.last_seen, fila: [fechaCorta(f.last_seen), f.modelo || '—', 'Sesión', f.entorno, f.ruta || '—', '—', '—'], p: coord(f.lat, f.lon, `${f.modelo} · ${fechaCorta(f.last_seen)}`) })),
+        ...h.map(f => ({ t: f.ultima_visita, fila: [fechaCorta(f.ultima_visita), f.dispositivo || '—', `${f.visitas} visitas`, [f.sistema, f.navegador].filter(Boolean).join(' · '), f.ultima_ruta || '—', f.ip || '—', f.email || '—'], p: null })),
+      ].sort((x, y) => String(y.t).localeCompare(String(x.t))).slice(0, MAX_PANEL);
+      return {
+        datos,
+        consulta: {
+          modulo: 'Ciberseguridad', desc: `visitantes · ${dias === 1 ? 'hoy' : `${dias} días`}${buscar ? ` · «${buscar}»` : ''}`,
+          filas: `${s2.length} sesión${s2.length === 1 ? '' : 'es'} · ${h.length} equipo${h.length === 1 ? '' : 's'}`,
+          detalle: `visitas acumuladas ${datos.visitas_acumuladas} · última vez ${datos.ultima_vez_hora_cr}`,
+          panel: { columnas: ['Fecha', 'Equipo', 'Visitas', 'Sistema / entorno', 'Página', 'IP', 'Correo'], filas: filasP.map(x => x.fila), puntos: filasP.map(x => x.p) },
+        },
+      };
+    },
+  },
+  {
+    nombre: 'estado_ciberseguridad',
+    modulo: 'seguridad',
+    soloSuper: true,
+    descripcion: 'Estado de la ciberseguridad: IPs bloqueadas (activas y permanentes), lista blanca, equipos y usuarios baneados, y bloqueos del sistema. Usa esto para «qué está bloqueado», «cuántos baneos hay». El detalle con IPs y correos le aparece al superadmin en pantalla.',
+    parametros: { type: 'object', properties: {} },
+    async ejecutar(_a, { db }) {
+      const ahora = new Date().toISOString();
+      const [ips, blanca, equipos, usuarios, bans] = await Promise.all([
+        todos(db, 'banned_ips', 'ip,nivel,permanente,bloqueo_total,bloqueado_hasta,motivo,intentos_fallidos,pais,ciudad,actualizado_en'),
+        todos(db, 'ip_whitelist', 'ip,descripcion,creado_en'),
+        todos(db, 'banned_devices', 'device_uuid,motivo,email,creado_en,levantado_en'),
+        todos(db, 'blocked_users_list', 'email,nombre,motivo,creado_en,levantado_en'),
+        todos(db, 'system_bans', 'tipo,valor,motivo,hasta,activo,created_at'),
+      ]);
+      const ipsActivas = ips.filter(i => i.permanente || i.bloqueo_total || (i.bloqueado_hasta && i.bloqueado_hasta > ahora));
+      const eqAct = equipos.filter(e => !e.levantado_en), usAct = usuarios.filter(u => !u.levantado_en), bansAct = bans.filter(b => b.activo && (!b.hasta || b.hasta > ahora));
+      const datos = {
+        ips_bloqueadas_activas: ipsActivas.length, ips_permanentes: ips.filter(i => i.permanente).length, ips_registradas: ips.length,
+        lista_blanca: blanca.length, equipos_baneados: eqAct.length, usuarios_baneados: usAct.length, bloqueos_del_sistema: bansAct.length,
+        motivos: contar([...ipsActivas, ...eqAct, ...usAct], x => limpiar(x.motivo, 60)),
+        nota: 'IPs, correos y equipos concretos se le muestran al superadmin en pantalla, no aquí.',
+      };
+      const filasP: (string | number | null)[][] = [
+        ...ipsActivas.map(i => ['IP bloqueada', i.ip, i.permanente ? 'Permanente' : `Hasta ${fechaCorta(i.bloqueado_hasta)}`, i.motivo || '—', [i.ciudad, i.pais].filter(Boolean).join(', ') || '—']),
+        ...eqAct.map(e => ['Equipo baneado', e.device_uuid, fechaCorta(e.creado_en), e.motivo || '—', e.email || '—']),
+        ...usAct.map(u => ['Usuario baneado', u.email, fechaCorta(u.creado_en), u.motivo || '—', u.nombre || '—']),
+        ...bansAct.map(b => [`Bloqueo (${b.tipo})`, b.valor, b.hasta ? `Hasta ${fechaCorta(b.hasta)}` : 'Sin fecha', b.motivo || '—', '—']),
+        ...blanca.map(w => ['Lista blanca', w.ip, fechaCorta(w.creado_en), w.descripcion || '—', '—']),
+      ].slice(0, MAX_PANEL);
+      return {
+        datos,
+        consulta: {
+          modulo: 'Ciberseguridad', desc: 'bloqueos y lista blanca', filas: `${ipsActivas.length + eqAct.length + usAct.length + bansAct.length} bloqueo(s) activo(s)`,
+          detalle: `IPs ${ipsActivas.length} · equipos ${eqAct.length} · usuarios ${usAct.length} · lista blanca ${blanca.length}`,
+          panel: { columnas: ['Tipo', 'Valor', 'Vigencia', 'Motivo', 'Lugar / dato'], filas: filasP },
+        },
+      };
+    },
+  },
+  {
+    nombre: 'ubicaciones',
+    modulo: 'seguridad',
+    soloSuper: true,
+    descripcion: 'Ubicaciones compartidas por personal o clientes (provincia, contexto, hora) y la ubicación de los últimos ingresos. Usa esto para «dónde está», «ubicaciones de hoy», «mapa». Las coordenadas y nombres se le muestran al superadmin en pantalla con mapa; tú recibes conteos por provincia.',
+    parametros: {
+      type: 'object',
+      properties: {
+        buscar: { type: 'string', description: 'Nombre, correo o provincia (opcional).' },
+        dias: { type: 'integer', description: 'Días hacia atrás (1-90, por defecto 7).' },
+      },
+    },
+    async ejecutar(a, { db, hoy }) {
+      const dias = num(a.dias, 7, 1, 90), buscar = patron(a.buscar).toLowerCase();
+      const filas = (await todos(db, 'ubicaciones_compartidas', 'nombre,email,rol,lat,lon,precision_m,provincia,contexto,created_at', q =>
+        q.gte('created_at', inicioDia(restarDias(hoy, dias - 1))).order('created_at', { ascending: false })))
+        .filter(f => !buscar || [f.nombre, f.email, f.provincia, f.contexto].some(v => String(v || '').toLowerCase().includes(buscar)));
+      const datos = {
+        dias, total: filas.length, personas: new Set(filas.map(f => f.email || f.nombre)).size,
+        por_provincia: contar(filas, f => f.provincia), por_rol: contar(filas, f => f.rol), por_contexto: contar(filas, f => f.contexto),
+        ultima_hora_cr: fechaCorta(filas[0]?.created_at || null),
+        nota: 'Nombres y coordenadas se le muestran al superadmin en pantalla con mapa, no aquí.',
+      };
+      const vis = filas.slice(0, MAX_PANEL);
+      return {
+        datos,
+        consulta: {
+          modulo: 'Ciberseguridad', desc: `ubicaciones · ${dias} días${buscar ? ` · «${buscar}»` : ''}`, filas: `${filas.length} ubicación${filas.length === 1 ? '' : 'es'}`,
+          detalle: `personas ${datos.personas} · última ${datos.ultima_hora_cr}`,
+          panel: {
+            columnas: ['Fecha', 'Persona', 'Rol', 'Provincia', 'Contexto', 'Precisión'],
+            filas: vis.map(f => [fechaCorta(f.created_at), f.nombre || f.email || '—', f.rol || '—', f.provincia || '—', f.contexto || '—', f.precision_m ? `${f.precision_m} m` : '—']),
+            puntos: vis.map(f => coord(f.lat, f.lon, `${f.nombre || f.email || 'Ubicación'} · ${fechaCorta(f.created_at)}`)),
+          },
+        },
+      };
+    },
+  },
+  {
+    nombre: 'finanzas',
+    modulo: 'finanzas',
+    soloSuper: true,
+    descripcion: 'Métricas financieras entre dos fechas: ventas de la tienda y del mostrador, costo de repuestos, regalías, margen neto, IVA, por método de pago y estado, pagos fallidos y desglose por día. Usa esto para utilidad, márgenes, ingresos de dinero y comparaciones.',
+    parametros: {
+      type: 'object',
+      properties: {
+        desde: { type: 'string', description: 'Fecha inicial AAAA-MM-DD (incluida).' },
+        hasta: { type: 'string', description: 'Fecha final AAAA-MM-DD (incluida). Por defecto, hoy.' },
+      },
+      required: ['desde'],
+    },
+    async ejecutar(a, { db, hoy }) {
+      const hasta = fecha(a.hasta, hoy), desde = fecha(a.desde, restarDias(hasta, 29));
+      const rango = (col: string) => (q: Db) => q.gte(col, inicioDia(desde)).lt(col, inicioDia(diaSiguiente(hasta)));
+      const [pedidos, facturas, pagos] = await Promise.all([
+        todos(db, 'orders', 'total,subtotal,tax_amount,shipping_cost,membership_discount,costo_repuestos,costo_regalias,margen_neto,payment_method,status,payment_status,created_at', rango('created_at')),
+        todos(db, 'invoices', 'total,iva_total,medio_pago,created_at', rango('created_at')),
+        todos(db, 'payments', 'estado,metodo,monto_menor,creado_en', rango('creado_en')),
+      ]);
+      const suma = (xs: Record<string, any>[], c: string) => Math.round(xs.reduce((t, x) => t + Number(x[c] || 0), 0));
+      const validos = pedidos.filter(p => !/cancel|anul|rechaz/i.test(String(p.status)));
+      const porDia: Record<string, { pedidos: number; ventas: number; margen: number; facturado: number }> = {};
+      const dia = (v: unknown) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Costa_Rica' }).format(new Date(String(v)));
+      for (const p of validos) { const d = dia(p.created_at); porDia[d] ||= { pedidos: 0, ventas: 0, margen: 0, facturado: 0 }; porDia[d].pedidos++; porDia[d].ventas += Number(p.total || 0); porDia[d].margen += Number(p.margen_neto || 0); }
+      for (const f of facturas) { const d = dia(f.created_at); porDia[d] ||= { pedidos: 0, ventas: 0, margen: 0, facturado: 0 }; porDia[d].facturado += Number(f.total || 0); }
+      const datos = {
+        desde, hasta,
+        tienda_en_linea: { pedidos: validos.length, ventas: suma(validos, 'total'), costo_repuestos: suma(validos, 'costo_repuestos'), regalias: suma(validos, 'costo_regalias'), margen_neto: suma(validos, 'margen_neto'), envios: suma(validos, 'shipping_cost'), descuentos: suma(validos, 'membership_discount'), cancelados: pedidos.length - validos.length, por_metodo: contar(validos, p => p.payment_method), por_estado: contar(pedidos, p => p.status) },
+        facturacion: { comprobantes: facturas.length, total: suma(facturas, 'total'), iva: suma(facturas, 'iva_total'), por_medio: contar(facturas, f => MEDIO[f.medio_pago] || f.medio_pago) },
+        pagos_en_linea: { total: pagos.length, por_estado: contar(pagos, p => p.estado), aprobado: Math.round(pagos.filter(p => /pag|aprob|complet/i.test(String(p.estado))).reduce((t, p) => t + Number(p.monto_menor || 0), 0) / 100) },
+        por_dia: Object.entries(porDia).sort((x, y) => x[0].localeCompare(y[0])).map(([d, v]) => ({ dia: d, ...v, ventas: Math.round(v.ventas), margen: Math.round(v.margen), facturado: Math.round(v.facturado) })).slice(-62),
+      };
+      return {
+        datos,
+        consulta: {
+          modulo: 'Finanzas', desc: `${desde} a ${hasta}`, filas: `${validos.length} pedido(s) · ${facturas.length} comprobante(s)`,
+          detalle: `ventas tienda ${colones(datos.tienda_en_linea.ventas)} · margen ${colones(datos.tienda_en_linea.margen_neto)}\nfacturado ${colones(datos.facturacion.total)} · IVA ${colones(datos.facturacion.iva)}`,
+          panel: { columnas: ['Día', 'Pedidos', 'Ventas tienda', 'Margen', 'Facturado'], filas: datos.por_dia.map(d => [d.dia, d.pedidos, colones(d.ventas), colones(d.margen), colones(d.facturado)]) },
+        },
+      };
+    },
+  },
 ];
 
-/** Las herramientas que el superadmin dejó encendidas. */
-export function disponibles(modulos: Record<string, boolean> | null | undefined): Herramienta[] {
-  return HERRAMIENTAS.filter(h => (modulos?.[h.modulo] ?? true) !== false);
+/** Las herramientas que el superadmin dejó encendidas y que esta persona puede usar. */
+export function disponibles(modulos: Record<string, boolean> | null | undefined, esSuper = false): Herramienta[] {
+  return HERRAMIENTAS.filter(h => (modulos?.[h.modulo] ?? true) !== false && (!h.soloSuper || esSuper));
 }
 
 /** Ejecuta una herramienta; un fallo se le devuelve a la IA como dato, no rompe la respuesta. */

@@ -13,23 +13,28 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sparkles, Plus, Lock, Globe, ArrowUp, Copy, Settings, Menu, BarChart3, Trash2, X, Clock, Info, ShieldCheck, ArrowLeft,
-  Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight,
+  Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight, ShieldAlert, Wallet, MapPin,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
-import { supabase } from '../../supabaseClient';
+const MapaModal = React.lazy(() => import('../ui/MapaModal'));
+import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../../supabaseClient';
+import { cabeceraClientInfo } from '../../utils/dispositivo';
 import { useToast, useConfirm } from '../ui/Overlays';
 import { esSuperadmin } from '../../utils/roles';
 import type { User } from '../../types';
 
 interface Conversacion { id: string; titulo: string; actualizado_en: string }
 /** Una consulta al sistema que hizo la IA (la tarjeta encima de la respuesta). */
-interface Consulta { modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean }
+interface Panel { columnas: string[]; filas: (string | number | null)[][]; puntos?: ({ lat: number; lon: number; etiqueta: string } | null)[] }
+interface Consulta { modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean; panel?: Panel }
 interface Mensaje {
   id: string; rol: 'user' | 'assistant'; texto: string;
   fuentes?: { titulo: string; url: string }[];
   consultas?: Consulta[];
   tokens_in?: number; tokens_out?: number; proveedor?: string | null; modelo?: string | null; busco?: boolean;
   pendiente?: boolean;
+  /** Mientras la respuesta llega en vivo: «Consultando inventario…». */
+  estado?: string;
 }
 interface Cupo {
   usados: number; limite: number | null; disponibles: number | null; tokensHoy: number;
@@ -37,7 +42,7 @@ interface Cupo {
   busqueda: boolean; respaldo: boolean; groqConfigurado: boolean;
   modulos?: string[]; consultasHoy?: number;
 }
-type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores', boolean>;
+type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas', boolean>;
 interface Ajustes { limite_diario: number; busqueda: boolean; respaldo: boolean; acceso: 'personal' | 'gestion' | 'super'; modulos?: Modulos }
 
 const MODULOS: { id: keyof Modulos; nombre: string; desc: string; icono: LucideIcon; soloSuper?: boolean }[] = [
@@ -45,8 +50,10 @@ const MODULOS: { id: keyof Modulos; nombre: string; desc: string; icono: LucideI
   { id: 'facturacion', nombre: 'Facturación', desc: 'Totales y facturas sin datos de clientes', icono: Receipt },
   { id: 'taller', nombre: 'Taller', desc: 'Órdenes por estado y días', icono: Wrench },
   { id: 'errores', nombre: 'Errores del sistema', desc: 'Fallos de correo, pagos, Hacienda y bitácora', icono: TriangleAlert, soloSuper: true },
+  { id: 'seguridad', nombre: 'Ciberseguridad', desc: 'Ingresos, visitantes, bloqueos y ubicaciones', icono: ShieldAlert, soloSuper: true },
+  { id: 'finanzas', nombre: 'Finanzas', desc: 'Ventas, costos, margen neto e IVA', icono: Wallet, soloSuper: true },
 ];
-const ICONO_MODULO: Record<string, LucideIcon> = { Inventario: Package, 'Facturación': Receipt, Taller: Wrench, 'Errores del sistema': TriangleAlert };
+const ICONO_MODULO: Record<string, LucideIcon> = { Inventario: Package, 'Facturación': Receipt, Taller: Wrench, 'Errores del sistema': TriangleAlert, Ciberseguridad: ShieldAlert, Finanzas: Wallet };
 
 /** «gemini-3.8-flash» → «Gemini 3.8 Flash». */
 function nombreModelo(m?: string | null): string {
@@ -126,6 +133,8 @@ const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}
 const SUGERENCIAS = [
   { t: 'Inventario', d: '¿Qué productos están por agotarse?', p: '¿Qué productos están por agotarse?', modulo: 'inventario' },
   { t: 'Ventas', d: '¿Cuánto se facturó esta semana?', p: '¿Cuánto se facturó esta semana y por qué medio de pago?', modulo: 'facturacion' },
+  { t: 'Ingresos', d: '¿Quién entró hoy al sistema?', p: '¿Quién entró hoy al sistema y hubo intentos fallidos?', modulo: 'seguridad' },
+  { t: 'Finanzas', d: '¿Cómo va el margen este mes?', p: '¿Cuánto vendimos este mes y cuál es el margen neto?', modulo: 'finanzas' },
   { t: 'Taller', d: '¿Qué órdenes llevan más de 5 días?', p: '¿Qué órdenes del taller llevan más de 5 días?', modulo: 'taller' },
   { t: 'Explicar', d: 'Un término o un error del celular', p: '¿Qué significa que un celular tenga eSIM y cómo se activa?' },
   { t: 'Redactar', d: 'Mensajes para clientes o redes', p: 'Escribime un mensaje corto y amable para avisar que llegaron accesorios nuevos.' },
@@ -215,18 +224,62 @@ function Linea({ t }: { t: string }) {
   );
 }
 
+/** Detalle completo de una consulta del superadmin (carril de pantalla:
+ *  esto NO pasó por la IA). Muestra 20 filas y el resto bajo demanda. */
+function TablaPanel({ panel }: { panel: Panel }) {
+  const [todas, setTodas] = useState(false);
+  const [mapa, setMapa] = useState<{ lat: number; lon: number; etiqueta: string } | null>(null);
+  const filas = todas ? panel.filas : panel.filas.slice(0, 20);
+  const conMapa = !!panel.puntos?.some(Boolean);
+  if (!panel.filas.length) return <p className="ai-panel-vacio">Sin registros en este período.</p>;
+  return (
+    <div className="ai-panel-det">
+      <div className="ai-tabla ai-tabla-fichas">
+        <table>
+          <thead><tr>{panel.columnas.map(c => <th key={c}>{c}</th>)}{conMapa && <th aria-label="Mapa" />}</tr></thead>
+          <tbody>
+            {filas.map((f, i) => (
+              <tr key={i}>
+                {f.map((v, j) => <td key={j} data-col={panel.columnas[j]}>{v ?? '—'}</td>)}
+                {conMapa && (
+                  <td className="ai-td-mapa">{panel.puntos?.[i] && (
+                    <button type="button" className="ai-mapa-btn" aria-label="Ver en el mapa" onClick={() => setMapa(panel.puntos![i]!)}><MapPin className="w-4 h-4" /></button>
+                  )}</td>
+                )}
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
+      {panel.filas.length > 20 && (
+        <button type="button" className="ai-ver-mas" onClick={() => setTodas(v => !v)}>
+          {todas ? 'Ver menos' : `Ver ${panel.filas.length - 20} más`}
+        </button>
+      )}
+      {mapa && (
+        <React.Suspense fallback={null}>
+          <MapaModal abierto onClose={() => setMapa(null)} lat={mapa.lat} lon={mapa.lon} etiqueta={mapa.etiqueta} titulo="Ubicación" />
+        </React.Suspense>
+      )}
+    </div>
+  );
+}
+
 function TarjetaConsulta({ c }: { c: Consulta }) {
   const Icono = c.sinPermiso ? Ban : (ICONO_MODULO[c.modulo] || Package);
+  // Lo del superadmin (con panel) se abre solo: es justo lo que pidió ver.
   return (
-    <details className="ai-herr" data-no={c.sinPermiso || undefined}>
+    <details className="ai-herr" data-no={c.sinPermiso || undefined} open={!!c.panel || undefined}>
       <summary>
         <span className="ai-herr-ic"><Icono className="w-4 h-4" /></span>
         <span className="ai-herr-t"><b>{c.modulo}</b> · {c.desc}</span>
-        {!c.sinPermiso && <span className="ai-herr-chip"><ShieldCheck className="w-3 h-3" />sin datos de clientes</span>}
+        {!c.sinPermiso && (c.panel
+          ? <span className="ai-herr-chip" data-tipo="privado"><Lock className="w-3 h-3" />detalle solo en tu pantalla</span>
+          : <span className="ai-herr-chip"><ShieldCheck className="w-3 h-3" />sin datos de clientes</span>)}
         {c.filas !== '—' && <small>{c.filas}</small>}
-        {c.detalle && <ChevronRight className="ai-herr-chev w-4 h-4" />}
+        {(c.detalle || c.panel) && <ChevronRight className="ai-herr-chev w-4 h-4" />}
       </summary>
-      {c.detalle && <pre>{c.detalle}</pre>}
+      {c.panel ? <TablaPanel panel={c.panel} /> : c.detalle && <pre>{c.detalle}</pre>}
     </details>
   );
 }
@@ -236,10 +289,13 @@ function TarjetaConsulta({ c }: { c: Consulta }) {
  *  historial, que en un teléfono de gama de entrada se notaba. */
 const Burbuja = React.memo(function Burbuja({ m, onCopiar }: { m: Mensaje; onCopiar: (t: string) => void }) {
   if (m.rol === 'user') return <div className="ai-yo">{m.texto}</div>;
+  const enVivo = m.id === BORRADOR;
   return (
-    <div className="ai-ia">
+    <div className="ai-ia" aria-live={enVivo ? 'polite' : undefined}>
       {!!m.consultas?.length && <div className="ai-herrs">{m.consultas.map((c, i) => <React.Fragment key={i}><TarjetaConsulta c={c} /></React.Fragment>)}</div>}
-      <div className="ai-tx"><Formato texto={m.texto} /></div>
+      {m.texto
+        ? <div className="ai-tx"><Formato texto={m.texto} />{enVivo && <span className="ai-cursor" />}</div>
+        : enVivo && <div className="ai-buscando"><span className="ai-puntos"><i /><i /><i /></span>{m.estado || 'Pensando…'}</div>}
       {!!m.fuentes?.length && (
         <div className="ai-fuentes">
           {m.fuentes.map((f, i) => (
@@ -247,14 +303,54 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar }: { m: Mensaje; onCop
           ))}
         </div>
       )}
-      <div className="ai-pie">
+      {!enVivo && <div className="ai-pie">
         <button type="button" aria-label="Copiar respuesta" onClick={() => onCopiar(m.texto)}><Copy className="w-4 h-4" /></button>
         <span className="ai-tok">↑ <i>{k(m.tokens_in || 0)}</i> · ↓ <i>{k(m.tokens_out || 0)}</i> tokens</span>
         <span>{nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.busco ? ' · con búsqueda' : ''}{m.consultas?.length ? ` · consultó ${m.consultas.length} ${m.consultas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
-      </div>
+      </div>}
     </div>
   );
 });
+const BORRADOR = 'borrador-en-vivo';
+
+/**
+ * Manda el mensaje y lee la respuesta EN VIVO (eventos SSE de la función).
+ * `functions.invoke` no lee flujos, así que se usa fetch con la sesión.
+ * Si algo de eso no está disponible, cae al modo de siempre (JSON).
+ */
+async function enviarEnVivo(cuerpo: Record<string, unknown>, onEvento: (evento: string, datos: any) => void): Promise<any> {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (!SUPABASE_URL || !session?.access_token || typeof ReadableStream === 'undefined') {
+    const { data, error } = await supabase.functions.invoke('asistente-ia', { body: cuerpo });
+    if (error && (error as any).context?.json) { try { return await (error as any).context.json(); } catch { /* sin cuerpo */ } }
+    return data;
+  }
+  const r = await fetch(`${SUPABASE_URL}/functions/v1/asistente-ia`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${session.access_token}`, apikey: SUPABASE_KEY, 'Content-Type': 'application/json', 'X-Client-Info': cabeceraClientInfo() },
+    body: JSON.stringify({ ...cuerpo, envivo: true }),
+  });
+  if (!(r.headers.get('content-type') || '').includes('text/event-stream') || !r.body) {
+    try { return await r.json(); } catch { return null; }
+  }
+  const lector = r.body.pipeThrough(new TextDecoderStream()).getReader();
+  let resto = '', final: any = null;
+  for (;;) {
+    const { value, done } = await lector.read();
+    if (done) break;
+    resto += value;
+    let i;
+    while ((i = resto.indexOf('\n\n')) >= 0) {
+      const bloque = resto.slice(0, i); resto = resto.slice(i + 2);
+      const evento = /^event: (.*)$/m.exec(bloque)?.[1] || 'message';
+      const dato = /^data: (.*)$/m.exec(bloque)?.[1];
+      if (!dato) continue;
+      let d: any; try { d = JSON.parse(dato); } catch { continue; }
+      if (evento === 'fin' || evento === 'error') final = d; else onEvento(evento, d);
+    }
+  }
+  return final;
+}
 const ListaMensajes = React.memo(function ListaMensajes({ mensajes, onCopiar }: { mensajes: Mensaje[]; onCopiar: (t: string) => void }) {
   return <>{mensajes.map(m => <React.Fragment key={m.id}><Burbuja m={m} onCopiar={onCopiar} /></React.Fragment>)}</>;
 });
@@ -402,24 +498,39 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
     setAviso(null);
     setEnviando(true);
     setMensajes(prev => [...prev, { id: `tmp-${Date.now()}`, rol: 'user', texto: t, pendiente: true }]);
+    // El borrador de la respuesta se actualiza a lo sumo una vez por cuadro
+    // (requestAnimationFrame): en un teléfono de gama de entrada, repintar
+    // en cada trozo de texto se notaba.
+    const borrador: Mensaje = { id: BORRADOR, rol: 'assistant', texto: '', consultas: [], estado: 'Pensando…' };
+    let programado = 0;
+    const pintar = () => {
+      programado = 0;
+      setMensajes(prev => [...prev.filter(m => m.id !== BORRADOR), { ...borrador, consultas: [...(borrador.consultas || [])] }]);
+    };
+    const pedirPintar = () => { if (!programado) programado = requestAnimationFrame(pintar); };
+    pintar();
     try {
-      const { data, error } = await supabase.functions.invoke('asistente-ia', {
-        body: { accion: 'enviar', texto: t, conversacionId: activa, buscar: buscar && busquedaPermitida },
-      });
-      // Los errores con cuerpo (límite, sin servicio) llegan como `error`
-      // del cliente; el detalle útil viene en el contexto de la respuesta.
-      let res = data;
-      if (error && (error as any).context?.json) {
-        try { res = await (error as any).context.json(); } catch { /* sin cuerpo */ }
-      }
+      const res = await enviarEnVivo(
+        { accion: 'enviar', texto: t, conversacionId: activa, buscar: false },
+        (evento, d) => {
+          if (evento === 'texto') { borrador.texto += d.delta || ''; borrador.estado = undefined; }
+          else if (evento === 'estado') borrador.estado = d.texto;
+          else if (evento === 'consulta') borrador.consultas = [...(borrador.consultas || []), d];
+          else if (evento === 'modelo') borrador.modelo = d.modelo;
+          else if (evento === 'reinicio') { borrador.texto = ''; borrador.consultas = []; borrador.estado = 'Cambiando a otro modelo…'; }
+          else return;
+          pedirPintar();
+        },
+      );
+      if (programado) cancelAnimationFrame(programado);
       if (!res?.ok) {
         if (res?.cupo) setCupo(res.cupo);
-        setMensajes(prev => prev.filter(m => !m.pendiente));
+        setMensajes(prev => prev.filter(m => !m.pendiente && m.id !== BORRADOR));
         setTexto(t);
         setAviso({ tipo: 'error', texto: res?.error || 'No se pudo enviar. Revisa la conexión e intenta de nuevo.' });
         return;
       }
-      setMensajes(prev => [...prev.map(m => (m.pendiente ? { ...m, pendiente: false } : m)), { id: `a-${Date.now()}`, ...res.mensaje }]);
+      setMensajes(prev => [...prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false } : m)), { id: `a-${Date.now()}`, ...res.mensaje }]);
       setCupo(res.cupo);
       if (res.respaldo) setAviso({ tipo: 'respaldo', texto: 'Google llegó a su límite por ahora; respondió el respaldo (Groq), sin búsqueda en internet.' });
       else if (res.sinBusqueda) {
@@ -431,7 +542,8 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
       if (!activa || res.nueva) { recienCreada.current = res.conversacionId; setActiva(res.conversacionId); }
       void cargarConvs();
     } catch (e: any) {
-      setMensajes(prev => prev.filter(m => !m.pendiente));
+      if (programado) cancelAnimationFrame(programado);
+      setMensajes(prev => prev.filter(m => !m.pendiente && m.id !== BORRADOR));
       setTexto(t);
       setAviso({ tipo: 'error', texto: 'No se pudo enviar. Revisa la conexión e intenta de nuevo.' });
     } finally {
@@ -528,9 +640,6 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
                   </div>
                 </div>
               ) : <ListaMensajes mensajes={mensajes} onCopiar={copiar} />}
-              {enviando && (
-                <div className="ai-ia"><div className="ai-buscando"><span className="ai-puntos"><i /><i /><i /></span>{buscar && busquedaPermitida ? 'Pensando y buscando en Google…' : conSistema ? 'Pensando y consultando el sistema…' : 'Pensando…'}</div></div>
-              )}
               <div ref={finRef} />
             </div>
 
