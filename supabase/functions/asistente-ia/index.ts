@@ -13,6 +13,11 @@
 //                    mueve solo al Flash más nuevo.
 //   GROQ_MODEL       por defecto «llama-3.3-70b-versatile».
 //
+// CONSULTAS AL SISTEMA (fase 2): la IA puede pedir datos de inventario,
+// facturación, taller y errores mediante «herramientas» (ver
+// herramientas.ts). Se ejecutan con la sesión de quien pregunta y nunca
+// devuelven datos de clientes.
+//
 // SEGURIDAD: la identidad sale del JWT de quien llama (no del cuerpo), el
 // acceso y el límite diario se comprueban aquí, y la base solo deja que cada
 // quien lea sus propias conversaciones.
@@ -20,6 +25,7 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
+import { disponibles, ejecutar, NOMBRE_MODULO, type Consulta, type Contexto } from './herramientas.ts';
 
 const CORS = {
   'Access-Control-Allow-Origin': '*',
@@ -42,13 +48,26 @@ const MAX_HISTORIAL = 20;          // mensajes previos que se mandan como contex
 const MAX_TEXTO = 8000;            // caracteres por mensaje
 const TOPE_RED_MS = 45000;
 
-const SISTEMA = `Eres el asistente del panel de Technoverse Costa Rica, una tienda y taller de celulares y accesorios.
-Responde en español de Costa Rica, claro y al grano. Usa listas cortas cuando ayuden.
-Si buscaste en internet, apóyate en las fuentes y no inventes datos. Si no sabes algo, dilo.
+const MAX_RONDAS = 4;               // consultas encadenadas por mensaje
+
+const sistema = (hoy: string, conHerramientas: boolean) => `Eres el asistente del panel de Technoverse Costa Rica, una tienda y taller de celulares y accesorios.
+Hoy es ${hoy} (hora de Costa Rica). Responde en español de Costa Rica, claro y al grano. Usa listas cortas o tablas en markdown cuando ayuden.
+${conHerramientas ? `Tienes consultas de SOLO LECTURA al sistema de la tienda. Úsalas siempre que la pregunta sea sobre el inventario, las ventas o facturas, el taller o los errores del sistema; nunca inventes cifras del negocio. Si una consulta dice que no hay acceso, explícalo sin inventar. No puedes crear, editar ni borrar nada: si te piden un cambio, indica en qué módulo del panel se hace.
+` : ''}Si buscaste en internet, apóyate en las fuentes. Si no sabes algo, dilo.
 No pidas ni repitas datos personales de clientes (cédulas, teléfonos, direcciones).`;
 
 type Turno = { rol: 'user' | 'assistant'; texto: string };
-type Resultado = { texto: string; fuentes: { titulo: string; url: string }[]; tokensIn: number; tokensOut: number; proveedor: 'gemini' | 'groq'; modelo: string; busco: boolean };
+type Resultado = { texto: string; fuentes: { titulo: string; url: string }[]; tokensIn: number; tokensOut: number; proveedor: 'gemini' | 'groq'; modelo: string; busco: boolean; consultas: Consulta[]; sinBusqueda?: boolean };
+/** Lo que necesita la IA para consultar el sistema en este mensaje. */
+type Sistema = { ctx: Contexto; herramientas: ReturnType<typeof disponibles>; consultas: Consulta[]; usados: Record<string, number> };
+
+async function correrHerramienta(nombre: string, args: Record<string, unknown>, sis: Sistema): Promise<unknown> {
+  const salida = await ejecutar(nombre, args, sis.ctx, sis.herramientas);
+  sis.consultas.push(salida.consulta);
+  const h = sis.herramientas.find(x => x.nombre === nombre);
+  if (h && !salida.consulta.sinPermiso) sis.usados[h.modulo] = (sis.usados[h.modulo] || 0) + 1;
+  return salida.datos;
+}
 
 class CupoAgotado extends Error {}
 
@@ -67,74 +86,115 @@ async function conTope(url: string, init: RequestInit): Promise<Response> {
 // llamada en cada mensaje y se responde sin buscar.
 let busquedaBloqueadaHasta = 0;
 
-async function preguntarGemini(historial: Turno[], buscar: boolean, modelo: string): Promise<Resultado & { sinBusqueda?: boolean }> {
+async function preguntarGemini(historial: Turno[], buscar: boolean, modelo: string, sis: Sistema): Promise<Resultado> {
   const clave = Deno.env.get('GEMINI_API_KEY');
   if (!clave) throw new CupoAgotado('Falta GEMINI_API_KEY en los secretos');
-  const conBusqueda = buscar && Date.now() > busquedaBloqueadaHasta;
-  const cuerpo: Record<string, unknown> = {
-    systemInstruction: { parts: [{ text: SISTEMA }] },
-    contents: historial.map(t => ({ role: t.rol === 'assistant' ? 'model' : 'user', parts: [{ text: t.texto }] })),
-  };
-  if (conBusqueda) cuerpo.tools = [{ google_search: {} }];
+  const conHerramientas = sis.herramientas.length > 0;
+  // La búsqueda en Google y las consultas al sistema no se combinan en la
+  // misma llamada: si hay consultas, mandan ellas.
+  const conBusqueda = buscar && !conHerramientas && Date.now() > busquedaBloqueadaHasta;
+  const contents: any[] = historial.map(t => ({ role: t.rol === 'assistant' ? 'model' : 'user', parts: [{ text: t.texto }] }));
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`;
-  const r = await conTope(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(cuerpo) });
-  if (!r.ok) {
-    const det = await r.text().catch(() => '');
-    console.log(`gemini ${modelo} busqueda=${conBusqueda} -> ${r.status}: ${det.slice(0, 300)}`);
-    // Con búsqueda, un 400 o 429 suele ser la búsqueda (no el modelo): se
-    // reintenta sin buscar antes de dar el modelo por agotado.
-    if (conBusqueda && (r.status === 400 || r.status === 429)) {
-      busquedaBloqueadaHasta = Date.now() + 30 * 60_000;
-      const sin = await preguntarGemini(historial, false, modelo);
-      return { ...sin, sinBusqueda: true };
+  let tokensIn = 0, tokensOut = 0;
+
+  for (let ronda = 0; ronda <= MAX_RONDAS; ronda++) {
+    const cuerpo: Record<string, unknown> = { systemInstruction: { parts: [{ text: sistema(sis.ctx.hoy, conHerramientas) }] }, contents };
+    // En la última ronda ya no se ofrecen consultas: tiene que responder.
+    if (conHerramientas && ronda < MAX_RONDAS) {
+      cuerpo.tools = [{ functionDeclarations: sis.herramientas.map(h => ({ name: h.nombre, description: h.descripcion, parameters: h.parametros })) }];
+    } else if (conBusqueda) {
+      cuerpo.tools = [{ google_search: {} }];
     }
-    if (r.status === 429 || r.status >= 500) throw new CupoAgotado(`Gemini ${modelo} ${r.status}`);
-    throw new Error(`Gemini respondió ${r.status}: ${det.slice(0, 200)}`);
+    const r = await conTope(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(cuerpo) });
+    if (!r.ok) {
+      const det = await r.text().catch(() => '');
+      console.log(`gemini ${modelo} busqueda=${conBusqueda} ronda=${ronda} -> ${r.status}: ${det.slice(0, 300)}`);
+      if (conBusqueda && (r.status === 400 || r.status === 429)) {
+        busquedaBloqueadaHasta = Date.now() + 30 * 60_000;
+        const sin = await preguntarGemini(historial, false, modelo, sis);
+        return { ...sin, sinBusqueda: true };
+      }
+      if (r.status === 429 || r.status >= 500) throw new CupoAgotado(`Gemini ${modelo} ${r.status}`);
+      throw new Error(`Gemini respondió ${r.status}: ${det.slice(0, 200)}`);
+    }
+    const d = await r.json();
+    tokensIn += Number(d?.usageMetadata?.promptTokenCount || 0);
+    tokensOut += Number(d?.usageMetadata?.candidatesTokenCount || 0) + Number(d?.usageMetadata?.thoughtsTokenCount || 0);
+    const cand = d?.candidates?.[0];
+    const partes: any[] = cand?.content?.parts || [];
+    const llamadas = partes.filter(p => p?.functionCall);
+    if (llamadas.length && ronda < MAX_RONDAS) {
+      // Se devuelve el turno del modelo tal cual (con sus firmas de
+      // razonamiento) y, después, el resultado de cada consulta.
+      contents.push(cand.content);
+      const respuestas = [];
+      for (const p of llamadas) {
+        const datos = await correrHerramienta(p.functionCall.name, p.functionCall.args || {}, sis);
+        respuestas.push({ functionResponse: { ...(p.functionCall.id ? { id: p.functionCall.id } : {}), name: p.functionCall.name, response: { resultado: datos } } });
+      }
+      contents.push({ role: 'user', parts: respuestas });
+      continue;
+    }
+    const texto = partes.map(p => p?.text || '').join('').trim();
+    if (!texto) throw new CupoAgotado('Gemini no devolvió texto');
+    const chunks = cand?.groundingMetadata?.groundingChunks || [];
+    const fuentes = chunks
+      .map((c: any) => ({ titulo: String(c?.web?.title || '').slice(0, 80), url: String(c?.web?.uri || '') }))
+      .filter((f: any) => f.url)
+      .slice(0, 6);
+    return {
+      texto, fuentes, tokensIn, tokensOut,
+      proveedor: 'gemini', modelo: String(d?.modelVersion || modelo), busco: conBusqueda && fuentes.length > 0,
+      consultas: sis.consultas, sinBusqueda: buscar && !conBusqueda && !conHerramientas,
+    };
   }
-  const d = await r.json();
-  const cand = d?.candidates?.[0];
-  const texto = (cand?.content?.parts || []).map((p: any) => p?.text || '').join('').trim();
-  if (!texto) throw new CupoAgotado('Gemini no devolvió texto');
-  const chunks = cand?.groundingMetadata?.groundingChunks || [];
-  const fuentes = chunks
-    .map((c: any) => ({ titulo: String(c?.web?.title || '').slice(0, 80), url: String(c?.web?.uri || '') }))
-    .filter((f: any) => f.url)
-    .slice(0, 6);
-  return {
-    texto, fuentes,
-    tokensIn: Number(d?.usageMetadata?.promptTokenCount || 0),
-    tokensOut: Number(d?.usageMetadata?.candidatesTokenCount || 0) + Number(d?.usageMetadata?.thoughtsTokenCount || 0),
-    proveedor: 'gemini', modelo: String(d?.modelVersion || modelo), busco: conBusqueda && fuentes.length > 0,
-    sinBusqueda: buscar && !conBusqueda,
-  };
+  throw new Error('La IA no terminó de responder.');
 }
 
-async function preguntarGroq(historial: Turno[]): Promise<Resultado> {
+async function preguntarGroq(historial: Turno[], sis: Sistema): Promise<Resultado> {
   const clave = Deno.env.get('GROQ_API_KEY');
   if (!clave) { console.log('groq: falta GROQ_API_KEY en los secretos'); throw new CupoAgotado('Sin respaldo configurado'); }
-  const r = await conTope('https://api.groq.com/openai/v1/chat/completions', {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clave}` },
-    body: JSON.stringify({
-      model: GROQ_MODEL,
-      messages: [{ role: 'system', content: SISTEMA }, ...historial.map(t => ({ role: t.rol, content: t.texto }))],
-      temperature: 0.6,
-    }),
-  });
-  if (!r.ok) {
-    const det = await r.text().catch(() => '');
-    console.log(`groq ${GROQ_MODEL} -> ${r.status}: ${det.slice(0, 300)}`);
-    if (r.status === 429 || r.status >= 500) throw new CupoAgotado('Groq sin cupo');
-    throw new Error(`Groq respondió ${r.status}: ${det.slice(0, 200)}`);
+  const conHerramientas = sis.herramientas.length > 0;
+  const mensajes: any[] = [{ role: 'system', content: sistema(sis.ctx.hoy, conHerramientas) }, ...historial.map(t => ({ role: t.rol, content: t.texto }))];
+  let tokensIn = 0, tokensOut = 0;
+  for (let ronda = 0; ronda <= MAX_RONDAS; ronda++) {
+    const cuerpo: Record<string, unknown> = { model: GROQ_MODEL, messages: mensajes, temperature: 0.4 };
+    if (conHerramientas && ronda < MAX_RONDAS) {
+      cuerpo.tools = sis.herramientas.map(h => ({ type: 'function', function: { name: h.nombre, description: h.descripcion, parameters: h.parametros } }));
+    }
+    const r = await conTope('https://api.groq.com/openai/v1/chat/completions', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clave}` },
+      body: JSON.stringify(cuerpo),
+    });
+    if (!r.ok) {
+      const det = await r.text().catch(() => '');
+      console.log(`groq ${GROQ_MODEL} ronda=${ronda} -> ${r.status}: ${det.slice(0, 300)}`);
+      if (r.status === 429 || r.status >= 500) throw new CupoAgotado('Groq sin cupo');
+      throw new Error(`Groq respondió ${r.status}: ${det.slice(0, 200)}`);
+    }
+    const d = await r.json();
+    tokensIn += Number(d?.usage?.prompt_tokens || 0); tokensOut += Number(d?.usage?.completion_tokens || 0);
+    const msg = d?.choices?.[0]?.message || {};
+    const llamadas: any[] = msg.tool_calls || [];
+    if (llamadas.length && ronda < MAX_RONDAS) {
+      mensajes.push({ role: 'assistant', content: msg.content || null, tool_calls: llamadas });
+      for (const c of llamadas) {
+        let args: Record<string, unknown> = {};
+        try { args = JSON.parse(c?.function?.arguments || '{}'); } catch { /* argumentos inválidos: sin filtros */ }
+        const datos = await correrHerramienta(c?.function?.name, args, sis);
+        mensajes.push({ role: 'tool', tool_call_id: c.id, content: JSON.stringify(datos) });
+      }
+      continue;
+    }
+    const texto = String(msg.content || '').trim();
+    if (!texto) throw new Error('Groq no devolvió respuesta.');
+    return {
+      texto, fuentes: [], tokensIn, tokensOut,
+      proveedor: 'groq', modelo: String(d?.model || GROQ_MODEL), busco: false, consultas: sis.consultas,
+    };
   }
-  const d = await r.json();
-  const texto = String(d?.choices?.[0]?.message?.content || '').trim();
-  if (!texto) throw new Error('Groq no devolvió respuesta.');
-  return {
-    texto, fuentes: [],
-    tokensIn: Number(d?.usage?.prompt_tokens || 0), tokensOut: Number(d?.usage?.completion_tokens || 0),
-    proveedor: 'groq', modelo: String(d?.model || GROQ_MODEL), busco: false,
-  };
+  throw new Error('La IA no terminó de responder.');
 }
 
 Deno.serve(async (req: Request) => {
@@ -166,7 +226,7 @@ Deno.serve(async (req: Request) => {
 
     const usoHoy = async () => {
       const [{ data: mio }, { data: equipo }] = await Promise.all([
-        admin.from('ia_uso_diario').select('mensajes,tokens').eq('user_id', uid).eq('dia', dia).maybeSingle(),
+        admin.from('ia_uso_diario').select('mensajes,tokens,consultas').eq('user_id', uid).eq('dia', dia).maybeSingle(),
         admin.from('ia_uso_diario').select('gemini,groq').eq('dia', dia),
       ]);
       const gem = (equipo || []).reduce((a: number, f: any) => a + (f.gemini || 0), 0);
@@ -177,6 +237,9 @@ Deno.serve(async (req: Request) => {
         tokensHoy: mio?.tokens || 0,
         equipo: { gemini: gem, groq: grq, cupoGemini: CUPO_GEMINI, cupoGroq: CUPO_GROQ },
         busqueda: !!ajustes?.busqueda, respaldo: !!ajustes?.respaldo, groqConfigurado: !!Deno.env.get('GROQ_API_KEY'),
+        // Módulos que este usuario puede consultar (errores: solo superadmin).
+        modulos: disponibles(ajustes?.modulos).map(h => h.modulo).filter((m, i, xs) => xs.indexOf(m) === i && (m !== 'errores' || esSuper)),
+        consultasHoy: Object.values((mio as any)?.consultas || {}).reduce((a: number, n: any) => a + Number(n || 0), 0),
       };
     };
 
@@ -210,19 +273,34 @@ Deno.serve(async (req: Request) => {
     const historial: Turno[] = [...(previos || []).reverse(), { rol: 'user', texto }] as Turno[];
 
     const buscar = !!ajustes?.busqueda && cuerpo?.buscar !== false;
+
+    // Las consultas al sistema se hacen con la SESIÓN DE QUIEN PREGUNTA (no
+    // con service_role): la base aplica las mismas reglas que en el panel.
+    const comoUsuario = createClient(Deno.env.get('SUPABASE_URL')!, req.headers.get('apikey') || Deno.env.get('SUPABASE_ANON_KEY')!, {
+      global: { headers: { Authorization: `Bearer ${jwt}` } },
+      auth: { persistSession: false, autoRefreshToken: false },
+    });
+    const herramientas = disponibles(ajustes?.modulos);
+    // Cada intento (Gemini, Flash-Lite, Groq) empieza con la lista de
+    // consultas vacía, para no duplicar tarjetas si uno falla a medias.
+    const nuevoSistema = (): Sistema => ({ ctx: { db: comoUsuario, esSuper, hoy: dia }, herramientas, consultas: [], usados: {} });
+    let sis = nuevoSistema();
+
     // Gemini primero; si Google no tiene cupo, Groq (si está permitido).
     // `null` = ninguno de los dos tiene cupo ahora.
-    const preguntar = async (): Promise<{ res: Resultado & { sinBusqueda?: boolean }; respaldo: boolean } | null> => {
+    const preguntar = async (): Promise<{ res: Resultado; respaldo: boolean } | null> => {
       for (const modelo of [GEMINI_MODEL, GEMINI_RESPALDO]) {
         try {
-          return { res: await preguntarGemini(historial, buscar, modelo), respaldo: false };
+          sis = nuevoSistema();
+          return { res: await preguntarGemini(historial, buscar, modelo, sis), respaldo: false };
         } catch (e) {
           if (!(e instanceof CupoAgotado)) throw e;
         }
       }
       if (!ajustes?.respaldo) return null;
       try {
-        return { res: await preguntarGroq(historial), respaldo: true };
+        sis = nuevoSistema();
+        return { res: await preguntarGroq(historial, sis), respaldo: true };
       } catch (e) {
         if (e instanceof CupoAgotado) return null;
         throw e;
@@ -247,27 +325,50 @@ Deno.serve(async (req: Request) => {
     }
     const { res, respaldo: usoRespaldo } = salida;
 
+    // Los dos mensajes llevan TODAS las columnas: en una inserción de varias
+    // filas, la que no trae un campo lo manda como null (no usa el valor por
+    // defecto), y `fuentes` no admite null.
     const ahora = new Date().toISOString();
     const despues = new Date(Date.now() + 1).toISOString();
-    await admin.from('ia_mensajes').insert([
-      { conversacion_id: convId, user_id: uid, rol: 'user', texto, creado_en: ahora },
-      { conversacion_id: convId, user_id: uid, rol: 'assistant', texto: res.texto, fuentes: res.fuentes, tokens_in: res.tokensIn, tokens_out: res.tokensOut, proveedor: res.proveedor, modelo: res.modelo, busco: res.busco, creado_en: despues },
+    const fila = (m: Record<string, unknown>) => ({
+      conversacion_id: convId, user_id: uid, fuentes: [], tokens_in: 0, tokens_out: 0, proveedor: null, modelo: null, busco: false, consultas: [], ...m,
+    });
+    const { error: errMsg } = await admin.from('ia_mensajes').insert([
+      fila({ rol: 'user', texto, creado_en: ahora }),
+      fila({ rol: 'assistant', texto: res.texto, fuentes: res.fuentes, tokens_in: res.tokensIn, tokens_out: res.tokensOut, proveedor: res.proveedor, modelo: res.modelo, busco: res.busco, consultas: res.consultas, creado_en: despues }),
     ]);
+    if (errMsg) console.log(`no se guardaron los mensajes: ${errMsg.message}`);
     await admin.from('ia_conversaciones').update({ actualizado_en: new Date().toISOString() }).eq('id', convId);
 
-    const fila = await admin.from('ia_uso_diario').select('mensajes,tokens,gemini,groq').eq('user_id', uid).eq('dia', dia).maybeSingle();
-    const f = fila.data || { mensajes: 0, tokens: 0, gemini: 0, groq: 0 };
-    await admin.from('ia_uso_diario').upsert({
+    const { data: uso } = await admin.from('ia_uso_diario').select('mensajes,tokens,gemini,groq,consultas').eq('user_id', uid).eq('dia', dia).maybeSingle();
+    const f = uso || { mensajes: 0, tokens: 0, gemini: 0, groq: 0, consultas: {} };
+    const consultasHoy: Record<string, number> = { ...(f.consultas || {}) };
+    for (const [m, n] of Object.entries(sis.usados)) consultasHoy[m] = (consultasHoy[m] || 0) + n;
+    const { error: errUso } = await admin.from('ia_uso_diario').upsert({
       user_id: uid, dia,
       mensajes: f.mensajes + 1,
       tokens: f.tokens + res.tokensIn + res.tokensOut,
       gemini: f.gemini + (res.proveedor === 'gemini' ? 1 : 0),
       groq: f.groq + (res.proveedor === 'groq' ? 1 : 0),
+      consultas: consultasHoy,
     });
+    if (errUso) console.log(`no se guardó el uso: ${errUso.message}`);
+
+    // Bitácora: qué módulo consultó el asistente (no qué se preguntó).
+    const modulosUsados = Object.keys(sis.usados);
+    if (modulosUsados.length) {
+      await admin.from('audit_logs').insert({
+        id: `LOG-${Date.now()}-${crypto.randomUUID().slice(0, 4)}`,
+        user_email: quien?.user?.email || null,
+        module: 'Asistente IA',
+        action: 'Consulta al sistema',
+        detail: 'Consultó: ' + modulosUsados.map(m => `${NOMBRE_MODULO[m] || m} (${sis.usados[m]})`).join(', '),
+      });
+    }
 
     return responder({
       ok: true, conversacionId: convId, nueva, respaldo: usoRespaldo, sinBusqueda: !!res.sinBusqueda,
-      mensaje: { rol: 'assistant', texto: res.texto, fuentes: res.fuentes, tokens_in: res.tokensIn, tokens_out: res.tokensOut, proveedor: res.proveedor, modelo: res.modelo, busco: res.busco },
+      mensaje: { rol: 'assistant', texto: res.texto, fuentes: res.fuentes, tokens_in: res.tokensIn, tokens_out: res.tokensOut, proveedor: res.proveedor, modelo: res.modelo, busco: res.busco, consultas: res.consultas },
       cupo: await usoHoy(),
     });
   } catch (e) {
