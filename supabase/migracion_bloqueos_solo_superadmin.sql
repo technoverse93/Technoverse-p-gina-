@@ -1,8 +1,7 @@
 -- ===========================================================================
 -- BLOQUEOS, LISTA BLANCA, PENALIZADOS Y APARATOS: SOLO SUPERADMIN (oct 2026)
 -- ===========================================================================
--- PENDIENTE: se corre a mano en el SQL Editor de Supabase (la herramienta
--- automática pidió aprobación). Al confirmarlo, cambiar a "YA EJECUTADO".
+-- YA EJECUTADO en la base (lo corrió el dueño en el SQL Editor; verificado).
 --
 -- Hasta ahora estas cuatro tablas y las cuatro funciones de baneo exigían
 -- `is_staff()`: cualquier persona del personal podía leerlas y cambiarlas
