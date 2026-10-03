@@ -1355,7 +1355,7 @@ async function refreshChatFromSupabase() {
   }
 
   // MODO STAFF / CLIENTE LOGUEADO: lectura directa (RLS filtra por rol/correo).
-  const { data: convRows, error: convError } = await supabase.from('chat_conversations').select('id,customer_name,customer_email,status,unread_count,assigned_admin_email,customer_token,updated_at,created_at,customer_last_read_at,customer_last_seen_at');
+  const { data: convRows, error: convError } = await supabase.from('chat_conversations').select('*');
   if (convError) {
     notifySyncError(`No se pudo leer chat_conversations: ${convError.message}`);
     return;
@@ -1383,7 +1383,10 @@ async function refreshChatFromSupabase() {
     customerToken: r.customer_token || undefined,
     updatedAt: r.updated_at || r.created_at || undefined,
     customerLastReadAt: r.customer_last_read_at || undefined,
-    customerLastSeenAt: r.customer_last_seen_at || undefined
+    customerLastSeenAt: r.customer_last_seen_at || undefined,
+    // `select('*')` y no la lista de columnas: así la lectura no se rompe si
+    // la columna de exclusividad todavía no existe en la base.
+    exclusivoSuperadmin: !!r.exclusivo_superadmin
   }));
   // Mismo fallo y mismo arreglo que en la rama de cliente anónimo arriba:
   // la foto de referencia sale de la verdad del servidor ANTES de
@@ -1810,6 +1813,10 @@ function montarCanalDePurga() {
       const { conv, msg } = m?.payload || {};
       if (conv && msg) quitarMensajeLocal(String(conv), String(msg));
     })
+    // Un chat cambió de exclusividad: cada pantalla relee del servidor y la
+    // base decide qué le toca ver. Así un administrador regular lo pierde al
+    // instante, sin que su app tenga que saber nada de roles.
+    .on('broadcast', { event: 'excl' }, () => { void recargarChatDelServidor(true); })
     .subscribe((estado) => {
       // Al (re)conectar se relee el chat del servidor. Un broadcast es de
       // usar y tirar: no queda encolado para quien no estaba escuchando.
@@ -2397,4 +2404,23 @@ export function addAuditLog(userEmail: string, module: string, action: string, d
   if (!dbInst.audit_log) dbInst.audit_log = [];
   dbInst.audit_log.unshift(newLog);
   if (!existingDb) saveDB(dbInst);
+}
+
+
+/**
+ * Marca o desmarca un chat como EXCLUSIVO DE SUPERADMIN.
+ *
+ * La regla vive en la base (RPC `chat_marcar_exclusivo`, que rechaza a
+ * cualquiera que no sea superadmin, y políticas RLS restrictivas que le
+ * esconden el chat al resto del personal). Después se avisa por el canal
+ * de chat para que las demás pantallas relean y lo pierdan al instante.
+ */
+export async function marcarChatExclusivo(convId: string, exclusivo: boolean): Promise<void> {
+  const { error } = await supabase.rpc('chat_marcar_exclusivo', { p_id: convId, p_exclusivo: exclusivo });
+  if (error) throw new Error(error.message);
+  try {
+    montarCanalDePurga();
+    await canalPurga!.send({ type: 'broadcast', event: 'excl', payload: { conv: convId } });
+  } catch { /* si el aviso no sale, la relectura periódica lo alcanza igual */ }
+  await recargarChatDelServidor(true);
 }

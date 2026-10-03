@@ -171,6 +171,8 @@ export interface ChatConversation {
   status: 'nuevo' | 'pendiente' | 'resuelto';
   unreadCount: number;
   assignedAdminEmail?: string;
+  /** Chat exclusivo de superadmin: el resto del personal no lo ve (RLS). */
+  exclusivoSuperadmin?: boolean;
   // Secreto por cliente (anónimo): identifica de forma segura sus propias
   // conversaciones. Se genera en el navegador y se guarda en localStorage.
   customerToken?: string;

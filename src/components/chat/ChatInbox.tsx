@@ -133,6 +133,9 @@ export default function ChatInbox({
               <div className="min-w-0">
                 <span className="block font-semibold text-[13.5px] text-[var(--text-primary)] truncate">{conv.customerName || 'Cliente'}</span>
                 <span className="block text-[12.5px] text-[var(--text-secondary)] truncate">{lastPreview(conv)}</span>
+                {conv.exclusivoSuperadmin && (
+                  <span className="block text-[10.5px] font-semibold text-[var(--accent)]">Exclusivo de superadmin</span>
+                )}
                 {conv.assignedAdminEmail && (
                   <span className="block text-[10.5px] text-[var(--text-muted)] truncate" title={`Asignado a ${conv.assignedAdminEmail}`}>
                     Atiende: {conv.assignedAdminEmail.split('@')[0]}

@@ -1286,3 +1286,4 @@ input, select, textarea { max-width: 100%; }
 html.sin-vidrio .tv-chat-pildora { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg-surface); }
 .tv-chat-pop button { justify-content: flex-start !important; text-align: left; }
 .tv-chat-pop button:has(> svg.lucide) { min-height: 40px; }
+.tv-chat-etq--excl { background: rgba(var(--accent-rgb), .14); color: var(--accent); }

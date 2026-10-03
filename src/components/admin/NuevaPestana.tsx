@@ -35,7 +35,8 @@
 // nada — cuatro colores más, uno por zona, sería el mismo error otra vez.
 // =====================================================================
 
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
+import { Search, Lock } from 'lucide-react';
 import { NAV_GROUPS } from './adminNav';
 import { modulosFrecuentes } from './usePestanas';
 import { resolverModulo } from './adminNav';
@@ -49,74 +50,95 @@ interface Props {
   abiertas: string[];
 }
 
+/** Sin tildes ni mayúsculas: «configuracion» encuentra «Configuración». */
+const normal = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase();
+
+// Diseño Cristal: buscador en píldora arriba (Enter abre el primero),
+// frecuentes como baldosas de vidrio, y cada zona como una rejilla de
+// tarjetas con su descripción. Los módulos exclusivos del superadmin
+// llevan un candado: es la misma regla `soloAdminSupremo` de siempre, solo
+// que ahora se ve.
 function NuevaPestana({ onElegir, esSupremo, abiertas }: Props) {
-  // Se calcula una sola vez al montar: si el uso cambia mientras esta
-  // pestaña sigue abierta de fondo, la fila de frecuentes se pone al día
-  // la próxima vez que se abra una «Nueva pestaña», no en caliente. Es
-  // el mismo comportamiento que el accesos-directos de un navegador, que
-  // tampoco se reordena solo mientras se lo mira.
   const frecuentes = useMemo(() => modulosFrecuentes(4).map(resolverModulo), []);
+  const [q, setQ] = useState('');
+
+  const zonas = useMemo(() => {
+    const t = normal(q.trim());
+    return NAV_GROUPS.map(g => ({
+      titulo: g.titulo,
+      items: g.items.filter(i => (!i.soloAdminSupremo || esSupremo) && (!t
+        || normal(i.label).includes(t)
+        || normal(i.descripcion || '').includes(t)
+        || (i.buscar || []).some(b => normal(b).includes(t)))),
+    })).filter(g => g.items.length > 0);
+  }, [q, esSupremo]);
+  const primero = zonas[0]?.items[0];
 
   return (
-    <div className="tv-nueva">
-      <h1 className="tv-nueva-titulo">Abrir un módulo</h1>
+    <div className="tv-lz">
+      <header className="tv-lz-cab">
+        <h1 className="tv-lz-titulo">¿Qué abrimos?</h1>
+        <label className="tv-lz-busca">
+          <Search className="w-[18px] h-[18px] shrink-0" aria-hidden="true" />
+          <input
+            value={q}
+            onChange={e => setQ(e.target.value)}
+            onKeyDown={e => { if (e.key === 'Enter' && primero) onElegir(primero.id); }}
+            placeholder="Buscar: cobros, mapa, usuarios…"
+            aria-label="Buscar un módulo"
+            autoFocus
+          />
+        </label>
+      </header>
 
-      {frecuentes.length > 0 && (
-        <section className="tv-nueva-seccion">
-          <div className="tv-nueva-lbl">Frecuentes</div>
-          <div className="tv-nueva-frec-fila">
+      {!q && frecuentes.length > 0 && (
+        <section className="tv-lz-sec">
+          <div className="tv-lz-lbl">Frecuentes</div>
+          <div className="tv-lz-frec">
             {frecuentes.map(m => (
-              <button
-                key={m.id}
-                type="button"
-                className="tv-nueva-frec"
-                onClick={() => onElegir(m.id)}
-              >
-                <span className="tv-nueva-circulo">
-                  <m.icon className="w-5 h-5" aria-hidden="true" />
-                </span>
-                <span className="tv-nueva-frec-n">{m.label}</span>
+              <button key={m.id} type="button" className="tv-lz-frec-b" onClick={() => onElegir(m.id)}>
+                <span className="tv-lz-tile"><m.icon className="w-5 h-5" aria-hidden="true" /></span>
+                <span>{m.label}</span>
               </button>
             ))}
           </div>
         </section>
       )}
 
-      <div className="tv-nueva-grid">
-        {NAV_GROUPS.map(grupo => {
-          const items = grupo.items.filter(i => !i.soloAdminSupremo || esSupremo);
-          if (items.length === 0) return null;
-          return (
-            <div className="tv-nueva-zona" key={grupo.titulo}>
-              <div className="tv-nueva-zona-cab">{grupo.titulo}</div>
-              <div className="tv-nueva-zona-lista">
-                {items.map(item => (
-                  <button
-                    key={item.id}
-                    type="button"
-                    className="tv-nueva-item"
-                    data-abierto={abiertas.includes(item.id) || undefined}
-                    onClick={() => onElegir(item.id)}
-                    title={item.label}
-                  >
-                    <span className="tv-nueva-ic">
-                      <item.icon className="w-4 h-4" aria-hidden="true" />
+      {zonas.length === 0 && (
+        <p className="tv-lz-vacio">Ningún módulo coincide con «{q}».</p>
+      )}
+
+      {zonas.map(grupo => (
+        <section className="tv-lz-sec" key={grupo.titulo}>
+          <div className="tv-lz-lbl">{grupo.titulo}</div>
+          <div className="tv-lz-grid">
+            {grupo.items.map(item => {
+              const abierto = abiertas.includes(item.id);
+              return (
+                <button
+                  key={item.id}
+                  type="button"
+                  className="tv-lz-card"
+                  data-abierto={abierto || undefined}
+                  onClick={() => onElegir(item.id)}
+                  title={item.descripcion || item.label}
+                >
+                  <span className="tv-lz-tile"><item.icon className="w-5 h-5" aria-hidden="true" /></span>
+                  <span className="tv-lz-tx">
+                    <span className="tv-lz-n">
+                      {item.label}
+                      {item.soloAdminSupremo && <Lock className="w-3 h-3 tv-lz-lock" aria-label="Solo superadmin" />}
                     </span>
-                    <span className="tv-nueva-n">{item.label}</span>
-                    {/* El punto no es un contador ni un aviso: es el mismo
-                        estado de "ya abierto" que llevaba el selector
-                        anterior, para que quede claro que tocarlo salta a
-                        esa pestaña en vez de duplicarla. */}
-                    {abiertas.includes(item.id) && (
-                      <span className="tv-nueva-punto-abierto" aria-label="Ya abierto" />
-                    )}
-                  </button>
-                ))}
-              </div>
-            </div>
-          );
-        })}
-      </div>
+                    {item.descripcion && <span className="tv-lz-d">{item.descripcion}</span>}
+                  </span>
+                  {abierto && <span className="tv-lz-abierto">Abierto</span>}
+                </button>
+              );
+            })}
+          </div>
+        </section>
+      ))}
     </div>
   );
 }
