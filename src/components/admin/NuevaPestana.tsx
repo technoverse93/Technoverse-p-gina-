@@ -59,7 +59,10 @@ const normal = (t: string) => t.normalize('NFD').replace(/[\u0300-\u036f]/g, '')
 // llevan un candado: es la misma regla `soloAdminSupremo` de siempre, solo
 // que ahora se ve.
 function NuevaPestana({ onElegir, esSupremo, abiertas }: Props) {
-  const frecuentes = useMemo(() => modulosFrecuentes(4).map(resolverModulo), []);
+  const frecuentes = useMemo(
+    () => modulosFrecuentes(6).map(resolverModulo).filter(m => esSupremo || !m.soloAdminSupremo).slice(0, 4),
+    [esSupremo],
+  );
   const [q, setQ] = useState('');
 
   const zonas = useMemo(() => {
