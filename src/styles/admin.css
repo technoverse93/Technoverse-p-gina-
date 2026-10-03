@@ -1536,7 +1536,7 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
    ===================================================================== */
 
 /* --- Controles: casi rectos ----------------------------------------- */
-#admin-panel-root button:not(.tv-pestana):not(.tv-menu-item):not(.tv-chip):not(.tv-btn):not(.tv-folder):not(.tv-lanzador):not(.tv-tab-nueva):not(.tv-tab-x):not(.tv-icon-btn):not(.tv-avatar):not(.tv-limpiar),
+#admin-panel-root button:not(.tv-pestana):not(.tv-menu-item):not(.tv-chip):not(.tv-btn):not(.tv-folder):not(.tv-lanzador):not(.tv-tab-nueva):not(.tv-tab-x):not(.tv-icon-btn):not(.tv-avatar):not(.tv-limpiar):not([class^="ai-"]),
 #admin-panel-root input:not([type="checkbox"]):not([type="radio"]),
 #admin-panel-root select,
 #admin-panel-root textarea {
@@ -2419,3 +2419,21 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
 .ai-modu-t b{font-weight:600;font-size:13px}
 .ai-modu-t b em{font-style:normal;font-size:11px;color:var(--tv-warn)}
 .ai-modu-t>span{font-size:12px;color:var(--text-secondary)}
+
+/* Cabecera del Asistente: los tres controles (menú, cupo, ajustes) a la
+   misma altura de 40 px y con el mismo trazo fino, en vez de cuadros de
+   44 px con fondo lleno. La regla táctil global (index.css) fuerza 44 px
+   de mínimo a todo botón con icono; aquí se ancla al id del panel para
+   ganarle en especificidad y se compensa con un área de toque de 40 px,
+   que sigue siendo cómoda. */
+#admin-panel-root .ai-ch .ai-menu,
+#admin-panel-root .ai-ch .ai-chip,
+#admin-panel-root .ai-ch .ai-cupo-pill{min-width:0!important;min-height:0!important;height:40px;box-sizing:border-box}
+#admin-panel-root .ai-root .ai-ch .ai-menu{width:40px;border-radius:999px;background:transparent;border:1px solid var(--border-color);color:var(--text-secondary)}
+#admin-panel-root .ai-ch .ai-chip{border-radius:999px}
+#admin-panel-root .ai-ch .ai-cupo-pill{padding:0 12px}
+#admin-panel-root .ai-ch .ai-modelo{height:40px;box-sizing:border-box}
+@container (max-width:760px){#admin-panel-root .ai-ch .ai-chip{width:40px;padding:0}}
+#admin-panel-root .ai-ch .ai-menu:hover,#admin-panel-root .ai-ch .ai-chip:hover,#admin-panel-root .ai-ch .ai-cupo-pill:hover{background:var(--bg-sunken)}
+/* Enviar y el globo: círculos de 40 px, no cuadros estirados por la regla táctil. */
+#admin-panel-root .ai-caja .ai-env,#admin-panel-root .ai-caja .ai-ib{min-width:0!important;min-height:0!important;width:40px;height:40px;border-radius:999px}
