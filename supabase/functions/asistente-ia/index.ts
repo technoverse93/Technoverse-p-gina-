@@ -31,6 +31,9 @@ const responder = (cuerpo: unknown, status = 200) =>
 
 const GEMINI_MODEL = Deno.env.get('GEMINI_MODEL') || 'gemini-flash-latest';
 const GROQ_MODEL = Deno.env.get('GROQ_MODEL') || 'llama-3.3-70b-versatile';
+// Si el Flash está saturado o sin cupo, se prueba el Flash-Lite (cupo aparte)
+// antes de pasar a Groq.
+const GEMINI_RESPALDO = Deno.env.get('GEMINI_MODEL_RESPALDO') || 'gemini-flash-lite-latest';
 // Cupo del equipo según el plan gratis de cada servicio. Solo se usa para
 // dibujar la barra; el límite real lo pone cada servicio.
 const CUPO_GEMINI = Number(Deno.env.get('CUPO_GEMINI_DIA') || 1000);
@@ -59,29 +62,39 @@ async function conTope(url: string, init: RequestInit): Promise<Response> {
   try { return await fetch(url, { ...init, signal: corte.signal }); } finally { clearTimeout(t); }
 }
 
-async function preguntarGemini(historial: Turno[], buscar: boolean): Promise<Resultado> {
+// La búsqueda en Google (grounding) no viene en todos los planes gratis:
+// cuando Google la rechaza, se recuerda un rato para no gastar una
+// llamada en cada mensaje y se responde sin buscar.
+let busquedaBloqueadaHasta = 0;
+
+async function preguntarGemini(historial: Turno[], buscar: boolean, modelo: string): Promise<Resultado & { sinBusqueda?: boolean }> {
   const clave = Deno.env.get('GEMINI_API_KEY');
-  if (!clave) throw new Error('Falta la clave de Gemini en el servidor.');
+  if (!clave) throw new CupoAgotado('Falta GEMINI_API_KEY en los secretos');
+  const conBusqueda = buscar && Date.now() > busquedaBloqueadaHasta;
   const cuerpo: Record<string, unknown> = {
     systemInstruction: { parts: [{ text: SISTEMA }] },
     contents: historial.map(t => ({ role: t.rol === 'assistant' ? 'model' : 'user', parts: [{ text: t.texto }] })),
   };
-  if (buscar) cuerpo.tools = [{ google_search: {} }];
-  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(GEMINI_MODEL)}:generateContent`;
+  if (conBusqueda) cuerpo.tools = [{ google_search: {} }];
+  const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`;
   const r = await conTope(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(cuerpo) });
-  if (r.status === 429) throw new CupoAgotado('Gemini sin cupo');
   if (!r.ok) {
     const det = await r.text().catch(() => '');
-    // Si la búsqueda no está incluida en el plan gratis de este modelo, se
-    // responde igual sin buscar, en vez de fallar.
-    if (buscar && r.status === 400) return preguntarGemini(historial, false);
-    if (r.status >= 500) throw new CupoAgotado('Gemini no disponible');
+    console.log(`gemini ${modelo} busqueda=${conBusqueda} -> ${r.status}: ${det.slice(0, 300)}`);
+    // Con búsqueda, un 400 o 429 suele ser la búsqueda (no el modelo): se
+    // reintenta sin buscar antes de dar el modelo por agotado.
+    if (conBusqueda && (r.status === 400 || r.status === 429)) {
+      busquedaBloqueadaHasta = Date.now() + 30 * 60_000;
+      const sin = await preguntarGemini(historial, false, modelo);
+      return { ...sin, sinBusqueda: true };
+    }
+    if (r.status === 429 || r.status >= 500) throw new CupoAgotado(`Gemini ${modelo} ${r.status}`);
     throw new Error(`Gemini respondió ${r.status}: ${det.slice(0, 200)}`);
   }
   const d = await r.json();
   const cand = d?.candidates?.[0];
   const texto = (cand?.content?.parts || []).map((p: any) => p?.text || '').join('').trim();
-  if (!texto) throw new Error('Gemini no devolvió respuesta.');
+  if (!texto) throw new CupoAgotado('Gemini no devolvió texto');
   const chunks = cand?.groundingMetadata?.groundingChunks || [];
   const fuentes = chunks
     .map((c: any) => ({ titulo: String(c?.web?.title || '').slice(0, 80), url: String(c?.web?.uri || '') }))
@@ -91,13 +104,14 @@ async function preguntarGemini(historial: Turno[], buscar: boolean): Promise<Res
     texto, fuentes,
     tokensIn: Number(d?.usageMetadata?.promptTokenCount || 0),
     tokensOut: Number(d?.usageMetadata?.candidatesTokenCount || 0) + Number(d?.usageMetadata?.thoughtsTokenCount || 0),
-    proveedor: 'gemini', modelo: String(d?.modelVersion || GEMINI_MODEL), busco: buscar && fuentes.length > 0,
+    proveedor: 'gemini', modelo: String(d?.modelVersion || modelo), busco: conBusqueda && fuentes.length > 0,
+    sinBusqueda: buscar && !conBusqueda,
   };
 }
 
 async function preguntarGroq(historial: Turno[]): Promise<Resultado> {
   const clave = Deno.env.get('GROQ_API_KEY');
-  if (!clave) throw new CupoAgotado('Sin respaldo configurado');
+  if (!clave) { console.log('groq: falta GROQ_API_KEY en los secretos'); throw new CupoAgotado('Sin respaldo configurado'); }
   const r = await conTope('https://api.groq.com/openai/v1/chat/completions', {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clave}` },
@@ -107,8 +121,12 @@ async function preguntarGroq(historial: Turno[]): Promise<Resultado> {
       temperature: 0.6,
     }),
   });
-  if (r.status === 429) throw new CupoAgotado('Groq sin cupo');
-  if (!r.ok) throw new Error(`Groq respondió ${r.status}: ${(await r.text().catch(() => '')).slice(0, 200)}`);
+  if (!r.ok) {
+    const det = await r.text().catch(() => '');
+    console.log(`groq ${GROQ_MODEL} -> ${r.status}: ${det.slice(0, 300)}`);
+    if (r.status === 429 || r.status >= 500) throw new CupoAgotado('Groq sin cupo');
+    throw new Error(`Groq respondió ${r.status}: ${det.slice(0, 200)}`);
+  }
   const d = await r.json();
   const texto = String(d?.choices?.[0]?.message?.content || '').trim();
   if (!texto) throw new Error('Groq no devolvió respuesta.');
@@ -194,13 +212,15 @@ Deno.serve(async (req: Request) => {
     const buscar = !!ajustes?.busqueda && cuerpo?.buscar !== false;
     // Gemini primero; si Google no tiene cupo, Groq (si está permitido).
     // `null` = ninguno de los dos tiene cupo ahora.
-    const preguntar = async (): Promise<{ res: Resultado; respaldo: boolean } | null> => {
-      try {
-        return { res: await preguntarGemini(historial, buscar), respaldo: false };
-      } catch (e) {
-        if (!(e instanceof CupoAgotado)) throw e;
-        if (!ajustes?.respaldo) return null;
+    const preguntar = async (): Promise<{ res: Resultado & { sinBusqueda?: boolean }; respaldo: boolean } | null> => {
+      for (const modelo of [GEMINI_MODEL, GEMINI_RESPALDO]) {
+        try {
+          return { res: await preguntarGemini(historial, buscar, modelo), respaldo: false };
+        } catch (e) {
+          if (!(e instanceof CupoAgotado)) throw e;
+        }
       }
+      if (!ajustes?.respaldo) return null;
       try {
         return { res: await preguntarGroq(historial), respaldo: true };
       } catch (e) {
@@ -222,6 +242,7 @@ Deno.serve(async (req: Request) => {
       const error = ajustes?.respaldo
         ? 'Los dos servicios gratuitos llegaron a su límite por ahora. Intenta en unos minutos.'
         : 'Google llegó a su límite por ahora. Intenta en unos minutos.';
+      console.log('sin servicio: ni Gemini ni Groq respondieron');
       return responder({ ok: false, codigo: 'sin_servicio', error, cupo: antes }, 503);
     }
     const { res, respaldo: usoRespaldo } = salida;
@@ -245,7 +266,7 @@ Deno.serve(async (req: Request) => {
     });
 
     return responder({
-      ok: true, conversacionId: convId, nueva, respaldo: usoRespaldo,
+      ok: true, conversacionId: convId, nueva, respaldo: usoRespaldo, sinBusqueda: !!res.sinBusqueda,
       mensaje: { rol: 'assistant', texto: res.texto, fuentes: res.fuentes, tokens_in: res.tokensIn, tokens_out: res.tokensOut, proveedor: res.proveedor, modelo: res.modelo, busco: res.busco },
       cupo: await usoHoy(),
     });

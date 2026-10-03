@@ -60,7 +60,7 @@ function ultimaActividad(c: ChatConversation): number {
   return m ? new Date(m.timestamp).getTime() : (c.updatedAt ? new Date(c.updatedAt).getTime() : 0);
 }
 
-export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdmin; oculto?: boolean; ahoraInicial?: number }) {
+export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial }: { chat: ChatAdmin; oculto?: boolean; elevada?: boolean; ahoraInicial?: number }) {
   // null = todo minimizado · 'lista' = lista completa · id = esa conversación
   const [abierta, setAbierta] = useState<string | null>(null);
   const [asomando, setAsomando] = useState<string | null>(null);
@@ -126,7 +126,7 @@ export function BurbujaChatVista({ chat, oculto, ahoraInicial }: { chat: ChatAdm
     <>
       {/* La pila de burbujas: la más reciente arriba del globo de la lista. */}
       <div
-        className="fixed right-3 sm:right-5 bottom-4 sm:bottom-5 flex flex-col-reverse items-end gap-2"
+        className={`fixed right-3 sm:right-5 ${elevada ? 'bottom-36' : 'bottom-4 sm:bottom-5'} flex flex-col-reverse items-end gap-2`}
         style={{ zIndex: Z.floating, marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
         aria-label="Chats"
       >
@@ -249,11 +249,13 @@ interface Props {
   onDataChanged?: () => void;
   /** La burbuja se esconde cuando ya se está en la pestaña Chat. */
   oculto?: boolean;
+  /** Más arriba, para no tapar un redactor anclado abajo (Asistente IA). */
+  elevada?: boolean;
 }
 
-export default function BurbujaChat({ currentUser, onDataChanged, oculto }: Props) {
+export default function BurbujaChat({ currentUser, onDataChanged, oculto, elevada }: Props) {
   // `avisar = false`: las notificaciones las dispara la pestaña Chat; si
   // también avisara la burbuja, cada mensaje sonaría dos veces.
   const chat = useChatAdmin(currentUser, onDataChanged, false);
-  return <BurbujaChatVista chat={chat} oculto={oculto} />;
+  return <BurbujaChatVista chat={chat} oculto={oculto} elevada={elevada} />;
 }
