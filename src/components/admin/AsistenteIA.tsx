@@ -13,16 +13,21 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
   Sparkles, Plus, Lock, Globe, ArrowUp, Copy, Settings, Menu, BarChart3, Trash2, X, Clock, Info, ShieldCheck, ArrowLeft,
+  Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight,
 } from 'lucide-react';
+import type { LucideIcon } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useToast, useConfirm } from '../ui/Overlays';
 import { esSuperadmin } from '../../utils/roles';
 import type { User } from '../../types';
 
 interface Conversacion { id: string; titulo: string; actualizado_en: string }
+/** Una consulta al sistema que hizo la IA (la tarjeta encima de la respuesta). */
+interface Consulta { modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean }
 interface Mensaje {
   id: string; rol: 'user' | 'assistant'; texto: string;
   fuentes?: { titulo: string; url: string }[];
+  consultas?: Consulta[];
   tokens_in?: number; tokens_out?: number; proveedor?: string | null; modelo?: string | null; busco?: boolean;
   pendiente?: boolean;
 }
@@ -30,17 +35,40 @@ interface Cupo {
   usados: number; limite: number | null; disponibles: number | null; tokensHoy: number;
   equipo: { gemini: number; groq: number; cupoGemini: number; cupoGroq: number };
   busqueda: boolean; respaldo: boolean; groqConfigurado: boolean;
+  modulos?: string[]; consultasHoy?: number;
 }
-interface Ajustes { limite_diario: number; busqueda: boolean; respaldo: boolean; acceso: 'personal' | 'gestion' | 'super' }
+type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores', boolean>;
+interface Ajustes { limite_diario: number; busqueda: boolean; respaldo: boolean; acceso: 'personal' | 'gestion' | 'super'; modulos?: Modulos }
+
+const MODULOS: { id: keyof Modulos; nombre: string; desc: string; icono: LucideIcon; soloSuper?: boolean }[] = [
+  { id: 'inventario', nombre: 'Inventario', desc: 'Existencias, precios, por agotarse', icono: Package },
+  { id: 'facturacion', nombre: 'Facturación', desc: 'Totales y facturas sin datos de clientes', icono: Receipt },
+  { id: 'taller', nombre: 'Taller', desc: 'Órdenes por estado y días', icono: Wrench },
+  { id: 'errores', nombre: 'Errores del sistema', desc: 'Fallos de correo, pagos, Hacienda y bitácora', icono: TriangleAlert, soloSuper: true },
+];
+const ICONO_MODULO: Record<string, LucideIcon> = { Inventario: Package, 'Facturación': Receipt, Taller: Wrench, 'Errores del sistema': TriangleAlert };
+
+/** «gemini-3.8-flash» → «Gemini 3.8 Flash». */
+function nombreModelo(m?: string | null): string {
+  if (!m) return 'Gemini Flash';
+  if (/llama|groq/i.test(m)) return 'Groq (respaldo)';
+  return m.replace(/-latest$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+}
+
+const CLAVE_ACTIVA = 'tv_ia_conversacion';
+const leerActiva = () => { try { return sessionStorage.getItem(CLAVE_ACTIVA); } catch { return null; } };
+const guardarActiva = (id: string | null) => { try { if (id) sessionStorage.setItem(CLAVE_ACTIVA, id); else sessionStorage.removeItem(CLAVE_ACTIVA); } catch { /* sin almacenamiento */ } };
 
 /** Contexto de Gemini Flash: un millón de tokens. */
 const CONTEXTO = 1_000_000;
 const estimarTokens = (t: string) => (t.trim() ? Math.ceil(t.trim().length / 4) : 0);
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
 const SUGERENCIAS = [
-  { t: 'Buscar un dato', d: 'Precios, horarios, especificaciones', p: '¿Qué diferencia hay entre una batería original y una genérica para Samsung?' },
-  { t: 'Redactar', d: 'Mensajes para clientes o redes', p: 'Escribime un mensaje corto y amable para avisar que llegaron accesorios nuevos.' },
+  { t: 'Inventario', d: '¿Qué productos están por agotarse?', p: '¿Qué productos están por agotarse?', modulo: 'inventario' },
+  { t: 'Ventas', d: '¿Cuánto se facturó esta semana?', p: '¿Cuánto se facturó esta semana y por qué medio de pago?', modulo: 'facturacion' },
+  { t: 'Taller', d: '¿Qué órdenes llevan más de 5 días?', p: '¿Qué órdenes del taller llevan más de 5 días?', modulo: 'taller' },
   { t: 'Explicar', d: 'Un término o un error del celular', p: '¿Qué significa que un celular tenga eSIM y cómo se activa?' },
+  { t: 'Redactar', d: 'Mensajes para clientes o redes', p: 'Escribime un mensaje corto y amable para avisar que llegaron accesorios nuevos.' },
   { t: 'Resumir', d: 'Un texto largo que pegués', p: 'Resumime en tres puntos este texto: ' },
 ];
 
@@ -71,7 +99,30 @@ function Formato({ texto }: { texto: string }) {
           out.push(<Tag key={`l${out.length}`}>{lista.items.map((it, j) => <li key={j}><Linea t={it} /></li>)}</Tag>);
           lista = null;
         };
+        let tabla: string[][] | null = null;
+        const cerrarTabla = () => {
+          if (!tabla) return;
+          const [cab, ...cuerpo] = tabla;
+          out.push(
+            <div key={`t${out.length}`} className="ai-tabla">
+              <table>
+                <thead><tr>{cab.map((c, k) => <th key={k}><Linea t={c} /></th>)}</tr></thead>
+                <tbody>{cuerpo.map((f, r) => <tr key={r}>{f.map((c, k) => <td key={k}><Linea t={c} /></td>)}</tr>)}</tbody>
+              </table>
+            </div>,
+          );
+          tabla = null;
+        };
         lineas.forEach((l, j) => {
+          // Tablas en markdown: «| a | b |». La fila «|---|---|» se salta.
+          if (/^\s*\|.*\|\s*$/.test(l)) {
+            cerrar();
+            if (/^\s*\|[\s:|-]+\|\s*$/.test(l)) return;
+            const celdas = l.trim().replace(/^\||\|$/g, '').split('|').map(c => c.trim());
+            (tabla ||= []).push(celdas);
+            return;
+          }
+          cerrarTabla();
           const vineta = l.match(/^\s*[-*•]\s+(.*)/);
           const num = l.match(/^\s*\d+[.)]\s+(.*)/);
           if (vineta || num) {
@@ -86,6 +137,7 @@ function Formato({ texto }: { texto: string }) {
           if (l.trim()) out.push(<p key={j}><Linea t={l} /></p>);
         });
         cerrar();
+        cerrarTabla();
         return <React.Fragment key={i}>{out}</React.Fragment>;
       })}
     </>
@@ -100,6 +152,22 @@ function Linea({ t }: { t: string }) {
           : p.startsWith('`') && p.endsWith('`') && p.length > 2 ? <code key={i}>{p.slice(1, -1)}</code>
             : <React.Fragment key={i}>{p}</React.Fragment>)}
     </>
+  );
+}
+
+function TarjetaConsulta({ c }: { c: Consulta }) {
+  const Icono = c.sinPermiso ? Ban : (ICONO_MODULO[c.modulo] || Package);
+  return (
+    <details className="ai-herr" data-no={c.sinPermiso || undefined}>
+      <summary>
+        <span className="ai-herr-ic"><Icono className="w-4 h-4" /></span>
+        <span className="ai-herr-t"><b>{c.modulo}</b> · {c.desc}</span>
+        {!c.sinPermiso && <span className="ai-herr-chip"><ShieldCheck className="w-3 h-3" />sin datos de clientes</span>}
+        {c.filas !== '—' && <small>{c.filas}</small>}
+        {c.detalle && <ChevronRight className="ai-herr-chev w-4 h-4" />}
+      </summary>
+      {c.detalle && <pre>{c.detalle}</pre>}
+    </details>
   );
 }
 
@@ -145,7 +213,13 @@ function PanelCupo({ cupo, tokensConv }: { cupo: Cupo | null; tokensConv: number
       <div className="ai-kv"><span>Tokens de esta conversación</span><b className="tabular-nums">{tokensConv.toLocaleString('es-CR')}</b></div>
       <div className="ai-kv"><span>Contexto usado</span><b className="tabular-nums">{(tokensConv / CONTEXTO * 100).toFixed(tokensConv ? 1 : 0)} %</b></div>
       <div className="ai-kv"><span>Tus tokens hoy</span><b className="tabular-nums">{(cupo?.tokensHoy ?? 0).toLocaleString('es-CR')}</b></div>
-      <p className="ai-prov">Gratis con Gemini de Google{cupo?.respaldo && cupo.groqConfigurado ? ' y Groq de respaldo' : ''}. El cupo se renueva a las 00:00.</p>
+      {cupo?.modulos && (
+        <>
+          <div className="ai-kv"><span>Consultas al sistema hoy</span><b className="tabular-nums">{cupo.consultasHoy ?? 0}</b></div>
+          <div className="ai-kv"><span>Módulos que puede leer</span><b className="tabular-nums">{cupo.modulos.length}</b></div>
+        </>
+      )}
+      <p className="ai-prov">Gratis con Gemini de Google{cupo?.respaldo && cupo.groqConfigurado ? ' y Groq de respaldo' : ''}. Las consultas al sistema se hacen con tus permisos y quedan en la bitácora.</p>
     </>
   );
 }
@@ -156,7 +230,10 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
   const soySuper = esSuperadmin(currentUser?.role);
 
   const [convs, setConvs] = useState<Conversacion[]>([]);
-  const [activa, setActiva] = useState<string | null>(null);
+  // La conversación abierta sobrevive a cambiar de pestaña (el módulo se
+  // desmonta al salir); se recuerda solo en esta sesión del navegador.
+  const [activa, setActivaEstado] = useState<string | null>(leerActiva);
+  const setActiva = useCallback((id: string | null) => { guardarActiva(id); setActivaEstado(id); }, []);
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   const [cupo, setCupo] = useState<Cupo | null>(null);
   const [texto, setTexto] = useState('');
@@ -186,9 +263,13 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
     if (recienCreada.current === activa) { recienCreada.current = null; return; }
     let vivo = true;
     void supabase.from('ia_mensajes')
-      .select('id,rol,texto,fuentes,tokens_in,tokens_out,proveedor,modelo,busco')
+      .select('id,rol,texto,fuentes,consultas,tokens_in,tokens_out,proveedor,modelo,busco')
       .eq('conversacion_id', activa).order('creado_en', { ascending: true })
-      .then(({ data }) => { if (vivo) setMensajes((data as Mensaje[]) || []); });
+      .then(({ data, error }) => {
+        if (!vivo) return;
+        if (error) { setMensajes([]); return; }
+        setMensajes((data as Mensaje[]) || []);
+      });
     return () => { vivo = false; };
   }, [activa]);
 
@@ -204,7 +285,12 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
 
   const tokensConv = useMemo(() => mensajes.reduce((a, m) => a + (m.tokens_in || 0) + (m.tokens_out || 0), 0), [mensajes]);
   const agotado = !!cupo && cupo.disponibles === 0;
-  const busquedaPermitida = cupo ? cupo.busqueda : true;
+  // Con consultas al sistema, la búsqueda en Google no se usa (no se
+  // combinan, y el plan gratis no la incluye).
+  const conSistema = !!cupo?.modulos?.length;
+  const busquedaPermitida = cupo ? cupo.busqueda && !conSistema : false;
+  const ultimoModelo = [...mensajes].reverse().find(m => m.rol === 'assistant')?.modelo;
+  const sugerencias = SUGERENCIAS.filter(s => !s.modulo || cupo?.modulos?.includes(s.modulo)).slice(0, 4);
 
   const nueva = () => { setActiva(null); setMensajes([]); setAviso(null); setCajon(null); setVista('chat'); setTimeout(() => cajaRef.current?.focus(), 50); };
 
@@ -298,11 +384,11 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
           <button type="button" className="ai-menu" aria-label="Conversaciones" onClick={() => setCajon('historial')}><Menu className="w-5 h-5" /></button>
           {vista === 'ajustes'
             ? <button type="button" className="ai-chip" onClick={() => setVista('chat')}><ArrowLeft className="w-4 h-4" />Volver al chat</button>
-            : <span className="ai-modelo"><span className="ai-dot"><Sparkles className="w-3.5 h-3.5" /></span>Gemini Flash</span>}
+            : <span className="ai-modelo"><span className="ai-dot"><Sparkles className="w-3.5 h-3.5" /></span>{nombreModelo(ultimoModelo)}</span>}
           <span className="ai-sp" />
           <button type="button" className="ai-cupo-pill" onClick={() => setCajon('cupo')}>
             <BarChart3 className="w-3.5 h-3.5" />
-            {cupo?.disponibles === null || !cupo ? <><b>{cupo?.usados ?? 0}</b> hoy</> : <><b>{cupo.disponibles}</b> disponibles</>}
+            {cupo?.disponibles === null || !cupo ? <><b>{cupo?.usados ?? 0}</b> hoy</> : <><b>{cupo.disponibles}</b><span className="ai-lbl"> disponibles</span></>}
           </button>
           {soySuper && vista === 'chat' && (
             <button type="button" className="ai-chip" onClick={() => setVista('ajustes')} aria-label="Ajustes"><Settings className="w-4 h-4" /><span className="ai-lbl">Ajustes</span></button>
@@ -328,9 +414,9 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
                 <div className="ai-hola">
                   <span className="ai-logo"><Sparkles className="w-7 h-7" /></span>
                   <h3>¿En qué te ayudo?</h3>
-                  <p>Preguntas, búsquedas, redactar o resumir. No escribás cédulas, teléfonos ni datos de clientes.</p>
+                  <p>{conSistema ? 'Preguntá por el inventario, las ventas o el taller, o pedí ayuda para redactar.' : 'Preguntas, redactar, explicar o resumir.'} No escribás cédulas, teléfonos ni datos de clientes.</p>
                   <div className="ai-sug">
-                    {SUGERENCIAS.map(s => (
+                    {sugerencias.map(s => (
                       <button key={s.t} type="button" onClick={() => { setTexto(s.p); cajaRef.current?.focus(); }}><b>{s.t}</b>{s.d}</button>
                     ))}
                   </div>
@@ -339,6 +425,7 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
                 <div key={m.id} className="ai-yo">{m.texto}</div>
               ) : (
                 <div key={m.id} className="ai-ia">
+                  {!!m.consultas?.length && <div className="ai-herrs">{m.consultas.map((c, i) => <React.Fragment key={i}><TarjetaConsulta c={c} /></React.Fragment>)}</div>}
                   <div className="ai-tx"><Formato texto={m.texto} /></div>
                   {!!m.fuentes?.length && (
                     <div className="ai-fuentes">
@@ -350,12 +437,12 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
                   <div className="ai-pie">
                     <button type="button" aria-label="Copiar respuesta" onClick={() => void copiar(m.texto)}><Copy className="w-4 h-4" /></button>
                     <span className="ai-tok">↑ <i>{k(m.tokens_in || 0)}</i> · ↓ <i>{k(m.tokens_out || 0)}</i> tokens</span>
-                    <span>{m.proveedor === 'groq' ? 'Groq (respaldo)' : 'Gemini Flash'}{m.busco ? ' · con búsqueda' : ''}</span>
+                    <span>{nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.busco ? ' · con búsqueda' : ''}{m.consultas?.length ? ` · consultó ${m.consultas.length} ${m.consultas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
                   </div>
                 </div>
               ))}
               {enviando && (
-                <div className="ai-ia"><div className="ai-buscando"><span className="ai-puntos"><i /><i /><i /></span>{buscar && busquedaPermitida ? 'Pensando y buscando en Google…' : 'Pensando…'}</div></div>
+                <div className="ai-ia"><div className="ai-buscando"><span className="ai-puntos"><i /><i /><i /></span>{buscar && busquedaPermitida ? 'Pensando y buscando en Google…' : conSistema ? 'Pensando y consultando el sistema…' : 'Pensando…'}</div></div>
               )}
               <div ref={finRef} />
             </div>
@@ -390,7 +477,7 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
                   </button>
                 </div>
               </div>
-              <p className="ai-nota">No escribás datos personales de clientes. La IA puede equivocarse: verificá lo importante.</p>
+              <p className="ai-nota">{conSistema ? 'Lee el sistema sin datos de clientes. ' : ''}No escribás datos personales de clientes. La IA puede equivocarse: verificá lo importante.</p>
             </div>
           </>
         )}
@@ -423,11 +510,13 @@ function AjustesIA({ onCambio }: { onCambio: () => void }) {
   const [aj, setAj] = useState<Ajustes | null>(null);
   const [uso, setUso] = useState<{ email: string; mensajes: number; tokens: number; es_super: boolean }[]>([]);
   const [limite, setLimite] = useState('60');
+  const [consultasHoy, setConsultasHoy] = useState<{ modulo: string; consultas: number }[]>([]);
 
   useEffect(() => {
-    void supabase.from('ia_ajustes').select('limite_diario,busqueda,respaldo,acceso').eq('id', 1).maybeSingle()
+    void supabase.from('ia_ajustes').select('limite_diario,busqueda,respaldo,acceso,modulos').eq('id', 1).maybeSingle()
       .then(({ data }) => { if (data) { setAj(data as Ajustes); setLimite(String((data as Ajustes).limite_diario)); } });
     void supabase.rpc('ia_uso_de_hoy').then(({ data }) => setUso((data as any[]) || []));
+    void supabase.rpc('ia_consultas_de_hoy').then(({ data }) => setConsultasHoy((data as any[]) || []));
   }, []);
 
   const guardar = async (cambio: Partial<Ajustes>) => {
@@ -442,8 +531,21 @@ function AjustesIA({ onCambio }: { onCambio: () => void }) {
 
   if (!aj) return <div className="ai-ajustes"><p className="ai-prov">Cargando ajustes…</p></div>;
   const tope = aj.limite_diario;
+  const modulos: Modulos = { inventario: true, facturacion: true, taller: true, errores: true, ...(aj.modulos || {}) };
+  const maxConsultas = Math.max(1, ...consultasHoy.map(c => c.consultas));
   return (
     <div className="ai-ajustes">
+      <div className="ai-aj">
+        <h4>Datos del sistema <small>solo lectura · sin datos de clientes</small></h4>
+        {MODULOS.map(m => (
+          <div key={m.id} className="ai-modu">
+            <span className="ai-modu-ic"><m.icono className="w-4 h-4" /></span>
+            <span className="ai-modu-t"><b>{m.nombre}{m.soloSuper && <em> · solo superadmin</em>}</b><span>{m.desc}</span></span>
+            <button type="button" role="switch" aria-checked={modulos[m.id]} className="ai-sw" data-on={modulos[m.id] || undefined}
+              onClick={() => void guardar({ modulos: { ...modulos, [m.id]: !modulos[m.id] } })} aria-label={`Consultar ${m.nombre}`} />
+          </div>
+        ))}
+      </div>
       <div className="ai-aj">
         <h4>Límites <small>se aplican desde ya</small></h4>
         <div className="ai-campo">
@@ -453,10 +555,6 @@ function AjustesIA({ onCambio }: { onCambio: () => void }) {
             <button type="button" disabled={Number(limite) === tope || !(Number(limite) >= 1 && Number(limite) <= 2000)}
               onClick={() => void guardar({ limite_diario: Math.round(Number(limite)) })}>Guardar</button>
           </span>
-        </div>
-        <div className="ai-campo">
-          <span>Búsqueda en internet</span>
-          <button type="button" role="switch" aria-checked={aj.busqueda} className="ai-sw" data-on={aj.busqueda || undefined} onClick={() => void guardar({ busqueda: !aj.busqueda })} aria-label="Búsqueda en internet" />
         </div>
         <div className="ai-campo">
           <span>Usar el respaldo (Groq) cuando Google se agote</span>
@@ -471,6 +569,18 @@ function AjustesIA({ onCambio }: { onCambio: () => void }) {
           </span>
         </div>
       </div>
+      {consultasHoy.length > 0 && (
+        <div className="ai-aj">
+          <h4>Consultas de hoy <small>qué módulo, no qué se preguntó</small></h4>
+          {consultasHoy.map(c => (
+            <div key={c.modulo} className="ai-per">
+              <b>{MODULOS.find(m => m.id === c.modulo)?.nombre || c.modulo}</b>
+              <div className="ai-bt"><i style={{ width: `${Math.round(c.consultas / maxConsultas * 100)}%` }} /></div>
+              <small className="tabular-nums">{c.consultas}</small>
+            </div>
+          ))}
+        </div>
+      )}
       <div className="ai-aj">
         <h4>Uso de hoy <small>sin leer conversaciones</small></h4>
         {uso.length === 0 && <p className="ai-prov" style={{ margin: 14 }}>Nadie lo ha usado hoy.</p>}
