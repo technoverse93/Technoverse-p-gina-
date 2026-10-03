@@ -35,7 +35,7 @@
 // nada — cuatro colores más, uno por zona, sería el mismo error otra vez.
 // =====================================================================
 
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Search, Lock } from 'lucide-react';
 import { NAV_GROUPS } from './adminNav';
 import { modulosFrecuentes } from './usePestanas';
@@ -64,6 +64,17 @@ function NuevaPestana({ onElegir, esSupremo, abiertas }: Props) {
     [esSupremo],
   );
   const [q, setQ] = useState('');
+  // El buscador se enfoca solo ÚNICAMENTE con ratón (computadora). En un
+  // teléfono o tablet eso abría el teclado sin que nadie tocara el campo y
+  // tapaba media pantalla; ahí el teclado sale solo al tocar el buscador.
+  const buscadorRef = useRef<HTMLInputElement>(null);
+  useEffect(() => {
+    try {
+      if (window.matchMedia('(pointer: fine)').matches && !window.matchMedia('(pointer: coarse)').matches) {
+        buscadorRef.current?.focus({ preventScroll: true });
+      }
+    } catch { /* sin matchMedia: no se enfoca */ }
+  }, []);
 
   const zonas = useMemo(() => {
     const t = normal(q.trim());
@@ -89,7 +100,7 @@ function NuevaPestana({ onElegir, esSupremo, abiertas }: Props) {
             onKeyDown={e => { if (e.key === 'Enter' && primero) onElegir(primero.id); }}
             placeholder="Buscar: cobros, mapa, usuarios…"
             aria-label="Buscar un módulo"
-            autoFocus
+            ref={buscadorRef}
           />
         </label>
       </header>
