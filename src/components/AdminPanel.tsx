@@ -43,6 +43,7 @@ import { esSoloSupremo } from './admin/adminNav';
 const TallerKanban = lazy(() => import('./TallerKanban'));
 const InventarioControl = lazy(() => import('./InventarioControl'));
 const ChatCRM = lazy(() => import('./chat/ChatCRM'));
+const AsistenteIA = lazy(() => import('./admin/AsistenteIA'));
 const BurbujaChat = lazy(() => import('./chat/BurbujaChat'));
 const CyberSecurityPanel = lazy(() => import('./CyberSecurityPanel'));
 const ClienteFicha = lazy(() => import('./ClienteFicha'));
@@ -1152,6 +1153,12 @@ export default function AdminPanel({
         {tab === 'chat' && (
           <Suspense fallback={<TabLoadingFallback />}>
             <ChatCRM currentUser={currentUser} onDataChanged={loadAllAdminData} />
+          </Suspense>
+        )}
+
+        {tab === 'asistente' && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <AsistenteIA currentUser={currentUser} />
           </Suspense>
         )}
 
