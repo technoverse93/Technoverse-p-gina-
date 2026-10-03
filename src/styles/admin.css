@@ -2201,3 +2201,18 @@ html.sin-vidrio .sg-riel, html.sin-vidrio .sg-seg { backdrop-filter: none; backg
 html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg-surface); }
 .tv-lz-card[data-abierto] .tv-lz-tx { padding-right: 58px; }
 @media (max-width: 640px) { .tv-lz-card[data-abierto] .tv-lz-tx { padding-right: 0; } }
+
+/* FALLO CORREGIDO — el menú del avatar quedaba DEBAJO del contenido.
+   El vidrio de la regleta (`backdrop-filter`) crea su propio contexto de
+   apilamiento, así que el `z-index: 80` del menú solo valía DENTRO de la
+   regleta. Todo lo que venía después en la página y también formaba capa
+   (el espejo de Supervisión, el riel de Ciberseguridad, tarjetas con
+   desenfoque) se pintaba encima del menú. La regleta entera sube por
+   encima del contenido; los modales (z 70+) siguen por encima de ella. */
+#admin-panel-root .tv-regleta { position: relative; z-index: 60; }
+/* Visitantes en teléfono: las acciones bajan a su propia línea para que el
+   nombre del aparato no se aplaste ni se monte con los botones. */
+@container (max-width: 640px) {
+  .sg-dr { grid-template-columns: minmax(0, 1fr); }
+  .sg-dr > .sg-row { justify-content: flex-end; padding-top: 6px; border-top: 1px dashed var(--border-color); }
+}

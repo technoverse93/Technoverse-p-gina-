@@ -67,8 +67,10 @@ export function CustomSelect({
         o.label.toLowerCase().includes(q) || (o.searchText || '').toLowerCase().includes(q)
       );
 
+  // Abierto, sube su propia capa: si no, la lista quedaba DEBAJO de la
+  // tarjeta siguiente cuando esa tarjeta forma capa propia.
   return (
-    <div ref={rootRef} className="relative" id={id}>
+    <div ref={rootRef} className={`relative ${isOpen ? 'z-[60]' : ''}`} id={id}>
       <button
         type="button"
         onClick={() => setIsOpen(!isOpen)}
