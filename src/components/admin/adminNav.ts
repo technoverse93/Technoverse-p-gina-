@@ -29,7 +29,7 @@ import {
   LayoutDashboard, Package, Wrench, ArrowRightLeft, FileSpreadsheet,
   Cpu, Boxes, LayoutGrid,
   MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
-  UserCog, ShieldCheck, Ban, MapPin, MonitorPlay,
+  UserCog, ShieldCheck, Ban, MapPin, MonitorPlay, Sparkles,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -154,6 +154,14 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         icon: MessageSquare,
         descripcion: 'Conversaciones con clientes en tiempo real y seguimiento comercial.',
         buscar: ['chat', 'crm', 'mensajes', 'soporte', 'conversaciones', 'whatsapp'],
+      },
+      {
+        id: 'asistente',
+        label: 'Asistente IA',
+        short: 'Asistente',
+        icon: Sparkles,
+        descripcion: 'Chat de consulta con IA gratuita: preguntas, búsquedas, redactar y resumir.',
+        buscar: ['asistente', 'ia', 'inteligencia artificial', 'gemini', 'chatgpt', 'preguntar', 'buscar'],
       },
       {
         id: 'taller',
