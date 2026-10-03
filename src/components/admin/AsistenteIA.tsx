@@ -235,6 +235,12 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
       setMensajes(prev => [...prev.map(m => (m.pendiente ? { ...m, pendiente: false } : m)), { id: `a-${Date.now()}`, ...res.mensaje }]);
       setCupo(res.cupo);
       if (res.respaldo) setAviso({ tipo: 'respaldo', texto: 'Google llegó a su límite por ahora; respondió el respaldo (Groq), sin búsqueda en internet.' });
+      else if (res.sinBusqueda) {
+        // Se avisa una sola vez y se apaga el globo, para no repetir el
+        // aviso en cada mensaje.
+        setBuscar(false);
+        setAviso({ tipo: 'respaldo', texto: 'La búsqueda en Google no está incluida en el plan gratis; respondió sin buscar en internet.' });
+      }
       if (!activa || res.nueva) { recienCreada.current = res.conversacionId; setActiva(res.conversacionId); }
       void cargarConvs();
     } catch (e: any) {

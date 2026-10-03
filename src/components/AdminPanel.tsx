@@ -1810,6 +1810,7 @@ export default function AdminPanel({
           currentUser={currentUser}
           onDataChanged={loadAllAdminData}
           oculto={activeTab === 'chat'}
+          elevada={activeTab === 'asistente'}
         />
       </Suspense>
     </AdminShell>
