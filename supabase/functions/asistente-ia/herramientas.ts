@@ -39,12 +39,12 @@ export type Panel = {
   /** Coordenadas por fila (mismo índice), para «Ver en el mapa». */
   puntos?: ({ lat: number; lon: number; etiqueta: string } | null)[];
 };
-export type Contexto = { db: Db; esSuper: boolean; hoy: string };
+export type Contexto = { db: Db; esSuper: boolean; hoy: string; fuentes?: { titulo: string; url: string }[] };
 type Salida = { datos: unknown; consulta: Consulta };
 
 type Herramienta = {
   nombre: string;
-  modulo: 'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas';
+  modulo: 'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas' | 'internet';
   /** Solo se le ofrece al superadmin (los demás ni la ven). */
   soloSuper?: boolean;
   descripcion: string;
@@ -54,7 +54,7 @@ type Herramienta = {
 
 export const NOMBRE_MODULO: Record<string, string> = {
   inventario: 'Inventario', facturacion: 'Facturación', taller: 'Taller', errores: 'Errores del sistema',
-  seguridad: 'Ciberseguridad', finanzas: 'Finanzas',
+  seguridad: 'Ciberseguridad', finanzas: 'Finanzas', internet: 'Internet',
 };
 const MAX_PANEL = 200;
 const fechaCorta = (v: unknown) => {
@@ -563,11 +563,59 @@ export const HERRAMIENTAS: Herramienta[] = [
       };
     },
   },
+  // ===================================================================
+  // INTERNET — búsqueda en tiempo real (Tavily, 1.000 gratis al mes)
+  // ===================================================================
+  {
+    nombre: 'buscar_web',
+    modulo: 'internet',
+    descripcion: 'Busca en internet información ACTUAL: precios, noticias, especificaciones, tipo de cambio, horarios, lanzamientos, cualquier dato que pueda haber cambiado. Devuelve fuentes con su enlace y un extracto. Úsala siempre que la respuesta dependa de algo reciente o que no sepas con certeza, y cita las fuentes.',
+    parametros: {
+      type: 'object',
+      properties: {
+        consulta: { type: 'string', description: 'Lo que se busca, en pocas palabras (en español o inglés).' },
+        noticias: { type: 'boolean', description: 'true si son noticias o hechos de los últimos días.' },
+      },
+      required: ['consulta'],
+    },
+    async ejecutar(a, ctx) {
+      const clave = (globalThis as any).Deno?.env?.get('TAVILY_API_KEY');
+      const consulta = String(a.consulta ?? '').trim().slice(0, 300);
+      if (!clave) {
+        return { datos: { error: 'La búsqueda en internet no está configurada (falta TAVILY_API_KEY).' }, consulta: { modulo: 'Internet', desc: 'búsqueda no configurada', filas: '—', detalle: '', sinPermiso: true } };
+      }
+      const corte = new AbortController();
+      const t = setTimeout(() => corte.abort(), 12000);
+      let d: any;
+      try {
+        const r = await fetch('https://api.tavily.com/search', {
+          method: 'POST', signal: corte.signal,
+          headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clave}` },
+          body: JSON.stringify({ query: consulta, max_results: 5, search_depth: 'basic', topic: a.noticias ? 'news' : 'general', include_answer: false }),
+        });
+        if (!r.ok) throw new Error(`Tavily ${r.status}: ${(await r.text().catch(() => '')).slice(0, 160)}`);
+        d = await r.json();
+      } finally { clearTimeout(t); }
+      const resultados = (d?.results || []).slice(0, 5).map((x: any) => ({
+        titulo: String(x.title || '').slice(0, 120), url: String(x.url || ''), extracto: String(x.content || '').slice(0, 700),
+      })).filter((x: any) => x.url);
+      for (const x of resultados) if (ctx.fuentes && !ctx.fuentes.some(f => f.url === x.url)) ctx.fuentes.push({ titulo: x.titulo, url: x.url });
+      const dominio = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+      return {
+        datos: { consulta, resultados },
+        consulta: {
+          modulo: 'Internet', desc: `«${consulta.slice(0, 60)}»`, filas: `${resultados.length} fuente${resultados.length === 1 ? '' : 's'}`,
+          detalle: lineas(resultados.map((x: any) => `${dominio(x.url)} · ${x.titulo}`), 5),
+        },
+      };
+    },
+  },
 ];
 
 /** Las herramientas que el superadmin dejó encendidas y que esta persona puede usar. */
 export function disponibles(modulos: Record<string, boolean> | null | undefined, esSuper = false): Herramienta[] {
-  return HERRAMIENTAS.filter(h => (modulos?.[h.modulo] ?? true) !== false && (!h.soloSuper || esSuper));
+  const hayBuscador = !!(globalThis as any).Deno?.env?.get('TAVILY_API_KEY');
+  return HERRAMIENTAS.filter(h => (modulos?.[h.modulo] ?? true) !== false && (!h.soloSuper || esSuper) && (h.modulo !== 'internet' || hayBuscador));
 }
 
 /** Ejecuta una herramienta; un fallo se le devuelve a la IA como dato, no rompe la respuesta. */

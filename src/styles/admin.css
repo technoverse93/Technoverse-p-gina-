@@ -2482,3 +2482,45 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
 .ai-panel-det .ai-tabla{max-height:none;overflow-y:visible;overflow-x:auto;overscroll-behavior:auto}
 .ai-tabla,.ai-pre{touch-action:pan-x pan-y;overscroll-behavior-x:contain}
 .ai-panel-det .ai-tabla th{position:static}
+
+/* Asistente IA · fase 3: adjuntos, editar, detener */
+.ai-yo-g{align-self:flex-end;display:grid;justify-items:end;gap:4px;max-width:min(80%,560px);min-width:0}
+.ai-yo-g .ai-yo{max-width:100%;align-self:auto}
+.ai-yo-adj{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
+.ai-yo-adj img{width:140px;height:104px;object-fit:cover;border-radius:14px;border:1px solid var(--border-color)}
+.ai-yo-adj span{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:12px;background:var(--bg-sunken);font-size:12px;color:var(--text-secondary);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#admin-panel-root .ai-editar{min-width:0!important;min-height:0!important;display:inline-flex;align-items:center;gap:4px;padding:2px 6px;font-size:12px;color:var(--text-muted);border-radius:8px}
+#admin-panel-root .ai-editar:hover{color:var(--text-primary);background:var(--bg-sunken)}
+.ai-adj{display:flex;gap:6px;flex-wrap:wrap}
+.ai-adj span{display:inline-flex;align-items:center;gap:6px;padding:4px 4px 4px 4px;border-radius:12px;background:var(--bg-sunken);font-size:12px;color:var(--text-secondary);max-width:100%}
+.ai-adj img{width:34px;height:34px;border-radius:8px;object-fit:cover}
+.ai-adj em{font-style:normal;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#admin-panel-root .ai-adj button{min-width:0!important;min-height:0!important;width:26px;height:26px;border-radius:999px;color:var(--text-muted)}
+#admin-panel-root .ai-adj button:hover{background:var(--tv-danger-soft);color:var(--tv-danger)}
+.ai-editando{display:flex;align-items:center;gap:8px;margin:0 4px 6px;padding:6px 10px;border-radius:12px;background:var(--tv-accent-soft);color:var(--accent);font-size:12.5px;font-weight:600}
+.ai-editando span{flex:1}
+#admin-panel-root .ai-editando button{min-width:0!important;min-height:0!important;padding:2px 8px;border-radius:8px;font-size:12px;color:var(--text-secondary)}
+#admin-panel-root .ai-caja .ai-env[data-detener]{background:var(--text-primary);color:var(--bg-surface)}
+.ai-ib:disabled{opacity:.4;cursor:default}
+
+/* Cabecera del asistente en teléfono: nada se encoge salvo el nombre del
+   modelo (que se corta con «…»); los botones de solo ícono son círculos
+   exactos de 40 px — la regla global de 44 px los deformaba y recortaba. */
+#admin-panel-root .ai-ch>*{flex:none}
+#admin-panel-root .ai-ch .ai-modelo{flex:0 1 auto;min-width:0;overflow:hidden}
+#admin-panel-root .ai-ch .ai-dot{flex:none}
+.ai-mn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+#admin-panel-root .ai-ch .ai-sp{flex:1 1 0;min-width:0}
+#admin-panel-root .ai-root .ai-ch .ai-atras{display:inline-flex!important;align-items:center;justify-content:center}
+.ai-titulo{font:700 15px var(--font-display,inherit);color:var(--text-primary);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto!important}
+#admin-panel-root .ai-ch .ai-cupo-pill{gap:6px}
+@container (max-width:760px){
+  #admin-panel-root .ai-ch .ai-cupo-pill{padding:0 12px 0 11px}
+  #admin-panel-root .ai-ch .ai-ajustes-btn{width:40px;padding:0;justify-content:center}
+}
+/* Botones pequeños dentro de filas: medida propia, sin el mínimo global. */
+#admin-panel-root .ai-borrar{min-width:0!important;min-height:0!important;width:34px;height:34px;border-radius:999px}
+#admin-panel-root .ai-aviso>button{min-width:0!important;min-height:0!important;width:28px;height:28px;margin:-4px -6px -4px 0;border-radius:999px;display:inline-flex;align-items:center;justify-content:center}
+#admin-panel-root .ai-aviso>button:hover{background:var(--bg-sunken)}
+#admin-panel-root .ai-pie button{min-width:0!important;min-height:0!important;width:34px;height:34px;border-radius:999px}
+@container (max-width:400px){.ai-barra{width:30px}}

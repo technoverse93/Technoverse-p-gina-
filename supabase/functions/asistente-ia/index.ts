@@ -12,6 +12,14 @@
 //   GEMINI_MODEL     por defecto «gemini-flash-latest» (el Flash más nuevo)
 //   GEMINI_MODEL_RESPALDO  por defecto «gemini-flash-lite-latest»
 //   GROQ_MODEL       por defecto «llama-3.3-70b-versatile».
+//   TAVILY_API_KEY   (app.tavily.com, 1.000 búsquedas gratis al mes) — opcional
+//
+// CAPACIDADES (fase 3, como ChatGPT o Claude, todo gratis):
+//   · Internet en tiempo real con Tavily (herramienta `buscar_web`).
+//   · Leer enlaces (`url_context`) y calcular con código (`code_execution`):
+//     herramientas propias de Gemini que corren en Google.
+//   · Fotos y PDF adjuntos (van como partes del mensaje).
+//   · Detener, regenerar y editar el último mensaje.
 //
 // CONSULTAS AL SISTEMA: la IA pide datos de inventario, facturación, taller,
 // errores y —solo el superadmin— ciberseguridad, ingresos, ubicaciones y
@@ -64,12 +72,15 @@ const MAX_RONDAS = 4;              // consultas encadenadas por mensaje
 const TOPE_INTENTO_MS = 20000;     // por llamada a un modelo
 const TOPE_TOTAL_MS = 40000;       // por mensaje completo
 
-const sistema = (hoy: string, conHerramientas: boolean, esSuper: boolean) => `Eres el asistente del panel de Technoverse Costa Rica, una tienda y taller de celulares y accesorios.
+type Capacidades = { enlaces: boolean; codigo: boolean; archivos: boolean };
+const sistema = (hoy: string, conHerramientas: boolean, esSuper: boolean, web = false, forzarWeb = false) => `Eres el asistente del panel de Technoverse Costa Rica, una tienda y taller de celulares y accesorios.
 Hoy es ${new Intl.DateTimeFormat('es-CR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Costa_Rica' }).format(new Date())} (${hoy}, hora de Costa Rica). Responde en español de Costa Rica, claro y al grano. Usa listas cortas o tablas en markdown cuando ayuden.
 ${conHerramientas ? `Tienes consultas de SOLO LECTURA al sistema. Úsalas siempre que la pregunta sea sobre datos del negocio; nunca inventes cifras. Elige la consulta que corresponde al tema (no busques un equipo o una persona en el taller si la pregunta es de ingresos o visitas). No puedes crear, editar ni borrar nada: si te piden un cambio, indica en qué módulo del panel se hace.
 ` : ''}${esSuper ? `Quien pregunta es el SUPERADMIN, dueño del sistema, con acceso total. Responde directo y completo sobre ciberseguridad, ingresos, visitantes, ubicaciones y finanzas: no evadas ni recortes. Esas consultas te dan conteos y resúmenes; el detalle completo (correos, IPs, coordenadas, mapa) ya le aparece al superadmin en pantalla junto a tu respuesta, así que no digas que no tienes acceso: resume, interpreta y menciona que el detalle está en la tabla.
 ` : `Ciberseguridad, ingresos, ubicaciones y finanzas son solo del superadmin: si te preguntan por eso, dilo en una frase.
-`}Si no sabes algo, dilo. No pidas ni repitas datos personales de clientes (cédulas, teléfonos, direcciones).`;
+`}${web ? `Tienes búsqueda en internet en tiempo real (buscar_web): úsala para todo lo que sea actual o que no sepas con certeza, y cita las fuentes. ${forzarWeb ? 'Para este mensaje la persona pidió buscar en internet: busca antes de responder. ' : ''}
+` : ''}Puedes leer enlaces que te peguen y ejecutar código para cálculos exactos (solo para cuentas, no para mirar imágenes). Si te mandan fotos o PDF, analízalos directamente.
+Si no sabes algo, dilo. No pidas ni repitas datos personales de clientes (cédulas, teléfonos, direcciones).`;
 
 type Turno = { rol: 'user' | 'assistant'; texto: string };
 type Resultado = { texto: string; fuentes: { titulo: string; url: string }[]; tokensIn: number; tokensOut: number; proveedor: 'gemini' | 'groq'; modelo: string; busco: boolean; consultas: Consulta[] };
@@ -80,6 +91,10 @@ type Sistema = {
   /** Resultados ya obtenidos en ESTE mensaje: si hay que cambiar de modelo, no se repiten. */
   hechas: Map<string, { datos: unknown; consulta: Consulta }>;
   emitir: Emisor; esSuper: boolean; limite: number;
+  caps: Capacidades; forzarWeb: boolean;
+  /** Fotos y PDF del mensaje actual (partes inlineData para Gemini). */
+  adjuntos: { mimeType: string; data: string }[];
+  fuentes: { titulo: string; url: string }[];
 };
 
 class CupoAgotado extends Error {}
@@ -150,19 +165,29 @@ async function preguntarGemini(historial: Turno[], modelo: string, sis: Sistema)
   if (!clave) throw new CupoAgotado('Falta GEMINI_API_KEY en los secretos');
   const conHerramientas = sis.herramientas.length > 0;
   const contents: any[] = historial.map(t => ({ role: t.rol === 'assistant' ? 'model' : 'user', parts: [{ text: t.texto }] }));
+  // Las fotos y PDF van en el último turno de la persona.
+  if (sis.adjuntos.length && contents.length) contents[contents.length - 1].parts.push(...sis.adjuntos.map(a => ({ inlineData: a })));
+  const web = sis.herramientas.some(h => h.modulo === 'internet');
+  // Con fotos adjuntas no se ofrece código: la IA tendía a «medir» la imagen
+  // con Python en vez de mirarla, y tardaba el triple.
+  const incorporadas = [...(sis.caps.enlaces ? [{ url_context: {} }] : []), ...(sis.caps.codigo && !sis.adjuntos.length ? [{ code_execution: {} }] : [])];
   const url = `https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:streamGenerateContent?alt=sse`;
   let tokensIn = 0, tokensOut = 0, version = modelo, empezo = false;
 
   for (let ronda = 0; ronda <= MAX_RONDAS; ronda++) {
     const cuerpo: Record<string, unknown> = {
-      systemInstruction: { parts: [{ text: sistema(sis.ctx.hoy, conHerramientas, sis.esSuper) }] },
+      systemInstruction: { parts: [{ text: sistema(sis.ctx.hoy, conHerramientas, sis.esSuper, web, sis.forzarWeb) }] },
       contents,
       generationConfig: { thinkingConfig: { thinkingLevel: 'low' } },
     };
     // En la última ronda ya no se ofrecen consultas: tiene que responder.
-    if (conHerramientas && ronda < MAX_RONDAS) {
-      cuerpo.tools = [{ functionDeclarations: sis.herramientas.map(h => ({ name: h.nombre, description: h.descripcion, parameters: h.parametros })) }];
-    }
+    const funciones = conHerramientas && ronda < MAX_RONDAS
+      ? [{ functionDeclarations: sis.herramientas.map(h => ({ name: h.nombre, description: h.descripcion, parameters: h.parametros })) }]
+      : [];
+    const tools = [...funciones, ...(ronda < MAX_RONDAS ? incorporadas : [])];
+    if (tools.length) cuerpo.tools = tools;
+    // Mezclar herramientas propias de Google con las nuestras exige avisarlo.
+    if (funciones.length && incorporadas.length && ronda < MAX_RONDAS) cuerpo.toolConfig = { includeServerSideToolInvocations: true };
     const restante = sis.limite - Date.now();
     if (restante < 3000) throw new CupoAgotado('sin tiempo');
     const r = await conTope(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(cuerpo) }, Math.min(TOPE_INTENTO_MS, restante))
@@ -179,11 +204,18 @@ async function preguntarGemini(historial: Turno[], modelo: string, sis: Sistema)
     const partes: any[] = [];
     let texto = '';
     let uso: any = null;
+    let codigo = '', salidaCodigo = '';
+    const enlaces: string[] = [];
     for await (const trozo of leerSSE(r.body)) {
       if (trozo?.usageMetadata) uso = trozo.usageMetadata; // el último trae el total
       if (trozo?.modelVersion) version = trozo.modelVersion;
+      for (const m of trozo?.candidates?.[0]?.urlContextMetadata?.urlMetadata || []) {
+        if (m?.retrievedUrl && !enlaces.includes(m.retrievedUrl)) enlaces.push(m.retrievedUrl);
+      }
       for (const p of trozo?.candidates?.[0]?.content?.parts || []) {
         partes.push(p);
+        if (p?.executableCode?.code) { codigo += (codigo ? '\n' : '') + p.executableCode.code; sis.emitir('estado', { texto: 'Calculando con código…' }); }
+        if (p?.codeExecutionResult?.output) salidaCodigo += p.codeExecutionResult.output;
         if (p?.text && !p?.thought) {
           if (!empezo) { empezo = true; sis.emitir('modelo', { modelo: version }); }
           texto += p.text;
@@ -193,6 +225,17 @@ async function preguntarGemini(historial: Turno[], modelo: string, sis: Sistema)
     }
     tokensIn += Number(uso?.promptTokenCount || 0);
     tokensOut += Number(uso?.candidatesTokenCount || 0) + Number(uso?.thoughtsTokenCount || 0);
+    // Tarjetas de lo que hizo Google por su cuenta: código y enlaces leídos.
+    if (codigo) {
+      const c: Consulta = { modulo: 'Código', desc: 'cálculo exacto', filas: salidaCodigo ? 'resultado' : 'ejecutado', detalle: `${codigo.trim().slice(0, 1500)}${salidaCodigo ? `\n→ ${salidaCodigo.trim().slice(0, 400)}` : ''}` };
+      sis.consultas.push(c); sis.emitir('consulta', c);
+    }
+    if (enlaces.length) {
+      const dominio = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
+      const c: Consulta = { modulo: 'Enlace', desc: enlaces.map(dominio).join(', ').slice(0, 80), filas: `${enlaces.length} leído${enlaces.length === 1 ? '' : 's'}`, detalle: enlaces.join('\n') };
+      sis.consultas.push(c); sis.emitir('consulta', c);
+      for (const u of enlaces) if (!sis.fuentes.some(f => f.url === u)) sis.fuentes.push({ titulo: dominio(u), url: u });
+    }
 
     const llamadas = partes.filter(p => p?.functionCall);
     if (llamadas.length && ronda < MAX_RONDAS) {
@@ -209,7 +252,7 @@ async function preguntarGemini(historial: Turno[], modelo: string, sis: Sistema)
     }
     texto = texto.trim();
     if (!texto) throw new CupoAgotado('Gemini no devolvió texto');
-    return { texto, fuentes: [], tokensIn, tokensOut, proveedor: 'gemini', modelo: String(version), busco: false, consultas: sis.consultas };
+    return { texto, fuentes: sis.fuentes.slice(0, 8), tokensIn, tokensOut, proveedor: 'gemini', modelo: String(version), busco: sis.usados.internet > 0, consultas: sis.consultas };
   }
   throw new Error('La IA no terminó de responder.');
 }
@@ -218,7 +261,8 @@ async function preguntarGroq(historial: Turno[], sis: Sistema): Promise<Resultad
   const clave = Deno.env.get('GROQ_API_KEY');
   if (!clave) { console.log('groq: falta GROQ_API_KEY en los secretos'); throw new CupoAgotado('Sin respaldo configurado'); }
   const conHerramientas = sis.herramientas.length > 0;
-  const mensajes: any[] = [{ role: 'system', content: sistema(sis.ctx.hoy, conHerramientas, sis.esSuper) }, ...historial.map(t => ({ role: t.rol, content: t.texto }))];
+  const web = sis.herramientas.some(h => h.modulo === 'internet');
+  const mensajes: any[] = [{ role: 'system', content: sistema(sis.ctx.hoy, conHerramientas, sis.esSuper, web, sis.forzarWeb) }, ...historial.map(t => ({ role: t.rol, content: t.texto }))];
   let tokensIn = 0, tokensOut = 0;
   for (let ronda = 0; ronda <= MAX_RONDAS; ronda++) {
     const cuerpo: Record<string, unknown> = { model: GROQ_MODEL, messages: mensajes, temperature: 0.4 };
@@ -256,7 +300,7 @@ async function preguntarGroq(historial: Turno[], sis: Sistema): Promise<Resultad
     if (!texto) throw new Error('Groq no devolvió respuesta.');
     sis.emitir('modelo', { modelo: d?.model || GROQ_MODEL });
     sis.emitir('texto', { delta: texto });
-    return { texto, fuentes: [], tokensIn, tokensOut, proveedor: 'groq', modelo: String(d?.model || GROQ_MODEL), busco: false, consultas: sis.consultas };
+    return { texto, fuentes: sis.fuentes.slice(0, 8), tokensIn, tokensOut, proveedor: 'groq', modelo: String(d?.model || GROQ_MODEL), busco: sis.usados.internet > 0, consultas: sis.consultas };
   }
   throw new Error('La IA no terminó de responder.');
 }
@@ -278,7 +322,8 @@ Deno.serve(async (req: Request) => {
 
     // Todo lo que no depende entre sí, en paralelo.
     const conConv = !!convId && accion === 'enviar';
-    const [{ data: perfil }, { data: ajustes }, { data: mio }, { data: equipo }, conv, previos] = await Promise.all([
+    const inicioMes = `${dia.slice(0, 7)}-01`;
+    const [{ data: perfil }, { data: ajustes }, { data: mio }, { data: equipo }, conv, previos, { data: delMes }] = await Promise.all([
       admin.from('profiles').select('role').eq('id', uid).maybeSingle(),
       admin.from('ia_ajustes').select('*').eq('id', 1).maybeSingle(),
       admin.from('ia_uso_diario').select('mensajes,tokens,gemini,groq,consultas').eq('user_id', uid).eq('dia', dia).maybeSingle(),
@@ -287,8 +332,9 @@ Deno.serve(async (req: Request) => {
         ? admin.from('ia_conversaciones').select('id').eq('id', convId).eq('user_id', uid).maybeSingle()
         : Promise.resolve({ data: null }),
       conConv
-        ? admin.from('ia_mensajes').select('rol,texto').eq('conversacion_id', convId).eq('user_id', uid).order('creado_en', { ascending: false }).limit(MAX_HISTORIAL)
+        ? admin.from('ia_mensajes').select('id,rol,texto').eq('conversacion_id', convId).eq('user_id', uid).order('creado_en', { ascending: false }).limit(MAX_HISTORIAL + 2)
         : Promise.resolve({ data: [] as any[] }),
+      admin.from('ia_uso_diario').select('consultas').gte('dia', inicioMes),
     ]);
     const rol = perfil?.role as string | undefined;
     const esSuper = rol === 'superadmin';
@@ -298,6 +344,9 @@ Deno.serve(async (req: Request) => {
       || (acceso === 'gestion' && rol === 'admin');
     if (!permitido) return responder({ ok: false, error: 'No tienes acceso al asistente.' }, 403);
     const limite = Number(ajustes?.limite_diario || 60);
+    const mods = (ajustes?.modulos || {}) as Record<string, boolean>;
+    const caps: Capacidades = { enlaces: mods.enlaces !== false, codigo: mods.codigo !== false, archivos: mods.archivos !== false };
+    const busquedasMes = (delMes || []).reduce((t: number, f: any) => t + Number(f?.consultas?.internet || 0), 0);
 
     const armarCupo = (u: any, eq: any[]) => ({
       usados: u?.mensajes || 0, limite: esSuper ? null : limite,
@@ -312,6 +361,9 @@ Deno.serve(async (req: Request) => {
       // las consultas al sistema: queda apagada.
       busqueda: false, respaldo: !!ajustes?.respaldo, groqConfigurado: !!Deno.env.get('GROQ_API_KEY'),
       modulos: [...new Set(disponibles(ajustes?.modulos, esSuper).map(h => h.modulo))],
+      busquedaWeb: !!Deno.env.get('TAVILY_API_KEY') && mods.internet !== false,
+      busquedasMes, cupoBusquedas: Number(Deno.env.get('CUPO_TAVILY_MES') || 1000),
+      capacidades: caps,
       consultasHoy: Object.values(u?.consultas || {}).reduce((a: number, n: any) => a + Number(n || 0), 0),
     });
     const antes = armarCupo(mio, equipo || []);
@@ -321,6 +373,12 @@ Deno.serve(async (req: Request) => {
 
     const texto = String(cuerpo?.texto || '').trim().slice(0, MAX_TEXTO);
     if (!texto) return responder({ ok: false, error: 'El mensaje está vacío.' }, 400);
+    // Fotos y PDF: hasta 3, solo imágenes y PDF, ~8 MB en total.
+    const crudos: any[] = Array.isArray(cuerpo?.adjuntos) ? cuerpo.adjuntos.slice(0, 3) : [];
+    const adjuntos = caps.archivos ? crudos
+      .filter(a => typeof a?.datos === 'string' && /^(image\/(jpeg|png|webp|heic|heif)|application\/pdf)$/.test(String(a?.tipo)))
+      .map(a => ({ mimeType: String(a.tipo), data: String(a.datos), nombre: String(a.nombre || 'archivo').slice(0, 80) })) : [];
+    if (adjuntos.reduce((t, a) => t + a.data.length, 0) > 11_000_000) return responder({ ok: false, error: 'Los archivos pesan demasiado (máximo unos 8 MB en total).' }, 413);
     if (!esSuper && antes.usados >= limite) {
       return responder({ ok: false, codigo: 'limite', error: 'Usaste todo tu cupo de hoy. Se renueva a la medianoche.', cupo: antes }, 429);
     }
@@ -334,7 +392,17 @@ Deno.serve(async (req: Request) => {
       if (error) throw error;
       convId = c.id; nueva = true;
     }
-    const historial: Turno[] = [...((nueva ? [] : previos.data) || []).reverse(), { rol: 'user', texto }] as Turno[];
+    // Regenerar / editar: se quita el último par (pregunta + respuesta) y se
+    // vuelve a responder con el texto que llegó (el mismo o el editado).
+    let previas: any[] = (nueva ? [] : previos.data) || [];
+    if (cuerpo?.regenerar === true && !nueva) {
+      const quitar: string[] = [];
+      if (previas[0]?.rol === 'assistant') quitar.push(previas.shift().id);
+      if (previas[0]?.rol === 'user') quitar.push(previas.shift().id);
+      if (quitar.length) await admin.from('ia_mensajes').delete().in('id', quitar).eq('user_id', uid);
+    }
+    previas = previas.slice(0, MAX_HISTORIAL);
+    const historial: Turno[] = [...previas.reverse(), { rol: 'user', texto }] as Turno[];
 
     // Las consultas al sistema se hacen con la SESIÓN DE QUIEN PREGUNTA (no
     // con service_role): la base aplica las mismas reglas que en el panel.
@@ -351,7 +419,13 @@ Deno.serve(async (req: Request) => {
     const correr = async (emitir: Emisor) => {
       const hechas = new Map<string, { datos: unknown; consulta: Consulta }>();
       const limiteT = Date.now() + TOPE_TOTAL_MS;
-      const nuevo = (): Sistema => ({ ctx: { db: comoUsuario, esSuper, hoy: dia }, herramientas, consultas: [], usados: {}, hechas, emitir, esSuper, limite: limiteT });
+      const nuevo = (): Sistema => {
+        const fuentes: { titulo: string; url: string }[] = [];
+        return {
+          ctx: { db: comoUsuario, esSuper, hoy: dia, fuentes }, herramientas, consultas: [], usados: {}, hechas, emitir, esSuper, limite: limiteT,
+          caps, forzarWeb: cuerpo?.buscar === true, adjuntos: adjuntos.map(a => ({ mimeType: a.mimeType, data: a.data })), fuentes,
+        };
+      };
       for (const modelo of [GEMINI_MODEL, GEMINI_RESPALDO]) {
         if (!disponibleModelo(modelo)) continue;
         const sis = nuevo();
@@ -362,7 +436,8 @@ Deno.serve(async (req: Request) => {
           emitir('reinicio', {}); // el panel borra el texto parcial, si lo hubo
         }
       }
-      if (ajustes?.respaldo) {
+      // Groq no ve fotos ni PDF: si había adjuntos, no tiene sentido el respaldo.
+      if (ajustes?.respaldo && !adjuntos.length) {
         const sis = nuevo();
         try {
           return { res: await preguntarGroq(historial, sis), respaldo: true, sis };
@@ -381,7 +456,8 @@ Deno.serve(async (req: Request) => {
         conversacion_id: convId, user_id: uid, fuentes: [], tokens_in: 0, tokens_out: 0, proveedor: null, modelo: null, busco: false, consultas: [], ...m,
       });
       const { error: errMsg } = await admin.from('ia_mensajes').insert([
-        fila({ rol: 'user', texto, creado_en: ahora }),
+        // Los adjuntos no se guardan (pesan y pueden ser privados): solo su nombre.
+        fila({ rol: 'user', texto, creado_en: ahora, fuentes: adjuntos.map(a => ({ titulo: a.nombre, url: `adjunto:${a.mimeType}` })) }),
         fila({ rol: 'assistant', texto: res.texto, fuentes: res.fuentes, tokens_in: res.tokensIn, tokens_out: res.tokensOut, proveedor: res.proveedor, modelo: res.modelo, busco: res.busco, consultas: res.consultas, creado_en: despues }),
       ]);
       if (errMsg) console.log(`no se guardaron los mensajes: ${errMsg.message}`);
@@ -420,11 +496,11 @@ Deno.serve(async (req: Request) => {
       [...(equipo || []), { gemini: res.proveedor === 'gemini' ? 1 : 0, groq: res.proveedor === 'groq' ? 1 : 0 }],
     );
     const sinServicio = () => ajustes?.respaldo
-      ? 'Los servicios gratuitos están saturados en este momento. Intenta en unos minutos.'
+      ? (adjuntos.length ? 'Google está saturado y el respaldo no puede ver fotos ni PDF. Intenta en unos minutos.' : 'Los servicios gratuitos están saturados en este momento. Intenta en unos minutos.')
       : 'Google llegó a su límite por ahora. Intenta en unos minutos.';
     const final = (r: { res: Resultado; respaldo: boolean }) => ({
       ok: true, conversacionId: convId, nueva, respaldo: r.respaldo, sinBusqueda: false,
-      mensaje: { rol: 'assistant', texto: r.res.texto, fuentes: r.res.fuentes, tokens_in: r.res.tokensIn, tokens_out: r.res.tokensOut, proveedor: r.res.proveedor, modelo: r.res.modelo, busco: false, consultas: r.res.consultas },
+      mensaje: { rol: 'assistant', texto: r.res.texto, fuentes: r.res.fuentes, tokens_in: r.res.tokensIn, tokens_out: r.res.tokensOut, proveedor: r.res.proveedor, modelo: r.res.modelo, busco: r.res.busco, consultas: r.res.consultas },
       cupo: cupoDespues(r.res),
     });
     const descartarNueva = async () => { if (nueva) await admin.from('ia_conversaciones').delete().eq('id', convId); };
@@ -443,7 +519,9 @@ Deno.serve(async (req: Request) => {
 
     // ---------------------------- EN VIVO ----------------------------
     const codificador = new TextEncoder();
+    let detenido = false; // la persona tocó «Detener»: no se guarda nada
     const flujo = new ReadableStream<Uint8Array>({
+      cancel() { detenido = true; },
       async start(control) {
         const emitir: Emisor = (evento, datos) => {
           try { control.enqueue(codificador.encode(`event: ${evento}\ndata: ${JSON.stringify(datos)}\n\n`)); } catch { /* el panel se fue */ }
@@ -455,6 +533,8 @@ Deno.serve(async (req: Request) => {
             await descartarNueva();
             console.log('sin servicio: ningún modelo respondió');
             emitir('error', { ok: false, codigo: 'sin_servicio', error: sinServicio(), cupo: antes });
+          } else if (detenido) {
+            await descartarNueva();
           } else {
             emitir('fin', final(salida));
             await enSegundoPlano(guardar(salida.res, salida.sis));
