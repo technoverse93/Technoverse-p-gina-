@@ -1474,7 +1474,7 @@ if (!m) return null;
                     <div className="flex gap-2">
                       <input
                         type="url"
-                        placeholder="Pegar URL pública de la imagen ya generada…"
+                        placeholder="URL de la imagen"
                         value={igImageDraft[req.id] || ''}
                         onChange={e => setIgImageDraft(prev => ({ ...prev, [req.id]: e.target.value }))}
                         className="flex-1 bg-[var(--bg-sunken)] border border-[var(--border-color)]/80 rounded-lg px-3 py-1.5 text-[11px] text-[var(--text-primary)]"
@@ -2157,7 +2157,7 @@ if (!m) return null;
                     </div>
                     <div>
                       <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Ubicación Física en Casa</label>
-                      <input type="text" placeholder="Ej: Armario del estudio, Caja azul en garaje" value={prodLocation} onChange={e => setProdLocation(e.target.value)} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)]" />
+                      <input type="text" placeholder="Ej.: armario, caja azul" value={prodLocation} onChange={e => setProdLocation(e.target.value)} className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)]" />
                     </div>
                     <div>
                       <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">Imagen del Producto *</label>

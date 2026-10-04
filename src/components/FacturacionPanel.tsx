@@ -622,7 +622,7 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
                     className="tv-input font-mono flex-1"
                     value={formatear(idTipo, idValor)}
                     onChange={e => alCambiarIdentificacion(e.target.value)}
-                    placeholder="Escriba la cédula y se completa sola"
+                    placeholder="Número de cédula"
                     inputMode="numeric"
                     maxLength={longitudMaximaDe(idTipo) + 3}
                     autoComplete="off"

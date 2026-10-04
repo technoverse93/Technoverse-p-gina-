@@ -449,11 +449,15 @@ h5, .text-lg {
   line-height: 1.4;
 }
 
+/* Piso de legibilidad: NADA por debajo de 12 px (estándar del panel en el
+   Galaxy A12). Los tamaños sueltos de Tailwind por debajo de eso suben a 12. */
 .text-\[8px\],
 .text-\[9px\],
 .text-\[10px\],
+.text-\[10\.5px\],
+.text-\[11\.5px\],
 [class*="text-[10px]"] {
-  font-size: clamp(0.72rem, 0.7rem + 0.1vw, 0.75rem) !important;
+  font-size: 12px !important;
 }
 .text-\[11px\] { font-size: clamp(0.8rem, 0.78rem + 0.15vw, 0.875rem) !important; }
 
@@ -1093,7 +1097,7 @@ input, select, textarea { max-width: 100%; }
   font-weight: 600;
 }
 .tv-pildora--on:hover { color: var(--chip-on-ink); border-color: var(--chip-on-bg); }
-.tv-pildora-n { font-size: 10.5px; opacity: 0.6; font-variant-numeric: tabular-nums; }
+.tv-pildora-n { font-size: 12px; opacity: 0.6; font-variant-numeric: tabular-nums; }
 
 /* ---- Tarjeta de producto ---- */
 .tv-prod {
@@ -1126,9 +1130,9 @@ input, select, textarea { max-width: 100%; }
   color: var(--text-primary);
   font-variant-numeric: tabular-nums;
 }
-.tv-prod-moneda { font-size: 11px; font-weight: 600; margin-right: 1px; }
-.tv-prod-meta { font-size: 11px; line-height: 1.3; color: var(--text-muted); }
-.tv-prod-tachado { font-size: 11px; color: var(--text-muted); text-decoration: line-through; font-variant-numeric: tabular-nums; }
+.tv-prod-moneda { font-size: 12px; font-weight: 600; margin-right: 1px; }
+.tv-prod-meta { font-size: 12px; line-height: 1.3; color: var(--text-muted); }
+.tv-prod-tachado { font-size: 12px; color: var(--text-muted); text-decoration: line-through; font-variant-numeric: tabular-nums; }
 .tv-prod-boton {
   margin-top: 4px;
   padding: 6px 10px;
@@ -1243,7 +1247,7 @@ input, select, textarea { max-width: 100%; }
 .tv-chat-filtro { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border: 1px solid var(--border-color); background: transparent; white-space: nowrap; }
 .tv-chat-filtro[data-on] { background: var(--text-primary); color: var(--bg-surface); border-color: var(--text-primary); }
 .tv-chat-rango { display: flex; gap: 4px; align-items: center; padding: 0 12px 8px; color: var(--text-muted); }
-.tv-chat-rango button { font-size: 11.5px; padding: 3px 10px; border-radius: 999px; background: var(--bg-sunken); color: var(--text-secondary); }
+.tv-chat-rango button { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--bg-sunken); color: var(--text-secondary); }
 .tv-chat-rango button[data-on] { background: rgba(var(--accent-rgb), .14); color: var(--accent); font-weight: 700; }
 
 .tv-chat-conv { width: 100%; text-align: left; display: grid; grid-template-columns: 44px minmax(0, 1fr) auto; gap: 10px; align-items: center; padding: 9px 12px; margin: 0 6px; width: calc(100% - 12px); border-radius: 16px; transition: background .15s; }
@@ -1251,18 +1255,18 @@ input, select, textarea { max-width: 100%; }
 .tv-chat-conv[data-activa] { background: rgba(var(--accent-rgb), .12); }
 .tv-chat-ava { width: 44px; height: 44px; border-radius: 15px; display: grid; place-items: center; font: 700 16px var(--font-display, inherit); color: #fff; flex: none; }
 .tv-chat-ava--cab { width: 40px; height: 40px; border-radius: 14px; font-size: 15px; }
-.tv-chat-ava--mini { width: 26px; height: 26px; border-radius: 9px; font-size: 11px; display: grid; place-items: center; font-weight: 700; color: #fff; }
+.tv-chat-ava--mini { width: 26px; height: 26px; border-radius: 9px; font-size: 12px; display: grid; place-items: center; font-weight: 700; color: #fff; }
 .tv-chat-punto { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--ok); border: 2px solid var(--bg-surface); }
-.tv-chat-cuenta { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 10.5px; font-weight: 700; display: grid; place-items: center; }
+.tv-chat-cuenta { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; display: grid; place-items: center; }
 
 .tv-chat-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border-color); position: relative; flex: none; }
 .tv-chat-ib { width: 36px; height: 36px; border-radius: 12px; display: inline-grid; place-items: center; color: var(--text-secondary); background: var(--tile); flex: none; }
 .tv-chat-ib:hover { color: var(--text-primary); }
-.tv-chat-etq { font-size: 11px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); }
+.tv-chat-etq { font-size: 12px; font-weight: 700; padding: 4px 10px; border-radius: 999px; background: var(--ok-soft); color: var(--ok); }
 .tv-chat-msgs { flex: 1; min-height: 0; overflow-y: auto; padding: 14px 12px; display: flex; flex-direction: column; gap: 10px; background: color-mix(in srgb, var(--tile) 50%, transparent); }
 .tv-chat-msgs > * { flex: none; }
-.tv-chat-dia { font-size: 10.5px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 11px; border-radius: 999px; background: var(--bg-surface); color: var(--text-muted); }
-.tv-chat-mas { font-size: 11.5px; font-weight: 600; padding: 6px 13px; border-radius: 999px; background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-secondary); }
+.tv-chat-dia { font-size: 12px; font-weight: 700; letter-spacing: .06em; text-transform: uppercase; padding: 3px 11px; border-radius: 999px; background: var(--bg-surface); color: var(--text-muted); }
+.tv-chat-mas { font-size: 12px; font-weight: 600; padding: 6px 13px; border-radius: 999px; background: var(--bg-surface); border: 1px solid var(--border-color); color: var(--text-secondary); }
 .tv-chat-burbuja { border-radius: 18px; }
 .tv-chat-burbuja--in { background: var(--bubble-in); color: var(--bubble-in-ink); border: 1px solid var(--border-color); border-bottom-left-radius: 6px; }
 .tv-chat-burbuja--out { background: var(--bubble-out); color: var(--bubble-out-ink); border-bottom-right-radius: 6px; }
@@ -1287,3 +1291,13 @@ html.sin-vidrio .tv-chat-pildora { backdrop-filter: none; -webkit-backdrop-filte
 .tv-chat-pop button { justify-content: flex-start !important; text-align: left; }
 .tv-chat-pop button:has(> svg.lucide) { min-height: 40px; }
 .tv-chat-etq--excl { background: rgba(var(--accent-rgb), .14); color: var(--accent); }
+
+/* Ningún texto de ejemplo (placeholder) ni valor largo se sale de su caja:
+   se corta con «…». La explicación larga va como ayuda debajo del campo. */
+input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { text-overflow: ellipsis; }
+input::placeholder { text-overflow: ellipsis; }
+
+/* Vidrio ligero (gama de entrada, ver iniciarVidrio en utils/tema.ts): el
+   mismo cristal con un desenfoque de 4 px en vez de 10. */
+html.vidrio-ligero, html.vidrio-ligero.dark { --glass-blur: 4px; }
+html.vidrio-ligero .sg-riel { backdrop-filter: blur(4px); }
