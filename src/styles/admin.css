@@ -2524,3 +2524,197 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
 #admin-panel-root .ai-aviso>button:hover{background:var(--bg-sunken)}
 #admin-panel-root .ai-pie button{min-width:0!important;min-height:0!important;width:34px;height:34px;border-radius:999px}
 @container (max-width:400px){.ai-barra{width:30px}}
+
+/* =====================================================================
+   JARVIS — piezas del Asistente IA del superadmin
+   ---------------------------------------------------------------------
+   Persona (Jarvis / Arquitecto), velocidad, voz, tarjetas de acción con
+   confirmación, «abrir en el panel» y gráfico comparado. Todo sale de los
+   tokens de la plataforma; solo se agregan los dos tonos del gráfico y el
+   rojo del botón que cambia accesos.
+   ===================================================================== */
+#admin-panel-root{--jv-actual:#008A9E;--jv-anterior:#9DB0B4;--jv-peligro:#C2363B;--jv-peligro-ink:#fff}
+.dark #admin-panel-root{--jv-actual:#26A99E;--jv-anterior:#56635F}
+/* ---------- Cabecera: persona (Jarvis operador / Arquitecto) ---------- */
+#admin-panel-root .ai-ch .ai-persona{min-width:0!important;min-height:0!important;height:40px;cursor:pointer;padding:5px 10px 5px 5px;gap:8px}
+#admin-panel-root .ai-ch .ai-persona:hover{background:var(--bg-sunken)}
+.ai-persona .ai-chev{display:inline-flex;color:var(--text-muted);flex:none}
+.ai-persona[data-p="arquitecto"] .ai-dot{background:var(--tv-warn);color:#fff}
+
+/* Menús emergentes (mismo aspecto que el menú de adjuntar del chat). */
+.ai-pop{position:absolute;z-index:40;padding:6px;width:min(330px,calc(100% - 24px));display:grid;gap:2px}
+.ai-pop[hidden]{display:none}
+.ai-pop-t{padding:8px 10px 6px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary)}
+#admin-panel-root .ai-pop-op{display:grid!important;grid-template-columns:34px 1fr auto;align-items:start!important;gap:10px;width:100%;padding:9px 10px;border-radius:12px;text-align:left;color:var(--text-primary);background:transparent;min-height:0!important;min-width:0!important}
+#admin-panel-root .ai-pop-op:hover{background:var(--bg-sunken)}
+#admin-panel-root .ai-pop-op[aria-checked="true"]{background:var(--tv-accent-soft)}
+.ai-pop-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--tile);color:var(--accent)}
+.ai-pop-op[aria-checked="true"] .ai-pop-ic{background:var(--accent);color:var(--accent-ink)}
+.ai-pop-tx{display:grid;gap:2px;min-width:0}
+.ai-pop-tx b{font-size:13.5px;font-weight:700}
+.ai-pop-tx span{font-size:12.5px;color:var(--text-secondary);line-height:1.4}
+.ai-pop-tx em{font-style:normal;font-size:12px;color:var(--text-muted)}
+.ai-pop-der{display:grid;justify-items:end;gap:4px;font:500 12px var(--font-mono,monospace);color:var(--text-secondary);white-space:nowrap;padding-top:2px}
+.ai-pop-der .ai-pop-ok{color:var(--accent);display:inline-flex}
+.ai-pop-op[aria-checked="false"] .ai-pop-ok{visibility:hidden}
+.ai-pop-aviso{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:999px;background:var(--tv-warn-soft);color:var(--tv-warn);font:600 12px var(--font-sans,inherit)}
+.ai-pop-pie{padding:8px 10px 6px;border-top:1px solid var(--border-soft);margin-top:4px;font-size:12px;color:var(--text-muted);line-height:1.45}
+
+/* ---------- Barra de escribir: +, voz y velocidad ---------- */
+.ai-red{position:relative}
+#admin-panel-root .ai-caja{grid-template-columns:minmax(0,1fr)}
+#admin-panel-root .ai-vel{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 9px 0 10px;border-radius:999px;background:var(--bg-sunken);color:var(--text-primary);font-size:12.5px;font-weight:600;white-space:nowrap;min-width:0!important;min-height:0!important;cursor:pointer;flex:none}
+#admin-panel-root .ai-vel:hover{background:var(--tile)}
+.ai-vel .ai-vel-ic{display:inline-flex;color:var(--accent)}
+.ai-vel .ai-chev{display:inline-flex;color:var(--text-muted)}
+.ai-vel-menu{right:12px;bottom:calc(100% - 4px)}
+.ai-mas-menu{left:12px;bottom:calc(100% - 4px);width:min(270px,calc(100% - 24px))}
+#admin-panel-root .ai-mas-op{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:10px;width:100%;padding:10px;border-radius:12px;font-size:13.5px;color:var(--text-primary);min-height:0!important;text-align:left}
+#admin-panel-root .ai-mas-op:hover{background:var(--bg-sunken)}
+.ai-mas-op .ai-pop-ic{width:30px;height:30px;border-radius:9px}
+.ai-mas-op small{display:block;font-size:12px;color:var(--text-muted)}
+.ai-mas-op[aria-checked="true"] .ai-pop-ic{background:var(--accent);color:var(--accent-ink)}
+
+/* Grabando: el mismo rojo pulsante de las notas de voz del chat. */
+#admin-panel-root .ai-caja .ai-ib[data-grabando]{background:var(--jv-peligro);color:#fff;animation:tv-chat-pulso 1.1s ease-in-out infinite}
+.ai-caja[data-grabando] textarea{display:none}
+.ai-escucha{display:none;align-items:center;gap:10px;min-height:24px;font-size:13.5px;color:var(--text-primary)}
+.ai-caja[data-grabando] .ai-escucha,.ai-caja[data-transcribiendo] .ai-escucha{display:flex}
+.ai-caja[data-transcribiendo] textarea{display:none}
+.ai-rec{width:9px;height:9px;border-radius:50%;background:var(--jv-peligro);flex:none;animation:ai-pulso 1.1s ease-in-out infinite}
+.ai-reloj{font:500 12.5px var(--font-mono,monospace);color:var(--text-secondary)}
+.ai-onda{display:flex;align-items:center;gap:2px;height:20px;flex:1 1 0;min-width:0;overflow:hidden}
+.ai-onda i{width:3px;height:100%;border-radius:2px;background:var(--accent);opacity:.75;transform:scaleY(.25);animation:jv-onda 1s ease-in-out infinite}
+@keyframes jv-onda{0%,100%{transform:scaleY(.2)}50%{transform:scaleY(1)}}
+.ai-yo-voz{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-muted);align-self:flex-end}
+
+/* ---------- Tarjeta de acción (proponer → confirmar → ejecutar) ---------- */
+.ai-acc{border:1px solid var(--border-color);border-radius:16px;background:var(--bg-surface);overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr)}
+.ai-acc-cab{display:flex;align-items:flex-start;gap:10px;padding:12px 12px 10px}
+.ai-acc-ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex:none;background:var(--tv-warn-soft);color:var(--tv-warn)}
+.ai-acc[data-riesgo="bajo"] .ai-acc-ic{background:var(--tv-accent-soft);color:var(--accent)}
+.ai-acc[data-estado="hecha"] .ai-acc-ic{background:var(--ok-soft);color:var(--ok)}
+.ai-acc[data-estado="cancelada"] .ai-acc-ic,.ai-acc[data-estado="vencida"] .ai-acc-ic,.ai-acc[data-estado="deshecha"] .ai-acc-ic{background:var(--bg-sunken);color:var(--text-muted)}
+.ai-acc-tt{flex:1;min-width:0;display:grid;gap:2px}
+.ai-acc-tt small{font-size:12px;font-weight:600;color:var(--text-muted)}
+.ai-acc-tt b{font:700 15px/1.3 var(--font-display,inherit);color:var(--text-primary);text-wrap:balance}
+.ai-acc-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;flex:none;background:var(--tv-warn-soft);color:var(--tv-warn)}
+.ai-acc-chip[data-t="bajo"]{background:var(--tv-accent-soft);color:var(--accent)}
+.ai-acc-chip[data-t="hecha"]{background:var(--ok-soft);color:var(--ok)}
+.ai-acc-chip[data-t="neutro"]{background:var(--bg-sunken);color:var(--text-secondary)}
+.ai-acc-dl{margin:0;display:grid;border-top:1px solid var(--border-soft)}
+.ai-acc-dl>div{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;padding:9px 12px;border-bottom:1px solid var(--border-soft);font-size:13px;align-items:start}
+.ai-acc-dl dt{color:var(--text-secondary);font-size:12.5px;padding-top:1px}
+.ai-acc-dl dd{margin:0;min-width:0;max-width:100%;color:var(--text-primary);overflow-wrap:anywhere;display:grid;gap:6px;line-height:1.45}
+.ai-acc-mono{font:500 12.5px var(--font-mono,monospace)}
+.ai-acc-priv{display:inline-flex;align-items:center;gap:4px;width:max-content;max-width:100%;padding:1px 8px;border-radius:999px;background:var(--bg-sunken);color:var(--text-secondary);font-size:12px;font-weight:600}
+.ai-acc-opc{display:flex;flex-wrap:wrap;gap:6px}
+#admin-panel-root .ai-acc-dur{padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid var(--border-color);background:var(--bg-sunken);color:var(--text-secondary);cursor:pointer}
+@media (pointer:coarse){#admin-panel-root .ai-acc-dur{padding:8px 12px}}
+#admin-panel-root .ai-acc-dur[aria-pressed="true"]{border-color:var(--accent);background:rgba(var(--accent-rgb),.10);color:var(--accent)}
+.ai-acc-chk{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--text-primary);cursor:pointer}
+.ai-acc-chk input{width:18px;height:18px;margin-top:1px;accent-color:var(--accent);flex:none}
+.ai-acc-token{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;padding:10px 12px;background:var(--tv-danger-soft);border-bottom:1px solid var(--border-soft);font-size:12.5px;color:var(--text-primary)}
+.ai-acc-token[hidden]{display:none}
+.ai-acc-token label{display:inline-flex;align-items:center;gap:6px;font-weight:600}
+.ai-acc-token input{width:96px;text-align:center;letter-spacing:.4em;font-family:var(--font-mono,monospace)}
+.ai-acc-pie{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap}
+.ai-acc-meta{flex:1 1 170px;min-width:0;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)}
+.ai-acc-meta .lucide{flex:none}
+.ai-acc-meta{flex-wrap:wrap;column-gap:6px;row-gap:2px}
+.jv-vence{white-space:nowrap;font-variant-numeric:tabular-nums}
+#admin-panel-root .ai-acc-ok{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 15px;border-radius:12px;font-weight:700;font-size:13px;background:var(--jv-peligro);color:var(--jv-peligro-ink);min-width:0!important;min-height:0!important;cursor:pointer;white-space:nowrap}
+#admin-panel-root .ai-acc-ok[data-tono="normal"]{background:var(--accent);color:var(--accent-ink)}
+#admin-panel-root .ai-acc-ok:hover{filter:brightness(1.07)}
+#admin-panel-root .ai-acc-ok:disabled{opacity:.5;cursor:default;filter:none}
+#admin-panel-root .ai-acc .ai-chip{height:38px;cursor:pointer}
+.ai-acc-hecho{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--border-soft);font-size:13px;color:var(--text-secondary)}
+.ai-acc-hecho>span{flex:1 1 180px;min-width:0}
+.ai-acc-hecho b{color:var(--text-primary)}
+.ai-acc[data-estado="hecha"] .ai-acc-dl,.ai-acc[data-estado="hecha"] .ai-acc-pie,.ai-acc[data-estado="hecha"] .ai-acc-token,
+.ai-acc[data-estado="cancelada"] .ai-acc-dl,.ai-acc[data-estado="cancelada"] .ai-acc-pie,.ai-acc[data-estado="cancelada"] .ai-acc-token,
+.ai-acc[data-estado="deshecha"] .ai-acc-dl,.ai-acc[data-estado="deshecha"] .ai-acc-pie,.ai-acc[data-estado="deshecha"] .ai-acc-token,
+.ai-acc[data-estado="vencida"] .ai-acc-dl,.ai-acc[data-estado="vencida"] .ai-acc-pie,.ai-acc[data-estado="vencida"] .ai-acc-token{display:none}
+.ai-giro{width:15px;height:15px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:jv-giro .7s linear infinite;flex:none}
+@keyframes jv-giro{to{transform:rotate(360deg)}}
+
+/* ---------- Tarjeta «abrir en el panel» ---------- */
+.ai-ir{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 12px;border:1px solid var(--border-color);border-radius:14px;background:var(--bg-surface)}
+.ai-ir .tv-btn{margin-left:auto}
+.ai-ir-tx{flex:1 1 170px;min-width:0;font-size:13px;color:var(--text-secondary);line-height:1.4}
+.ai-ir-tx b{display:block;color:var(--text-primary);font-weight:600}
+
+/* ---------- Gráfico de métricas dentro del chat ---------- */
+.ai-graf{border:1px solid var(--border-color);border-radius:14px;background:var(--bg-surface);overflow:hidden;position:relative}
+.ai-graf-cab{display:flex;align-items:center;gap:10px;padding:10px 12px 2px}
+.ai-graf-cab .ai-herr-ic{width:30px;height:30px}
+.ai-graf-tt{flex:1;min-width:0;display:grid;gap:1px}
+.ai-graf-tt b{font-size:13.5px;font-weight:700;color:var(--text-primary)}
+.ai-graf-tt span{font-size:12px;color:var(--text-secondary)}
+.ai-graf-ley{display:flex;gap:4px 16px;flex-wrap:wrap;padding:8px 12px 0;font-size:12px;color:var(--text-secondary)}
+.ai-graf-ley span{display:inline-flex;align-items:center;gap:6px}
+.ai-graf-ley i{width:10px;height:10px;border-radius:3px;flex:none}
+.ai-graf-ley b{color:var(--text-primary);font-weight:600;font-variant-numeric:tabular-nums}
+.ai-graf-lienzo{position:relative;padding:4px 6px 0}
+.ai-graf-lienzo svg{display:block;max-width:none}
+.ai-graf-lienzo .g-dia{cursor:pointer;outline:none}
+.ai-graf-lienzo .g-dia:focus-visible .g-hit{stroke:var(--accent);stroke-width:2px}
+.ai-graf-lienzo[data-foco] .g-dia:not([data-on]) .g-barra{opacity:.42}
+.ai-gtip{position:absolute;z-index:5;min-width:170px;padding:8px 10px;border-radius:10px;background:var(--bg-elevated);border:1px solid var(--border-color);box-shadow:var(--float-shadow);font-size:12px;color:var(--text-secondary);pointer-events:none;display:grid;gap:4px}
+.ai-gtip[hidden]{display:none}
+.ai-gtip strong{color:var(--text-primary);font-size:12.5px}
+.ai-gtip div{display:flex;align-items:center;gap:7px}
+.ai-gtip div b{margin-left:auto;color:var(--text-primary);font-variant-numeric:tabular-nums}
+.ai-gtip i{width:12px;height:2px;border-radius:2px;flex:none}
+.ai-graf-pie{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px 12px}
+.ai-graf-tabla{padding:0 12px 10px}
+.ai-graf-tabla[hidden]{display:none}
+.ai-graf-tabla td,.ai-graf-tabla th{font-variant-numeric:tabular-nums}
+
+/* ---------- Documento del modo Arquitecto ---------- */
+.ai-doc{border:1px solid var(--border-color);border-radius:16px;background:var(--bg-surface);overflow:hidden}
+.ai-doc-cab{display:flex;gap:10px;align-items:flex-start;padding:12px 12px 8px}
+.ai-doc-cab .ai-acc-ic{background:var(--tv-warn-soft);color:var(--tv-warn)}
+.ai-doc-cuerpo{position:relative;padding:2px 14px 14px;display:grid;gap:12px;font-size:13.5px;line-height:1.6;color:var(--text-primary);max-height:340px;overflow:hidden}
+.ai-doc[data-abierto] .ai-doc-cuerpo{max-height:none}
+.ai-doc:not([data-abierto]) .ai-doc-cuerpo::after{content:"";position:absolute;left:0;right:0;bottom:0;height:72px;background:linear-gradient(to bottom,transparent,var(--bg-surface));pointer-events:none}
+.ai-doc-cuerpo h4{margin:6px 0 0;font-size:12px!important;line-height:1.4;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary)}
+.ai-doc-cuerpo p{margin:0}
+.ai-doc-cuerpo ul,.ai-doc-cuerpo ol{margin:0;padding-left:20px;display:grid;gap:4px}
+.ai-doc-cuerpo ul{list-style:disc}.ai-doc-cuerpo ol{list-style:decimal}
+.ai-doc-cuerpo code{font:500 12.5px var(--font-mono,monospace);background:var(--bg-sunken);border-radius:6px;padding:1px 5px}
+.ai-doc-chk{list-style:none!important;padding-left:0!important}
+.ai-doc-chk li{display:flex;gap:8px;align-items:flex-start}
+.ai-doc-chk .lucide{color:var(--ok);flex:none;margin-top:3px}
+.ai-doc-pie{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--border-soft)}
+
+/* ---------- Pie de cada respuesta: velocidad usada ---------- */
+.ai-modo-tag{display:inline-flex;align-items:center;gap:5px}
+.ai-modo-tag .lucide{color:var(--accent)}
+.ai-persona-menu{top:58px;left:12px}
+.ai-escucha .ai-giro{color:var(--accent)}
+.ai-acc-error{margin:0;padding:8px 12px;background:var(--tv-danger-soft);color:var(--tv-danger);font-size:12.5px;font-weight:600;line-height:1.45}
+.ai-acc-hecho .ai-acc-error{flex-basis:100%;border-radius:10px}
+#admin-panel-root .ai-mas-op:disabled{opacity:.5;cursor:default}
+/* ---------- Teléfono (al final para ganarle a las reglas de arriba) ---------- */
+@container (max-width:460px){
+  /* El chip de riesgo baja bajo el título para que este no quede en columna. */
+  .ai-acc-cab{display:grid;grid-template-columns:34px minmax(0,1fr);column-gap:10px;row-gap:6px}
+  .ai-acc-cab .ai-acc-chip{grid-column:2;justify-self:start}
+  .ai-acc-dl>div{grid-template-columns:minmax(0,1fr);gap:4px}
+  .ai-acc-meta{flex-basis:100%}
+  .ai-acc-pie{justify-content:flex-end}
+  .ai-acc-hecho>span{flex-basis:100%}
+}
+/* Teléfono angosto: la velocidad queda como ícono; el nombre está en el
+   menú y en el pie de cada respuesta. */
+@container (max-width:340px){
+  .ai-vel .ai-vel-tx{display:none}
+  #admin-panel-root .ai-vel{padding:0 8px}
+  .ai-persona .ai-chev{display:none}
+  #admin-panel-root .ai-ch{gap:6px}
+  #admin-panel-root .ai-ch .ai-persona{padding-right:10px}
+}
+@media (prefers-reduced-motion:reduce){
+  .ai-onda i,.ai-rec,.ai-giro,#admin-panel-root .ai-caja .ai-ib[data-grabando]{animation:none}
+}

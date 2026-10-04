@@ -6,7 +6,7 @@ import { initKeyboard } from './mobile/keyboard';
 import { initOtaUpdater } from './mobile/otaUpdater';
 import { OverlayProvider, useToast } from './components/ui/Overlays';
 import { conexionBloqueada, detalleDeBloqueo, conTope } from './utils/adminLogin';
-import { registrarVisita } from './utils/huella';
+import { registrarVisita, leerDatosDelAparato } from './utils/huella';
 import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada } from './utils/biometria';
 import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO, UMBRAL_REINGRESO_RAPIDO_MS } from './mobile/appLock';
 import { marcarBloqueo, esAplicacionNativa } from './utils/biometriaNativa';
@@ -443,7 +443,18 @@ function AppInner() {
     // dispositivo. Su lectura es asíncrona —nativa en la APK— y se entrega
     // en cuanto está, para que ese modo de bloqueo funcione.
     void obtenerHuellaAparato()
-      .then(h => { fijarHuellaAparato(h.huella); fijarModeloAparato(h.modelo || null); })
+      .then(async h => {
+        fijarHuellaAparato(h.huella);
+        // En la web, el «modelo» de la huella es el primer tramo del UA
+        // («Linux», «Windows NT 10.0»…), que no coincide con lo que la
+        // Supervisión anota del visitante. Se usa el mismo lector que ella,
+        // para que un bloqueo por modelo hecho desde ahí sí lo alcance.
+        let modelo = h.modelo || null;
+        if (!(window as any)?.Capacitor?.isNativePlatform?.()) {
+          try { modelo = (await leerDatosDelAparato()).dispositivo || modelo; } catch { /* queda el de la huella */ }
+        }
+        fijarModeloAparato(modelo);
+      })
       .catch(() => { /* sin huella: siguen valiendo el bloqueo por cuenta e IP */ });
   }, []);
 

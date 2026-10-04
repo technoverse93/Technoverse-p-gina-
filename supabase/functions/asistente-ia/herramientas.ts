@@ -30,8 +30,19 @@ export type Consulta = {
   filas: string;        // «4 productos», «23 facturas»
   detalle: string;      // lo que leyó la IA, resumido (se ve al abrir la tarjeta)
   sinPermiso?: boolean;
+  /** Marcas de Jarvis dentro de la respuesta: tarjeta de acción o botón para abrir un módulo. */
+  tipo?: 'accion' | 'navegar';
+  id?: string;
+  destino?: string;
   /** Carril de pantalla: detalle completo que NO se manda a la IA. */
   panel?: Panel;
+  /** Gráfico de barras comparado (este período contra el anterior). */
+  grafico?: Grafico;
+};
+export type Grafico = {
+  titulo: string; subtitulo: string;
+  etiquetas: string[]; fechas: string[]; fechasAnt: string[];
+  series: { nombre: string; valores: number[] }[];
 };
 export type Panel = {
   columnas: string[];
@@ -345,6 +356,85 @@ export const HERRAMIENTAS: Herramienta[] = [
             `correos de factura · ${correos.length}`, `pagos fallidos · ${pagos.length}`, `publicaciones con error · ${publicaciones.length}`,
             `rechazos de Hacienda · ${hacienda.length}`, `errores en bitácora · ${bitacora.length}`, `ingresos fallidos · ${ingresos.length}`,
           ].join('\n'),
+        },
+      };
+    },
+  },
+  {
+    nombre: 'comparar_ventas',
+    modulo: 'facturacion',
+    descripcion: 'Compara lo facturado día por día en un período (hasta 31 días) contra el período anterior del mismo largo, y muestra un gráfico. Usala para «¿cómo vamos esta semana?», «este mes contra el anterior», tendencias de ventas.',
+    parametros: {
+      type: 'object',
+      properties: {
+        desde: { type: 'string', description: 'Fecha inicial AAAA-MM-DD (por defecto, el lunes de esta semana).' },
+        hasta: { type: 'string', description: 'Fecha final AAAA-MM-DD (por defecto, hoy).' },
+      },
+    },
+    async ejecutar(a, { db, hoy }) {
+      const lunes = (() => { const f = new Date(`${hoy}T12:00:00Z`); const d = (f.getUTCDay() + 6) % 7; return restarDias(hoy, d); })();
+      let hasta = fecha(a.hasta, hoy), desde = fecha(a.desde, lunes);
+      if (desde > hasta) [desde, hasta] = [hasta, desde];
+      let n = Math.round((new Date(`${hasta}T12:00:00Z`).getTime() - new Date(`${desde}T12:00:00Z`).getTime()) / 86_400_000) + 1;
+      if (n > 31) { desde = restarDias(hasta, 30); n = 31; }
+      const antHasta = restarDias(desde, 1), antDesde = restarDias(desde, n);
+      const filas = await todos(db, 'invoices', 'total,created_at', q => q.gte('created_at', inicioDia(antDesde)).lt('created_at', inicioDia(diaSiguiente(hasta))));
+      const dia = (v: unknown) => new Intl.DateTimeFormat('en-CA', { timeZone: 'America/Costa_Rica' }).format(new Date(String(v)));
+      const suma = new Map<string, { total: number; n: number }>();
+      for (const f of filas) { const d = dia(f.created_at); const e = suma.get(d) || { total: 0, n: 0 }; e.total += Number(f.total || 0); e.n++; suma.set(d, e); }
+      const dias = Array.from({ length: n }, (_, i) => restarDias(hasta, n - 1 - i));
+      const diasAnt = Array.from({ length: n }, (_, i) => restarDias(antHasta, n - 1 - i));
+      const val = (d: string) => Math.round(suma.get(d)?.total || 0);
+      const cnt = (ds: string[]) => ds.reduce((t, d) => t + (suma.get(d)?.n || 0), 0);
+      const actual = dias.map(val), anterior = diasAnt.map(val);
+      const tA = actual.reduce((t, v) => t + v, 0), tB = anterior.reduce((t, v) => t + v, 0);
+      const corto = (d: string) => new Date(`${d}T12:00:00Z`).toLocaleDateString('es-CR', { timeZone: 'UTC', weekday: 'short', day: 'numeric', month: 'short' });
+      const etiq = (d: string) => n <= 7 ? 'DLKMJVS'[new Date(`${d}T12:00:00Z`).getUTCDay()] : String(Number(d.slice(8)));
+      const imax = actual.indexOf(Math.max(...actual));
+      const datos = {
+        desde, hasta, anterior_desde: antDesde, anterior_hasta: antHasta,
+        total: tA, total_anterior: tB, comprobantes: cnt(dias), comprobantes_anterior: cnt(diasAnt),
+        variacion_pct: tB ? Math.round((tA / tB - 1) * 1000) / 10 : null,
+        mejor_dia: tA ? { dia: dias[imax], total: actual[imax] } : null,
+        por_dia: dias.map((d, i) => ({ dia: d, total: actual[i], dia_anterior: diasAnt[i], total_anterior: anterior[i] })),
+      };
+      return {
+        datos,
+        consulta: {
+          modulo: 'Facturación', desc: `${desde} a ${hasta} contra el período anterior`, filas: `${datos.comprobantes} comprobantes`,
+          detalle: `este período ${colones(tA)} · anterior ${colones(tB)}${datos.variacion_pct === null ? '' : ` · ${datos.variacion_pct > 0 ? '+' : ''}${datos.variacion_pct} %`}`,
+          grafico: {
+            titulo: 'Facturado por día', subtitulo: `${corto(desde)} a ${corto(hasta)} contra ${corto(antDesde)} a ${corto(antHasta)} · colones`,
+            etiquetas: dias.map(etiq), fechas: dias.map(corto), fechasAnt: diasAnt.map(corto),
+            series: [{ nombre: 'Este período', valores: actual }, { nombre: 'Período anterior', valores: anterior }],
+          },
+        },
+      };
+    },
+  },
+  {
+    nombre: 'sesiones_abiertas',
+    modulo: 'seguridad',
+    soloSuper: true,
+    descripcion: 'Sesiones abiertas de una persona (en qué equipos tiene el panel abierto y desde cuándo). Usala antes de cerrar sesiones o para «¿dónde está conectado X?». El detalle con equipos e IPs le aparece al superadmin en pantalla.',
+    parametros: {
+      type: 'object',
+      properties: { buscar: { type: 'string', description: 'Correo o nombre de la persona.' } },
+      required: ['buscar'],
+    },
+    async ejecutar(a, { db }) {
+      const buscar = patron(a.buscar);
+      const { data, error } = await db.rpc('sesiones_de', { p_buscar: buscar });
+      if (error) throw new Error(error.message);
+      const filas = (data || []) as Record<string, any>[];
+      const personas = new Set(filas.map(f => f.persona));
+      const equipo = (ua: string) => { const u = String(ua || ''); const m = u.match(/Android [\d.]+; ([^;)]+)/); if (m && m[1] !== 'K') return m[1] + (/ wv\)/.test(u) ? ' · APK' : ''); if (/iPhone/.test(u)) return 'iPhone'; if (/Windows/.test(u)) return 'Windows'; if (/Mac OS X/.test(u)) return 'Mac'; if (/Android/.test(u)) return 'Android'; return 'Navegador'; };
+      return {
+        datos: { personas: personas.size, sesiones: filas.length, ultima_actividad_hora_cr: fechaCorta(filas[0]?.actividad || null), nota: 'Correos, equipos e IPs se le muestran al superadmin en pantalla, no aquí.' },
+        consulta: {
+          modulo: 'Ciberseguridad', desc: `sesiones abiertas · «${buscar}»`, filas: `${filas.length} sesión${filas.length === 1 ? '' : 'es'}`,
+          detalle: `personas ${personas.size} · sesiones ${filas.length}`,
+          panel: { columnas: ['Persona', 'Rol', 'Equipo', 'Abierta', 'Última actividad', 'IP'], filas: filas.slice(0, MAX_PANEL).map(f => [f.correo, f.rol, equipo(f.agente), fechaCorta(f.creada), fechaCorta(f.actividad), f.ip || '—']) },
         },
       };
     },

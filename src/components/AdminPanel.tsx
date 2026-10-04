@@ -1158,7 +1158,7 @@ export default function AdminPanel({
 
         {tab === 'asistente' && (
           <Suspense fallback={<TabLoadingFallback />}>
-            <AsistenteIA currentUser={currentUser} />
+            <AsistenteIA currentUser={currentUser} onAbrirModulo={irAModulo} />
           </Suspense>
         )}
 
