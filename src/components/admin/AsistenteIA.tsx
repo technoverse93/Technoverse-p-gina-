@@ -15,7 +15,7 @@ import {
   Sparkles, Plus, Lock, Globe, ArrowUp, Copy, Settings, Menu, BarChart3, Trash2, X, Clock, Info, ShieldCheck, ArrowLeft,
   Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight, ShieldAlert, Wallet, MapPin,
   Paperclip, Square, RotateCcw, Pencil, Link2, Code2, FileText,
-  Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot,
+  Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot, ThumbsUp, ThumbsDown,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
@@ -24,7 +24,7 @@ import { cabeceraClientInfo } from '../../utils/dispositivo';
 import { useToast, useConfirm } from '../ui/Overlays';
 import { esSuperadmin } from '../../utils/roles';
 import type { User } from '../../types';
-import { TarjetaAccion, TarjetaIr, GraficoComparado, tarjetasVivas } from './JarvisPiezas';
+import { TarjetaAccion, TarjetaIr, GraficoComparado, ChipMemoria, tarjetasVivas } from './JarvisPiezas';
 import type { Grafico } from './JarvisPiezas';
 import { grabarNotaDeVoz, puedeGrabarVoz } from '../../utils/grabadorVoz';
 import type { GrabacionEnCurso } from '../../utils/grabadorVoz';
@@ -39,7 +39,7 @@ interface Panel { columnas: string[]; filas: (string | number | null)[][]; punto
 interface Consulta {
   modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean; panel?: Panel;
   /** Jarvis: «accion» es una propuesta (tarjeta con confirmar); «navegar», un botón para abrir un módulo. */
-  tipo?: 'accion' | 'navegar'; id?: string; destino?: string; grafico?: Grafico;
+  tipo?: 'accion' | 'navegar' | 'memoria'; id?: string; destino?: string; grafico?: Grafico;
 }
 type Perfil = 'rapido' | 'equilibrado' | 'profundo';
 type Persona = 'jarvis' | 'arquitecto';
@@ -55,6 +55,10 @@ interface Mensaje {
   vistas?: { nombre: string; tipo: string; url?: string }[];
   /** Jarvis: velocidad, modo y cuánto tardó la respuesta. */
   perfil?: Perfil | null; persona?: string | null; ms?: number | null;
+  /** 👍 = 1, 👎 = -1. */
+  valoracion?: number | null;
+  /** Jarvis subió la velocidad porque la pregunta pedía análisis. */
+  escalado?: boolean;
   /** Segundos de la nota de voz, si el mensaje se dictó (solo en vivo). */
   porVoz?: number;
 }
@@ -70,7 +74,8 @@ interface Cupo {
   perfiles?: Record<Perfil, boolean>; acciones?: boolean;
 }
 type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas' | 'internet' | 'enlaces' | 'archivos' | 'codigo' | 'acciones', boolean>;
-interface Ajustes { limite_diario: number; busqueda: boolean; respaldo: boolean; acceso: 'personal' | 'gestion' | 'super'; modulos?: Modulos }
+type Tono = 'formal' | 'tico_moderado' | 'tico_suelto';
+interface Ajustes { limite_diario: number; busqueda: boolean; respaldo: boolean; acceso: 'personal' | 'gestion' | 'super'; modulos?: Modulos; tono?: Tono }
 
 const MODULOS: { id: keyof Modulos; nombre: string; desc: string; icono: LucideIcon; soloSuper?: boolean }[] = [
   { id: 'inventario', nombre: 'Inventario', desc: 'Existencias, precios, por agotarse', icono: Package },
@@ -105,6 +110,27 @@ const leerPref = <T extends string>(k: string, def: T, validos: readonly string[
   try { const v = localStorage.getItem(k); return v && validos.includes(v) ? v as T : def; } catch { return def; }
 };
 const guardarPref = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } };
+/**
+ * Carril privado de Jarvis: cédulas, correos y teléfonos que escriba el
+ * superadmin se sacan del texto ANTES de mandarlo. La IA (Google) solo ve
+ * marcas como [CÉDULA·1]; los datos van aparte y solo los usan las tarjetas.
+ */
+function separarPrivados(t: string, previos: Record<string, string>): { texto: string; privados: Record<string, string> } {
+  const privados = { ...previos };
+  const cuenta: Record<string, number> = {};
+  for (const k of Object.keys(previos)) { const [p, n] = k.split('·'); cuenta[p] = Math.max(cuenta[p] || 0, Number(n) || 0); }
+  const marcar = (pref: string, valor: string) => {
+    const ya = Object.entries(privados).find(([k, v]) => k.startsWith(pref) && v === valor);
+    if (ya) return `[${ya[0]}]`;
+    cuenta[pref] = (cuenta[pref] || 0) + 1;
+    const k = `${pref}·${cuenta[pref]}`; privados[k] = valor; return `[${k}]`;
+  };
+  const texto = t
+    .replace(/[^\s@\[\]]+@[^\s@]+\.[a-z]{2,}/gi, m => marcar('CORREO', m))
+    .replace(/\b\d-?\d{4}-?\d{4}\b|\b\d{9,12}\b/g, m => marcar('CÉDULA', m.replace(/\D/g, '')))
+    .replace(/(?:\+?506[\s-]?)?\b[2-8]\d{3}[\s-]?\d{4}\b/g, m => marcar('TEL', m.replace(/\D/g, '').slice(-8)));
+  return { texto, privados };
+}
 const aBase64 = (b: Blob) => new Promise<string>((ok, mal) => {
   const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = () => mal(r.error); r.readAsDataURL(b);
 });
@@ -155,7 +181,7 @@ function nombreModelo(m?: string | null): string {
 const COLUMNAS_BASE = 'id,rol,texto,fuentes,consultas,tokens_in,tokens_out,proveedor,modelo,busco';
 // perfil/persona/ms llegaron con Jarvis; si la base todavía no los tiene,
 // se cae a las columnas de siempre en vez de no mostrar nada.
-let COLUMNAS_MSG = `${COLUMNAS_BASE},perfil,persona,ms`;
+let COLUMNAS_MSG = `${COLUMNAS_BASE},perfil,persona,ms,valoracion`;
 const CLAVE_CACHE = 'tv_ia_cache';
 const MAX_EN_CACHE = 12;
 const cache = new Map<string, Mensaje[]>();
@@ -376,7 +402,8 @@ function TarjetaConsulta({ c }: { c: Consulta }) {
 /** Un mensaje del historial. Memoizado: escribir en la caja (que cambia el
  *  estado del módulo en cada letra) ya no vuelve a formatear todo el
  *  historial, que en un teléfono de gama de entrada se notaba. */
-const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar }: { m: Mensaje; onCopiar: (t: string) => void; onRegenerar?: () => void; onEditar?: () => void }) {
+const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar, onValorar }: { m: Mensaje; onCopiar: (t: string) => void; onRegenerar?: () => void; onEditar?: () => void; onValorar?: (id: string, v: number | null, nota?: string) => void }) {
+  const [nota, setNota] = useState<string | null>(null);
   if (m.rol === 'user') {
     const adj = m.vistas || (m.fuentes || []).filter(f => f.url?.startsWith('adjunto:')).map(f => ({ nombre: f.titulo, tipo: f.url.slice(8) }));
     return (
@@ -401,6 +428,8 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
   // Lecturas arriba (como siempre); lo de Jarvis —gráficos, abrir un
   // módulo y acciones por confirmar— después del texto, que lo explica.
   const lecturas = (m.consultas || []).filter(c => !c.tipo);
+  const memorias = (m.consultas || []).filter(c => c.tipo === 'memoria');
+  const valorable = !!onValorar && !!m.persona && /^[0-9a-f-]{36}$/i.test(m.id);
   const graficos = lecturas.filter(c => c.grafico);
   const irs = (m.consultas || []).filter(c => c.tipo === 'navegar' && c.destino);
   const acciones = (m.consultas || []).filter(c => c.tipo === 'accion' && c.id);
@@ -415,6 +444,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
       {graficos.map((c, i) => <React.Fragment key={`g${i}`}><GraficoComparado g={c.grafico!} /></React.Fragment>)}
       {irs.map((c, i) => <React.Fragment key={`n${i}`}><IrModulo titulo={c.desc} destino={c.destino!} /></React.Fragment>)}
       {acciones.map(c => <React.Fragment key={c.id}><TarjetaAccion id={c.id!} /></React.Fragment>)}
+      {memorias.map((c, i) => <React.Fragment key={`m${i}`}><ChipMemoria id={c.id} texto={c.desc} estado={c.filas} detalle={c.detalle} /></React.Fragment>)}
       {esRequerimiento && !enVivo && (
         <div className="ai-graf-pie" style={{ padding: 0 }}>
           <button type="button" className="ai-chip" onClick={() => onCopiar(m.texto)}><Copy className="w-4 h-4" />Copiar como prompt</button>
@@ -430,13 +460,24 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
       {!enVivo && <div className="ai-pie">
         <button type="button" aria-label="Copiar respuesta" onClick={() => onCopiar(m.texto)}><Copy className="w-4 h-4" /></button>
         {onRegenerar && <button type="button" aria-label="Regenerar respuesta" onClick={onRegenerar}><RotateCcw className="w-4 h-4" /></button>}
+        {valorable && <>
+          <button type="button" aria-label="Me gustó" aria-pressed={m.valoracion === 1} data-on={m.valoracion === 1 || undefined} onClick={() => { setNota(null); onValorar!(m.id, m.valoracion === 1 ? null : 1); }}><ThumbsUp className="w-4 h-4" /></button>
+          <button type="button" aria-label="No me gustó" aria-pressed={m.valoracion === -1} data-on={m.valoracion === -1 || undefined} onClick={() => { if (m.valoracion === -1) { onValorar!(m.id, null); setNota(null); } else { onValorar!(m.id, -1); setNota(''); } }}><ThumbsDown className="w-4 h-4" /></button>
+        </>}
         <span className="ai-tok">↑ <i>{k(m.tokens_in || 0)}</i> · ↓ <i>{k(m.tokens_out || 0)}</i> tokens</span>
         {perfil ? (
-          <span className="ai-modo-tag"><perfil.icono className="w-3.5 h-3.5" />{m.persona === 'arquitecto' ? 'Arquitecto · ' : ''}{perfil.nombre} · {nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.ms ? ` · ${segundos(m.ms)}` : ''}{m.busco ? ' · buscó en internet' : ''}{lecturas.length ? ` · consultó ${lecturas.length} ${lecturas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
+          <span className="ai-modo-tag"><perfil.icono className="w-3.5 h-3.5" />{m.persona === 'arquitecto' ? 'Arquitecto · ' : ''}{perfil.nombre}{m.escalado ? ' (subió solo)' : ''} · {nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.ms ? ` · ${segundos(m.ms)}` : ''}{m.busco ? ' · buscó en internet' : ''}{lecturas.length ? ` · consultó ${lecturas.length} ${lecturas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
         ) : (
           <span>{nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.busco ? ' · buscó en internet' : ''}{m.consultas?.length ? ` · consultó ${m.consultas.length} ${m.consultas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
         )}
       </div>}
+      {nota !== null && (
+        <form className="ai-nota-val" onSubmit={e => { e.preventDefault(); onValorar!(m.id, -1, nota.trim() || undefined); setNota(null); }}>
+          <input className="glass-input rounded-lg px-3 py-2 text-[13px]" value={nota} onChange={e => setNota(e.target.value)} maxLength={200} placeholder="¿Qué no te gustó? Jarvis lo evita en adelante" aria-label="Qué no te gustó" autoFocus />
+          <button type="submit" className="ai-chip">Enviar</button>
+          <button type="button" className="ai-chip" onClick={() => setNota(null)}>Omitir</button>
+        </form>
+      )}
     </div>
   );
 });
@@ -485,12 +526,12 @@ async function enviarEnVivo(cuerpo: Record<string, unknown>, onEvento: (evento: 
   }
   return final;
 }
-const ListaMensajes = React.memo(function ListaMensajes({ mensajes, onCopiar, onRegenerar, onEditar }: { mensajes: Mensaje[]; onCopiar: (t: string) => void; onRegenerar?: () => void; onEditar?: () => void }) {
+const ListaMensajes = React.memo(function ListaMensajes({ mensajes, onCopiar, onRegenerar, onEditar, onValorar }: { mensajes: Mensaje[]; onCopiar: (t: string) => void; onRegenerar?: () => void; onEditar?: () => void; onValorar?: (id: string, v: number | null, nota?: string) => void }) {
   // Regenerar y editar solo aplican al último intercambio (como en Claude).
   const ultIA = mensajes.length - 1, ultYo = mensajes[ultIA]?.rol === 'assistant' ? ultIA - 1 : -1;
   return <>{mensajes.map((m, i) => (
     <React.Fragment key={m.id}>
-      <Burbuja m={m} onCopiar={onCopiar} onRegenerar={i === ultIA && m.rol === 'assistant' ? onRegenerar : undefined} onEditar={i === ultYo ? onEditar : undefined} />
+      <Burbuja m={m} onCopiar={onCopiar} onValorar={onValorar} onRegenerar={i === ultIA && m.rol === 'assistant' ? onRegenerar : undefined} onEditar={i === ultYo ? onEditar : undefined} />
     </React.Fragment>
   ))}</>;
 });
@@ -610,6 +651,15 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
   // nueva informa las velocidades en el cupo); antes, todo queda como siempre.
   const jarvis = soySuper && !!cupo?.perfiles;
   const conVoz = jarvis && puedeGrabarVoz();
+  const privadosRef = useRef<Record<string, string>>({});
+  useEffect(() => { privadosRef.current = {}; }, [activa]);
+  const valorar = useCallback((id: string, v: number | null, nota?: string) => {
+    setMensajes(prev => prev.map(m => (m.id === id ? { ...m, valoracion: v } : m)));
+    void supabase.functions.invoke('asistente-ia', { body: { accion: 'valorar', id, valor: v, nota } }).then(({ data }) => {
+      if (!data?.ok) toast.error('No se pudo guardar la valoración.');
+      else if (v === -1 && nota) toast.success('Anotado: Jarvis lo va a evitar.');
+    });
+  }, [toast]);
   // La conversación que acaba de crear el primer envío ya está en pantalla;
   // no se vuelve a leer de la base (parpadearía).
   const recienCreada = useRef<string | null>(null);
@@ -672,7 +722,11 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
   const nueva = () => { setActiva(null); setMensajes([]); setAviso(null); setCajon(null); setVista('chat'); setTimeout(() => cajaRef.current?.focus(), 50); };
 
   const enviar = async (contenido?: string, opciones: { regenerar?: boolean; porVoz?: number } = {}) => {
-    const t = (contenido ?? texto).trim();
+    const crudo = (contenido ?? texto).trim();
+    // Jarvis: los datos personales se quedan en este aparato (ver separarPrivados).
+    const sep = jarvis ? separarPrivados(crudo, privadosRef.current) : { texto: crudo, privados: {} };
+    if (jarvis) privadosRef.current = sep.privados;
+    const t = sep.texto;
     if (!t || enviando || agotado) return;
     // Editar el último mensaje = regenerar con el texto nuevo.
     const regenerar = opciones.regenerar || editando;
@@ -711,7 +765,7 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
         {
           accion: 'enviar', texto: t, conversacionId: activa, buscar: buscar && busquedaPermitida, regenerar, adjuntos: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
           // Jarvis: el aparato propio va para que nunca proponga bloquearse a sí mismo.
-          ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
+          ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, privados: sep.privados, yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
         },
         (evento, d) => {
           if (evento === 'texto') { borrador.texto += d.delta || ''; borrador.estado = undefined; }
@@ -724,7 +778,7 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
             tarjetasVivas.set(d.id, { id: d.id, estado: d.estado, vence_en: d.venceEn, tarjeta: d.tarjeta });
             borrador.consultas = [...(borrador.consultas || []), { tipo: 'accion', id: d.id, modulo: d.tarjeta?.modulo || 'Jarvis', desc: d.tarjeta?.titulo || 'Acción', filas: 'propuesta', detalle: '' }];
           }
-          else if (evento === 'navegar') borrador.consultas = [...(borrador.consultas || []), d];
+          else if (evento === 'navegar' || evento === 'memoria') borrador.consultas = [...(borrador.consultas || []), d];
           else return;
           pedirPintar();
         },
@@ -734,7 +788,7 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
       if (!res?.ok) {
         if (res?.cupo) setCupo(res.cupo);
         setMensajes(prev => prev.filter(m => !m.pendiente && m.id !== BORRADOR));
-        setTexto(t);
+        setTexto(crudo);
         setAviso({ tipo: 'error', texto: res?.error || 'No se pudo enviar. Revisa la conexión e intenta de nuevo.' });
         return;
       }
@@ -954,7 +1008,7 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
                     ))}
                   </div>
                 </div>
-              ) : <ListaMensajes mensajes={mensajes} onCopiar={copiar} onRegenerar={enviando ? undefined : regenerarUltima} onEditar={enviando ? undefined : editarUltima} />}
+              ) : <ListaMensajes mensajes={mensajes} onCopiar={copiar} onValorar={jarvis ? valorar : undefined} onRegenerar={enviando ? undefined : regenerarUltima} onEditar={enviando ? undefined : editarUltima} />}
               <div ref={finRef} />
             </div>
 
@@ -1133,7 +1187,8 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
   const [consultasHoy, setConsultasHoy] = useState<{ modulo: string; consultas: number }[]>([]);
 
   useEffect(() => {
-    void supabase.from('ia_ajustes').select('limite_diario,busqueda,respaldo,acceso,modulos').eq('id', 1).maybeSingle()
+    // '*': así no falla si la columna `tono` todavía no existe.
+    void supabase.from('ia_ajustes').select('*').eq('id', 1).maybeSingle()
       .then(({ data }) => { if (data) { setAj(data as Ajustes); setLimite(String((data as Ajustes).limite_diario)); } });
     void supabase.rpc('ia_uso_de_hoy').then(({ data }) => setUso((data as any[]) || []));
     void supabase.rpc('ia_consultas_de_hoy').then(({ data }) => setConsultasHoy((data as any[]) || []));
@@ -1176,7 +1231,16 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
           <button type="button" role="switch" aria-checked={modulos.acciones} className="ai-sw" data-on={modulos.acciones || undefined}
             onClick={() => void guardar({ modulos: { ...modulos, acciones: !modulos.acciones } })} aria-label="Acciones de Jarvis" />
         </div>
+        <div className="ai-campo">
+          <span>Tono de Jarvis</span>
+          <span className="ai-seg">
+            {([['formal', 'Formal'], ['tico_moderado', 'Tico moderado'], ['tico_suelto', 'Tico suelto']] as const).map(([v, l]) => (
+              <button key={v} type="button" data-on={(aj.tono || 'tico_moderado') === v || undefined} onClick={() => void guardar({ tono: v })}>{l}</button>
+            ))}
+          </span>
+        </div>
       </div>}
+      {cupo?.perfiles && <MemoriaJarvis />}
       <div className="ai-aj">
         <h4>Datos del sistema <small>solo lectura · sin datos de clientes</small></h4>
         {MODULOS.map(m => (
@@ -1235,6 +1299,57 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
         ))}
       </div>
       <p className="ai-prov">Las claves de Google y Groq viven como secretos en el servidor; nadie del personal las ve.</p>
+    </div>
+  );
+}
+
+/** Lo que Jarvis recuerda del dueño: se ve, se agrega y se borra aquí. */
+function MemoriaJarvis() {
+  const toast = useToast();
+  const [items, setItems] = useState<{ id: string; texto: string; tipo: string }[] | null>(null);
+  const [nuevo, setNuevo] = useState('');
+  const [sinTabla, setSinTabla] = useState(false);
+  const cargar = useCallback(async () => {
+    const { data, error } = await supabase.from('jarvis_memoria').select('id,texto,tipo').order('creada_en', { ascending: false }).limit(100);
+    if (error) { setSinTabla(true); setItems([]); return; }
+    setItems((data as any[]) || []);
+  }, []);
+  useEffect(() => { void cargar(); }, [cargar]);
+  const agregar = async () => {
+    const t = nuevo.trim();
+    if (t.length < 3) return;
+    if (/\b\d{8,12}\b|\d{4}[-\s]\d{4}|@/.test(t)) { toast.error('Eso parece un dato personal: la memoria no guarda cédulas, teléfonos ni correos.'); return; }
+    const { data: { user } } = await supabase.auth.getUser();
+    const { error } = await supabase.from('jarvis_memoria').insert({ user_id: user?.id, texto: t.slice(0, 300), tipo: 'preferencia', origen: 'manual' });
+    if (error) { toast.error('No se pudo guardar: ' + error.message); return; }
+    setNuevo(''); void cargar();
+  };
+  const borrar = async (id: string) => {
+    const { error } = await supabase.from('jarvis_memoria').delete().eq('id', id);
+    if (error) { toast.error('No se pudo borrar.'); return; }
+    setItems(prev => (prev || []).filter(i => i.id !== id));
+  };
+  const TIPO: Record<string, string> = { preferencia: 'Preferencia', negocio: 'Negocio', forma_de_hablar: 'Forma de hablar' };
+  return (
+    <div className="ai-aj">
+      <h4>Memoria de Jarvis <small>sin datos de clientes · viaja a Google</small></h4>
+      {sinTabla ? <p className="ai-prov" style={{ margin: 14 }}>Se activa cuando se aplique la migración de memoria.</p> : (
+        <>
+          {items === null && <p className="ai-prov" style={{ margin: 14 }}>Cargando…</p>}
+          {items?.length === 0 && <p className="ai-prov" style={{ margin: 14 }}>Todavía no recuerda nada. Decile «recordá que…» o agregalo aquí.</p>}
+          {items?.map(i => (
+            <div key={i.id} className="ai-modu">
+              <span className="ai-modu-ic"><Brain className="w-4 h-4" /></span>
+              <span className="ai-modu-t"><b>{i.texto}</b><span>{TIPO[i.tipo] || i.tipo}</span></span>
+              <button type="button" className="ai-borrar" aria-label="Olvidar" title="Olvidar" onClick={() => void borrar(i.id)}><Trash2 className="w-4 h-4" /></button>
+            </div>
+          ))}
+          <form className="ai-campo" onSubmit={e => { e.preventDefault(); void agregar(); }}>
+            <input className="glass-input rounded-lg px-3 py-2 text-[13px]" style={{ flex: 1, minWidth: 0 }} value={nuevo} onChange={e => setNuevo(e.target.value)} maxLength={300} placeholder="Ej.: los resúmenes en tres líneas" aria-label="Algo para que Jarvis recuerde" />
+            <button type="submit" className="ai-chip" disabled={nuevo.trim().length < 3}>Agregar</button>
+          </form>
+        </>
+      )}
     </div>
   );
 }

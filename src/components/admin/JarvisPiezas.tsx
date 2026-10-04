@@ -8,16 +8,17 @@
 // =====================================================================
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, Unlock, LogOut, Timer, KeyRound, Undo2, CircleCheck, CircleX, Clock, ArrowUpRight, BarChart3, Table2, Lock } from 'lucide-react';
+import { Ban, Unlock, LogOut, Timer, KeyRound, Undo2, CircleCheck, CircleX, Clock, ArrowUpRight, BarChart3, Table2, Lock, Receipt, Brain, FileText } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { avisarCambioDeBloqueos, avisarCierreDeSesion } from '../../seguridad/killSwitch';
 
 export type OpcionTarjeta =
   | { id: string; tipo: 'elegir'; etiqueta: string; valores: { valor: string; texto: string; ayuda?: string }[]; defecto: string }
   | { id: 'minutos'; tipo: 'duracion'; etiqueta: string; defecto: number | null }
-  | { id: 'motivo'; tipo: 'texto'; etiqueta: string; defecto: string };
+  | { id: string; tipo: 'texto'; etiqueta: string; defecto: string; teclado?: 'email' | 'numeric' | 'tel'; max?: number };
 export interface DatosTarjeta {
-  accion: string; modulo: string; icono: 'ban' | 'unlock' | 'log-out'; titulo: string; riesgo: 'reversible' | 'acceso';
+  accion: string; modulo: string; icono: 'ban' | 'unlock' | 'log-out' | 'receipt'; titulo: string; riesgo: 'reversible' | 'acceso' | 'fiscal';
+  chip?: string; enCliente?: 'cobro';
   efecto: string; filas: { etiqueta: string; valor: string }[]; opciones: OpcionTarjeta[];
   boton: string; botonSiempre?: string; token: 'nunca' | 'para_siempre'; deshacible: boolean; nota?: string;
 }
@@ -28,7 +29,7 @@ interface Fila { id: string; estado: Estado; vence_en: string; tarjeta: DatosTar
 export const tarjetasVivas = new Map<string, Fila>();
 
 const DURACIONES: [number | null, string][] = [[30, '30 min'], [120, '2 horas'], [1440, '24 horas'], [null, 'Para siempre']];
-const ICONO = { ban: Ban, unlock: Unlock, 'log-out': LogOut };
+const ICONO = { ban: Ban, unlock: Unlock, 'log-out': LogOut, receipt: Receipt };
 const hora = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' }) : '');
 
 async function llamar(cuerpo: Record<string, unknown>) {
@@ -77,8 +78,24 @@ export function TarjetaAccion({ id }: { id: string }) {
     const opciones: Record<string, any> = {};
     for (const o of t.opciones) opciones[o.id] = valor(o);
     const r = await llamar({ accion: 'confirmar', id, opciones, token: pide ? token : undefined });
+    if (!r?.ok) { setOcupado(false); setError(r?.error || 'No se pudo.'); if (r?.estado && r.estado !== 'propuesta') setFila(f => f && { ...f, estado: r.estado }); return; }
+    if (r.ejecutarEnCliente?.tipo === 'cobro') {
+      // El cobro lo hace el panel con el MISMO proceso del módulo de Cobros
+      // (inventario, factura, PDF, correo); después se le avisa al servidor.
+      setFila(f => f && { ...f, estado: 'ejecutando' });
+      let res: { ok: boolean; mensaje: string; invoiceId?: string; consecutivo?: string; pdfUrl?: string };
+      try {
+        const { cobrarServicio } = await import('../../utils/facturacion');
+        res = await cobrarServicio(r.ejecutarEnCliente.datos);
+      } catch (e: any) {
+        res = { ok: false, mensaje: e?.message || 'El cobro no se pudo completar.' };
+      }
+      const fin = await llamar({ accion: 'resultado', id, ok: res.ok, mensaje: res.mensaje, invoiceId: res.invoiceId, consecutivo: res.consecutivo });
+      setOcupado(false);
+      setFila(f => f && { ...f, estado: res.ok ? 'ejecutada' : 'fallida', ejecutada_en: new Date().toISOString(), resultado: { ...(fin?.resultado || {}), detalle: res.mensaje, pdfUrl: res.pdfUrl } });
+      return;
+    }
     setOcupado(false);
-    if (!r?.ok) { setError(r?.error || 'No se pudo.'); if (r?.estado && r.estado !== 'propuesta') setFila(f => f && { ...f, estado: r.estado }); return; }
     await efectos(r.resultado);
     setFila(f => f && { ...f, estado: 'ejecutada', opciones: r.opciones, resultado: r.resultado, ejecutada_en: new Date().toISOString(), deshacer_hasta: r.deshacerHasta });
   };
@@ -99,14 +116,14 @@ export function TarjetaAccion({ id }: { id: string }) {
   };
 
   const cejilla = estado === 'ejecutada' ? `Ejecutada · ${hora(fila.ejecutada_en)}` : estado === 'deshecha' ? 'Deshecha' : estado === 'cancelada' ? 'Cancelada' : estado === 'vencida' ? 'Vencida' : estado === 'fallida' ? 'Falló' : `Acción propuesta · ${t.modulo}`;
-  const chip = estado === 'ejecutada' ? ['hecha', 'Hecho'] : estado === 'propuesta' || estado === 'ejecutando' ? [t.riesgo === 'acceso' ? 'acceso' : 'bajo', t.riesgo === 'acceso' ? 'Cambia el acceso' : 'Reversible'] : ['neutro', estado === 'deshecha' ? 'Revertido' : 'Sin cambios'];
+  const chip = estado === 'ejecutada' ? ['hecha', 'Hecho'] : estado === 'propuesta' || estado === 'ejecutando' ? [t.riesgo === 'reversible' ? 'bajo' : 'acceso', t.chip || (t.riesgo === 'acceso' ? 'Cambia el acceso' : 'Reversible')] : ['neutro', estado === 'deshecha' ? 'Revertido' : estado === 'fallida' ? 'Falló' : 'Sin cambios'];
   const puedeDeshacer = estado === 'ejecutada' && t.deshacible && !!fila.deshacer_hasta && new Date(fila.deshacer_hasta).getTime() > ahora;
   const textoFinal = estado === 'ejecutada' ? fila.resultado?.detalle : estado === 'deshecha' ? fila.resultado?.deshecho?.detalle || 'Se revirtió.'
     : estado === 'cancelada' ? 'No se hizo nada.' : estado === 'vencida' ? 'Venció sin confirmarse. No se hizo nada; pedímela de nuevo si hace falta.' : estado === 'fallida' ? (fila.resultado?.detalle || 'No se pudo ejecutar.') : null;
   const s = Math.ceil(restante / 1000);
 
   return (
-    <div className="ai-acc" data-estado={estado === 'ejecutada' ? 'hecha' : estado} data-riesgo={t.riesgo === 'acceso' ? 'acceso' : 'bajo'}>
+    <div className="ai-acc" data-estado={estado === 'ejecutada' ? 'hecha' : estado} data-riesgo={t.riesgo === 'reversible' ? 'bajo' : 'acceso'}>
       <div className="ai-acc-cab">
         <span className="ai-acc-ic"><Icono className="w-[18px] h-[18px]" /></span>
         <div className="ai-acc-tt"><small>{cejilla}</small><b>{t.titulo}</b></div>
@@ -141,7 +158,8 @@ export function TarjetaAccion({ id }: { id: string }) {
                     </div>
                   )}
                   {o.tipo === 'texto' && (
-                    <input className="glass-input w-full rounded-lg px-3 py-2 text-[13px]" value={valor(o)} maxLength={120} aria-label={o.etiqueta}
+                    <input className="glass-input w-full rounded-lg px-3 py-2 text-[13px]" value={valor(o)} maxLength={o.max || 120} aria-label={o.etiqueta}
+                      type={o.teclado === 'email' ? 'email' : 'text'} inputMode={o.teclado || 'text'} autoComplete="off"
                       onChange={e => setElegidas(x => ({ ...x, [o.id]: e.target.value }))} />
                   )}
                 </dd>
@@ -170,6 +188,7 @@ export function TarjetaAccion({ id }: { id: string }) {
       {textoFinal && (
         <div className="ai-acc-hecho">
           <span>{textoFinal}</span>
+          {estado === 'ejecutada' && fila.resultado?.pdfUrl && <a className="ai-chip" href={fila.resultado.pdfUrl} target="_blank" rel="noopener noreferrer"><FileText className="w-4 h-4" />Ver factura</a>}
           {puedeDeshacer && <button type="button" className="ai-chip" onClick={() => void deshacer()} disabled={ocupado}><Undo2 className="w-4 h-4" />Deshacer</button>}
           {error && <p className="ai-acc-error" role="alert">{error}</p>}
         </div>
@@ -274,6 +293,34 @@ export function GraficoComparado({ g }: { g: Grafico }) {
       <div className="ai-graf-pie">
         <button type="button" className="ai-chip" aria-expanded={tabla} onClick={() => setTabla(v => !v)}><Table2 className="w-4 h-4" />{tabla ? 'Ocultar tabla' : 'Ver tabla'}</button>
       </div>
+    </div>
+  );
+}
+
+/** «Recordado» / «Olvidado»: lo que Jarvis hizo con su memoria, con deshacer. */
+export function ChipMemoria({ id, texto, estado, detalle }: { id?: string; texto: string; estado: string; detalle: string }) {
+  const [hecho, setHecho] = useState<null | 'deshecho' | 'error'>(null);
+  const olvido = estado === 'olvidado';
+  const deshacer = async () => {
+    try {
+      if (olvido) {
+        const items = JSON.parse(detalle || '[]') as { texto: string; tipo: string }[];
+        const { data: { user } } = await supabase.auth.getUser();
+        const { error } = await supabase.from('jarvis_memoria').insert(items.map(i => ({ user_id: user?.id, texto: i.texto, tipo: i.tipo, origen: 'manual' })));
+        if (error) throw error;
+      } else {
+        const { error } = await supabase.from('jarvis_memoria').delete().eq('id', id);
+        if (error) throw error;
+      }
+      setHecho('deshecho');
+    } catch { setHecho('error'); }
+  };
+  return (
+    <div className="ai-mem" data-hecho={hecho || undefined}>
+      <span className="ai-herr-ic"><Brain className="w-4 h-4" /></span>
+      <span className="ai-mem-tx"><b>{hecho === 'deshecho' ? (olvido ? 'Lo recuerdo de nuevo' : 'No lo guardé') : olvido ? 'Olvidado' : 'Recordado'}</b>{texto}</span>
+      {!hecho && <button type="button" className="ai-chip" onClick={() => void deshacer()}><Undo2 className="w-4 h-4" />Deshacer</button>}
+      {hecho === 'error' && <span className="ai-mem-err">No se pudo deshacer.</span>}
     </div>
   );
 }
