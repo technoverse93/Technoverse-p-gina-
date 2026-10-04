@@ -769,7 +769,7 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
               <div ref={finRef} />
             </div>
 
-            <div className="ai-red">
+            <div className="ai-red" data-burbuja-encima>
               {editando && (
                 <div className="ai-editando"><Pencil className="w-3.5 h-3.5" /><span>Editando tu último mensaje</span>
                   <button type="button" onClick={() => { setEditando(false); setTexto(''); }}>Cancelar</button></div>
