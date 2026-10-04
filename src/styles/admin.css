@@ -2469,3 +2469,16 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
   .ai-tabla-fichas td.ai-td-mapa::before{display:none}
   .ai-tabla-fichas tr:has(.ai-mapa-btn) td:first-child{padding-right:40px!important}
 }
+
+/* DESPLAZAMIENTO TÁCTIL FLUIDO EN EL ASISTENTE
+   Un solo contenedor vertical: el chat. La tabla de detalle tenía su propio
+   scroll interno (420 px) dentro del chat y, en el WebView de Android, el
+   dedo «agarraba» la caja de adentro: el gesto no pasaba al chat y se perdía
+   el impulso. Ahora la tabla crece hacia abajo («Ver más» de 20 en 20) y
+   solo se desliza de lado si es más ancha que la pantalla.
+   `touch-action` le dice al navegador de antemano qué gestos hace cada caja,
+   así responde al primer toque sin esperar a ver si alguien los intercepta. */
+.ai-msgs{touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+.ai-panel-det .ai-tabla{max-height:none;overflow-y:visible;overflow-x:auto;overscroll-behavior:auto}
+.ai-tabla,.ai-pre{touch-action:pan-x pan-y;overscroll-behavior-x:contain}
+.ai-panel-det .ai-tabla th{position:static}
