@@ -15,6 +15,7 @@ import {
   Sparkles, Plus, Lock, Globe, ArrowUp, Copy, Settings, Menu, BarChart3, Trash2, X, Clock, Info, ShieldCheck, ArrowLeft,
   Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight, ShieldAlert, Wallet, MapPin,
   Paperclip, Square, RotateCcw, Pencil, Link2, Code2, FileText,
+  Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
@@ -23,11 +24,25 @@ import { cabeceraClientInfo } from '../../utils/dispositivo';
 import { useToast, useConfirm } from '../ui/Overlays';
 import { esSuperadmin } from '../../utils/roles';
 import type { User } from '../../types';
+import { TarjetaAccion, TarjetaIr, GraficoComparado, tarjetasVivas } from './JarvisPiezas';
+import type { Grafico } from './JarvisPiezas';
+import { grabarNotaDeVoz, puedeGrabarVoz } from '../../utils/grabadorVoz';
+import type { GrabacionEnCurso } from '../../utils/grabadorVoz';
+import { aparatoActual } from '../../seguridad/killSwitch';
+
+/** Abre un módulo del panel en su pestaña (lo da AdminPanel). */
+const AbrirModuloCtx = React.createContext<((m: string) => void) | undefined>(undefined);
 
 interface Conversacion { id: string; titulo: string; actualizado_en: string }
 /** Una consulta al sistema que hizo la IA (la tarjeta encima de la respuesta). */
 interface Panel { columnas: string[]; filas: (string | number | null)[][]; puntos?: ({ lat: number; lon: number; etiqueta: string } | null)[] }
-interface Consulta { modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean; panel?: Panel }
+interface Consulta {
+  modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean; panel?: Panel;
+  /** Jarvis: «accion» es una propuesta (tarjeta con confirmar); «navegar», un botón para abrir un módulo. */
+  tipo?: 'accion' | 'navegar'; id?: string; destino?: string; grafico?: Grafico;
+}
+type Perfil = 'rapido' | 'equilibrado' | 'profundo';
+type Persona = 'jarvis' | 'arquitecto';
 interface Mensaje {
   id: string; rol: 'user' | 'assistant'; texto: string;
   fuentes?: { titulo: string; url: string }[];
@@ -38,6 +53,10 @@ interface Mensaje {
   estado?: string;
   /** Vistas previas de las fotos que se mandaron en esta sesión. */
   vistas?: { nombre: string; tipo: string; url?: string }[];
+  /** Jarvis: velocidad, modo y cuánto tardó la respuesta. */
+  perfil?: Perfil | null; persona?: string | null; ms?: number | null;
+  /** Segundos de la nota de voz, si el mensaje se dictó (solo en vivo). */
+  porVoz?: number;
 }
 interface Adjunto { nombre: string; tipo: string; datos: string; vista?: string }
 interface Cupo {
@@ -47,8 +66,10 @@ interface Cupo {
   modulos?: string[]; consultasHoy?: number;
   busquedaWeb?: boolean; busquedasMes?: number; cupoBusquedas?: number;
   capacidades?: { enlaces: boolean; codigo: boolean; archivos: boolean };
+  /** Solo superadmin: qué velocidades tienen cupo y si Jarvis puede preparar acciones. */
+  perfiles?: Record<Perfil, boolean>; acciones?: boolean;
 }
-type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas' | 'internet' | 'enlaces' | 'archivos' | 'codigo', boolean>;
+type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas' | 'internet' | 'enlaces' | 'archivos' | 'codigo' | 'acciones', boolean>;
 interface Ajustes { limite_diario: number; busqueda: boolean; respaldo: boolean; acceso: 'personal' | 'gestion' | 'super'; modulos?: Modulos }
 
 const MODULOS: { id: keyof Modulos; nombre: string; desc: string; icono: LucideIcon; soloSuper?: boolean }[] = [
@@ -66,6 +87,27 @@ const CAPACIDADES: { id: keyof Modulos; nombre: string; desc: string; icono: Luc
   { id: 'archivos', nombre: 'Fotos y PDF', desc: 'Hasta 3 por mensaje', icono: Paperclip },
   { id: 'codigo', nombre: 'Cálculos con código', desc: 'Resultados exactos', icono: Code2 },
 ];
+/** Velocidades de Jarvis (tiempos medidos con la clave gratis). */
+const PERFILES: { id: Perfil; nombre: string; desc: string; modelo: string; t: string; icono: LucideIcon }[] = [
+  { id: 'rapido', nombre: 'Rápido', desc: 'Órdenes y datos directos. Las cuentas las hacen las consultas del sistema.', modelo: 'Flash-Lite · sin razonar', t: '~0,5 s', icono: Zap },
+  { id: 'equilibrado', nombre: 'Equilibrado', desc: 'Análisis con varios datos y comparaciones.', modelo: 'Flash-Lite · razona', t: '~2 s', icono: Scale },
+  { id: 'profundo', nombre: 'Profundo', desc: 'Decisiones, auditorías y modo Arquitecto.', modelo: 'Flash 3.8 · razona a fondo', t: '3–15 s', icono: Brain },
+];
+const PERSONAS: { id: Persona; nombre: string; desc: string; icono: LucideIcon }[] = [
+  { id: 'jarvis', nombre: 'Jarvis', desc: 'Consulta y opera el panel. Antes de cambiar algo te muestra una tarjeta y espera tu confirmación.', icono: Sparkles },
+  { id: 'arquitecto', nombre: 'Arquitecto', desc: 'Evalúa ideas y cambios futuros y te deja el requerimiento listo para programar. No ejecuta nada.', icono: Lightbulb },
+];
+const ONDA = Array.from({ length: 22 }, (_, n) => `-${((n * 0.137) % 1).toFixed(2)}s`);
+const segundos = (ms?: number | null) => (ms ? `${(ms / 1000).toFixed(1).replace('.', ',')} s` : '');
+const reloj = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+/** Recuerda la velocidad y el modo elegidos (comodidad de este aparato). */
+const leerPref = <T extends string>(k: string, def: T, validos: readonly string[]): T => {
+  try { const v = localStorage.getItem(k); return v && validos.includes(v) ? v as T : def; } catch { return def; }
+};
+const guardarPref = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } };
+const aBase64 = (b: Blob) => new Promise<string>((ok, mal) => {
+  const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = () => mal(r.error); r.readAsDataURL(b);
+});
 const ICONO_MODULO: Record<string, LucideIcon> = { Inventario: Package, 'Facturación': Receipt, Taller: Wrench, 'Errores del sistema': TriangleAlert, Ciberseguridad: ShieldAlert, Finanzas: Wallet, Internet: Globe, Enlace: Link2, 'Código': Code2 };
 
 /** Foto → JPEG de hasta 1600 px (≈200–400 KB): en datos móviles mandar la
@@ -110,7 +152,10 @@ function nombreModelo(m?: string | null): string {
 // y se actualiza por detrás. Vive en memoria y en sessionStorage (se borra
 // al cerrar la app; nunca en localStorage, porque son conversaciones
 // privadas en un teléfono que puede ser compartido).
-const COLUMNAS_MSG = 'id,rol,texto,fuentes,consultas,tokens_in,tokens_out,proveedor,modelo,busco';
+const COLUMNAS_BASE = 'id,rol,texto,fuentes,consultas,tokens_in,tokens_out,proveedor,modelo,busco';
+// perfil/persona/ms llegaron con Jarvis; si la base todavía no los tiene,
+// se cae a las columnas de siempre en vez de no mostrar nada.
+let COLUMNAS_MSG = `${COLUMNAS_BASE},perfil,persona,ms`;
 const CLAVE_CACHE = 'tv_ia_cache';
 const MAX_EN_CACHE = 12;
 const cache = new Map<string, Mensaje[]>();
@@ -146,11 +191,13 @@ function quitarDeCache(id: string) {
 function leerMensajes(id: string): Promise<Mensaje[] | null> {
   const ya = enVuelo.get(id);
   if (ya) return ya;
-  const p = Promise.resolve(
-    supabase.from('ia_mensajes').select(COLUMNAS_MSG).eq('conversacion_id', id).order('creado_en', { ascending: true }),
-  ).then(({ data, error }) => {
+  const leer = () => supabase.from('ia_mensajes').select(COLUMNAS_MSG).eq('conversacion_id', id).order('creado_en', { ascending: true });
+  const p = Promise.resolve(leer()).then(async r => {
+    if (r.error && COLUMNAS_MSG !== COLUMNAS_BASE && /column|columna/i.test(r.error.message)) { COLUMNAS_MSG = COLUMNAS_BASE; return await leer(); }
+    return r;
+  }).then(({ data, error }) => {
     if (error) return null;
-    const ms = (data as Mensaje[]) || [];
+    const ms = (data as unknown as Mensaje[]) || [];
     guardarEnCache(id, ms);
     return ms;
   }).finally(() => enVuelo.delete(id));
@@ -342,17 +389,37 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
           </div>
         )}
         <div className="ai-yo">{m.texto}</div>
+        {(() => {
+          const voz = m.porVoz || Number((m.fuentes || []).find(f => f.url?.startsWith('voz:'))?.url.slice(4)) || 0;
+          return voz ? <span className="ai-yo-voz"><Mic className="w-3.5 h-3.5" />Por voz · {reloj(voz)}</span> : null;
+        })()}
         {onEditar && <button type="button" className="ai-editar" onClick={onEditar}><Pencil className="w-3.5 h-3.5" />Editar</button>}
       </div>
     );
   }
   const enVivo = m.id === BORRADOR;
+  // Lecturas arriba (como siempre); lo de Jarvis —gráficos, abrir un
+  // módulo y acciones por confirmar— después del texto, que lo explica.
+  const lecturas = (m.consultas || []).filter(c => !c.tipo);
+  const graficos = lecturas.filter(c => c.grafico);
+  const irs = (m.consultas || []).filter(c => c.tipo === 'navegar' && c.destino);
+  const acciones = (m.consultas || []).filter(c => c.tipo === 'accion' && c.id);
+  const perfil = PERFILES.find(p => p.id === m.perfil);
+  const esRequerimiento = m.persona === 'arquitecto' && /REQUERIMIENTO:/.test(m.texto);
   return (
     <div className="ai-ia" aria-live={enVivo ? 'polite' : undefined}>
-      {!!m.consultas?.length && <div className="ai-herrs">{m.consultas.map((c, i) => <React.Fragment key={i}><TarjetaConsulta c={c} /></React.Fragment>)}</div>}
+      {!!lecturas.length && <div className="ai-herrs">{lecturas.map((c, i) => <React.Fragment key={i}><TarjetaConsulta c={c} /></React.Fragment>)}</div>}
       {m.texto
         ? <div className="ai-tx"><Formato texto={m.texto} />{enVivo && <span className="ai-cursor" />}</div>
         : enVivo && <div className="ai-buscando"><span className="ai-puntos"><i /><i /><i /></span>{m.estado || 'Pensando…'}</div>}
+      {graficos.map((c, i) => <React.Fragment key={`g${i}`}><GraficoComparado g={c.grafico!} /></React.Fragment>)}
+      {irs.map((c, i) => <React.Fragment key={`n${i}`}><IrModulo titulo={c.desc} destino={c.destino!} /></React.Fragment>)}
+      {acciones.map(c => <React.Fragment key={c.id}><TarjetaAccion id={c.id!} /></React.Fragment>)}
+      {esRequerimiento && !enVivo && (
+        <div className="ai-graf-pie" style={{ padding: 0 }}>
+          <button type="button" className="ai-chip" onClick={() => onCopiar(m.texto)}><Copy className="w-4 h-4" />Copiar como prompt</button>
+        </div>
+      )}
       {!!m.fuentes?.length && (
         <div className="ai-fuentes">
           {m.fuentes.map((f, i) => (
@@ -364,12 +431,20 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
         <button type="button" aria-label="Copiar respuesta" onClick={() => onCopiar(m.texto)}><Copy className="w-4 h-4" /></button>
         {onRegenerar && <button type="button" aria-label="Regenerar respuesta" onClick={onRegenerar}><RotateCcw className="w-4 h-4" /></button>}
         <span className="ai-tok">↑ <i>{k(m.tokens_in || 0)}</i> · ↓ <i>{k(m.tokens_out || 0)}</i> tokens</span>
-        <span>{nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.busco ? ' · buscó en internet' : ''}{m.consultas?.length ? ` · consultó ${m.consultas.length} ${m.consultas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
+        {perfil ? (
+          <span className="ai-modo-tag"><perfil.icono className="w-3.5 h-3.5" />{m.persona === 'arquitecto' ? 'Arquitecto · ' : ''}{perfil.nombre} · {nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.ms ? ` · ${segundos(m.ms)}` : ''}{m.busco ? ' · buscó en internet' : ''}{lecturas.length ? ` · consultó ${lecturas.length} ${lecturas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
+        ) : (
+          <span>{nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.busco ? ' · buscó en internet' : ''}{m.consultas?.length ? ` · consultó ${m.consultas.length} ${m.consultas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
+        )}
       </div>}
     </div>
   );
 });
 const BORRADOR = 'borrador-en-vivo';
+function IrModulo({ titulo, destino }: { titulo: string; destino: string }) {
+  const abrir = React.useContext(AbrirModuloCtx);
+  return <TarjetaIr titulo={titulo} destino={destino} onAbrir={abrir} />;
+}
 
 /**
  * Manda el mensaje y lee la respuesta EN VIVO (eventos SSE de la función).
@@ -479,7 +554,20 @@ function PanelCupo({ cupo, tokensConv }: { cupo: Cupo | null; tokensConv: number
   );
 }
 
-function AsistenteIA({ currentUser }: { currentUser: User | null }) {
+const SUGERENCIAS_JARVIS = [
+  { t: 'Ventas', d: 'Esta semana contra la anterior', p: 'Compará las ventas de esta semana con las de la semana pasada.' },
+  { t: 'Sesiones', d: '¿Quién tiene sesión abierta?', p: '¿Quién del personal tiene sesión abierta ahora y desde qué equipo?' },
+  { t: 'Seguridad', d: 'Intentos fallidos de hoy', p: '¿Hubo intentos de ingreso fallidos hoy? ¿Desde dónde?' },
+  { t: 'Ir a', d: 'Abrir un módulo del panel', p: 'Abrí el módulo de Bloqueos.' },
+];
+const SUGERENCIAS_ARQ = [
+  { t: 'Evaluar', d: 'Una idea para la tienda', p: 'Quiero que los clientes puedan apartar un producto 24 horas pagando una parte. ¿Qué implicaría?' },
+  { t: 'Requerimiento', d: 'Listo para programar', p: 'Escribime el requerimiento para avisarle al cliente por WhatsApp cuando su reparación esté lista.' },
+  { t: 'Revisar', d: 'Un flujo del panel', p: '¿Qué mejorarías del flujo de cobro en el mostrador?' },
+  { t: 'Priorizar', d: 'Qué hacer primero', p: 'De estas ideas, ¿cuál conviene hacer primero y por qué?: ' },
+];
+
+function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null; onAbrirModulo?: (m: string) => void }) {
   const toast = useToast();
   const confirm = useConfirm();
   const soySuper = esSuperadmin(currentUser?.role);
@@ -508,6 +596,20 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
   const [cajon, setCajon] = useState<null | 'historial' | 'cupo'>(null);
   const finRef = useRef<HTMLDivElement>(null);
   const cajaRef = useRef<HTMLTextAreaElement>(null);
+  // Jarvis (solo superadmin): con quién habla, a qué velocidad y la voz.
+  const [persona, setPersonaEstado] = useState<Persona>(() => leerPref<Persona>('tv_jarvis_persona', 'jarvis', ['jarvis', 'arquitecto']));
+  const [perfil, setPerfilEstado] = useState<Perfil>(() => leerPref<Perfil>('tv_jarvis_perfil', 'equilibrado', ['rapido', 'equilibrado', 'profundo']));
+  const setPersona = (p: Persona) => { setPersonaEstado(p); guardarPref('tv_jarvis_persona', p); };
+  const setPerfil = (p: Perfil) => { setPerfilEstado(p); guardarPref('tv_jarvis_perfil', p); };
+  const [menu, setMenu] = useState<null | 'persona' | 'vel' | 'mas'>(null);
+  const [voz, setVoz] = useState<null | 'grabando' | 'transcribiendo'>(null);
+  const [segVoz, setSegVoz] = useState(0);
+  const grabacion = useRef<GrabacionEnCurso | null>(null);
+  const inicioVoz = useRef(0);
+  // Jarvis se enciende solo cuando el servidor ya lo tiene (la función
+  // nueva informa las velocidades en el cupo); antes, todo queda como siempre.
+  const jarvis = soySuper && !!cupo?.perfiles;
+  const conVoz = jarvis && puedeGrabarVoz();
   // La conversación que acaba de crear el primer envío ya está en pantalla;
   // no se vuelve a leer de la base (parpadearía).
   const recienCreada = useRef<string | null>(null);
@@ -569,7 +671,7 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
 
   const nueva = () => { setActiva(null); setMensajes([]); setAviso(null); setCajon(null); setVista('chat'); setTimeout(() => cajaRef.current?.focus(), 50); };
 
-  const enviar = async (contenido?: string, opciones: { regenerar?: boolean } = {}) => {
+  const enviar = async (contenido?: string, opciones: { regenerar?: boolean; porVoz?: number } = {}) => {
     const t = (contenido ?? texto).trim();
     if (!t || enviando || agotado) return;
     // Editar el último mensaje = regenerar con el texto nuevo.
@@ -589,7 +691,7 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
         if (base[base.length - 1]?.rol === 'assistant') base.pop();
         if (base[base.length - 1]?.rol === 'user') base.pop();
       }
-      return [...base, { id: `tmp-${Date.now()}`, rol: 'user', texto: t, pendiente: true, vistas: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, url: a.vista })) }];
+      return [...base, { id: `tmp-${Date.now()}`, rol: 'user', texto: t, pendiente: true, porVoz: opciones.porVoz, vistas: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, url: a.vista })) }];
     });
     const control = new AbortController();
     cortar.current = control;
@@ -606,13 +708,23 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
     pintar();
     try {
       const res = await enviarEnVivo(
-        { accion: 'enviar', texto: t, conversacionId: activa, buscar: buscar && busquedaPermitida, regenerar, adjuntos: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })) },
+        {
+          accion: 'enviar', texto: t, conversacionId: activa, buscar: buscar && busquedaPermitida, regenerar, adjuntos: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
+          // Jarvis: el aparato propio va para que nunca proponga bloquearse a sí mismo.
+          ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
+        },
         (evento, d) => {
           if (evento === 'texto') { borrador.texto += d.delta || ''; borrador.estado = undefined; }
           else if (evento === 'estado') borrador.estado = d.texto;
           else if (evento === 'consulta') borrador.consultas = [...(borrador.consultas || []), d];
           else if (evento === 'modelo') borrador.modelo = d.modelo;
           else if (evento === 'reinicio') { borrador.texto = ''; borrador.consultas = []; borrador.estado = 'Cambiando a otro modelo…'; }
+          else if (evento === 'propuesta') {
+            // La tarjeta se pinta ya con lo que llegó; después se relee de la base.
+            tarjetasVivas.set(d.id, { id: d.id, estado: d.estado, vence_en: d.venceEn, tarjeta: d.tarjeta });
+            borrador.consultas = [...(borrador.consultas || []), { tipo: 'accion', id: d.id, modulo: d.tarjeta?.modulo || 'Jarvis', desc: d.tarjeta?.titulo || 'Acción', filas: 'propuesta', detalle: '' }];
+          }
+          else if (evento === 'navegar') borrador.consultas = [...(borrador.consultas || []), d];
           else return;
           pedirPintar();
         },
@@ -650,6 +762,69 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
     }
   };
   const detener = () => cortar.current?.abort();
+
+  // ------------------------------ VOZ ------------------------------
+  // Se graba con la misma grabadora de las notas de voz del chat (funciona
+  // en la APK), se transcribe en el servidor y se manda como mensaje.
+  const empezarVoz = async () => {
+    if (voz || enviando) return;
+    setMenu(null);
+    try {
+      grabacion.current = await grabarNotaDeVoz();
+      inicioVoz.current = Date.now();
+      setSegVoz(0);
+      setVoz('grabando');
+    } catch (e: any) {
+      toast.error(e?.message || 'No se pudo usar el micrófono.');
+    }
+  };
+  const cancelarVoz = () => { grabacion.current?.cancelar(); grabacion.current = null; setVoz(null); };
+  const terminarVoz = async () => {
+    const g = grabacion.current;
+    if (!g) return;
+    grabacion.current = null;
+    const seg = Math.max(1, Math.round((Date.now() - inicioVoz.current) / 1000));
+    setVoz('transcribiendo');
+    try {
+      const blob = await g.detener();
+      if (blob.size < 600) { toast.error('No se escuchó nada. Probá de nuevo más cerca del micrófono.'); return; }
+      const audio = await aBase64(blob);
+      const { data, error } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'transcribir', audio, tipo: blob.type || 'audio/webm' } });
+      let r = data;
+      if (error && (error as any).context?.json) { try { r = await (error as any).context.json(); } catch { /* sin cuerpo */ } }
+      const dicho = String(r?.texto || '').trim();
+      if (!r?.ok || !dicho) { toast.error(r?.error || 'No se entendió el audio. Probá de nuevo o escribilo.'); return; }
+      setVoz(null);
+      void enviarRef.current(dicho, { porVoz: seg });
+    } catch {
+      toast.error('No se pudo transcribir. Revisá la conexión.');
+    } finally {
+      setVoz(v => (v === 'transcribiendo' ? null : v));
+    }
+  };
+  const terminarVozRef = useRef(terminarVoz);
+  terminarVozRef.current = terminarVoz;
+  useEffect(() => {
+    if (voz !== 'grabando') return;
+    const t = setInterval(() => {
+      const s = Math.floor((Date.now() - inicioVoz.current) / 1000);
+      setSegVoz(s);
+      if (s >= 175) void terminarVozRef.current();
+    }, 250);
+    return () => clearInterval(t);
+  }, [voz]);
+  // Al salir del módulo, el micrófono se suelta.
+  useEffect(() => () => { grabacion.current?.cancelar(); }, []);
+
+  // Los menús se cierran al tocar afuera o con Escape.
+  useEffect(() => {
+    if (!menu) return;
+    const fuera = (e: PointerEvent) => { if (!(e.target as Element)?.closest?.('.ai-pop,[data-menu-btn]')) setMenu(null); };
+    const tecla = (e: KeyboardEvent) => { if (e.key === 'Escape') setMenu(null); };
+    document.addEventListener('pointerdown', fuera);
+    document.addEventListener('keydown', tecla);
+    return () => { document.removeEventListener('pointerdown', fuera); document.removeEventListener('keydown', tecla); };
+  }, [menu]);
 
   const ultimaPregunta = [...mensajes].reverse().find(m => m.rol === 'user')?.texto || '';
   const regenerarUltima = useCallback(() => { if (ultimaPregunta) void enviarRef.current(ultimaPregunta, { regenerar: true }); }, [ultimaPregunta]);
@@ -710,7 +885,9 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
     </>
   );
 
+  const perfilActual = PERFILES.find(p => p.id === perfil) || PERFILES[1];
   return (
+    <AbrirModuloCtx.Provider value={onAbrirModulo}>
     <div className="ai-root" id="view-asistente">
       <aside className="ai-lado">{listaConvs}</aside>
 
@@ -724,7 +901,15 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
           ) : (
             <>
               <button type="button" className="ai-menu" aria-label="Conversaciones" onClick={() => setCajon('historial')}><Menu className="w-5 h-5" /></button>
-              <span className="ai-modelo" title={nombreModelo(ultimoModelo)}><span className="ai-dot"><Sparkles className="w-3.5 h-3.5" /></span><span className="ai-mn">{nombreModelo(ultimoModelo).startsWith('Gemini ') ? <><span className="ai-lbl">Gemini </span>{nombreModelo(ultimoModelo).slice(7)}</> : nombreModelo(ultimoModelo)}</span></span>
+              {jarvis ? (
+                <button type="button" className="ai-modelo ai-persona" data-p={persona === 'arquitecto' ? 'arquitecto' : 'operador'} data-menu-btn
+                  aria-haspopup="menu" aria-expanded={menu === 'persona'} aria-label={`Modo: ${persona === 'arquitecto' ? 'Arquitecto' : 'Jarvis'}`}
+                  onClick={() => setMenu(m => (m === 'persona' ? null : 'persona'))}>
+                  <span className="ai-dot">{persona === 'arquitecto' ? <Lightbulb className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5" />}</span>
+                  <span className="ai-mn">{persona === 'arquitecto' ? 'Arquitecto' : 'Jarvis'}</span>
+                  <span className="ai-chev"><ChevronDown className="w-4 h-4" /></span>
+                </button>
+              ) : <span className="ai-modelo" title={nombreModelo(ultimoModelo)}><span className="ai-dot"><Sparkles className="w-3.5 h-3.5" /></span><span className="ai-mn">{nombreModelo(ultimoModelo).startsWith('Gemini ') ? <><span className="ai-lbl">Gemini </span>{nombreModelo(ultimoModelo).slice(7)}</> : nombreModelo(ultimoModelo)}</span></span>}
             </>
           )}
           <span className="ai-sp" />
@@ -756,11 +941,15 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
                 </div>
               ) : mensajes.length === 0 ? (
                 <div className="ai-hola">
-                  <span className="ai-logo"><Sparkles className="w-7 h-7" /></span>
-                  <h3>¿En qué te ayudo?</h3>
-                  <p>{conSistema ? 'Preguntá por el inventario, las ventas o el taller, o pedí ayuda para redactar.' : 'Preguntas, redactar, explicar o resumir.'} No escribás cédulas, teléfonos ni datos de clientes.</p>
+                  <span className="ai-logo">{jarvis && persona === 'arquitecto' ? <Lightbulb className="w-7 h-7" /> : <Sparkles className="w-7 h-7" />}</span>
+                  <h3>{jarvis ? (persona === 'arquitecto' ? '¿Qué idea evaluamos?' : '¿Qué hacemos hoy?') : '¿En qué te ayudo?'}</h3>
+                  <p>{jarvis
+                    ? (persona === 'arquitecto'
+                      ? 'Contame una idea o un cambio. Te digo qué implica en el sistema y te dejo el requerimiento listo para programar. No ejecuto nada.'
+                      : `Preguntá por cualquier módulo o pedí una acción: «cerrá la sesión de…», «bloqueá el modelo…». Antes de cambiar algo te muestro una tarjeta para confirmar.${conVoz ? ' También por voz.' : ''}`)
+                    : <>{conSistema ? 'Preguntá por el inventario, las ventas o el taller, o pedí ayuda para redactar.' : 'Preguntas, redactar, explicar o resumir.'} No escribás cédulas, teléfonos ni datos de clientes.</>}</p>
                   <div className="ai-sug">
-                    {sugerencias.map(s => (
+                    {(jarvis ? (persona === 'arquitecto' ? SUGERENCIAS_ARQ : SUGERENCIAS_JARVIS) : sugerencias).map(s => (
                       <button key={s.t} type="button" onClick={() => { setTexto(s.p); cajaRef.current?.focus(); }}><b>{s.t}</b>{s.d}</button>
                     ))}
                   </div>
@@ -774,7 +963,7 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
                 <div className="ai-editando"><Pencil className="w-3.5 h-3.5" /><span>Editando tu último mensaje</span>
                   <button type="button" onClick={() => { setEditando(false); setTexto(''); }}>Cancelar</button></div>
               )}
-              <div className="ai-caja">
+              <div className="ai-caja" data-grabando={voz === 'grabando' || undefined} data-transcribiendo={voz === 'transcribiendo' || undefined}>
                 {!!adjuntos.length && (
                   <div className="ai-adj">
                     {adjuntos.map((a, i) => (
@@ -791,44 +980,125 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
                   value={texto}
                   onChange={e => setTexto(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); void enviar(); } }}
-                  placeholder={agotado ? 'Cupo agotado hasta la medianoche' : 'Preguntá lo que necesités…'}
+                  placeholder={agotado ? 'Cupo agotado hasta la medianoche' : jarvis ? (persona === 'arquitecto' ? 'Contale la idea al Arquitecto…' : 'Pedile algo a Jarvis…') : 'Preguntá lo que necesités…'}
                   disabled={agotado}
                   rows={1}
                   aria-label="Mensaje para el asistente"
                 />
+                {voz && (
+                  <div className="ai-escucha" aria-live="polite">
+                    {voz === 'grabando' ? (
+                      <>
+                        <span className="ai-rec" />
+                        <span>Escuchando…</span>
+                        <span className="ai-onda" aria-hidden="true">{ONDA.map((d, i) => <i key={i} style={{ animationDelay: d }} />)}</span>
+                        <span className="ai-reloj">{reloj(segVoz)}</span>
+                        <button type="button" className="ai-ib" onClick={cancelarVoz} aria-label="Descartar grabación" title="Descartar grabación"><X className="w-4 h-4" /></button>
+                      </>
+                    ) : (
+                      <><span className="ai-giro" aria-hidden="true" /><span>Transcribiendo…</span></>
+                    )}
+                  </div>
+                )}
+                <input ref={archivoRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={e => void alElegirArchivos(e.target.files)} />
                 <div className="ai-bot">
-                  {archivosPermitidos && !editando && (
+                  {jarvis && !editando && (archivosPermitidos || busquedaPermitida) && (
+                    <button type="button" className="ai-ib" data-menu-btn data-on={buscar || undefined} aria-haspopup="menu" aria-expanded={menu === 'mas'}
+                      aria-label="Adjuntar o buscar en internet" title="Adjuntar o buscar en internet" disabled={!!voz}
+                      onClick={() => setMenu(m => (m === 'mas' ? null : 'mas'))}>
+                      <Plus className="w-[18px] h-[18px]" />
+                    </button>
+                  )}
+                  {conVoz && (
+                    <button type="button" className="ai-ib" data-grabando={voz === 'grabando' || undefined} disabled={enviando || agotado || voz === 'transcribiendo'}
+                      aria-label={voz === 'grabando' ? 'Terminar y enviar' : 'Dictar por voz'} title={voz === 'grabando' ? 'Terminar y enviar' : 'Dictar por voz'}
+                      onClick={() => void (voz === 'grabando' ? terminarVoz() : empezarVoz())}>
+                      <Mic className="w-[18px] h-[18px]" />
+                    </button>
+                  )}
+                  {!jarvis && archivosPermitidos && !editando && (
                     <>
-                      <input ref={archivoRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={e => void alElegirArchivos(e.target.files)} />
                       <button type="button" className="ai-ib" onClick={() => archivoRef.current?.click()} disabled={adjuntos.length >= 3} aria-label="Adjuntar foto o PDF" title="Adjuntar foto o PDF">
                         <Paperclip className="w-[18px] h-[18px]" />
                       </button>
                     </>
                   )}
-                  {busquedaPermitida && (
+                  {!jarvis && busquedaPermitida && (
                     <button type="button" className="ai-ib" data-on={buscar || undefined} onClick={() => setBuscar(v => !v)}
                       aria-pressed={buscar} aria-label="Buscar en internet" title={buscar ? 'Va a buscar en internet' : 'Buscar en internet (la IA también busca sola cuando hace falta)'}>
                       <Globe className="w-[18px] h-[18px]" />
                     </button>
                   )}
                   <span className="ai-sp" />
-                  <span className="ai-cont" title="Tokens estimados de tu texto · contexto usado de la conversación">
-                    ≈ <b>{estimarTokens(texto)}</b><span className="ai-lbl"> tokens</span>
-                    <span className="ai-barra"><i style={{ width: `${Math.min(100, Math.max(tokensConv ? 2 : 0, tokensConv / CONTEXTO * 100))}%` }} /></span>
-                    {(tokensConv / CONTEXTO * 100).toFixed(tokensConv ? 1 : 0)}%
-                  </span>
-                  {enviando ? (
+                  {jarvis ? (
+                    <button type="button" className="ai-vel" data-menu-btn aria-haspopup="menu" aria-expanded={menu === 'vel'} aria-label={`Velocidad: ${perfilActual.nombre}`}
+                      onClick={() => setMenu(m => (m === 'vel' ? null : 'vel'))}>
+                      <span className="ai-vel-ic"><perfilActual.icono className="w-4 h-4" /></span>
+                      <span className="ai-vel-tx">{perfilActual.nombre}</span>
+                      <span className="ai-chev"><ChevronDown className="w-4 h-4" /></span>
+                    </button>
+                  ) : (
+                    <span className="ai-cont" title="Tokens estimados de tu texto · contexto usado de la conversación">
+                      ≈ <b>{estimarTokens(texto)}</b><span className="ai-lbl"> tokens</span>
+                      <span className="ai-barra"><i style={{ width: `${Math.min(100, Math.max(tokensConv ? 2 : 0, tokensConv / CONTEXTO * 100))}%` }} /></span>
+                      {(tokensConv / CONTEXTO * 100).toFixed(tokensConv ? 1 : 0)}%
+                    </span>
+                  )}
+                  {voz === 'grabando' ? (
+                    <button type="button" className="ai-env" onClick={() => void terminarVoz()} aria-label="Terminar y enviar"><ArrowUp className="w-5 h-5" /></button>
+                  ) : enviando ? (
                     <button type="button" className="ai-env" data-detener onClick={detener} aria-label="Detener"><Square className="w-4 h-4" fill="currentColor" /></button>
                   ) : (
-                    <button type="button" className="ai-env" disabled={!texto.trim() || agotado} onClick={() => void enviar()} aria-label="Enviar">
+                    <button type="button" className="ai-env" disabled={!texto.trim() || agotado || !!voz} onClick={() => void enviar()} aria-label="Enviar">
                       <ArrowUp className="w-5 h-5" />
                     </button>
                   )}
                 </div>
               </div>
-              <p className="ai-nota">No escribás ni adjuntés cédulas ni documentos de clientes. La IA puede equivocarse: verificá lo importante.</p>
+              <p className="ai-nota">{jarvis && persona === 'jarvis'
+                ? 'Jarvis no cambia nada sin tu confirmación y no puede tocar el código del sistema. Puede equivocarse: verificá lo importante.'
+                : 'No escribás ni adjuntés cédulas ni documentos de clientes. La IA puede equivocarse: verificá lo importante.'}</p>
+              {jarvis && menu === 'vel' && (
+                <div className="ai-pop tv-chat-pop ai-vel-menu" role="menu" aria-label="Velocidad de Jarvis">
+                  <div className="ai-pop-t">Velocidad</div>
+                  {PERFILES.map(p => (
+                    <button key={p.id} type="button" className="ai-pop-op" role="menuitemradio" aria-checked={perfil === p.id} onClick={() => { setPerfil(p.id); setMenu(null); }}>
+                      <span className="ai-pop-ic"><p.icono className="w-[18px] h-[18px]" /></span>
+                      <span className="ai-pop-tx"><b>{p.nombre}</b><span>{p.desc}</span><em>{p.modelo}</em></span>
+                      <span className="ai-pop-der"><span>{p.t}</span>{p.id === 'profundo' && cupo?.perfiles?.profundo === false && <span className="ai-pop-aviso">cupo bajo</span>}<span className="ai-pop-ok"><Check className="w-4 h-4" /></span></span>
+                    </button>
+                  ))}
+                  <p className="ai-pop-pie">Tiempos medidos con la clave gratis. Si Flash 3.8 se queda sin cupo, Profundo sigue con Flash-Lite a fondo y el pie de la respuesta lo dice.</p>
+                </div>
+              )}
+              {jarvis && menu === 'mas' && (
+                <div className="ai-pop tv-chat-pop ai-mas-menu" role="menu" aria-label="Adjuntar o buscar">
+                  {archivosPermitidos && (
+                    <button type="button" className="ai-mas-op" role="menuitem" disabled={adjuntos.length >= 3} onClick={() => { setMenu(null); archivoRef.current?.click(); }}>
+                      <span className="ai-pop-ic"><Paperclip className="w-4 h-4" /></span><span>Adjuntar foto o PDF<small>{adjuntos.length >= 3 ? 'Ya hay 3 en este mensaje' : 'Hasta 3 por mensaje · sin acciones'}</small></span>
+                    </button>
+                  )}
+                  {busquedaPermitida && (
+                    <button type="button" className="ai-mas-op" role="menuitemcheckbox" aria-checked={buscar} onClick={() => { setBuscar(v => !v); setMenu(null); }}>
+                      <span className="ai-pop-ic"><Globe className="w-4 h-4" /></span><span>Buscar en internet<small>{buscar ? 'Activado para la próxima respuesta' : 'La próxima respuesta busca primero'}</small></span>
+                    </button>
+                  )}
+                </div>
+              )}
             </div>
           </>
+        )}
+        {jarvis && menu === 'persona' && vista === 'chat' && (
+          <div className="ai-pop tv-chat-pop ai-persona-menu" role="menu" aria-label="Modo de Jarvis">
+            <div className="ai-pop-t">Con quién hablás</div>
+            {PERSONAS.map(p => (
+              <button key={p.id} type="button" className="ai-pop-op" role="menuitemradio" aria-checked={persona === p.id} onClick={() => { setPersona(p.id); setMenu(null); }}>
+                <span className="ai-pop-ic"><p.icono className="w-[18px] h-[18px]" /></span>
+                <span className="ai-pop-tx"><b>{p.nombre}</b><span>{p.desc}</span></span>
+                <span className="ai-pop-der"><span className="ai-pop-ok"><Check className="w-4 h-4" /></span></span>
+              </button>
+            ))}
+          </div>
         )}
       </section>
 
@@ -851,6 +1121,7 @@ function AsistenteIA({ currentUser }: { currentUser: User | null }) {
         </div>
       )}
     </div>
+    </AbrirModuloCtx.Provider>
   );
 }
 
@@ -880,7 +1151,7 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
 
   if (!aj) return <div className="ai-ajustes"><p className="ai-prov">Cargando ajustes…</p></div>;
   const tope = aj.limite_diario;
-  const modulos: Modulos = { inventario: true, facturacion: true, taller: true, errores: true, seguridad: true, finanzas: true, internet: true, enlaces: true, archivos: true, codigo: true, ...(aj.modulos || {}) };
+  const modulos: Modulos = { inventario: true, facturacion: true, taller: true, errores: true, seguridad: true, finanzas: true, internet: true, enlaces: true, archivos: true, codigo: true, acciones: true, ...(aj.modulos || {}) };
   const maxConsultas = Math.max(1, ...consultasHoy.map(c => c.consultas));
   return (
     <div className="ai-ajustes">
@@ -897,6 +1168,15 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
           </div>
         ))}
       </div>
+      {cupo?.perfiles && <div className="ai-aj">
+        <h4>Jarvis <small>solo superadmin</small></h4>
+        <div className="ai-modu">
+          <span className="ai-modu-ic"><Bot className="w-4 h-4" /></span>
+          <span className="ai-modu-t"><b>Acciones con confirmación</b><span>Prepara bloqueos, desbloqueos y cierres de sesión; nada se ejecuta sin tu «Confirmar». Nunca toca el código.</span></span>
+          <button type="button" role="switch" aria-checked={modulos.acciones} className="ai-sw" data-on={modulos.acciones || undefined}
+            onClick={() => void guardar({ modulos: { ...modulos, acciones: !modulos.acciones } })} aria-label="Acciones de Jarvis" />
+        </div>
+      </div>}
       <div className="ai-aj">
         <h4>Datos del sistema <small>solo lectura · sin datos de clientes</small></h4>
         {MODULOS.map(m => (

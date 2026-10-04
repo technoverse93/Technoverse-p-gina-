@@ -165,12 +165,13 @@ export function iniciarKillSwitch(modelo?: string | null): void {
   canal = supabase
     .channel('system_bans')
     .on('broadcast', { event: 'cambio' }, () => { void revisar(); })
+    .on('broadcast', { event: 'sesion' }, () => { void revisarSesion(); })
     .subscribe();
 
   // Red de seguridad: si un aviso se perdiera, igual se revisa sola. Y al
   // volver a poner la app al frente, otra revisión —por si el bloqueo
   // ocurrió mientras estaba en segundo plano y el socket dormía.
-  reloj = setInterval(() => void revisar(), REVISION_PERIODICA_MS);
+  reloj = setInterval(() => { void revisar(); void revisarSesion(); }, REVISION_PERIODICA_MS);
   document.addEventListener('visibilitychange', alVolverAlFrente);
 }
 
@@ -198,6 +199,41 @@ export async function avisarCambioDeBloqueos(): Promise<void> {
     const c = canal || supabase.channel('system_bans');
     await c.send({ type: 'broadcast', event: 'cambio', payload: {} });
   } catch { /* si no sale, la revisión periódica lo alcanza igual */ }
+}
+
+/**
+ * ¿Me cerraron la sesión? Jarvis puede cerrar las sesiones de una persona
+ * (borra sus sesiones en el servidor); el token que ya tiene seguiría
+ * sirviendo hasta vencer, así que cada panel pregunta por la suya y, si ya
+ * no existe, sale. Mismo criterio que arriba: el aviso no dice a quién, y
+ * si la consulta falla no se saca a nadie.
+ */
+let sinRevisionDeSesion = false;
+async function revisarSesion(): Promise<void> {
+  if (sinRevisionDeSesion) return;
+  try {
+    const { data: { session } } = await supabase.auth.getSession();
+    if (!session) return;
+    const { data, error } = await supabase.rpc('mi_sesion_vigente');
+    // La base todavía no tiene la función: no se insiste cada minuto.
+    if (error?.code === 'PGRST202') { sinRevisionDeSesion = true; return; }
+    if (error || data !== false) return;
+    await supabase.auth.signOut({ scope: 'local' });
+    location.reload();
+  } catch { /* sin red: nadie sale */ }
+}
+
+/** Avisa a todos que revisen si su sesión sigue viva. Lo usa Jarvis. */
+export async function avisarCierreDeSesion(): Promise<void> {
+  try {
+    const c = canal || supabase.channel('system_bans');
+    await c.send({ type: 'broadcast', event: 'sesion', payload: {} });
+  } catch { /* la próxima recarga de token lo alcanza igual */ }
+}
+
+/** Lo que este aparato reporta de sí mismo (para no bloquearse solo). */
+export function aparatoActual(): { modelo: string | null; huella: string | null } {
+  return { modelo: modeloAparato, huella: huellaAparato };
 }
 
 /** Corta la vigilancia. Solo para pruebas o al desmontar del todo. */
