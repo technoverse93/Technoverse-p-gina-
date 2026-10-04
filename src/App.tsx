@@ -18,6 +18,7 @@ import { iniciarVisitante, detenerVisitante } from './supervision/visitante';
 import { precalentarEspejo } from './supervision/motorEspejo';
 import { registrarIngreso } from './utils/auditoria';
 import { iniciarKillSwitch, fijarModeloAparato, fijarHuellaAparato } from './seguridad/killSwitch';
+import { iniciarAtajoJarvis } from './mobile/jarvisAtajo';
 import { activarFlagSecure, fijarFlagSecureSegunCorreo } from './seguridad/flagSecure';
 import { iniciarAntiCaptura, fijarExencionAntiCaptura } from './seguridad/antiCaptura';
 import { obtenerHuellaAparato } from './utils/fingerprint';
@@ -426,6 +427,8 @@ function AppInner() {
   // entrega en cuanto está, para que funcione el bloqueo por hardware.
   useEffect(() => {
     iniciarKillSwitch();
+    // Widget y atajo del ícono: «technoverse://jarvis» abre Jarvis.
+    void iniciarAtajoJarvis();
     // Aviso de cierre cuando el Superadmin purga los chats.
     iniciarAvisoDePurga();
     // Anti-captura: para TODOS, sin excepción, desde el arranque — tienda

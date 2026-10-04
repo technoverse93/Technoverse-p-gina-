@@ -73,7 +73,7 @@ interface Cupo {
   /** Solo superadmin: qué velocidades tienen cupo y si Jarvis puede preparar acciones. */
   perfiles?: Record<Perfil, boolean>; acciones?: boolean;
 }
-type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas' | 'internet' | 'enlaces' | 'archivos' | 'codigo' | 'acciones', boolean>;
+type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas' | 'internet' | 'enlaces' | 'archivos' | 'codigo' | 'acciones' | 'chat_directo' | 'taller_directo', boolean>;
 type Tono = 'formal' | 'tico_moderado' | 'tico_suelto';
 interface Ajustes { limite_diario: number; busqueda: boolean; respaldo: boolean; acceso: 'personal' | 'gestion' | 'super'; modulos?: Modulos; tono?: Tono }
 
@@ -599,7 +599,7 @@ const SUGERENCIAS_JARVIS = [
   { t: 'Ventas', d: 'Esta semana contra la anterior', p: 'Compará las ventas de esta semana con las de la semana pasada.' },
   { t: 'Sesiones', d: '¿Quién tiene sesión abierta?', p: '¿Quién del personal tiene sesión abierta ahora y desde qué equipo?' },
   { t: 'Seguridad', d: 'Intentos fallidos de hoy', p: '¿Hubo intentos de ingreso fallidos hoy? ¿Desde dónde?' },
-  { t: 'Ir a', d: 'Abrir un módulo del panel', p: 'Abrí el módulo de Bloqueos.' },
+  { t: 'Responder', d: 'Escribirle a un cliente', p: 'Respondele al último chat que ya le contesto en un momento.' },
 ];
 const SUGERENCIAS_ARQ = [
   { t: 'Evaluar', d: 'Una idea para la tienda', p: 'Quiero que los clientes puedan apartar un producto 24 horas pagando una parte. ¿Qué implicaría?' },
@@ -608,7 +608,7 @@ const SUGERENCIAS_ARQ = [
   { t: 'Priorizar', d: 'Qué hacer primero', p: 'De estas ideas, ¿cuál conviene hacer primero y por qué?: ' },
 ];
 
-function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null; onAbrirModulo?: (m: string) => void }) {
+function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser: User | null; onAbrirModulo?: (m: string) => void; pedirVoz?: number }) {
   const toast = useToast();
   const confirm = useConfirm();
   const soySuper = esSuperadmin(currentUser?.role);
@@ -639,7 +639,7 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
   const cajaRef = useRef<HTMLTextAreaElement>(null);
   // Jarvis (solo superadmin): con quién habla, a qué velocidad y la voz.
   const [persona, setPersonaEstado] = useState<Persona>(() => leerPref<Persona>('tv_jarvis_persona', 'jarvis', ['jarvis', 'arquitecto']));
-  const [perfil, setPerfilEstado] = useState<Perfil>(() => leerPref<Perfil>('tv_jarvis_perfil', 'equilibrado', ['rapido', 'equilibrado', 'profundo']));
+  const [perfil, setPerfilEstado] = useState<Perfil>(() => leerPref<Perfil>('tv_jarvis_perfil', 'rapido', ['rapido', 'equilibrado', 'profundo']));
   const setPersona = (p: Persona) => { setPersonaEstado(p); guardarPref('tv_jarvis_persona', p); };
   const setPerfil = (p: Perfil) => { setPerfilEstado(p); guardarPref('tv_jarvis_perfil', p); };
   const [menu, setMenu] = useState<null | 'persona' | 'vel' | 'mas'>(null);
@@ -721,17 +721,18 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
 
   const nueva = () => { setActiva(null); setMensajes([]); setAviso(null); setCajon(null); setVista('chat'); setTimeout(() => cajaRef.current?.focus(), 50); };
 
-  const enviar = async (contenido?: string, opciones: { regenerar?: boolean; porVoz?: number } = {}) => {
-    const crudo = (contenido ?? texto).trim();
+  const enviar = async (contenido?: string, opciones: { regenerar?: boolean; porVoz?: number; audio?: { datos: string; tipo: string } } = {}) => {
+    const crudo = opciones.audio ? '' : (contenido ?? texto).trim();
     // Jarvis: los datos personales se quedan en este aparato (ver separarPrivados).
     const sep = jarvis ? separarPrivados(crudo, privadosRef.current) : { texto: crudo, privados: {} };
     if (jarvis) privadosRef.current = sep.privados;
-    const t = sep.texto;
+    // Por voz, el texto lo pone el servidor al transcribir (un solo viaje).
+    const t = opciones.audio ? '🎤 …' : sep.texto;
     if (!t || enviando || agotado) return;
     // Editar el último mensaje = regenerar con el texto nuevo.
     const regenerar = opciones.regenerar || editando;
     const mios = regenerar ? [] : adjuntos;
-    setTexto('');
+    if (!opciones.audio) setTexto('');
     setAdjuntos([]);
     setEditando(false);
     setAviso(null);
@@ -752,7 +753,7 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
     // El borrador de la respuesta se actualiza a lo sumo una vez por cuadro
     // (requestAnimationFrame): en un teléfono de gama de entrada, repintar
     // en cada trozo de texto se notaba.
-    const borrador: Mensaje = { id: BORRADOR, rol: 'assistant', texto: '', consultas: [], estado: 'Pensando…' };
+    const borrador: Mensaje = { id: BORRADOR, rol: 'assistant', texto: '', consultas: [], estado: opciones.audio ? 'Escuchando lo que dijiste…' : 'Pensando…' };
     let programado = 0;
     const pintar = () => {
       programado = 0;
@@ -763,11 +764,16 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
     try {
       const res = await enviarEnVivo(
         {
-          accion: 'enviar', texto: t, conversacionId: activa, buscar: buscar && busquedaPermitida, regenerar, adjuntos: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
+          accion: 'enviar', texto: opciones.audio ? '' : t, conversacionId: activa, buscar: buscar && busquedaPermitida, regenerar, adjuntos: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
           // Jarvis: el aparato propio va para que nunca proponga bloquearse a sí mismo.
-          ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, privados: sep.privados, yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
+          ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, privados: sep.privados, ...(opciones.audio ? { audio: opciones.audio.datos, tipoAudio: opciones.audio.tipo } : {}), yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
         },
         (evento, d) => {
+          if (evento === 'inicio') {
+            // Por voz: aquí llega lo que se entendió, para mostrarlo ya.
+            if (d.pregunta) setMensajes(prev => prev.map(m => (m.pendiente && m.rol === 'user' ? { ...m, texto: d.pregunta } : m)));
+            return;
+          }
           if (evento === 'texto') { borrador.texto += d.delta || ''; borrador.estado = undefined; }
           else if (evento === 'estado') borrador.estado = d.texto;
           else if (evento === 'consulta') borrador.consultas = [...(borrador.consultas || []), d];
@@ -792,7 +798,7 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
         setAviso({ tipo: 'error', texto: res?.error || 'No se pudo enviar. Revisa la conexión e intenta de nuevo.' });
         return;
       }
-      setMensajes(prev => [...prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false } : m)), { id: `a-${Date.now()}`, ...res.mensaje }]);
+      setMensajes(prev => [...prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false, ...(res.pregunta ? { texto: res.pregunta } : {}) } : m)), { id: `a-${Date.now()}`, ...res.mensaje }]);
       setCupo(res.cupo);
       if (res.respaldo) setAviso({ tipo: 'respaldo', texto: 'Google llegó a su límite por ahora; respondió el respaldo (Groq).' });
       setBuscar(false);
@@ -843,15 +849,12 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
       const blob = await g.detener();
       if (blob.size < 600) { toast.error('No se escuchó nada. Probá de nuevo más cerca del micrófono.'); return; }
       const audio = await aBase64(blob);
-      const { data, error } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'transcribir', audio, tipo: blob.type || 'audio/webm' } });
-      let r = data;
-      if (error && (error as any).context?.json) { try { r = await (error as any).context.json(); } catch { /* sin cuerpo */ } }
-      const dicho = String(r?.texto || '').trim();
-      if (!r?.ok || !dicho) { toast.error(r?.error || 'No se entendió el audio. Probá de nuevo o escribilo.'); return; }
+      // Un solo viaje: el audio va con el mensaje y el servidor lo
+      // transcribe y responde de una vez.
       setVoz(null);
-      void enviarRef.current(dicho, { porVoz: seg });
+      void enviarRef.current('', { porVoz: seg, audio: { datos: audio, tipo: blob.type || 'audio/webm' } });
     } catch {
-      toast.error('No se pudo transcribir. Revisá la conexión.');
+      toast.error('No se pudo leer el audio. Probá de nuevo.');
     } finally {
       setVoz(v => (v === 'transcribiendo' ? null : v));
     }
@@ -867,6 +870,13 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
     }, 250);
     return () => clearInterval(t);
   }, [voz]);
+  // «Hablar» desde el widget: se empieza a escuchar en cuanto Jarvis está listo.
+  const vozAtendida = useRef(0);
+  useEffect(() => {
+    if (!pedirVoz || pedirVoz === vozAtendida.current || !conVoz || voz || enviando) return;
+    vozAtendida.current = pedirVoz;
+    void empezarVoz();
+  }, [pedirVoz, conVoz]); // eslint-disable-line react-hooks/exhaustive-deps
   // Al salir del módulo, el micrófono se suelta.
   useEffect(() => () => { grabacion.current?.cancelar(); }, []);
 
@@ -1000,7 +1010,7 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
                   <p>{jarvis
                     ? (persona === 'arquitecto'
                       ? 'Contame una idea o un cambio. Te digo qué implica en el sistema y te dejo el requerimiento listo para programar. No ejecuto nada.'
-                      : `Preguntá por cualquier módulo o pedí una acción: «cerrá la sesión de…», «bloqueá el modelo…». Antes de cambiar algo te muestro una tarjeta para confirmar.${conVoz ? ' También por voz.' : ''}`)
+                      : `Preguntá por cualquier módulo o dame una orden: «respondele a Laura que ya está lista», «pasá la orden TKT-104 a Lista», «bloqueá el modelo…». Lo delicado te lo muestro en una tarjeta para confirmar.${conVoz ? ' También por voz.' : ''}`)
                     : <>{conSistema ? 'Preguntá por el inventario, las ventas o el taller, o pedí ayuda para redactar.' : 'Preguntas, redactar, explicar o resumir.'} No escribás cédulas, teléfonos ni datos de clientes.</>}</p>
                   <div className="ai-sug">
                     {(jarvis ? (persona === 'arquitecto' ? SUGERENCIAS_ARQ : SUGERENCIAS_JARVIS) : sugerencias).map(s => (
@@ -1110,7 +1120,7 @@ function AsistenteIA({ currentUser, onAbrirModulo }: { currentUser: User | null;
                 </div>
               </div>
               <p className="ai-nota">{jarvis && persona === 'jarvis'
-                ? 'Jarvis no cambia nada sin tu confirmación y no puede tocar el código del sistema. Puede equivocarse: verificá lo importante.'
+                ? 'Jarvis hace lo que le pedís; cobros, bloqueos y cierres de sesión los confirmás vos. No puede tocar el código del sistema.'
                 : 'No escribás ni adjuntés cédulas ni documentos de clientes. La IA puede equivocarse: verificá lo importante.'}</p>
               {jarvis && menu === 'vel' && (
                 <div className="ai-pop tv-chat-pop ai-vel-menu" role="menu" aria-label="Velocidad de Jarvis">
@@ -1206,7 +1216,7 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
 
   if (!aj) return <div className="ai-ajustes"><p className="ai-prov">Cargando ajustes…</p></div>;
   const tope = aj.limite_diario;
-  const modulos: Modulos = { inventario: true, facturacion: true, taller: true, errores: true, seguridad: true, finanzas: true, internet: true, enlaces: true, archivos: true, codigo: true, acciones: true, ...(aj.modulos || {}) };
+  const modulos: Modulos = { inventario: true, facturacion: true, taller: true, errores: true, seguridad: true, finanzas: true, internet: true, enlaces: true, archivos: true, codigo: true, acciones: true, chat_directo: true, taller_directo: true, ...(aj.modulos || {}) };
   const maxConsultas = Math.max(1, ...consultasHoy.map(c => c.consultas));
   return (
     <div className="ai-ajustes">
@@ -1231,6 +1241,15 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
           <button type="button" role="switch" aria-checked={modulos.acciones} className="ai-sw" data-on={modulos.acciones || undefined}
             onClick={() => void guardar({ modulos: { ...modulos, acciones: !modulos.acciones } })} aria-label="Acciones de Jarvis" />
         </div>
+        {([['chat_directo', 'Responder chats sin preguntar', 'Si hay un solo chat que coincide, lo envía de una (se puede borrar por 10 min).'],
+          ['taller_directo', 'Mover órdenes del taller sin preguntar', 'Si hay una sola orden, la mueve de una; entregar o cancelar siempre se confirma.']] as const).map(([k, n, d]) => (
+          <div key={k} className="ai-modu">
+            <span className="ai-modu-ic"><Zap className="w-4 h-4" /></span>
+            <span className="ai-modu-t"><b>{n}</b><span>{d}</span></span>
+            <button type="button" role="switch" aria-checked={modulos[k]} className="ai-sw" data-on={modulos[k] || undefined}
+              onClick={() => void guardar({ modulos: { ...modulos, [k]: !modulos[k] } })} aria-label={n} />
+          </div>
+        ))}
         <div className="ai-campo">
           <span>Tono de Jarvis</span>
           <span className="ai-seg">

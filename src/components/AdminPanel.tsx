@@ -18,6 +18,7 @@ import { CATEGORIAS_TIENDA, normalizarCategoria, esRepuesto } from '../utils/cat
 import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog } from '../types';
 import { useToast, useConfirm } from './ui/Overlays';
 import { esGestion, esSuperadmin } from '../utils/roles';
+import { EVENTO_JARVIS, tomarPedidoJarvis } from '../mobile/jarvisAtajo';
 
 // ---------------------------------------------------------------------
 // TECHNOVERSE CONSOLE
@@ -1064,6 +1065,18 @@ export default function AdminPanel({
    * no `pushState` para no llenar el historial: quien pulsa "atrás"
    * espera salir del panel, no recorrer los doce módulos que visitó.
    */
+  // Widget de Android / atajo del ícono: abre Jarvis (y el micrófono).
+  const [pedidoJarvis, setPedidoJarvis] = useState<{ n: number; voz: boolean } | null>(null);
+  useEffect(() => {
+    if (!esSuperadmin(currentUser?.role)) return;
+    const atender = (voz: boolean) => setPedidoJarvis(p => ({ n: (p?.n || 0) + 1, voz }));
+    const pendiente = tomarPedidoJarvis();
+    if (pendiente) atender(pendiente.voz);
+    const alAvisar = () => { const p = tomarPedidoJarvis(); if (p) atender(p.voz); };
+    window.addEventListener(EVENTO_JARVIS, alAvisar);
+    return () => window.removeEventListener(EVENTO_JARVIS, alAvisar);
+  }, [currentUser?.role]);
+
   const irAModulo = useCallback((tab: string) => {
     if (esSoloSupremo(tab) && !esAdminSupremo(currentUser?.email)) return;
     pestanas.abrir(tab);
@@ -1159,7 +1172,7 @@ export default function AdminPanel({
 
         {tab === 'asistente' && (
           <Suspense fallback={<TabLoadingFallback />}>
-            <AsistenteIA currentUser={currentUser} onAbrirModulo={irAModulo} />
+            <AsistenteIA currentUser={currentUser} onAbrirModulo={irAModulo} pedirVoz={pedidoJarvis?.voz ? pedidoJarvis.n : 0} />
           </Suspense>
         )}
 
@@ -1817,7 +1830,7 @@ export default function AdminPanel({
       {/* Jarvis a mano en cualquier módulo (solo el superadmin). */}
       {esSuperadmin(currentUser?.role) && (
         <Suspense fallback={null}>
-          <JarvisFlotante currentUser={currentUser} onAbrirModulo={irAModulo} oculto={activeTab === 'asistente'} />
+          <JarvisFlotante currentUser={currentUser} onAbrirModulo={irAModulo} oculto={activeTab === 'asistente'} pedido={pedidoJarvis} />
         </Suspense>
       )}
     </AdminShell>

@@ -4,6 +4,7 @@ import { Kanban, Search, Plus, Save, Clock, HelpCircle, FileText, CheckCircle2, 
 import { RepairOrder, Product, ClientProfile } from '../types';
 import { getDB, saveDB, addAuditLog } from '../utils/storage';
 import { processRepairAtomic } from '../utils/transactions';
+import { cambiarEstadoOrden } from '../utils/taller';
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
 import { CATEGORIAS_REPUESTO } from '../utils/categorias';
@@ -535,40 +536,7 @@ function TallerKanban({ activeUserEmail = 'tecnico@technoverse.com', onRepairUpd
   };
 
   const handleUpdateStatus = (repairId: string, newStatus: RepairOrder['status']) => {
-    const db = getDB();
-    const idxRep = db.repair_orders.findIndex(r => r.id === repairId);
-    if (idxRep === -1) return;
-
-    const rep = db.repair_orders[idxRep];
-    const prevStatus = rep.status;
-    if (prevStatus === newStatus) return;
-
-    db.repair_orders[idxRep].status = newStatus;
-
-    // Generate blockchain-like hash when transitioned to "Entregada"
-    let hashMsg = "";
-    if (newStatus === 'Entregada') {
-      const randHex = Math.floor(1e12 + Math.random() * 9e12).toString(16);
-      const blockchainHash = `SHA256-${randHex}-TECHNOVERSE-COSTA-RICA-WARRANTY-${rep.ticket}`;
-      db.repair_orders[idxRep].blockchainHash = blockchainHash;
-      hashMsg = ` Garantía de ${rep.warrantyMonths} meses sellada en bloque con hash traceable: ${blockchainHash}`;
-    }
-
-    db.repair_orders[idxRep].bitacora.push({
-      status: newStatus,
-      notes: `Cambio de estado: de ${prevStatus} a ${newStatus}.${hashMsg}`,
-      timestamp: new Date().toISOString(),
-      user: activeUserEmail
-    });
-
-    saveDB(db);
-    addAuditLog(
-      activeUserEmail, 
-      'Taller', 
-      'Cambio Estado Kanban', 
-      `Ticket ${rep.ticket} movido a ${newStatus}.${hashMsg}`
-    );
-
+    if (cambiarEstadoOrden(repairId, newStatus, activeUserEmail) === null) return;
     loadTallerData();
     if (onRepairUpdated) onRepairUpdated();
   };

@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="jarvis_widget_desc">Hablale o escribile a Jarvis desde la pantalla de inicio.</string>
+    <string name="jarvis_atajo_voz">Hablar con Jarvis</string>
+    <string name="jarvis_atajo_voz_largo">Hablar con Jarvis</string>
+    <string name="jarvis_atajo_texto">Escribir a Jarvis</string>
+</resources>

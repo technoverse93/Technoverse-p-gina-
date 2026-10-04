@@ -11,18 +11,28 @@
 // sigue donde iba.
 // =====================================================================
 
-import React, { Suspense, lazy, useState } from 'react';
+import React, { Suspense, lazy, useEffect, useState } from 'react';
 import { Sparkles, Minus, Maximize2 } from 'lucide-react';
 import { Z } from '../ui/Overlays';
 import type { User } from '../../types';
 
 const AsistenteIA = lazy(() => import('./AsistenteIA'));
 
-export default function JarvisFlotante({ currentUser, onAbrirModulo, oculto }: { currentUser: User | null; onAbrirModulo: (m: string) => void; oculto?: boolean }) {
+export default function JarvisFlotante({ currentUser, onAbrirModulo, oculto, pedido }: { currentUser: User | null; onAbrirModulo: (m: string) => void; oculto?: boolean; pedido?: { n: number; voz: boolean } | null }) {
   const [abierto, setAbierto] = useState(false);
   // Se monta la primera vez que se abre y después solo se esconde: así la
   // conversación sobrevive a minimizar.
   const [montado, setMontado] = useState(false);
+  // Se baja el código del asistente cuando el teléfono está libre, para que
+  // al tocar el botón abra al instante (en 4G la primera descarga se notaba).
+  useEffect(() => {
+    const precargar = () => { void import('./AsistenteIA'); };
+    const w = window as any;
+    const id = w.requestIdleCallback ? w.requestIdleCallback(precargar, { timeout: 8000 }) : setTimeout(precargar, 4000);
+    return () => { if (w.cancelIdleCallback) w.cancelIdleCallback(id); else clearTimeout(id); };
+  }, []);
+  // Pedido del widget: se abre la ventana (y, si fue «Hablar», el micrófono).
+  useEffect(() => { if (pedido?.n) { setMontado(true); setAbierto(true); } }, [pedido?.n]);
   if (oculto) return null;
   const abrir = () => { setMontado(true); setAbierto(true); };
   return (
@@ -42,7 +52,7 @@ export default function JarvisFlotante({ currentUser, onAbrirModulo, oculto }: {
           </div>
           <div className="jv-hoja-cuerpo">
             <Suspense fallback={null}>
-              <AsistenteIA currentUser={currentUser} onAbrirModulo={(m: string) => { setAbierto(false); onAbrirModulo(m); }} />
+              <AsistenteIA currentUser={currentUser} onAbrirModulo={(m: string) => { setAbierto(false); onAbrirModulo(m); }} pedirVoz={pedido?.voz ? pedido.n : 0} />
             </Suspense>
           </div>
         </div>
