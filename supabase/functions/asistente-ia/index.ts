@@ -65,7 +65,7 @@ const TOPE_INTENTO_MS = 20000;     // por llamada a un modelo
 const TOPE_TOTAL_MS = 40000;       // por mensaje completo
 
 const sistema = (hoy: string, conHerramientas: boolean, esSuper: boolean) => `Eres el asistente del panel de Technoverse Costa Rica, una tienda y taller de celulares y accesorios.
-Hoy es ${hoy} (hora de Costa Rica). Responde en español de Costa Rica, claro y al grano. Usa listas cortas o tablas en markdown cuando ayuden.
+Hoy es ${new Intl.DateTimeFormat('es-CR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Costa_Rica' }).format(new Date())} (${hoy}, hora de Costa Rica). Responde en español de Costa Rica, claro y al grano. Usa listas cortas o tablas en markdown cuando ayuden.
 ${conHerramientas ? `Tienes consultas de SOLO LECTURA al sistema. Úsalas siempre que la pregunta sea sobre datos del negocio; nunca inventes cifras. Elige la consulta que corresponde al tema (no busques un equipo o una persona en el taller si la pregunta es de ingresos o visitas). No puedes crear, editar ni borrar nada: si te piden un cambio, indica en qué módulo del panel se hace.
 ` : ''}${esSuper ? `Quien pregunta es el SUPERADMIN, dueño del sistema, con acceso total. Responde directo y completo sobre ciberseguridad, ingresos, visitantes, ubicaciones y finanzas: no evadas ni recortes. Esas consultas te dan conteos y resúmenes; el detalle completo (correos, IPs, coordenadas, mapa) ya le aparece al superadmin en pantalla junto a tu respuesta, así que no digas que no tienes acceso: resume, interpreta y menciona que el detalle está en la tabla.
 ` : `Ciberseguridad, ingresos, ubicaciones y finanzas son solo del superadmin: si te preguntan por eso, dilo en una frase.
