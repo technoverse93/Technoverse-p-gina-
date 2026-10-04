@@ -251,6 +251,65 @@ jobs:
           echo "--- AndroidManifest.xml (fragmento) ---"
           grep -n "FOREGROUND_SERVICE\|CapturaPantallaService" android/app/src/main/AndroidManifest.xml
 
+      # WIDGET «JARVIS» Y ATAJO DEL ÍCONO
+      # ---------------------------------------------------------------
+      # Igual que el resto de lo nativo: android/ nace de cero en cada
+      # corrida, así que el widget vive en `native-android/jarvis/` y se
+      # copia aquí. Abre la app con technoverse://jarvis (?voz=1 para que
+      # Jarvis empiece a escuchar); la parte web está en
+      # src/mobile/jarvisAtajo.ts. No muestra datos ni salta la huella: solo
+      # abre la app.
+      - name: Instalar el widget de Jarvis y el atajo del ícono
+        run: |
+          PAQUETE=android/app/src/main/java/com/technoverse/admin
+          RES=android/app/src/main/res
+          cp native-android/jarvis/JarvisWidget.java "$PAQUETE/JarvisWidget.java"
+          for d in layout drawable xml values; do
+            mkdir -p "$RES/$d"
+            cp native-android/jarvis/res/$d/* "$RES/$d/"
+          done
+
+          python3 - <<'PY'
+          ruta = 'android/app/src/main/AndroidManifest.xml'
+          texto = open(ruta, encoding='utf-8').read()
+
+          if 'JarvisWidget' not in texto:
+              receptor = (
+                  '        <receiver android:name=".JarvisWidget" android:exported="false" android:label="Jarvis">\n'
+                  '            <intent-filter>\n'
+                  '                <action android:name="android.appwidget.action.APPWIDGET_UPDATE" />\n'
+                  '            </intent-filter>\n'
+                  '            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_jarvis_info" />\n'
+                  '        </receiver>\n'
+                  '    </application>'
+              )
+              if '</application>' not in texto:
+                  raise SystemExit('No se encontró el cierre </application>.')
+              texto = texto.replace('</application>', receptor, 1)
+              print('Widget de Jarvis declarado en el manifiesto.')
+
+          if 'android:scheme="technoverse"' not in texto:
+              enlace = (
+                  '            <intent-filter>\n'
+                  '                <action android:name="android.intent.action.VIEW" />\n'
+                  '                <category android:name="android.intent.category.DEFAULT" />\n'
+                  '                <category android:name="android.intent.category.BROWSABLE" />\n'
+                  '                <data android:scheme="technoverse" android:host="jarvis" />\n'
+                  '            </intent-filter>\n'
+                  '            <meta-data android:name="android.app.shortcuts" android:resource="@xml/jarvis_atajos" />\n'
+                  '        </activity>'
+              )
+              if '</activity>' not in texto:
+                  raise SystemExit('No se encontró el cierre </activity> de MainActivity.')
+              texto = texto.replace('</activity>', enlace, 1)
+              print('Enlace technoverse://jarvis y atajos del ícono declarados en MainActivity.')
+
+          open(ruta, 'w', encoding='utf-8').write(texto)
+          PY
+
+          echo "--- AndroidManifest.xml (Jarvis) ---"
+          grep -n "JarvisWidget\|technoverse\|jarvis_atajos" android/app/src/main/AndroidManifest.xml
+
       # Ícono del lanzador con el logo oficial de la tienda, en vez del
       # robot de Capacitor por defecto. Igual que el manifiesto de arriba:
       # android/ nace de cero en cada corrida, así que los mipmap/ que

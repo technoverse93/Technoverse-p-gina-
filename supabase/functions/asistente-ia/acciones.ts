@@ -16,7 +16,7 @@
 // No hay acciones para tocar código, desplegar, escribir SQL libre, borrar
 // registros, cambiar roles, ni para vigilar o seguir a personas.
 //
-// COBRAR es la única acción que NO ejecuta el servidor: emitir la factura
+// COBRAR y RESPONDER UN CHAT no los ejecuta el servidor: emitir la factura
 // (PDF, consecutivo, Hacienda, correo) ya está resuelto y probado en el
 // panel (`cobrarServicio`). Jarvis prepara los datos y calcula los montos;
 // al confirmar, el servidor entrega esos datos validados y el panel los
@@ -34,11 +34,15 @@ export type Opcion =
 export type Tarjeta = {
   accion: string;
   modulo: string;
-  icono: 'ban' | 'unlock' | 'log-out' | 'receipt';
+  icono: 'ban' | 'unlock' | 'log-out' | 'receipt' | 'message' | 'wrench';
   /** Texto del chip de riesgo (si no, se deduce de `riesgo`). */
   chip?: string;
-  /** La acción la termina el panel (hoy solo «cobro»). */
-  enCliente?: 'cobro';
+  /** La acción la termina el panel con su propio proceso. */
+  enCliente?: 'cobro' | 'chat' | 'taller';
+  /** Se ejecuta sola al aparecer (solo si no hay ninguna duda de a quién). */
+  auto?: boolean;
+  /** Minutos para deshacer cuando el deshacer lo hace el panel. */
+  deshacerMin?: number;
   titulo: string;
   riesgo: Riesgo;
   efecto: string;
@@ -61,6 +65,8 @@ export type CtxAccion = {
    *  El panel los saca del texto ANTES de que llegue a la IA y los manda
    *  aparte; la IA solo ve marcas como [CÉDULA·1]. */
   privados: Record<string, string>;
+  /** Ajustes del asistente (p. ej. `chat_directo`). */
+  ajustes: Record<string, boolean>;
 };
 export type Preparada = { tarjeta: Tarjeta; objetivo: Record<string, any>; paraIA: Record<string, unknown> };
 /** `texto` va a la IA (sin datos personales); `detalle` solo a la pantalla. */
@@ -517,6 +523,134 @@ export const ACCIONES: Accion[] = [
         repuestos: (objetivo.lineas || []).map((l: any) => ({ productId: l.id, productName: l.nombre, quantity: l.cantidad, costoUnitario: l.costo, precioUnitario: l.precio, esRegalia: false })),
         insumos: [], adminEmail: ctx.email,
       };
+    },
+  },
+  // -------------------------------------------------------------------
+  {
+    nombre: 'responder_chat',
+    bitacora: 'Respuesta de chat por Jarvis',
+    descripcion: 'ENVÍA un mensaje a un cliente en el Chat de la tienda, como respuesta del personal. Usala SIEMPRE que el dueño pida responder, contestar, escribirle, mandarle o decirle algo a un cliente por el chat (no abras el módulo Chat en su lugar). `texto` es lo que el dueño pidió decir, tal cual (si dijo «respondele yo más», el texto es «Yo más»); solo corregí mayúscula inicial y puntuación, no agregues saludos ni contenido. `cliente` es el nombre como lo dijo, o «último» si habla del chat más reciente.',
+    parametros: {
+      type: 'object',
+      properties: {
+        cliente: { type: 'string', description: 'Nombre del cliente como lo dijo el dueño, o «último».' },
+        texto: { type: 'string', description: 'El mensaje exacto a enviar.' },
+      },
+      required: ['cliente', 'texto'],
+    },
+    async preparar(args, ctx) {
+      const mensaje = String(args.texto ?? '').trim().slice(0, 1000);
+      exigir(mensaje.length >= 1, 'Falta el texto del mensaje.');
+      const q = patron(args.cliente);
+      const ultimo = !q || /^(el |la )?(ú|u)ltim|reciente|ese chat|este chat/i.test(q);
+      let consulta = ctx.db.from('chat_conversations').select('id,customer_name,status,updated_at,unread_count').order('updated_at', { ascending: false }).limit(ultimo ? 3 : 8);
+      if (!ultimo) consulta = consulta.ilike('customer_name', `%${q}%`);
+      const { data: convs, error } = await consulta;
+      if (error) throw error;
+      // Las abiertas primero; una resuelta solo si no hay otra.
+      const lista = [...(convs || [])].sort((a: any, b: any) => Number(a.status === 'resuelto') - Number(b.status === 'resuelto')).slice(0, 5);
+      exigir(lista.length, ultimo ? 'No hay chats todavía.' : `No encontré un chat de «${q}».`);
+      const ids = lista.map((c: any) => c.id);
+      const { data: msgs } = await ctx.db.from('chat_messages').select('conversation_id,sender,text,created_at').in('conversation_id', ids).eq('sender', 'customer').order('created_at', { ascending: false }).limit(40);
+      const ultimoDe = (id: string) => (msgs || []).find((m: any) => m.conversation_id === id);
+      const abiertas = lista.filter((c: any) => c.status !== 'resuelto');
+      const seguro = ultimo ? true : (abiertas.length === 1 || lista.length === 1);
+      const auto = seguro && ctx.ajustes.chat_directo !== false;
+      const elegido = lista[0];
+      const corto = (t: unknown) => { const x = String(t || '').replace(/\s+/g, ' ').trim(); return x.length > 70 ? `${x.slice(0, 67)}…` : x || '(foto, audio o video)'; };
+      return {
+        tarjeta: {
+          accion: 'responder_chat', modulo: 'Chat', icono: 'message', titulo: lista.length === 1 || auto ? `Responder a ${elegido.customer_name || 'cliente'}` : 'Responder un chat',
+          riesgo: 'reversible', chip: 'Mensaje al cliente', enCliente: 'chat', auto, deshacerMin: 10,
+          efecto: 'Se envía en el chat como respuesta de la tienda; el cliente lo ve al instante.',
+          filas: lista.length === 1 || auto ? [{ etiqueta: 'Último del cliente', valor: ultimoDe(elegido.id) ? `«${corto(ultimoDe(elegido.id).text)}» · ${fechaCorta(ultimoDe(elegido.id).created_at)}` : '—' }] : [],
+          opciones: [
+            ...(lista.length > 1 && !auto ? [{ id: 'chat', tipo: 'elegir' as const, etiqueta: 'Chat', defecto: 'c0',
+              valores: lista.map((c: any, i: number) => ({ valor: `c${i}`, texto: c.customer_name || 'Cliente',
+                ayuda: `${c.status === 'resuelto' ? 'Resuelto' : c.unread_count ? `${c.unread_count} sin leer` : 'Abierto'} · último: «${corto(ultimoDe(c.id)?.text)}»` })) }] : []),
+            { id: 'texto', tipo: 'texto' as const, etiqueta: 'Mensaje', defecto: mensaje, max: 1000 },
+          ],
+          boton: 'Enviar', token: 'nunca', deshacible: true,
+          nota: auto ? 'Enviado sin preguntar: había un solo chat que coincidía. Se puede borrar por 10 minutos.' : 'Se puede borrar para todos durante 10 minutos.',
+        },
+        objetivo: { chats: lista.map((c: any) => ({ id: c.id, nombre: c.customer_name || 'Cliente' })) },
+        paraIA: auto
+          ? { hecho: true, se_envia_solo: true, instruccion: 'YA SE ENVIÓ, no pidas confirmar. Respondé en pasado y corto, p. ej. «Listo, ya le escribí.»' }
+          : { hecho: false, chats_que_coinciden: lista.length, instruccion: 'Hay varios chats posibles: decí que elija el chat en la tarjeta y toque Enviar.' },
+      };
+    },
+    ejecutar() { throw new Error('El mensaje lo envía el panel.'); },
+    async deshacer(_o, _opc, resultado) {
+      // El panel ya lo borró para todos; aquí solo queda el registro.
+      return { texto: 'Mensaje borrado.', detalle: `Se borró el mensaje${resultado?.datos?.cliente ? ` a ${resultado.datos.cliente}` : ''}.` };
+    },
+    paraCliente(objetivo, opc) {
+      const i = opc.chat ? Number(String(opc.chat).slice(1)) : 0;
+      const c = objetivo.chats?.[i];
+      exigir(c, 'Chat no válido.');
+      const texto = String(opc.texto || '').trim();
+      exigir(texto.length >= 1, 'El mensaje está vacío.');
+      return { convId: c.id, cliente: c.nombre, texto };
+    },
+  },
+  // -------------------------------------------------------------------
+  {
+    nombre: 'cambiar_estado_orden',
+    bitacora: 'Estado de orden por Jarvis',
+    descripcion: 'CAMBIA el estado de una orden del Taller (mueve la tarjeta en el tablero). Usala cuando el dueño pida pasar, mover, marcar o poner una orden en un estado («la de Laura ya está lista», «marcá el TKT-104 como entregado»). Estados: Pendiente, Diagnosticada, Cotizada, Aprobada, Esperando repuestos, En Reparación, Lista, Entregada, Cancelada.',
+    parametros: {
+      type: 'object',
+      properties: {
+        orden: { type: 'string', description: 'Ticket (TKT-…), nombre del cliente o equipo, como lo dijo el dueño.' },
+        estado: { type: 'string', enum: ['Pendiente', 'Diagnosticada', 'Cotizada', 'Aprobada', 'Esperando repuestos', 'En Reparación', 'Lista', 'Entregada', 'Cancelada'] },
+      },
+      required: ['orden', 'estado'],
+    },
+    async preparar(args, ctx) {
+      const ESTADOS = ['Pendiente', 'Diagnosticada', 'Cotizada', 'Aprobada', 'Esperando repuestos', 'En Reparación', 'Lista', 'Entregada', 'Cancelada'];
+      const estado = String(args.estado || '');
+      exigir(ESTADOS.includes(estado), 'Ese estado no existe en el taller.');
+      const q = patron(args.orden);
+      exigir(q.length >= 2, 'Decime cuál orden: ticket, cliente o equipo.');
+      const { data, error } = await ctx.db.from('repair_orders').select('id,ticket,customer_name,device,device_model,status,created_at')
+        .or(`ticket.ilike.%${q}%,customer_name.ilike.%${q}%,device.ilike.%${q}%,device_model.ilike.%${q}%`).order('created_at', { ascending: false }).limit(8);
+      if (error) throw error;
+      const abiertas = (data || []).filter((o: any) => !['Entregada', 'Cancelada'].includes(o.status));
+      const lista = (abiertas.length ? abiertas : data || []).slice(0, 5);
+      exigir(lista.length, `No encontré una orden con «${q}».`);
+      const ya = lista.length === 1 && lista[0].status === estado;
+      exigir(!ya, `Esa orden ya está en «${estado}».`);
+      // Entregar o cancelar cierra la orden (entregar sella la garantía): esos se confirman.
+      const final = estado === 'Entregada' || estado === 'Cancelada';
+      const auto = lista.length === 1 && !final && ctx.ajustes.taller_directo !== false;
+      const o = lista[0];
+      const nombre = (x: any) => `${x.ticket} · ${x.customer_name || 'Cliente'} · ${x.device_model || x.device || 'equipo'}`;
+      return {
+        tarjeta: {
+          accion: 'cambiar_estado_orden', modulo: 'Taller', icono: 'wrench', titulo: lista.length === 1 ? `${o.ticket} → ${estado}` : `Mover una orden a «${estado}»`,
+          riesgo: 'reversible', chip: final ? 'Cierra la orden' : 'Taller', enCliente: 'taller', auto, deshacerMin: 10,
+          efecto: estado === 'Entregada' ? 'La orden pasa a Entregada y se sella la garantía.' : `La orden pasa a «${estado}» en el tablero, con su nota en la bitácora.`,
+          filas: lista.length === 1 ? [{ etiqueta: 'Orden', valor: nombre(o) }, { etiqueta: 'Estado actual', valor: o.status }] : [],
+          opciones: lista.length > 1 ? [{ id: 'orden', tipo: 'elegir' as const, etiqueta: 'Orden', defecto: 'o0',
+            valores: lista.map((x: any, i: number) => ({ valor: `o${i}`, texto: `${x.ticket} · ${x.customer_name || 'Cliente'}`, ayuda: `${x.device_model || x.device || 'equipo'} · ahora: ${x.status}` })) }] : [],
+          boton: `Pasar a ${estado}`, token: 'nunca', deshacible: true,
+          nota: auto ? 'Hecho sin preguntar: había una sola orden. Se puede deshacer por 10 minutos.' : 'Se puede deshacer por 10 minutos.',
+        },
+        objetivo: { ordenes: lista.map((x: any) => ({ id: x.id, ticket: x.ticket, estado: x.status })), estado },
+        paraIA: auto
+          ? { hecho: true, se_hace_solo: true, ticket: o.ticket, instruccion: 'YA SE HIZO, no pidas confirmar. Respondé en pasado y corto.' }
+          : { hecho: false, ordenes_posibles: lista.length, instruccion: final ? 'Entregar o cancelar se confirma en la tarjeta.' : 'Hay varias órdenes posibles: que elija en la tarjeta.' },
+      };
+    },
+    ejecutar() { throw new Error('El cambio lo hace el panel.'); },
+    async deshacer(_o, _opc, resultado) {
+      return { texto: 'Estado revertido.', detalle: `La orden volvió a «${resultado?.datos?.anterior || 'su estado anterior'}».` };
+    },
+    paraCliente(objetivo, opc) {
+      const i = opc.orden ? Number(String(opc.orden).slice(1)) : 0;
+      const o = objetivo.ordenes?.[i];
+      exigir(o, 'Orden no válida.');
+      return { repairId: o.id, ticket: o.ticket, estado: objetivo.estado };
     },
   },
 ];

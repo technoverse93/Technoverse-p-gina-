@@ -1,0 +1,28 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Mantener presionado el ícono de la app: «Hablar con Jarvis». -->
+<shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
+    <shortcut
+        android:shortcutId="jarvis_voz"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/jarvis_atajo_voz"
+        android:shortcutLongLabel="@string/jarvis_atajo_voz_largo">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="technoverse://jarvis?voz=1"
+            android:targetPackage="com.technoverse.admin"
+            android:targetClass="com.technoverse.admin.MainActivity" />
+    </shortcut>
+    <shortcut
+        android:shortcutId="jarvis_texto"
+        android:enabled="true"
+        android:icon="@mipmap/ic_launcher"
+        android:shortcutShortLabel="@string/jarvis_atajo_texto"
+        android:shortcutLongLabel="@string/jarvis_atajo_texto">
+        <intent
+            android:action="android.intent.action.VIEW"
+            android:data="technoverse://jarvis"
+            android:targetPackage="com.technoverse.admin"
+            android:targetClass="com.technoverse.admin.MainActivity" />
+    </shortcut>
+</shortcuts>

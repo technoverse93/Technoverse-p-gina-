@@ -8,7 +8,7 @@
 // =====================================================================
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, Unlock, LogOut, Timer, KeyRound, Undo2, CircleCheck, CircleX, Clock, ArrowUpRight, BarChart3, Table2, Lock, Receipt, Brain, FileText } from 'lucide-react';
+import { Ban, Unlock, LogOut, Timer, KeyRound, Undo2, CircleCheck, CircleX, Clock, ArrowUpRight, BarChart3, Table2, Lock, Receipt, Brain, FileText, MessageSquare, Wrench } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { avisarCambioDeBloqueos, avisarCierreDeSesion } from '../../seguridad/killSwitch';
 
@@ -17,19 +17,19 @@ export type OpcionTarjeta =
   | { id: 'minutos'; tipo: 'duracion'; etiqueta: string; defecto: number | null }
   | { id: string; tipo: 'texto'; etiqueta: string; defecto: string; teclado?: 'email' | 'numeric' | 'tel'; max?: number };
 export interface DatosTarjeta {
-  accion: string; modulo: string; icono: 'ban' | 'unlock' | 'log-out' | 'receipt'; titulo: string; riesgo: 'reversible' | 'acceso' | 'fiscal';
-  chip?: string; enCliente?: 'cobro';
+  accion: string; modulo: string; icono: 'ban' | 'unlock' | 'log-out' | 'receipt' | 'message' | 'wrench'; titulo: string; riesgo: 'reversible' | 'acceso' | 'fiscal';
+  chip?: string; enCliente?: 'cobro' | 'chat' | 'taller'; auto?: boolean;
   efecto: string; filas: { etiqueta: string; valor: string }[]; opciones: OpcionTarjeta[];
   boton: string; botonSiempre?: string; token: 'nunca' | 'para_siempre'; deshacible: boolean; nota?: string;
 }
 type Estado = 'propuesta' | 'ejecutando' | 'ejecutada' | 'fallida' | 'cancelada' | 'vencida' | 'deshecha';
-interface Fila { id: string; estado: Estado; vence_en: string; tarjeta: DatosTarjeta; opciones?: Record<string, any> | null; resultado?: any; ejecutada_en?: string | null; deshacer_hasta?: string | null }
+interface Fila { id: string; estado: Estado; vence_en: string; creada_en?: string; tarjeta: DatosTarjeta; opciones?: Record<string, any> | null; resultado?: any; ejecutada_en?: string | null; deshacer_hasta?: string | null }
 
 /** Lo que llegó en vivo (evento «propuesta») se guarda aquí para pintar al instante. */
 export const tarjetasVivas = new Map<string, Fila>();
 
 const DURACIONES: [number | null, string][] = [[30, '30 min'], [120, '2 horas'], [1440, '24 horas'], [null, 'Para siempre']];
-const ICONO = { ban: Ban, unlock: Unlock, 'log-out': LogOut, receipt: Receipt };
+const ICONO = { ban: Ban, unlock: Unlock, 'log-out': LogOut, receipt: Receipt, message: MessageSquare, wrench: Wrench };
 const hora = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' }) : '');
 
 async function llamar(cuerpo: Record<string, unknown>) {
@@ -48,7 +48,7 @@ export function TarjetaAccion({ id }: { id: string }) {
 
   useEffect(() => {
     let vivo = true;
-    void supabase.from('ia_acciones').select('id,estado,vence_en,tarjeta,opciones,resultado,ejecutada_en,deshacer_hasta').eq('id', id).maybeSingle()
+    void supabase.from('ia_acciones').select('id,estado,vence_en,creada_en,tarjeta,opciones,resultado,ejecutada_en,deshacer_hasta').eq('id', id).maybeSingle()
       .then(({ data }) => { if (vivo && data) setFila(data as Fila); });
     return () => { vivo = false; };
   }, [id]);
@@ -57,6 +57,20 @@ export function TarjetaAccion({ id }: { id: string }) {
     const t = setInterval(() => setAhora(Date.now()), 1000);
     return () => clearInterval(t);
   }, [fila?.estado]);
+
+  // Una acción marcada «auto» (p. ej. responder el único chat que
+  // coincide) se confirma sola, pero SOLO recién creada: al reabrir la
+  // conversación después no se vuelve a disparar (y el servidor la ejecuta
+  // una sola vez aunque dos pantallas lo intentaran).
+  const confirmarRef = useRef<() => Promise<void>>(async () => {});
+  const autoHecho = useRef(false);
+  useEffect(() => {
+    const reciente = tarjetasVivas.has(id) || (!!fila?.creada_en && Date.now() - new Date(fila.creada_en).getTime() < 30_000);
+    if (autoHecho.current || !fila?.tarjeta?.auto || fila.estado !== 'propuesta' || !reciente) return;
+    autoHecho.current = true;
+    tarjetasVivas.delete(id);
+    void confirmarRef.current();
+  }, [fila, id]);
 
   if (!fila) return <div className="ai-acc" data-estado="propuesta"><div className="ai-acc-cab"><span className="ai-acc-ic"><Clock className="w-[18px] h-[18px]" /></span><div className="ai-acc-tt"><small>Acción</small><b>Cargando…</b></div></div></div>;
   const t = fila.tarjeta;
@@ -79,6 +93,36 @@ export function TarjetaAccion({ id }: { id: string }) {
     for (const o of t.opciones) opciones[o.id] = valor(o);
     const r = await llamar({ accion: 'confirmar', id, opciones, token: pide ? token : undefined });
     if (!r?.ok) { setOcupado(false); setError(r?.error || 'No se pudo.'); if (r?.estado && r.estado !== 'propuesta') setFila(f => f && { ...f, estado: r.estado }); return; }
+    if (r.ejecutarEnCliente?.tipo === 'chat' || r.ejecutarEnCliente?.tipo === 'taller') {
+      // Lo hace el panel con el MISMO proceso de su módulo; después se le
+      // cuenta al servidor cómo salió.
+      setFila(f => f && { ...f, estado: 'ejecutando' });
+      const d = r.ejecutarEnCliente.datos;
+      let res: { ok: boolean; mensaje: string; extra?: Record<string, string | undefined> };
+      try {
+        const { data: { session } } = await supabase.auth.getSession();
+        const quien = session?.user?.email || 'admin';
+        if (r.ejecutarEnCliente.tipo === 'chat') {
+          const { enviarRespuestaDeSoporte } = await import('../chat/enviarRespuesta');
+          const e = await enviarRespuestaDeSoporte(d.convId, d.texto, quien);
+          res = { ok: e.ok, mensaje: e.mensaje, extra: { msgId: e.msgId, cliente: d.cliente } };
+        } else {
+          const { cambiarEstadoOrden } = await import('../../utils/taller');
+          const anterior = cambiarEstadoOrden(d.repairId, d.estado, quien);
+          res = anterior
+            ? { ok: true, mensaje: `${d.ticket}: de «${anterior}» a «${d.estado}».`, extra: { anterior, repairId: d.repairId } }
+            : { ok: false, mensaje: 'No encontré la orden en el tablero o ya estaba en ese estado.' };
+        }
+      } catch (e: any) {
+        res = { ok: false, mensaje: e?.message || 'No se pudo.' };
+      }
+      const fin = await llamar({ accion: 'resultado', id, ok: res.ok, mensaje: res.mensaje, ...(res.extra || {}) });
+      setOcupado(false);
+      setFila(f => f && { ...f, estado: res.ok ? 'ejecutada' : 'fallida', ejecutada_en: new Date().toISOString(),
+        deshacer_hasta: res.ok ? new Date(Date.now() + 10 * 60_000).toISOString() : null,
+        resultado: { ...(fin?.resultado || {}), detalle: res.mensaje, datos: { ...(fin?.resultado?.datos || {}), ...(res.extra || {}) } } });
+      return;
+    }
     if (r.ejecutarEnCliente?.tipo === 'cobro') {
       // El cobro lo hace el panel con el MISMO proceso del módulo de Cobros
       // (inventario, factura, PDF, correo); después se le avisa al servidor.
@@ -99,6 +143,7 @@ export function TarjetaAccion({ id }: { id: string }) {
     await efectos(r.resultado);
     setFila(f => f && { ...f, estado: 'ejecutada', opciones: r.opciones, resultado: r.resultado, ejecutada_en: new Date().toISOString(), deshacer_hasta: r.deshacerHasta });
   };
+  confirmarRef.current = confirmar;
   const cancelar = async () => {
     setOcupado(true); setError(null);
     const r = await llamar({ accion: 'cancelar', id });
@@ -108,6 +153,20 @@ export function TarjetaAccion({ id }: { id: string }) {
   };
   const deshacer = async () => {
     setOcupado(true); setError(null);
+    // Lo que hizo el panel, lo deshace el panel antes de avisar.
+    const datos = fila.resultado?.datos || {};
+    try {
+      if (t.enCliente === 'chat') {
+        const { borrarMensajeParaTodos } = await import('../../utils/storage');
+        if (!datos.msgId) throw new Error('No encontré el mensaje.');
+        await borrarMensajeParaTodos(datos.msgId);
+      } else if (t.enCliente === 'taller') {
+        const { cambiarEstadoOrden } = await import('../../utils/taller');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!datos.repairId || !datos.anterior) throw new Error('No sé a qué estado volver.');
+        cambiarEstadoOrden(datos.repairId, datos.anterior, session?.user?.email || 'admin');
+      }
+    } catch (e: any) { setOcupado(false); setError('No se pudo deshacer: ' + (e?.message || e)); return; }
     const r = await llamar({ accion: 'deshacer', id });
     setOcupado(false);
     if (!r?.ok) { setError(r?.error || 'No se pudo deshacer.'); return; }
