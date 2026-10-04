@@ -34,11 +34,11 @@ export type Opcion =
 export type Tarjeta = {
   accion: string;
   modulo: string;
-  icono: 'ban' | 'unlock' | 'log-out' | 'receipt' | 'message' | 'wrench';
+  icono: 'ban' | 'unlock' | 'log-out' | 'receipt' | 'message' | 'wrench' | 'package';
   /** Texto del chip de riesgo (si no, se deduce de `riesgo`). */
   chip?: string;
   /** La acción la termina el panel con su propio proceso. */
-  enCliente?: 'cobro' | 'chat' | 'taller';
+  enCliente?: 'cobro' | 'chat' | 'taller' | 'inventario';
   /** Se ejecuta sola al aparecer (solo si no hay ninguna duda de a quién). */
   auto?: boolean;
   /** Minutos para deshacer cuando el deshacer lo hace el panel. */
@@ -144,7 +144,7 @@ export const MODULOS_PANEL: Record<string, string> = {
 };
 export const NAVEGAR = {
   nombre: 'abrir_modulo',
-  descripcion: 'Deja un botón para que el superadmin abra un módulo del panel en una pestaña. Usalo cuando pida «abrí», «llevame a» o cuando el detalle esté mejor en su pantalla.',
+  descripcion: 'Deja un botón para abrir un módulo del panel. SOLO cuando el superadmin pida explícitamente ir o abrir algo («abrí», «llevame a», «mostrame el módulo»). Nunca para cumplir una orden ni para «revisar»: para eso consultá o usá la acción.',
   parametros: {
     type: 'object',
     properties: { modulo: { type: 'string', enum: Object.keys(MODULOS_PANEL), description: 'Módulo a abrir.' } },
@@ -227,6 +227,9 @@ export const ACCIONES: Accion[] = [
       exigir(libres.length, 'Eso te bloquearía a vos mismo (tu cuenta, tu equipo, tu modelo o una IP de la lista blanca). No lo preparé.');
       const orden = { device: 0, email: 1, modelo: 2, ip: 3 };
       libres.sort((a, b) => orden[a.tipo] - orden[b.tipo]);
+      // Lo que coincide EXACTO con lo pedido («el modelo GFY-LX3») va primero.
+      const exacto = libres.findIndex(a => a.valor.toLowerCase() === q.toLowerCase());
+      if (exacto > 0) libres.unshift(...libres.splice(exacto, 1));
       const elegibles = libres.slice(0, 5);
       return {
         tarjeta: {
@@ -651,6 +654,72 @@ export const ACCIONES: Accion[] = [
       const o = objetivo.ordenes?.[i];
       exigir(o, 'Orden no válida.');
       return { repairId: o.id, ticket: o.ticket, estado: objetivo.estado };
+    },
+  },
+  // -------------------------------------------------------------------
+  {
+    nombre: 'editar_producto',
+    bitacora: 'Inventario por Jarvis',
+    descripcion: 'CAMBIA las existencias o el precio de venta de un producto del inventario. Usala cuando el dueño pida subir, bajar, poner o corregir el stock («entraron 5 cargadores USB-C», «quedan 2 fundas A12») o el precio («poné la funda A12 a ₡4 500»). `sumar` para sumar o restar unidades; `stock` para dejar un número exacto; `precio` en colones con IVA.',
+    parametros: {
+      type: 'object',
+      properties: {
+        producto: { type: 'string', description: 'Nombre o SKU como lo dijo el dueño.' },
+        sumar: { type: 'integer', description: 'Unidades a sumar (negativo para restar).' },
+        stock: { type: 'integer', description: 'Existencia exacta que debe quedar.' },
+        precio: { type: 'number', description: 'Nuevo precio de venta en colones, IVA incluido.' },
+      },
+      required: ['producto'],
+    },
+    async preparar(args, ctx) {
+      const q = patron(args.producto);
+      exigir(q.length >= 2, 'Decime cuál producto: nombre o SKU.');
+      const sumar = args.sumar == null ? null : Math.round(Number(args.sumar));
+      const fijar = args.stock == null ? null : Math.round(Number(args.stock));
+      const precio = args.precio == null ? null : Math.round(Number(args.precio));
+      exigir(sumar !== null || fijar !== null || precio !== null, 'Decime qué cambiar: unidades, existencia exacta o precio.');
+      exigir(fijar === null || (fijar >= 0 && fijar <= 100000), 'Esa existencia no es válida.');
+      exigir(sumar === null || Math.abs(sumar) <= 100000, 'Esa cantidad no es válida.');
+      exigir(precio === null || (precio >= 0 && precio <= 50_000_000), 'Ese precio no es válido.');
+      const { data, error } = await ctx.db.from('products').select('id,name,sku,stock,price').or(`sku.ilike.${q},name.ilike.%${q}%`).limit(6);
+      if (error) throw error;
+      const lista = data || [];
+      const exacto = lista.find((x: any) => String(x.sku || '').toLowerCase() === q.toLowerCase()) || (lista.length === 1 ? lista[0] : null);
+      if (!exacto) {
+        exigir(lista.length, `No encontré «${q}» en el inventario.`);
+        throw new Error(`Hay varios productos que coinciden con «${q}»: ${lista.map((x: any) => `${x.name} (SKU ${x.sku || '—'})`).join('; ')}. Preguntale cuál es.`);
+      }
+      const p: any = exacto;
+      const nuevoStock = fijar !== null ? fijar : sumar !== null ? Math.max(0, Number(p.stock) + sumar) : Number(p.stock);
+      const colon = (n: number) => '₡' + Math.round(n).toLocaleString('es-CR');
+      const cambios = [
+        ...(nuevoStock !== Number(p.stock) ? [{ etiqueta: 'Existencias', valor: `${p.stock} → ${nuevoStock}` }] : []),
+        ...(precio !== null && precio !== Number(p.price) ? [{ etiqueta: 'Precio', valor: `${colon(p.price)} → ${colon(precio)}` }] : []),
+      ];
+      exigir(cambios.length, `«${p.name}» ya está así: no hay nada que cambiar.`);
+      // Bajar el precio a menos de la mitad o dejar en 0 se confirma: es el error de dedo típico.
+      const raro = (precio !== null && Number(p.price) > 0 && precio < Number(p.price) / 2) || nuevoStock === 0;
+      const auto = !raro && ctx.ajustes.inventario_directo !== false;
+      return {
+        tarjeta: {
+          accion: 'editar_producto', modulo: 'Inventario', icono: 'package', titulo: p.name, riesgo: 'reversible',
+          chip: 'Inventario', enCliente: 'inventario', auto, deshacerMin: 10,
+          efecto: 'Se actualiza la ficha del producto y queda el movimiento en el historial de inventario.',
+          filas: [{ etiqueta: 'SKU', valor: p.sku || '—' }, ...cambios],
+          opciones: [],
+          boton: 'Aplicar', token: 'nunca', deshacible: true,
+          nota: auto ? 'Hecho sin preguntar. Se puede deshacer por 10 minutos.' : nuevoStock === 0 ? 'En 0 el producto sale de la tienda: confirmalo.' : 'El precio baja a menos de la mitad: confirmalo.',
+        },
+        objetivo: { id: p.id, nombre: p.name, modo: fijar !== null ? 'fijar' : 'sumar', stock: fijar !== null ? fijar : sumar, precio },
+        paraIA: auto
+          ? { hecho: true, se_hace_solo: true, producto: p.name, cambios: cambios.map(c => `${c.etiqueta}: ${c.valor}`), instruccion: 'YA SE HIZO. Decilo en pasado y corto.' }
+          : { hecho: false, producto: p.name, cambios: cambios.map(c => `${c.etiqueta}: ${c.valor}`), instruccion: 'Pedile que confirme en la tarjeta.' },
+      };
+    },
+    ejecutar() { throw new Error('El cambio lo hace el panel.'); },
+    async deshacer() { return { texto: 'Producto restaurado.', detalle: 'El producto volvió a como estaba.' }; },
+    paraCliente(objetivo) {
+      return { productId: objetivo.id, nombre: objetivo.nombre, modo: objetivo.modo, stock: objetivo.stock, precio: objetivo.precio };
     },
   },
 ];

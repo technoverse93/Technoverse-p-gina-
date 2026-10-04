@@ -73,7 +73,7 @@ interface Cupo {
   /** Solo superadmin: qué velocidades tienen cupo y si Jarvis puede preparar acciones. */
   perfiles?: Record<Perfil, boolean>; acciones?: boolean;
 }
-type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas' | 'internet' | 'enlaces' | 'archivos' | 'codigo' | 'acciones' | 'chat_directo' | 'taller_directo', boolean>;
+type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas' | 'internet' | 'enlaces' | 'archivos' | 'codigo' | 'acciones' | 'chat_directo' | 'taller_directo' | 'inventario_directo', boolean>;
 type Tono = 'formal' | 'tico_moderado' | 'tico_suelto';
 interface Ajustes { limite_diario: number; busqueda: boolean; respaldo: boolean; acceso: 'personal' | 'gestion' | 'super'; modulos?: Modulos; tono?: Tono }
 
@@ -1216,7 +1216,7 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
 
   if (!aj) return <div className="ai-ajustes"><p className="ai-prov">Cargando ajustes…</p></div>;
   const tope = aj.limite_diario;
-  const modulos: Modulos = { inventario: true, facturacion: true, taller: true, errores: true, seguridad: true, finanzas: true, internet: true, enlaces: true, archivos: true, codigo: true, acciones: true, chat_directo: true, taller_directo: true, ...(aj.modulos || {}) };
+  const modulos: Modulos = { inventario: true, facturacion: true, taller: true, errores: true, seguridad: true, finanzas: true, internet: true, enlaces: true, archivos: true, codigo: true, acciones: true, chat_directo: true, taller_directo: true, inventario_directo: true, ...(aj.modulos || {}) };
   const maxConsultas = Math.max(1, ...consultasHoy.map(c => c.consultas));
   return (
     <div className="ai-ajustes">
@@ -1242,7 +1242,8 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
             onClick={() => void guardar({ modulos: { ...modulos, acciones: !modulos.acciones } })} aria-label="Acciones de Jarvis" />
         </div>
         {([['chat_directo', 'Responder chats sin preguntar', 'Si hay un solo chat que coincide, lo envía de una (se puede borrar por 10 min).'],
-          ['taller_directo', 'Mover órdenes del taller sin preguntar', 'Si hay una sola orden, la mueve de una; entregar o cancelar siempre se confirma.']] as const).map(([k, n, d]) => (
+          ['taller_directo', 'Mover órdenes del taller sin preguntar', 'Si hay una sola orden, la mueve de una; entregar o cancelar siempre se confirma.'],
+          ['inventario_directo', 'Cambiar existencias y precios sin preguntar', 'Bajar un precio a menos de la mitad o dejar algo en 0 siempre se confirma.']] as const).map(([k, n, d]) => (
           <div key={k} className="ai-modu">
             <span className="ai-modu-ic"><Zap className="w-4 h-4" /></span>
             <span className="ai-modu-t"><b>{n}</b><span>{d}</span></span>
