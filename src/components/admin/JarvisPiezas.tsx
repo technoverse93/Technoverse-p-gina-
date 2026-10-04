@@ -8,7 +8,7 @@
 // =====================================================================
 
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { Ban, Unlock, LogOut, Timer, KeyRound, Undo2, CircleCheck, CircleX, Clock, ArrowUpRight, BarChart3, Table2, Lock, Receipt, Brain, FileText, MessageSquare, Wrench } from 'lucide-react';
+import { Ban, Unlock, LogOut, Timer, KeyRound, Undo2, CircleCheck, CircleX, Clock, ArrowUpRight, BarChart3, Table2, Lock, Receipt, Brain, FileText, MessageSquare, Wrench, Package } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { avisarCambioDeBloqueos, avisarCierreDeSesion } from '../../seguridad/killSwitch';
 
@@ -17,8 +17,8 @@ export type OpcionTarjeta =
   | { id: 'minutos'; tipo: 'duracion'; etiqueta: string; defecto: number | null }
   | { id: string; tipo: 'texto'; etiqueta: string; defecto: string; teclado?: 'email' | 'numeric' | 'tel'; max?: number };
 export interface DatosTarjeta {
-  accion: string; modulo: string; icono: 'ban' | 'unlock' | 'log-out' | 'receipt' | 'message' | 'wrench'; titulo: string; riesgo: 'reversible' | 'acceso' | 'fiscal';
-  chip?: string; enCliente?: 'cobro' | 'chat' | 'taller'; auto?: boolean;
+  accion: string; modulo: string; icono: 'ban' | 'unlock' | 'log-out' | 'receipt' | 'message' | 'wrench' | 'package'; titulo: string; riesgo: 'reversible' | 'acceso' | 'fiscal';
+  chip?: string; enCliente?: 'cobro' | 'chat' | 'taller' | 'inventario'; auto?: boolean;
   efecto: string; filas: { etiqueta: string; valor: string }[]; opciones: OpcionTarjeta[];
   boton: string; botonSiempre?: string; token: 'nunca' | 'para_siempre'; deshacible: boolean; nota?: string;
 }
@@ -29,7 +29,7 @@ interface Fila { id: string; estado: Estado; vence_en: string; creada_en?: strin
 export const tarjetasVivas = new Map<string, Fila>();
 
 const DURACIONES: [number | null, string][] = [[30, '30 min'], [120, '2 horas'], [1440, '24 horas'], [null, 'Para siempre']];
-const ICONO = { ban: Ban, unlock: Unlock, 'log-out': LogOut, receipt: Receipt, message: MessageSquare, wrench: Wrench };
+const ICONO = { ban: Ban, unlock: Unlock, 'log-out': LogOut, receipt: Receipt, message: MessageSquare, wrench: Wrench, package: Package };
 const hora = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' }) : '');
 
 async function llamar(cuerpo: Record<string, unknown>) {
@@ -93,7 +93,7 @@ export function TarjetaAccion({ id }: { id: string }) {
     for (const o of t.opciones) opciones[o.id] = valor(o);
     const r = await llamar({ accion: 'confirmar', id, opciones, token: pide ? token : undefined });
     if (!r?.ok) { setOcupado(false); setError(r?.error || 'No se pudo.'); if (r?.estado && r.estado !== 'propuesta') setFila(f => f && { ...f, estado: r.estado }); return; }
-    if (r.ejecutarEnCliente?.tipo === 'chat' || r.ejecutarEnCliente?.tipo === 'taller') {
+    if (r.ejecutarEnCliente?.tipo === 'chat' || r.ejecutarEnCliente?.tipo === 'taller' || r.ejecutarEnCliente?.tipo === 'inventario') {
       // Lo hace el panel con el MISMO proceso de su módulo; después se le
       // cuenta al servidor cómo salió.
       setFila(f => f && { ...f, estado: 'ejecutando' });
@@ -106,6 +106,12 @@ export function TarjetaAccion({ id }: { id: string }) {
           const { enviarRespuestaDeSoporte } = await import('../chat/enviarRespuesta');
           const e = await enviarRespuestaDeSoporte(d.convId, d.texto, quien);
           res = { ok: e.ok, mensaje: e.mensaje, extra: { msgId: e.msgId, cliente: d.cliente } };
+        } else if (r.ejecutarEnCliente.tipo === 'inventario') {
+          const { editarProducto } = await import('../../utils/inventario');
+          const antes = editarProducto(d.productId, { modo: d.modo, stock: d.stock ?? undefined, precio: d.precio ?? undefined }, quien, 'Pedido a Jarvis');
+          res = antes
+            ? { ok: true, mensaje: `${antes.nombre}: listo.`, extra: { productId: d.productId, stockAntes: String(antes.stock), precioAntes: String(antes.precio) } }
+            : { ok: false, mensaje: 'No encontré ese producto en el inventario cargado.' };
         } else {
           const { cambiarEstadoOrden } = await import('../../utils/taller');
           const anterior = cambiarEstadoOrden(d.repairId, d.estado, quien);
@@ -160,6 +166,11 @@ export function TarjetaAccion({ id }: { id: string }) {
         const { borrarMensajeParaTodos } = await import('../../utils/storage');
         if (!datos.msgId) throw new Error('No encontré el mensaje.');
         await borrarMensajeParaTodos(datos.msgId);
+      } else if (t.enCliente === 'inventario') {
+        const { editarProducto } = await import('../../utils/inventario');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!datos.productId) throw new Error('No sé qué producto restaurar.');
+        editarProducto(datos.productId, { modo: 'fijar', stock: Number(datos.stockAntes), precio: Number(datos.precioAntes) }, session?.user?.email || 'admin', 'Deshecho desde Jarvis');
       } else if (t.enCliente === 'taller') {
         const { cambiarEstadoOrden } = await import('../../utils/taller');
         const { data: { session } } = await supabase.auth.getSession();
