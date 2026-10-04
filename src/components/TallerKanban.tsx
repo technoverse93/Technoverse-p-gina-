@@ -640,14 +640,14 @@ function TallerKanban({ activeUserEmail = 'tecnico@technoverse.com', onRepairUpd
               type="text"
               value={searchTicket}
               onChange={(e) => setSearchTicket(e.target.value)}
-              placeholder="Número de Ticket (ej: TKT-123)"
+              placeholder="Ticket, ej. TKT-123"
               className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 font-mono"
             />
             <input
               type="email"
               value={searchEmail}
               onChange={(e) => setSearchEmail(e.target.value)}
-              placeholder="Correo electrónico registrado"
+              placeholder="Correo registrado"
               className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-emerald-500 "
             />
             <button
@@ -932,7 +932,7 @@ function TallerKanban({ activeUserEmail = 'tecnico@technoverse.com', onRepairUpd
                 type="text"
                 value={newNeededTools}
                 onChange={(e) => setNewNeededTools(e.target.value)}
-                placeholder="Ej. Kit iFixit, Soldador, Multímetro, Cinta Kapton"
+                placeholder="Ej.: soldador, multímetro"
                 className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl px-4 py-2 text-xs text-[var(--text-primary)] focus:outline-none focus:border-sky-500 "
               />
             </div>

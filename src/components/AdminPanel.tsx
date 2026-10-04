@@ -1559,7 +1559,7 @@ export default function AdminPanel({
                 label="Webhook de Instagram (Zapier)"
                 hint='URL del "Catch Hook" de un Zap (Webhook → Instagram Publish Photo). Con esto configurado, las publicaciones programadas desde Inventario salen solas en la fecha elegida, sin que nadie tenga que abrir la aplicación en ese momento.'
               >
-                <input type="url" className="tv-input font-mono" placeholder="https://hooks.zapier.com/hooks/catch/…"
+                <input type="url" className="tv-input font-mono" placeholder="https://hooks.zapier.com/…"
                   value={instagramWebhookUrl} onChange={e => setInstagramWebhookUrl(e.target.value)} />
               </Field>
             </Card>

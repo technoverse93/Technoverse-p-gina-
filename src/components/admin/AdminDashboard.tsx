@@ -91,7 +91,7 @@ function AdminDashboard({
   const distribucionInventario = useMemo(() => {
     return CATEGORIAS_TIENDA
       .map(cat => ({
-        name: cat.length > 11 ? `${cat.slice(0, 10)}…` : cat,
+        name: cat.length > 9 ? `${cat.slice(0, 8)}…` : cat,
         stock: products.filter(p => p && p.category === cat).reduce((s, p) => s + (p.stock || 0), 0),
       }))
       .filter(d => d.stock > 0);
@@ -262,10 +262,10 @@ function AdminDashboard({
                     </linearGradient>
                   </defs>
                   <CartesianGrid strokeDasharray="3 3" stroke={rejilla} vertical={false} />
-                  <XAxis dataKey="name" stroke={ejes} fontSize={11} tickLine={false} axisLine={false} dy={8} />
+                  <XAxis dataKey="name" stroke={ejes} fontSize={12} tickLine={false} axisLine={false} dy={8} />
                   <YAxis
                     stroke={ejes}
-                    fontSize={11}
+                    fontSize={12}
                     tickLine={false}
                     axisLine={false}
                     width={54}
@@ -302,8 +302,8 @@ function AdminDashboard({
               <ResponsiveContainer width="100%" height="100%">
                 <BarChart data={distribucionInventario} margin={{ top: 6, right: 6, left: -18, bottom: 0 }}>
                   <CartesianGrid strokeDasharray="3 3" stroke={rejilla} vertical={false} />
-                  <XAxis dataKey="name" stroke={ejes} fontSize={10.5} tickLine={false} axisLine={false} dy={8} interval={0} />
-                  <YAxis stroke={ejes} fontSize={11} tickLine={false} axisLine={false} width={44} allowDecimals={false} />
+                  <XAxis dataKey="name" stroke={ejes} fontSize={12} tickLine={false} axisLine={false} dy={8} interval={0} />
+                  <YAxis stroke={ejes} fontSize={12} tickLine={false} axisLine={false} width={44} allowDecimals={false} />
                   <Tooltip
                     contentStyle={globo}
                     cursor={{ fill: 'rgba(var(--accent-rgb), 0.08)' }}

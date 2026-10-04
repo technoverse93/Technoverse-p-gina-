@@ -96,6 +96,17 @@ export function iniciarVidrio(): void {
     }
   } catch { /* sin señal: se queda con el vidrio */ }
   document.documentElement.classList.toggle('sin-vidrio', sinVidrio);
+
+  // Vidrio LIGERO para gama de entrada (estándar: Galaxy A12, ~4 GB): se
+  // conserva el aspecto, pero el desenfoque baja de 10 a 4 px. El costo del
+  // desenfoque en la GPU crece con el radio, y en una Mali-G52 era lo que
+  // más pesaba al desplazar el panel.
+  let ligero = false;
+  try {
+    const mem = (navigator as any).deviceMemory;
+    ligero = !sinVidrio && typeof mem === 'number' && mem > 0 && mem <= 4;
+  } catch { /* sin señal: vidrio normal */ }
+  document.documentElement.classList.toggle('vidrio-ligero', ligero);
 }
 
 export function iniciarTema(): void {

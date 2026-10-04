@@ -1185,7 +1185,7 @@ function CyberSecurityPanel({
                       <div style={{ minWidth: 0 }}>
                         <b>{a.email || '—'}</b>
                         <span className="sg-s">
-                          {bandera(a.codigo_pais)} {ubicacionTexto(a)} · <span className="sg-mono" style={{ fontSize: 11 }}>{a.ip || '—'}{a.proveedor ? ` · ${a.proveedor}` : ''}</span>
+                          {bandera(a.codigo_pais)} {ubicacionTexto(a)} · <span className="sg-mono" style={{ fontSize: 12 }}>{a.ip || '—'}{a.proveedor ? ` · ${a.proveedor}` : ''}</span>
                         </span>
                       </div>
                       <div className="sg-ls">{resumirDispositivo(a.user_agent)}</div>
@@ -1217,7 +1217,7 @@ function CyberSecurityPanel({
               <b>aparato nuevo</b> que usted no reconoce, esa es la señal de alarma de verdad, mucho más confiable que la
               ubicación, porque la IP solo llega a decir la ciudad.
               <br />
-              <span style={{ fontSize: 11.5, opacity: 0.85 }}>
+              <span style={{ fontSize: 12, opacity: 0.85 }}>
                 Si borra los datos del navegador o entra en modo incógnito, su propio aparato saldrá como nuevo. Y la marca
                 la manda el navegador, así que en teoría se puede falsear: tómelo como una alerta que vale la pena revisar,
                 no como una cerradura.
@@ -1248,7 +1248,7 @@ function CyberSecurityPanel({
                   </div>
                   <div className="sg-dat">
                     <div>Primera vez<b>{fechaCorta(d.primer_visto)}</b></div>
-                    <div>Última vez<b>{fechaCorta(d.ultimo_visto)}</b>{d.ultimo_email && <span style={{ fontSize: 11 }}>{d.ultimo_email}</span>}</div>
+                    <div>Última vez<b>{fechaCorta(d.ultimo_visto)}</b>{d.ultimo_email && <span style={{ fontSize: 12 }}>{d.ultimo_email}</span>}</div>
                   </div>
                   <div className="sg-pie">
                     <Btn className="sg-btn-sm" onClick={() => renombrarDispositivo(d)}>Ponerle nombre</Btn>
@@ -1272,7 +1272,7 @@ function CyberSecurityPanel({
               type="text"
               value={nuevaIpBloqueo}
               onChange={e => setNuevaIpBloqueo(e.target.value)}
-              placeholder="Dirección IP (ej. 190.10.20.30)"
+              placeholder="IP, ej. 190.10.20.30"
               aria-label="Dirección IP a bloquear"
               className="sg-input sg-mono"
             />
@@ -1315,8 +1315,8 @@ function CyberSecurityPanel({
                         {b.permanente && <span className="sg-badge" data-t="ba">Permanente</span>}
                       </div>
                       <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5 }}>{ubicacionTexto(b)} · {b.intentos_fallidos} intento(s)</div>
-                      {b.ultimo_email && <div className="sg-mono" style={{ fontSize: 11, color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>Último correo probado: {b.ultimo_email}</div>}
-                      <div style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{b.motivo} · {fechaCorta(b.actualizado_en)}</div>
+                      {b.ultimo_email && <div className="sg-mono" style={{ fontSize: 12, color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>Último correo probado: {b.ultimo_email}</div>}
+                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{b.motivo} · {fechaCorta(b.actualizado_en)}</div>
                     </div>
                     {activo && (
                       <div className="sg-act">
@@ -1476,7 +1476,7 @@ function CyberSecurityPanel({
                           <div className="sg-nb">
                             <span style={{ overflowWrap: 'anywhere' }}>{nombre}</span>
                             {g.huellas.length > 1 && (
-                              <span title={`${g.huellas.length} identidades del mismo equipo`} style={{ fontSize: 11, color: 'var(--text-muted)', fontWeight: 400 }}>×{g.huellas.length}</span>
+                              <span title={`${g.huellas.length} identidades del mismo equipo`} style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>×{g.huellas.length}</span>
                             )}
                             {bloqueado && <span className="sg-badge" data-t="ba">Bloqueado</span>}
                             {esSupremo && g.oculto && <span className="sg-badge" data-t="ac" title="Solo tú ves este aparato">Oculto al personal</span>}
@@ -1493,7 +1493,7 @@ function CyberSecurityPanel({
                       </div>
                       <div className="sg-c4">
                         <div className="sg-nv tabular-nums">{g.visitas}</div>
-                        <span style={{ fontSize: 11.5, color: 'var(--text-muted)' }}>{fechaCorta(g.ultima)}</span>
+                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fechaCorta(g.ultima)}</span>
                       </div>
                       <div className="sg-row" style={{ gap: 4, flexWrap: 'nowrap' }}>
                         <button type="button" className="sg-ib" onClick={() => setVisitanteDetalle(g.reciente)} title="Ver ficha" aria-label="Ver ficha">
@@ -1586,7 +1586,7 @@ function CyberSecurityPanel({
               <input
                 value={nuevoAparato}
                 onChange={e => setNuevoAparato(e.target.value)}
-                placeholder="Identificador del aparato (columna Aparato en Visitantes)"
+                placeholder="ID del aparato"
                 aria-label="Identificador del aparato"
                 className="sg-input sg-mono"
               />
@@ -1606,7 +1606,7 @@ function CyberSecurityPanel({
                       <span className="sg-badge" data-t={vigente ? 'ba' : undefined}>{vigente ? 'Bloqueado' : 'Liberado'}</span>
                     </div>
                     <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 6 }}>Motivo: {a.motivo || '—'}</div>
-                    <div style={{ fontSize: 11.5, color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
+                    <div style={{ fontSize: 12, color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
                       Cuenta: {a.email || 'Sin cuenta'} · {fechaCorta(a.creado_en)}{a.creado_por ? ` · ${a.creado_por}` : ''}
                       {!vigente && ` · liberado el ${fechaCorta(a.levantado_en)}`}
                     </div>
