@@ -31,7 +31,7 @@ export type Consulta = {
   detalle: string;      // lo que leyó la IA, resumido (se ve al abrir la tarjeta)
   sinPermiso?: boolean;
   /** Marcas de Jarvis dentro de la respuesta: tarjeta de acción o botón para abrir un módulo. */
-  tipo?: 'accion' | 'navegar';
+  tipo?: 'accion' | 'navegar' | 'memoria';
   id?: string;
   destino?: string;
   /** Carril de pantalla: detalle completo que NO se manda a la IA. */
@@ -527,6 +527,46 @@ export const HERRAMIENTAS: Herramienta[] = [
           filas: `${s2.length} sesión${s2.length === 1 ? '' : 'es'} · ${h.length} equipo${h.length === 1 ? '' : 's'}`,
           detalle: `visitas acumuladas ${datos.visitas_acumuladas} · última vez ${datos.ultima_vez_hora_cr}`,
           panel: { columnas: ['Fecha', 'Equipo', 'Visitas', 'Sistema / entorno', 'Página', 'IP', 'Correo'], filas: filasP.map(x => x.fila), puntos: filasP.map(x => x.p) },
+        },
+      };
+    },
+  },
+  {
+    nombre: 'en_vivo',
+    modulo: 'seguridad',
+    soloSuper: true,
+    descripcion: 'AHORA MISMO: visitantes activos en la tienda (últimos minutos), quién acaba de entrar, en qué página están, y qué personal tiene el panel abierto. Usala para «¿hay alguien en la tienda?», «¿quién acaba de entrar?», «¿quién está conectado?». Para días anteriores usá visitantes_tienda.',
+    parametros: {
+      type: 'object',
+      properties: { minutos: { type: 'integer', description: 'Ventana en minutos (1-60, por defecto 5).' } },
+    },
+    async ejecutar(a, { db }) {
+      const minutos = num(a.minutos, 5, 1, 60);
+      const desde = new Date(Date.now() - minutos * 60_000).toISOString();
+      const [vis, staff] = await Promise.all([
+        todos(db, 'supervision_visitantes', 'visita,modelo,tipo,entorno,ruta,last_seen,lat,lon', q => q.gte('last_seen', desde).order('last_seen', { ascending: false })),
+        todos(db, 'supervision_state', 'user_id,email,device,modelo,last_seen', q => q.gte('last_seen', desde).order('last_seen', { ascending: false })),
+      ]);
+      const hace = (iso: string) => { const s = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 1000)); return s < 60 ? `hace ${s} s` : `hace ${Math.round(s / 60)} min`; };
+      const datos = {
+        ventana_minutos: minutos,
+        visitantes_activos: vis.length,
+        ultimo_visitante: vis[0] ? { equipo: vis[0].modelo || 'sin modelo', pagina: vis[0].ruta || '—', entorno: vis[0].entorno, visto: hace(vis[0].last_seen) } : null,
+        por_pagina: contar(vis, f => f.ruta), por_equipo: contar(vis, f => f.modelo),
+        personal_conectado: staff.length,
+        nota: 'Los correos del personal y las ubicaciones se le muestran al superadmin en pantalla, no aquí.',
+      };
+      const filas = [
+        ...vis.map(f => ({ t: f.last_seen, fila: [hace(f.last_seen), 'Visitante', f.modelo || '—', f.entorno || '—', f.ruta || '—'], p: coord(f.lat, f.lon, `${f.modelo || 'Visitante'} · ${hace(f.last_seen)}`) })),
+        ...staff.map(f => ({ t: f.last_seen, fila: [hace(f.last_seen), 'Personal', f.modelo || f.device || '—', 'panel', f.email || '—'], p: null })),
+      ].sort((x, y) => String(y.t).localeCompare(String(x.t))).slice(0, MAX_PANEL);
+      return {
+        datos,
+        consulta: {
+          modulo: 'Ciberseguridad', desc: `en vivo · últimos ${minutos} min`,
+          filas: `${vis.length} visitante${vis.length === 1 ? '' : 's'} · ${staff.length} del personal`,
+          detalle: '',
+          panel: { columnas: ['Visto', 'Quién', 'Equipo', 'Entorno', 'Página / cuenta'], filas: filas.map(x => x.fila), puntos: filas.map(x => x.p) },
         },
       };
     },

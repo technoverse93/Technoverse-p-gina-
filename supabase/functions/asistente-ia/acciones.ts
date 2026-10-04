@@ -14,21 +14,31 @@
 // referencia («A1»); correos, IPs y equipos van a la tarjeta en pantalla.
 //
 // No hay acciones para tocar código, desplegar, escribir SQL libre, borrar
-// registros, cobrar, cambiar roles, ni para vigilar o seguir a personas.
+// registros, cambiar roles, ni para vigilar o seguir a personas.
+//
+// COBRAR es la única acción que NO ejecuta el servidor: emitir la factura
+// (PDF, consecutivo, Hacienda, correo) ya está resuelto y probado en el
+// panel (`cobrarServicio`). Jarvis prepara los datos y calcula los montos;
+// al confirmar, el servidor entrega esos datos validados y el panel los
+// cobra por el MISMO camino que el módulo de Cobros, nunca por uno aparte.
 // =====================================================================
 
 // deno-lint-ignore no-explicit-any
 type Db = any;
 
-export type Riesgo = 'reversible' | 'acceso';
+export type Riesgo = 'reversible' | 'acceso' | 'fiscal';
 export type Opcion =
   | { id: string; tipo: 'elegir'; etiqueta: string; valores: { valor: string; texto: string; ayuda?: string }[]; defecto: string }
   | { id: 'minutos'; tipo: 'duracion'; etiqueta: string; defecto: number | null }
-  | { id: 'motivo'; tipo: 'texto'; etiqueta: string; defecto: string };
+  | { id: string; tipo: 'texto'; etiqueta: string; defecto: string; teclado?: 'email' | 'numeric' | 'tel'; max?: number };
 export type Tarjeta = {
   accion: string;
   modulo: string;
-  icono: 'ban' | 'unlock' | 'log-out';
+  icono: 'ban' | 'unlock' | 'log-out' | 'receipt';
+  /** Texto del chip de riesgo (si no, se deduce de `riesgo`). */
+  chip?: string;
+  /** La acción la termina el panel (hoy solo «cobro»). */
+  enCliente?: 'cobro';
   titulo: string;
   riesgo: Riesgo;
   efecto: string;
@@ -47,6 +57,10 @@ export type CtxAccion = {
   email: string;
   ip: string | null;      // desde donde se conecta el superadmin
   yo: { device?: string | null; modelo?: string | null };
+  /** Datos personales que escribió el superadmin (cédula, correo, teléfono).
+   *  El panel los saca del texto ANTES de que llegue a la IA y los manda
+   *  aparte; la IA solo ve marcas como [CÉDULA·1]. */
+  privados: Record<string, string>;
 };
 export type Preparada = { tarjeta: Tarjeta; objetivo: Record<string, any>; paraIA: Record<string, unknown> };
 /** `texto` va a la IA (sin datos personales); `detalle` solo a la pantalla. */
@@ -59,6 +73,8 @@ export type Accion = {
   preparar(args: Record<string, unknown>, ctx: CtxAccion): Promise<Preparada>;
   ejecutar(objetivo: Record<string, any>, opc: Record<string, any>, ctx: CtxAccion): Promise<Resultado>;
   deshacer?(objetivo: Record<string, any>, opc: Record<string, any>, resultado: Resultado, ctx: CtxAccion): Promise<Resultado>;
+  /** Solo acciones `enCliente`: valida lo elegido y arma lo que el panel ejecuta. */
+  paraCliente?(objetivo: Record<string, any>, opc: Record<string, any>, ctx: CtxAccion): Record<string, any>;
 };
 
 const DURACIONES = [30, 120, 1440, null] as const;
@@ -106,7 +122,7 @@ export function validarOpciones(t: Tarjeta, crudas: unknown): Record<string, any
       exigir((DURACIONES as readonly (number | null)[]).includes(v as number | null), 'Duración no válida.');
       out.minutos = v;
     } else {
-      out[o.id] = texto(c[o.id] ?? o.defecto, 120);
+      out[o.id] = texto(c[o.id] ?? o.defecto, o.max || 120);
     }
   }
   return out;
@@ -356,6 +372,151 @@ export const ACCIONES: Accion[] = [
       if (error) throw error;
       const n = Number(data || 0);
       return { texto: `Sesiones cerradas (${n}).`, detalle: `${p.email}: ${n} ${n === 1 ? 'sesión cerrada' : 'sesiones cerradas'}.`, efectos: ['avisar_sesion'] };
+    },
+  },
+  // -------------------------------------------------------------------
+  {
+    nombre: 'preparar_cobro',
+    bitacora: 'Cobro preparado por Jarvis',
+    descripcion: 'PREPARA un cobro con factura electrónica (servicio con repuestos del inventario). Calcula el precio en el servidor a partir del costo real y el margen, o usa el monto que se indique, o el precio de venta del inventario. El superadmin revisa los datos del cliente y los montos en una tarjeta y confirma; el panel emite la factura por el mismo camino del módulo de Cobros. Usala solo cuando pida cobrar o facturar. Los datos del cliente llegan como marcas [CÉDULA·1], [CORREO·1], [TEL·1]: pasalas tal cual en `cliente`, nunca inventes cédulas ni correos.',
+    parametros: {
+      type: 'object',
+      properties: {
+        cliente: { type: 'string', description: 'Nombre del cliente y las marcas que haya en el mensaje, p. ej. «Laura Mora [CÉDULA·1] [CORREO·1]».' },
+        repuestos: {
+          type: 'array', description: 'Repuestos o productos del inventario usados (nombre o SKU y cantidad).',
+          items: { type: 'object', properties: { producto: { type: 'string' }, cantidad: { type: 'integer' } }, required: ['producto'] },
+        },
+        servicio: { type: 'string', description: 'Descripción corta del servicio para la factura (p. ej. «Cambio de pantalla Galaxy A12»).' },
+        margen_pct: { type: 'number', description: 'Margen de ganancia en % sobre el precio sin IVA (p. ej. 35). Opcional.' },
+        mano_obra: { type: 'number', description: 'Mano de obra en colones, sin IVA, que se suma al precio. Opcional.' },
+        monto_total: { type: 'number', description: 'Total exacto a cobrar en colones con IVA, si lo dijeron. Tiene prioridad sobre el margen.' },
+        medio: { type: 'string', enum: ['SINPE', 'Efectivo'], description: 'Medio de pago.' },
+        garantia_meses: { type: 'integer', description: 'Meses de garantía: 1, 3 o 12 (por defecto 3).' },
+      },
+      required: ['cliente'],
+    },
+    async preparar(args, ctx) {
+      // ---- Cliente: marcas privadas + facturas anteriores ----
+      const crudo = texto(args.cliente, 200);
+      const marcas = [...crudo.matchAll(/\[([A-ZÉ]+·\d+)\]/g)].map(m => m[1]);
+      const valorDe = (pref: string) => marcas.filter(m => m.startsWith(pref)).map(m => ctx.privados[m]).find(Boolean) || '';
+      let cedula = valorDe('CÉDULA').replace(/\D/g, '');
+      let correo = valorDe('CORREO').toLowerCase();
+      const telefono = valorDe('TEL').replace(/\D/g, '');
+      let nombre = crudo.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
+      let idTipo = cedula.length === 10 ? '02' : '01';
+      let previo = false;
+      const cols = 'customer_name,customer_identification,customer_identification_type,customer_email';
+      const { data: ant } = cedula
+        ? await ctx.db.from('invoices').select(cols).eq('customer_identification', cedula).order('created_at', { ascending: false }).limit(1)
+        : nombre.length >= 3
+          ? await ctx.db.from('invoices').select(cols).ilike('customer_name', `%${patron(nombre)}%`).order('created_at', { ascending: false }).limit(3)
+          : { data: [] };
+      const nombres = new Set((ant || []).map((f: any) => String(f.customer_name || '').toLowerCase()));
+      if (ant?.length && (cedula || nombres.size === 1)) {
+        const f = ant[0];
+        previo = true;
+        nombre = nombre || f.customer_name || '';
+        if (!cedula) cedula = String(f.customer_identification || '').replace(/\D/g, '');
+        if (!correo) correo = String(f.customer_email || '');
+        if (f.customer_identification_type) idTipo = String(f.customer_identification_type);
+      }
+
+      // ---- Repuestos: inventario real (costo, precio, existencias) ----
+      const pedidos = (Array.isArray(args.repuestos) ? args.repuestos : []).slice(0, 8) as any[];
+      const lineas: { id: string; nombre: string; cantidad: number; costo: number; precio: number }[] = [];
+      for (const r of pedidos) {
+        const q = patron(r?.producto);
+        exigir(q.length >= 2, 'Falta el nombre o SKU de un repuesto.');
+        const cant = Math.max(1, Math.min(50, Math.round(Number(r?.cantidad) || 1)));
+        const { data: prods, error } = await ctx.db.from('products').select('id,name,sku,cost,price,stock,active')
+          .or(`sku.ilike.${q},name.ilike.%${q}%`).limit(6);
+        if (error) throw error;
+        const activos = (prods || []).filter((p: any) => p.active !== false);
+        const exacto = activos.find((p: any) => String(p.sku || '').toLowerCase() === q.toLowerCase()) || (activos.length === 1 ? activos[0] : null);
+        if (!exacto) {
+          exigir(activos.length, `No encontré «${q}» en el inventario.`);
+          throw new Error(`Hay varios productos que coinciden con «${q}»: ${activos.map((p: any) => `${p.name} (SKU ${p.sku || '—'})`).join('; ')}. Preguntale cuál es.`);
+        }
+        exigir(Number(exacto.stock) >= cant, `«${exacto.name}» tiene ${Number(exacto.stock) || 0} en existencia y se piden ${cant}.`);
+        lineas.push({ id: exacto.id, nombre: exacto.name, cantidad: cant, costo: Number(exacto.cost) || 0, precio: Number(exacto.price) || 0 });
+      }
+
+      // ---- Montos: los calcula el servidor, nunca la IA ----
+      const costo = lineas.reduce((t, l) => t + l.costo * l.cantidad, 0);
+      const manoObra = Math.max(0, Number(args.mano_obra) || 0);
+      const margen = args.margen_pct == null ? null : Number(args.margen_pct);
+      let total: number, como: string;
+      if (Number(args.monto_total) > 0) {
+        total = Math.round(Number(args.monto_total)); como = 'monto indicado';
+      } else if (margen != null) {
+        exigir(margen >= 0 && margen < 95, 'El margen tiene que estar entre 0 % y 95 %.');
+        exigir(costo > 0 || manoObra > 0, 'Sin repuestos con costo ni mano de obra no puedo calcular el margen.');
+        const base = costo / (1 - margen / 100) + manoObra;
+        total = Math.round(base * 1.13); como = `margen ${margen} % sobre el costo${manoObra ? ' + mano de obra' : ''}, más IVA 13 %`;
+      } else {
+        const lista = lineas.reduce((t, l) => t + l.precio * l.cantidad, 0);
+        exigir(lista > 0 || manoObra > 0, 'Decime el margen o el monto a cobrar.');
+        total = Math.round(lista + manoObra * 1.13); como = 'precio de venta del inventario (IVA incluido)';
+      }
+      exigir(total > 0 && total < 50_000_000, 'El total no es válido.');
+      const sinIva = total / 1.13;
+      const ganancia = sinIva - costo;
+      const colon = (n: number) => '₡' + Math.round(n).toLocaleString('es-CR');
+      const servicio = texto(args.servicio, 120) || (lineas[0] ? `Servicio técnico — ${lineas.map(l => l.nombre).join(', ')}` : 'Servicio técnico');
+
+      return {
+        tarjeta: {
+          accion: 'preparar_cobro', modulo: 'Cobros', icono: 'receipt', titulo: `Cobrar ${colon(total)}${nombre ? ` a ${nombre}` : ''}`,
+          riesgo: 'fiscal', chip: 'Emite factura', enCliente: 'cobro',
+          efecto: 'Descuenta el inventario, emite la factura electrónica con número fiscal y se la envía al cliente por correo. Es el mismo proceso del módulo de Cobros.',
+          filas: [
+            ...lineas.map(l => ({ etiqueta: 'Repuesto', valor: `${l.cantidad} × ${l.nombre} · costo ${colon(l.costo * l.cantidad)}` })),
+            ...(manoObra ? [{ etiqueta: 'Mano de obra', valor: `${colon(manoObra)} + IVA` }] : []),
+            { etiqueta: 'Total', valor: `${colon(total)} (IVA ${colon(total - sinIva)} incluido) · ${como}` },
+            { etiqueta: 'Ganancia', valor: `${colon(ganancia)} · ${sinIva > 0 ? Math.round(ganancia / sinIva * 100) : 0} % sobre el precio sin IVA` },
+            ...(previo ? [{ etiqueta: 'Cliente', valor: 'Datos tomados de su última factura. Revisalos.' }] : []),
+          ],
+          opciones: [
+            { id: 'nombre', tipo: 'texto', etiqueta: 'Cliente', defecto: nombre, max: 100 },
+            { id: 'id_tipo', tipo: 'elegir', etiqueta: 'Identificación', defecto: ['01', '02', '03', '04'].includes(idTipo) ? idTipo : '01',
+              valores: [{ valor: '01', texto: 'Física' }, { valor: '02', texto: 'Jurídica' }, { valor: '03', texto: 'DIMEX' }, { valor: '04', texto: 'NITE' }] },
+            { id: 'cedula', tipo: 'texto', etiqueta: 'Número', defecto: cedula, teclado: 'numeric', max: 12 },
+            { id: 'correo', tipo: 'texto', etiqueta: 'Correo', defecto: correo, teclado: 'email', max: 120 },
+            { id: 'medio', tipo: 'elegir', etiqueta: 'Pago', defecto: args.medio === 'Efectivo' ? 'Efectivo' : 'SINPE',
+              valores: [{ valor: 'SINPE', texto: 'SINPE Móvil' }, { valor: 'Efectivo', texto: 'Efectivo' }] },
+            { id: 'telefono', tipo: 'texto', etiqueta: 'Teléfono SINPE', defecto: telefono, teclado: 'tel', max: 12 },
+            { id: 'garantia', tipo: 'elegir', etiqueta: 'Garantía', defecto: String([1, 3, 12].includes(Number(args.garantia_meses)) ? Number(args.garantia_meses) : 3),
+              valores: [{ valor: '1', texto: '1 mes' }, { valor: '3', texto: '3 meses' }, { valor: '12', texto: '12 meses' }] },
+            { id: 'servicio', tipo: 'texto', etiqueta: 'Detalle en la factura', defecto: servicio, max: 120 },
+          ],
+          boton: `Cobrar ${colon(total)}`, token: 'nunca', deshacible: false,
+          nota: 'No se deshace: para anular, nota de crédito desde Contabilidad.',
+        },
+        objetivo: { lineas, total, servicio },
+        paraIA: {
+          total_colones: total, como_se_calculo: como, repuestos: lineas.map(l => `${l.cantidad} × ${l.nombre}`),
+          ganancia_colones: Math.round(ganancia),
+          cliente: previo ? 'encontrado en facturas anteriores' : (cedula || correo ? 'con datos del mensaje' : 'faltan sus datos: los completa en la tarjeta'),
+        },
+      };
+    },
+    ejecutar() { throw new Error('El cobro lo termina el panel.'); },
+    paraCliente(objetivo, opc, ctx) {
+      const cedula = String(opc.cedula || '').replace(/\D/g, '');
+      exigir(String(opc.nombre || '').trim().length >= 3, 'Falta el nombre del cliente.');
+      exigir(cedula.length >= 9 && cedula.length <= 12, 'La identificación tiene que tener entre 9 y 12 dígitos.');
+      exigir(ES_CORREO.test(String(opc.correo || '')), 'El correo del cliente no es válido.');
+      if (opc.medio === 'SINPE') exigir(String(opc.telefono || '').replace(/\D/g, '').length === 8, 'Para SINPE falta el teléfono de 8 dígitos.');
+      return {
+        clienteNombre: String(opc.nombre).trim(), clienteIdTipo: opc.id_tipo, clienteId: cedula,
+        clienteEmail: String(opc.correo).trim().toLowerCase(), clienteTelefono: String(opc.telefono || '').replace(/\D/g, ''),
+        descripcionServicio: String(opc.servicio || objetivo.servicio), montoTotal: Number(objetivo.total),
+        garantiaMeses: Number(opc.garantia), medioCobro: opc.medio,
+        repuestos: (objetivo.lineas || []).map((l: any) => ({ productId: l.id, productName: l.nombre, quantity: l.cantidad, costoUnitario: l.costo, precioUnitario: l.precio, esRegalia: false })),
+        insumos: [], adminEmail: ctx.email,
+      };
     },
   },
 ];

@@ -2718,3 +2718,29 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
 @media (prefers-reduced-motion:reduce){
   .ai-onda i,.ai-rec,.ai-giro,#admin-panel-root .ai-caja .ai-ib[data-grabando]{animation:none}
 }
+
+/* ---------- Jarvis fase 2: memoria y valoraciones ---------- */
+.ai-mem{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:9px 12px;border:1px dashed var(--border-color);border-radius:14px;background:var(--bg-surface)}
+.ai-mem-tx{flex:1 1 180px;min-width:0;font-size:13px;color:var(--text-secondary);line-height:1.45;overflow-wrap:anywhere}
+.ai-mem-tx b{display:block;color:var(--text-primary);font-weight:600;font-size:12.5px}
+.ai-mem[data-hecho] .ai-herr-ic{opacity:.5}
+.ai-mem-err{font-size:12px;color:var(--tv-danger)}
+#admin-panel-root .ai-pie button[data-on]{color:var(--accent);background:var(--tv-accent-soft)}
+.ai-nota-val{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
+.ai-nota-val input{flex:1 1 200px;min-width:0}
+
+/* ---------- Jarvis flotante (intercomunicador) ---------- */
+#admin-panel-root .jv-fab{position:fixed;left:12px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:44px;height:44px;min-width:0!important;min-height:0!important;border-radius:14px;display:grid!important;place-items:center;background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 24px rgba(0,0,0,.22)}
+#admin-panel-root .jv-fab:hover{filter:brightness(1.08)}
+#admin-panel-root .jv-fab:active{transform:scale(.95)}
+@media (min-width:640px){#admin-panel-root .jv-fab{left:20px;bottom:20px}}
+.jv-hoja{position:fixed;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;border-radius:22px;overflow:hidden;border:1px solid var(--border-color);box-shadow:0 24px 60px rgba(0,0,0,.3);background:var(--bg-surface)}
+.jv-hoja[hidden]{display:none}
+@media (min-width:640px){.jv-hoja{left:20px;right:auto;top:auto;bottom:20px;width:min(440px,calc(100vw - 40px));height:min(720px,calc(100dvh - 108px))}}
+.jv-hoja-cab{display:flex;align-items:center;gap:4px;height:36px;padding:0 6px 0 12px;border-bottom:1px solid var(--border-color);background:var(--bg-sunken);flex:none}
+.jv-hoja-cab span{flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+#admin-panel-root .jv-hoja-btn{width:30px;height:30px;min-width:0!important;min-height:0!important;border-radius:9px;display:grid!important;place-items:center;color:var(--text-secondary)}
+#admin-panel-root .jv-hoja-btn:hover{background:var(--bg-surface);color:var(--text-primary)}
+.jv-hoja-cuerpo{flex:1;min-height:0;display:flex;padding:6px}
+.jv-hoja-cuerpo .ai-root{flex:1;min-height:0;height:auto}
+.jv-hoja-cuerpo .ai-panel{border-radius:16px}

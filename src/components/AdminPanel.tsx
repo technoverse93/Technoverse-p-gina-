@@ -17,7 +17,7 @@ import { CATEGORIAS_TIENDA, normalizarCategoria, esRepuesto } from '../utils/cat
 
 import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog } from '../types';
 import { useToast, useConfirm } from './ui/Overlays';
-import { esGestion } from '../utils/roles';
+import { esGestion, esSuperadmin } from '../utils/roles';
 
 // ---------------------------------------------------------------------
 // TECHNOVERSE CONSOLE
@@ -45,6 +45,7 @@ const InventarioControl = lazy(() => import('./InventarioControl'));
 const ChatCRM = lazy(() => import('./chat/ChatCRM'));
 const AsistenteIA = lazy(() => import('./admin/AsistenteIA'));
 const BurbujaChat = lazy(() => import('./chat/BurbujaChat'));
+const JarvisFlotante = lazy(() => import('./admin/JarvisFlotante'));
 const CyberSecurityPanel = lazy(() => import('./CyberSecurityPanel'));
 const ClienteFicha = lazy(() => import('./ClienteFicha'));
 // El módulo de cobros carga jsPDF y qrcode al emitir: se trae aparte para
@@ -1813,6 +1814,12 @@ export default function AdminPanel({
           elevada={activeTab === 'asistente'}
         />
       </Suspense>
+      {/* Jarvis a mano en cualquier módulo (solo el superadmin). */}
+      {esSuperadmin(currentUser?.role) && (
+        <Suspense fallback={null}>
+          <JarvisFlotante currentUser={currentUser} onAbrirModulo={irAModulo} oculto={activeTab === 'asistente'} />
+        </Suspense>
+      )}
     </AdminShell>
   );
 }
