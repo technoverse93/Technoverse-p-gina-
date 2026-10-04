@@ -107,6 +107,36 @@ export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial }: { chat
     return () => window.removeEventListener('keydown', alTeclear);
   }, [abierta]);
 
+  // «Elevada»: en módulos con barra de escribir abajo (Asistente IA) la
+  // burbuja se para justo encima de esa barra, que se marca con
+  // `data-burbuja-encima`. Se mide en vivo porque la barra crece (varias
+  // líneas, fotos adjuntas) y con el teclado del teléfono.
+  const [alzar, setAlzar] = useState<number | null>(null);
+  useEffect(() => {
+    if (!elevada || oculto) { setAlzar(null); return; }
+    let obs: ResizeObserver | null = null;
+    let marco = 0;
+    const medir = () => {
+      const el = document.querySelector<HTMLElement>('[data-burbuja-encima]');
+      if (!el) { setAlzar(null); return; }
+      const alto = window.visualViewport?.height ?? window.innerHeight;
+      setAlzar(Math.max(16, Math.round(alto - el.getBoundingClientRect().top + 10)));
+    };
+    const enlazar = () => {
+      const el = document.querySelector<HTMLElement>('[data-burbuja-encima]');
+      if (!el) { marco = requestAnimationFrame(enlazar); return; }
+      obs = new ResizeObserver(medir); obs.observe(el); medir();
+    };
+    enlazar();
+    window.addEventListener('resize', medir);
+    window.visualViewport?.addEventListener('resize', medir);
+    return () => {
+      cancelAnimationFrame(marco); obs?.disconnect();
+      window.removeEventListener('resize', medir);
+      window.visualViewport?.removeEventListener('resize', medir);
+    };
+  }, [elevada, oculto]);
+
   // Al entrar a la pestaña Chat se minimiza todo (allí ya está el chat entero).
   useEffect(() => { if (oculto) setAbierta(null); }, [oculto]);
 
@@ -127,7 +157,7 @@ export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial }: { chat
       {/* La pila de burbujas: la más reciente arriba del globo de la lista. */}
       <div
         className={`fixed right-3 sm:right-5 ${elevada ? 'bottom-36' : 'bottom-4 sm:bottom-5'} flex flex-col-reverse items-end gap-2`}
-        style={{ zIndex: Z.floating, marginBottom: 'env(safe-area-inset-bottom, 0px)' }}
+        style={{ zIndex: Z.floating, marginBottom: alzar == null ? 'env(safe-area-inset-bottom, 0px)' : 0, ...(alzar != null ? { bottom: alzar } : {}) }}
         aria-label="Chats"
       >
         <button

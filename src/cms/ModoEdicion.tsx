@@ -65,24 +65,29 @@ export function ModoEdicionProvider({
   );
 }
 
-/** El lápiz flotante. Solo se monta si la persona puede editar. */
+/** El lápiz flotante. Solo se monta si la persona puede editar.
+ *  Es un círculo de 44 px apilado ENCIMA del botón del chat de la tienda
+ *  (misma columna: right-4 / sm:right-6, que está en bottom-5): antes era
+ *  una pastilla «Editar» en la misma esquina y lo tapaba. Va bajo la
+ *  ventana del chat (z-45) para no quedar encima de ella si se abre. */
 function BotonModoEdicion() {
   const { activo, alternar } = useModoEdicion();
+  const etiqueta = activo ? 'Terminar de editar' : 'Editar la página';
   return (
     <button
       type="button"
       onClick={alternar}
       aria-pressed={activo}
-      title={activo ? 'Terminar de editar' : 'Editar la página'}
-      className="fixed z-[900] bottom-5 right-5 flex items-center gap-2 rounded-full px-4 py-3 shadow-lg font-bold text-[13px] transition"
+      aria-label={etiqueta}
+      title={etiqueta}
+      className="fixed z-[44] bottom-[76px] right-4 sm:right-6 w-11 h-11 rounded-[14px] grid place-items-center shadow-[var(--float-shadow-lg)] transition"
       style={{
         background: activo ? 'var(--accent)' : 'var(--bg-elevated)',
         color: activo ? 'var(--accent-ink, #fff)' : 'var(--text-primary)',
         border: '1px solid var(--border-color)',
       }}
     >
-      {activo ? <Check className="w-4 h-4" /> : <Pencil className="w-4 h-4" />}
-      {activo ? 'Listo' : 'Editar'}
+      {activo ? <Check className="w-5 h-5" /> : <Pencil className="w-5 h-5" />}
     </button>
   );
 }
