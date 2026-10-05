@@ -11,14 +11,15 @@
 // sigue donde iba.
 // =====================================================================
 
-import React, { Suspense, lazy, useEffect, useState } from 'react';
+import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { useUnaSolaCapa } from './capaFlotante';
 import { Sparkles, Minus, Maximize2 } from 'lucide-react';
 import { Z } from '../ui/Overlays';
 import type { User } from '../../types';
 
 const AsistenteIA = lazy(() => import('./AsistenteIA'));
 
-export default function JarvisFlotante({ currentUser, onAbrirModulo, oculto, pedido }: { currentUser: User | null; onAbrirModulo: (m: string) => void; oculto?: boolean; pedido?: { n: number; voz: boolean } | null }) {
+export default function JarvisFlotante({ currentUser, onAbrirModulo, oculto, pedido, pestana }: { currentUser: User | null; onAbrirModulo: (m: string) => void; oculto?: boolean; pedido?: { n: number; voz: boolean } | null; pestana?: string }) {
   const [abierto, setAbierto] = useState(false);
   // Se monta la primera vez que se abre y después solo se esconde: así la
   // conversación sobrevive a minimizar.
@@ -31,6 +32,9 @@ export default function JarvisFlotante({ currentUser, onAbrirModulo, oculto, ped
     const id = w.requestIdleCallback ? w.requestIdleCallback(precargar, { timeout: 8000 }) : setTimeout(precargar, 4000);
     return () => { if (w.cancelIdleCallback) w.cancelIdleCallback(id); else clearTimeout(id); };
   }, []);
+  // Una sola ventana flotante a la vez, y se minimiza al cambiar de pestaña.
+  const minimizar = useCallback(() => setAbierto(false), []);
+  useUnaSolaCapa('jarvis', abierto, minimizar, pestana);
   // Pedido del widget: se abre la ventana (y, si fue «Hablar», el micrófono).
   useEffect(() => { if (pedido?.n) { setMontado(true); setAbierto(true); } }, [pedido?.n]);
   if (oculto) return null;

@@ -1066,10 +1066,17 @@ export default function AdminPanel({
    * espera salir del panel, no recorrer los doce módulos que visitó.
    */
   // Widget de Android / atajo del ícono: abre Jarvis (y el micrófono).
+  const tabActivoRef = useRef(activeTab);
+  tabActivoRef.current = activeTab;
+  const irAModuloRef = useRef<(t: string) => void>(() => {});
   const [pedidoJarvis, setPedidoJarvis] = useState<{ n: number; voz: boolean } | null>(null);
   useEffect(() => {
     if (!esSuperadmin(currentUser?.role)) return;
-    const atender = (voz: boolean) => setPedidoJarvis(p => ({ n: (p?.n || 0) + 1, voz }));
+    const atender = (voz: boolean) => {
+      // En Chat y Supervisión no hay botón flotante: se abre la pestaña de Jarvis.
+      if (['chat', 'supervision'].includes(tabActivoRef.current)) irAModuloRef.current('asistente');
+      setPedidoJarvis(p => ({ n: (p?.n || 0) + 1, voz }));
+    };
     const pendiente = tomarPedidoJarvis();
     if (pendiente) atender(pendiente.voz);
     const alAvisar = () => { const p = tomarPedidoJarvis(); if (p) atender(p.voz); };
@@ -1083,6 +1090,7 @@ export default function AdminPanel({
     setActiveDropdown(null);
     try { window.history.replaceState(null, '', `/admin/${tab}`); } catch { /* la navegación funciona igual */ }
   }, [pestanas.abrir, currentUser?.email]);
+  irAModuloRef.current = irAModulo;
 
   // Antes era un arrow function inline en el JSX de Inventario: nuevo en
   // cada render, así que `InventarioControl` no podía memoizarse aunque
@@ -1825,12 +1833,16 @@ export default function AdminPanel({
           onDataChanged={loadAllAdminData}
           oculto={activeTab === 'chat'}
           elevada={activeTab === 'asistente'}
+          pestana={activeTab}
         />
       </Suspense>
       {/* Jarvis a mano en cualquier módulo (solo el superadmin). */}
       {esSuperadmin(currentUser?.role) && (
         <Suspense fallback={null}>
-          <JarvisFlotante currentUser={currentUser} onAbrirModulo={irAModulo} oculto={activeTab === 'asistente'} pedido={pedidoJarvis} />
+          {/* Fuera de los módulos de pantalla completa: en Chat el botón caía
+              encima del «+» de adjuntar del redactor. */}
+          <JarvisFlotante currentUser={currentUser} onAbrirModulo={irAModulo} pedido={pedidoJarvis} pestana={activeTab}
+            oculto={activeTab === 'asistente' || activeTab === 'chat' || activeTab === 'supervision'} />
         </Suspense>
       )}
     </AdminShell>

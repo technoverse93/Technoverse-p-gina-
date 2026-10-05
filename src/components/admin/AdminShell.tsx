@@ -68,6 +68,7 @@ import { useToast } from '../ui/Overlays';
 import CambiarContrasenaModal from '../security/CambiarContrasenaModal';
 import CambiarPinModal from '../security/CambiarPinModal';
 import BotonTema from '../ui/BotonTema';
+import { medirBordeCabecera } from './capaFlotante';
 import { esAdminSupremo } from '../../utils/securityPin';
 
 /**
@@ -218,6 +219,10 @@ export default function AdminShell({
    */
   const carpetasDeNav = moduloActivo.carpetas;
 
+  // Las ventanas flotantes (chat, Jarvis) empiezan debajo de esta barra.
+  const cabeceraRef = useRef<HTMLElement>(null);
+  useEffect(() => medirBordeCabecera(cabeceraRef.current), []);
+
   return (
     /* El id se conserva: `#admin-panel-root` es donde admin.css declara
        las variables de la consola y donde index.css aísla el apilamiento
@@ -226,7 +231,7 @@ export default function AdminShell({
       <div className="tv-main">
 
         {/* ---------------- REGLETA ---------------- */}
-        <header className="tv-regleta">
+        <header className="tv-regleta" ref={cabeceraRef}>
           {/* Lanzador del selector. En móvil es el único botón a la
               izquierda, y por eso lleva el logo dentro: sustituye a la
               cabecera de marca que ocupaba una fila entera. */}

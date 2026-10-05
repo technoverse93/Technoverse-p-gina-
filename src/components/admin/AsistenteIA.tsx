@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
+const CerebroJarvis = React.lazy(() => import('./CerebroJarvis'));
 import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../../supabaseClient';
 import { cabeceraClientInfo } from '../../utils/dispositivo';
 import { useToast, useConfirm } from '../ui/Overlays';
@@ -142,6 +143,12 @@ async function prepararArchivo(f: File): Promise<Adjunto | null> {
   const aBase64 = (b: Blob) => new Promise<string>((ok, mal) => {
     const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = () => mal(r.error); r.readAsDataURL(b);
   });
+  // Documentos de texto (txt, csv, md, json…): la IA los lee como texto.
+  if (/^text\//.test(f.type) || /\.(txt|csv|md|json|log|tsv)$/i.test(f.name) || f.type === 'application/json') {
+    if (f.size > 1024 * 1024) throw new Error(`«${f.name}» pesa más de 1 MB (para textos largos, mejor un PDF).`);
+    return { nombre: f.name, tipo: 'text/plain', datos: await aBase64(f) };
+  }
+  if (/\.(docx?|xlsx?|pptx?)$/i.test(f.name)) throw new Error(`«${f.name}» es de Office: guardalo como PDF y adjuntalo.`);
   if (f.type === 'application/pdf') {
     if (f.size > 5 * 1024 * 1024) throw new Error(`«${f.name}» pesa más de 5 MB.`);
     return { nombre: f.name, tipo: f.type, datos: await aBase64(f) };
@@ -633,7 +640,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
   const [enviando, setEnviando] = useState(false);
   const [cargandoConv, setCargandoConv] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: 'respaldo' | 'error'; texto: string } | null>(null);
-  const [vista, setVista] = useState<'chat' | 'ajustes'>('chat');
+  const [vista, setVista] = useState<'chat' | 'ajustes' | 'cerebro'>('chat');
   const [cajon, setCajon] = useState<null | 'historial' | 'cupo'>(null);
   const finRef = useRef<HTMLDivElement>(null);
   const cajaRef = useRef<HTMLTextAreaElement>(null);
@@ -901,7 +908,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
     const libres = 3 - adjuntos.length;
     const nuevos: Adjunto[] = [];
     for (const f of Array.from(lista).slice(0, libres)) {
-      try { const a = await prepararArchivo(f); if (a) nuevos.push(a); else toast.error(`«${f.name}» no es una foto ni un PDF.`); }
+      try { const a = await prepararArchivo(f); if (a) nuevos.push(a); else toast.error(`«${f.name}» no es una foto, un PDF ni un texto.`); }
       catch (e: any) { toast.error(e?.message || 'No se pudo leer el archivo.'); }
     }
     if (lista.length > libres) toast.error('Máximo 3 archivos por mensaje.');
@@ -957,10 +964,10 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
 
       <section className="ai-panel">
         <header className="ai-ch">
-          {vista === 'ajustes' ? (
+          {vista !== 'chat' ? (
             <>
               <button type="button" className="ai-menu ai-atras" aria-label="Volver al chat" title="Volver al chat" onClick={() => setVista('chat')}><ArrowLeft className="w-5 h-5" /></button>
-              <b className="ai-titulo">Ajustes del asistente</b>
+              <b className="ai-titulo">{vista === 'cerebro' ? 'Cerebro de Jarvis' : 'Ajustes del asistente'}</b>
             </>
           ) : (
             <>
@@ -981,12 +988,15 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
             <BarChart3 className="w-4 h-4" />
             {cupo?.disponibles === null || !cupo ? <><b>{cupo?.usados ?? 0}</b><span className="ai-lbl"> hoy</span></> : <><b>{cupo.disponibles}</b><span className="ai-lbl"> disponibles</span></>}
           </button>
+          {jarvis && vista === 'chat' && (
+            <button type="button" className="ai-chip ai-ajustes-btn" onClick={() => setVista('cerebro')} aria-label="Cerebro de Jarvis" title="Cerebro de Jarvis"><Brain className="w-[18px] h-[18px]" /><span className="ai-lbl">Cerebro</span></button>
+          )}
           {soySuper && vista === 'chat' && (
             <button type="button" className="ai-chip ai-ajustes-btn" onClick={() => setVista('ajustes')} aria-label="Ajustes" title="Ajustes"><Settings className="w-[18px] h-[18px]" /><span className="ai-lbl">Ajustes</span></button>
           )}
         </header>
 
-        {vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} /> : (
+        {vista === 'cerebro' && jarvis ? <div className="ai-ajustes"><React.Suspense fallback={null}><CerebroJarvis /></React.Suspense></div> : vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} /> : (
           <>
             {aviso && (
               <div className="ai-aviso" data-tipo={aviso.tipo}>
@@ -1064,7 +1074,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
                     )}
                   </div>
                 )}
-                <input ref={archivoRef} type="file" accept="image/*,application/pdf" multiple hidden onChange={e => void alElegirArchivos(e.target.files)} />
+                <input ref={archivoRef} type="file" accept="image/*,application/pdf,text/plain,text/csv,text/markdown,application/json,.txt,.csv,.md,.json,.tsv,.log,.doc,.docx,.xls,.xlsx" multiple hidden onChange={e => void alElegirArchivos(e.target.files)} />
                 <div className="ai-bot">
                   {jarvis && !editando && (archivosPermitidos || busquedaPermitida) && (
                     <button type="button" className="ai-ib" data-menu-btn data-on={buscar || undefined} aria-haspopup="menu" aria-expanded={menu === 'mas'}
@@ -1082,7 +1092,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
                   )}
                   {!jarvis && archivosPermitidos && !editando && (
                     <>
-                      <button type="button" className="ai-ib" onClick={() => archivoRef.current?.click()} disabled={adjuntos.length >= 3} aria-label="Adjuntar foto o PDF" title="Adjuntar foto o PDF">
+                      <button type="button" className="ai-ib" onClick={() => archivoRef.current?.click()} disabled={adjuntos.length >= 3} aria-label="Adjuntar foto o documento" title="Adjuntar foto o documento">
                         <Paperclip className="w-[18px] h-[18px]" />
                       </button>
                     </>
@@ -1139,7 +1149,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
                 <div className="ai-pop tv-chat-pop ai-mas-menu" role="menu" aria-label="Adjuntar o buscar">
                   {archivosPermitidos && (
                     <button type="button" className="ai-mas-op" role="menuitem" disabled={adjuntos.length >= 3} onClick={() => { setMenu(null); archivoRef.current?.click(); }}>
-                      <span className="ai-pop-ic"><Paperclip className="w-4 h-4" /></span><span>Adjuntar foto o PDF<small>{adjuntos.length >= 3 ? 'Ya hay 3 en este mensaje' : 'Hasta 3 por mensaje · sin acciones'}</small></span>
+                      <span className="ai-pop-ic"><Paperclip className="w-4 h-4" /></span><span>Adjuntar foto o documento<small>{adjuntos.length >= 3 ? 'Ya hay 3 en este mensaje' : 'Fotos, PDF, txt, csv · hasta 3'}</small></span>
                     </button>
                   )}
                   {busquedaPermitida && (
