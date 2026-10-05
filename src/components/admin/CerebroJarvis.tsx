@@ -25,7 +25,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { Brain, RefreshCw, Search, Plus, Minus, LocateFixed, X, Pencil, Trash2, ExternalLink, MessageCircleQuestion, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
-import { nombreHumano, sitioHumano } from '../../utils/nombresCerebro';
+import { limpiarExtracto, nombreHumano, sitioHumano } from '../../utils/nombresCerebro';
 
 type Tipo = 'raiz' | 'dominio' | 'modulo' | 'tema' | 'dato' | 'fuente' | 'recuerdo';
 type Fila = { id: string; clave: string; etiqueta: string; tipo: Tipo; resumen: string | null; fuente: string | null; url: string | null; usos: number; ultimo_uso: string | null; creado_en: string; actualizado_en: string;
@@ -920,7 +920,8 @@ function Detalle({ n, red, onSel, onCerrar, onPreguntar, onCambio, onBorrados, o
   const vecinos = (red.vecinos.get(n.id) || []).map(v => ({ ...v, f: red.porId.get(v.id)! })).filter(v => v.f);
   const fijo = n.tipo === 'raiz' || n.tipo === 'modulo' || ['dom:internet', 'dom:dueno', 'dom:negocio'].includes(n.clave);
   // Lo que sabe, sin direcciones web ni marcas de formato: eso es de la IA.
-  const resumen = (n.resumen || '').replace(/https?:\/\/\S+/g, '').replace(/[*_`#>|]+/g, '').replace(/\s{2,}/g, ' ').trim();
+  // Lo de internet se muestra sin menús ni basura de la página (lo guardado no se toca).
+  const resumen = n.fuente === 'internet' ? (n.resumen || '').split(' · ').map(r => limpiarExtracto(r.replace(/^[^.:]{1,40}:\s+/, ''), 400)).filter(Boolean).join(' ') : (n.resumen || '').replace(/https?:\/\/\S+/g, '').replace(/[*_`#>|]+/g, '').replace(/\s{2,}/g, ' ').trim();
   const sitio = n.url ? sitioHumano(n.url) : '';
 
   const guardar = async (cambios: Partial<Fila>, ok: string) => {
