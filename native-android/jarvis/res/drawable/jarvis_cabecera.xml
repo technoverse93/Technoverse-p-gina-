@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Cabecera del widget: la barra gris-verdosa de la hoja de Jarvis. -->
+<shape xmlns:android="http://schemas.android.com/apk/res/android" android:shape="rectangle">
+    <solid android:color="@color/jv_hundido" />
+    <corners android:topLeftRadius="24dp" android:topRightRadius="24dp" android:bottomLeftRadius="0dp" android:bottomRightRadius="0dp" />
+</shape>

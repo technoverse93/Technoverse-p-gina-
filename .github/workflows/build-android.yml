@@ -273,7 +273,7 @@ jobs:
           PAQUETE=android/app/src/main/java/com/technoverse/admin
           RES=android/app/src/main/res
           cp native-android/jarvis/*.java "$PAQUETE/"
-          for d in layout drawable xml values; do
+          for d in layout drawable xml values values-night; do
             mkdir -p "$RES/$d"
             cp native-android/jarvis/res/$d/* "$RES/$d/"
           done

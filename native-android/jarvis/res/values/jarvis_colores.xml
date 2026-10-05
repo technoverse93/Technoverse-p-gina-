@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Colores del widget de Jarvis = los del administrador (tema claro).
+     El tema oscuro está en values-night: el widget sigue el del teléfono. -->
+<resources>
+    <color name="jv_sup">#FFFFFF</color>
+    <color name="jv_sup_fondo">#F7FFFFFF</color>
+    <color name="jv_hundido">#EAF2F3</color>
+    <color name="jv_base">#EEF4F3</color>
+    <color name="jv_tile">#E7F3F4</color>
+    <color name="jv_tinta">#12262B</color>
+    <color name="jv_tinta2">#4C666C</color>
+    <color name="jv_tenue">#7B9096</color>
+    <color name="jv_borde">#DDE8E9</color>
+    <color name="jv_acento">#0C6C78</color>
+    <color name="jv_tinta_ac">#FFFFFF</color>
+</resources>

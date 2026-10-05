@@ -30,7 +30,7 @@ import java.security.KeyStore;
 @CapacitorPlugin(name = "JarvisWidget")
 public class JarvisWidgetPlugin extends Plugin {
     /** La web la compara: 3 = Jarvis con sesión, usable en el propio recuadro. */
-    static final int VERSION = 3;
+    static final int VERSION = 4;
 
     private int pedidos = 0;
 
@@ -60,7 +60,14 @@ public class JarvisWidgetPlugin extends Plugin {
         r.put("activo", JarvisWidget.activo(getContext()));
         r.put("enVentanita", getActivity() instanceof JarvisRapido);
         r.put("version", VERSION);
-        if (getActivity() instanceof JarvisRapido) r.put("modo", ((JarvisRapido) getActivity()).modo());
+        if (getActivity() instanceof JarvisRapido) {
+            JarvisRapido v = (JarvisRapido) getActivity();
+            r.put("modo", v.modo());
+            r.put("noche", v.noche());
+            JSObject m = v.marcoCss();
+            if (m != null) r.put("marco", m);
+            r.put("historial", JarvisWidget.historial(getContext()).toString());
+        }
         String conv = JarvisWidget.prefs(getContext()).getString(JarvisWidget.CONVERSACION, null);
         if (conv != null) r.put("conversacion", conv);
         call.resolve(r);

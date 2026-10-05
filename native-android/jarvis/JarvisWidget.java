@@ -21,8 +21,10 @@ import org.json.JSONObject;
  *
  *  · Micrófono: el dictado del teléfono; la pregunta va a Jarvis con la
  *    sesión de la app y la respuesta sale aquí (y se lee en voz alta).
- *  · «Escribile…»: Android no deja escribir dentro de un widget, así que
- *    sale solo una barrita sobre el teclado; la respuesta vuelve aquí.
+ *  · «Escribile…»: el chat se dibuja EXACTAMENTE encima del recuadro (mismo
+ *    lugar, tamaño y diseño, sin oscurecer la pantalla) con el teclado
+ *    abajo: a la vista es el mismo widget que se activa. La respuesta queda
+ *    aquí. (Android no deja escribir dentro de un widget.)
  *  · Botón de tamaño: chico (la última respuesta) o grande (la
  *    conversación, que se desliza).
  *  · «Abrir conversación» (en grande, o tocando la respuesta en chico):
@@ -53,11 +55,18 @@ public class JarvisWidget extends AppWidgetProvider {
     }
 
     private static PendingIntent ventanita(Context ctx, String modo, int codigo) {
+        return ventanita(ctx, modo, codigo, -1);
+    }
+
+    /** `widgetId` ≥ 0 = se tocó la caja de ESE widget: la ventanita dibuja el
+     *  chat exactamente encima del recuadro (con el tamaño del widget). */
+    private static PendingIntent ventanita(Context ctx, String modo, int codigo, int widgetId) {
         Intent intent = new Intent(ctx, JarvisRapido.class);
-        intent.setAction("com.technoverse.jarvis." + modo.toUpperCase());
+        intent.setAction("com.technoverse.jarvis." + modo.toUpperCase() + (widgetId >= 0 ? "." + widgetId : ""));
         intent.putExtra(JarvisRapido.EXTRA_MODO, modo);
+        if (widgetId >= 0) intent.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, widgetId);
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
-        return PendingIntent.getActivity(ctx, codigo, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
+        return PendingIntent.getActivity(ctx, widgetId >= 0 ? codigo * 1000 + (widgetId % 1000) : codigo, intent, PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
     }
 
     private static PendingIntent app(Context ctx, int codigo) {
@@ -149,7 +158,7 @@ public class JarvisWidget extends AppWidgetProvider {
             // Sin activar, el widget no abre nada propio: todo lleva a la app
             // (Jarvis), donde se activa. Así nunca tapa la pantalla.
             vista.setOnClickPendingIntent(R.id.jarvis_hablar, activo ? ventanita(ctx, "voz", 11) : app(ctx, 21));
-            vista.setOnClickPendingIntent(R.id.jarvis_escribir, activo ? ventanita(ctx, "escribir", 12) : app(ctx, 22));
+            vista.setOnClickPendingIntent(R.id.jarvis_escribir, activo ? ventanita(ctx, "escribir", 12, id) : app(ctx, 22));
             if (grande) {
                 Intent servicio = new Intent(ctx, JarvisWidgetLista.class);
                 servicio.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);

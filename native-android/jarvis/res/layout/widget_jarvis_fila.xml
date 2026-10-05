@@ -18,7 +18,7 @@
         android:paddingTop="7dp"
         android:paddingEnd="12dp"
         android:paddingBottom="7dp"
-        android:textColor="#E7EFEC"
+        android:textColor="@color/jv_tinta"
         android:textSize="13sp" />
 
     <TextView
@@ -32,6 +32,6 @@
         android:paddingTop="8dp"
         android:paddingEnd="12dp"
         android:paddingBottom="8dp"
-        android:textColor="#D9E4E0"
+        android:textColor="@color/jv_tinta"
         android:textSize="13sp" />
 </LinearLayout>

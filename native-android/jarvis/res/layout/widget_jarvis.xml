@@ -8,16 +8,16 @@
     android:layout_height="match_parent"
     android:background="@drawable/widget_jarvis_fondo"
     android:orientation="vertical"
-    android:paddingStart="12dp"
-    android:paddingTop="8dp"
-    android:paddingEnd="8dp"
     android:paddingBottom="10dp">
 
     <LinearLayout
         android:layout_width="match_parent"
-        android:layout_height="34dp"
+        android:layout_height="44dp"
+        android:background="@drawable/jarvis_cabecera"
         android:gravity="center_vertical"
-        android:orientation="horizontal">
+        android:orientation="horizontal"
+        android:paddingStart="12dp"
+        android:paddingEnd="6dp">
 
         <LinearLayout
             android:id="@+id/jarvis_marca"
@@ -37,7 +37,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
                 android:text="Jarvis"
-                android:textColor="#E7EFEC"
+                android:textColor="@color/jv_tinta"
                 android:textSize="14sp"
                 android:textStyle="bold" />
         </LinearLayout>
@@ -50,7 +50,7 @@
             android:layout_weight="1"
             android:ellipsize="end"
             android:maxLines="1"
-            android:textColor="#4FD1C5"
+            android:textColor="@color/jv_acento"
             android:textSize="12sp" />
 
         <ImageView
@@ -65,6 +65,9 @@
     <TextView
         android:id="@+id/jarvis_ultima"
         android:layout_width="match_parent"
+        android:layout_marginStart="12dp"
+        android:layout_marginTop="4dp"
+        android:layout_marginEnd="8dp"
         android:layout_height="0dp"
         android:layout_weight="1"
         android:ellipsize="end"
@@ -73,12 +76,14 @@
         android:paddingEnd="4dp"
         android:paddingBottom="6dp"
         android:text="Hablale o escribile: la respuesta sale aquí."
-        android:textColor="#D9E4E0"
+        android:textColor="@color/jv_tinta"
         android:textSize="13sp" />
 
     <LinearLayout
         android:layout_width="match_parent"
         android:layout_height="44dp"
+        android:layout_marginStart="10dp"
+        android:layout_marginEnd="8dp"
         android:gravity="center_vertical"
         android:orientation="horizontal">
 
@@ -93,7 +98,7 @@
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
             android:text="Escribile a Jarvis…"
-            android:textColor="#8FA39D"
+            android:textColor="@color/jv_tenue"
             android:textSize="14sp" />
 
         <ImageView
