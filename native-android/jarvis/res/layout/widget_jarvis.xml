@@ -1,76 +1,78 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Widget «Jarvis»: marca a la izquierda, dos botones a la derecha. -->
+<!-- Mini-widget «Jarvis»: la barra para escribir y el micrófono abren la
+     ventanita (JarvisRapido) sobre la pantalla de inicio, sin abrir la app.
+     Abajo, la última respuesta. La marca abre Jarvis completo en la app. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
     android:background="@drawable/widget_jarvis_fondo"
-    android:gravity="center_vertical"
-    android:orientation="horizontal"
-    android:padding="8dp">
+    android:orientation="vertical"
+    android:padding="10dp">
 
     <LinearLayout
-        android:id="@+id/jarvis_marca"
-        android:layout_width="0dp"
-        android:layout_height="match_parent"
-        android:layout_weight="1"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
         android:gravity="center_vertical"
-        android:orientation="horizontal"
-        android:paddingStart="6dp">
-
-        <ImageView
-            android:layout_width="32dp"
-            android:layout_height="32dp"
-            android:contentDescription="Technoverse"
-            android:src="@mipmap/ic_launcher" />
+        android:orientation="horizontal">
 
         <LinearLayout
-            android:layout_width="wrap_content"
+            android:id="@+id/jarvis_marca"
+            android:layout_width="0dp"
             android:layout_height="wrap_content"
-            android:layout_marginStart="10dp"
-            android:orientation="vertical">
+            android:layout_weight="1"
+            android:gravity="center_vertical"
+            android:orientation="horizontal">
+
+            <ImageView
+                android:layout_width="26dp"
+                android:layout_height="26dp"
+                android:contentDescription="Technoverse"
+                android:src="@mipmap/ic_launcher" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:layout_marginStart="8dp"
                 android:text="Jarvis"
                 android:textColor="#FFFFFF"
-                android:textSize="15sp"
+                android:textSize="14sp"
                 android:textStyle="bold" />
-
-            <TextView
-                android:layout_width="wrap_content"
-                android:layout_height="wrap_content"
-                android:maxLines="1"
-                android:text="Technoverse"
-                android:textColor="#9DB7C9"
-                android:textSize="12sp" />
         </LinearLayout>
+
+        <ImageView
+            android:id="@+id/jarvis_hablar"
+            android:layout_width="40dp"
+            android:layout_height="40dp"
+            android:background="@drawable/jarvis_circulo_acento"
+            android:contentDescription="Hablarle a Jarvis"
+            android:padding="9dp"
+            android:src="@drawable/jarvis_ic_mic_oscuro" />
     </LinearLayout>
 
     <TextView
         android:id="@+id/jarvis_escribir"
-        android:layout_width="wrap_content"
+        android:layout_width="match_parent"
         android:layout_height="40dp"
-        android:background="@drawable/widget_jarvis_boton"
-        android:gravity="center"
-        android:paddingStart="14dp"
-        android:paddingEnd="14dp"
-        android:text="Escribir"
-        android:textColor="#FFFFFF"
-        android:textSize="13sp"
-        android:textStyle="bold" />
+        android:layout_marginTop="8dp"
+        android:background="@drawable/jarvis_campo"
+        android:gravity="center_vertical"
+        android:maxLines="1"
+        android:paddingStart="16dp"
+        android:paddingEnd="16dp"
+        android:text="Preguntale a Jarvis…"
+        android:textColor="#9DB7C9"
+        android:textSize="14sp" />
 
     <TextView
-        android:id="@+id/jarvis_hablar"
-        android:layout_width="wrap_content"
-        android:layout_height="40dp"
-        android:layout_marginStart="8dp"
-        android:background="@drawable/widget_jarvis_boton_principal"
-        android:gravity="center"
-        android:paddingStart="14dp"
-        android:paddingEnd="14dp"
-        android:text="🎤 Hablar"
-        android:textColor="#031837"
-        android:textSize="13sp"
-        android:textStyle="bold" />
+        android:id="@+id/jarvis_ultima"
+        android:layout_width="match_parent"
+        android:layout_height="wrap_content"
+        android:layout_marginTop="6dp"
+        android:ellipsize="end"
+        android:maxLines="2"
+        android:paddingStart="4dp"
+        android:paddingEnd="4dp"
+        android:text="Preguntale lo que quieras del negocio."
+        android:textColor="#D7E4EE"
+        android:textSize="12.5sp" />
 </LinearLayout>

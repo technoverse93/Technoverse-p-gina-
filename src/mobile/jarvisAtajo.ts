@@ -1,10 +1,12 @@
 // =====================================================================
 // ATAJO A JARVIS — widget de la pantalla de inicio y atajo del ícono
 // =====================================================================
-// El widget nativo (native-android/JarvisWidget.java) y el atajo de
-// mantener presionado el ícono abren la app con `technoverse://jarvis`
-// (`?voz=1` para empezar a escuchar de una). Aquí se recibe ese enlace,
-// se lleva al panel si hacía falta y se avisa con el evento `tv:jarvis`.
+// El atajo de mantener presionado el ícono, la marca «Jarvis» del widget
+// y el botón «Abrir en la app» de su ventanita abren la app con
+// `technoverse://jarvis` (`?voz=1` para empezar a escuchar de una). Aquí se
+// recibe ese enlace, se lleva al panel si hacía falta y se avisa con el
+// evento `tv:jarvis`. (Las preguntas del mini-widget NO pasan por aquí: se
+// contestan en su ventanita nativa, ver native-android/jarvis/.)
 //
 // El pedido queda guardado unos segundos en sessionStorage: si el panel
 // todavía no está montado (arranque en frío, bloqueo con huella), lo

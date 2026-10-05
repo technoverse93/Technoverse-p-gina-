@@ -251,19 +251,26 @@ jobs:
           echo "--- AndroidManifest.xml (fragmento) ---"
           grep -n "FOREGROUND_SERVICE\|CapturaPantallaService" android/app/src/main/AndroidManifest.xml
 
-      # WIDGET «JARVIS» Y ATAJO DEL ÍCONO
+      # MINI-WIDGET «JARVIS» Y ATAJO DEL ÍCONO
       # ---------------------------------------------------------------
       # Igual que el resto de lo nativo: android/ nace de cero en cada
       # corrida, así que el widget vive en `native-android/jarvis/` y se
-      # copia aquí. Abre la app con technoverse://jarvis (?voz=1 para que
-      # Jarvis empiece a escuchar); la parte web está en
-      # src/mobile/jarvisAtajo.ts. No muestra datos ni salta la huella: solo
-      # abre la app.
-      - name: Instalar el widget de Jarvis y el atajo del ícono
+      # copia aquí:
+      #   · JarvisWidget: el widget (barra para escribir, micrófono y la
+      #     última respuesta).
+      #   · JarvisRapido: la ventanita que se abre ENCIMA de la pantalla de
+      #     inicio y contesta ahí mismo, sin abrir la app ni pedir huella
+      #     (lo pidió el dueño, 2026-10-05). Solo pregunta; las órdenes van
+      #     en la app.
+      #   · JarvisLlave: la llave del widget, cifrada con el Keystore.
+      #   · JarvisWidgetPlugin: el puente con la app para activarlo.
+      # El atajo del ícono y la marca del widget siguen abriendo la app con
+      # technoverse://jarvis (src/mobile/jarvisAtajo.ts).
+      - name: Instalar el mini-widget de Jarvis y el atajo del ícono
         run: |
           PAQUETE=android/app/src/main/java/com/technoverse/admin
           RES=android/app/src/main/res
-          cp native-android/jarvis/JarvisWidget.java "$PAQUETE/JarvisWidget.java"
+          cp native-android/jarvis/*.java "$PAQUETE/"
           for d in layout drawable xml values; do
             mkdir -p "$RES/$d"
             cp native-android/jarvis/res/$d/* "$RES/$d/"
@@ -288,6 +295,36 @@ jobs:
               texto = texto.replace('</application>', receptor, 1)
               print('Widget de Jarvis declarado en el manifiesto.')
 
+          if 'JarvisRapido' not in texto:
+              # Tarea propia y fuera de «Recientes»: es una ventanita, no la app.
+              ventanita = (
+                  '        <activity\n'
+                  '            android:name=".JarvisRapido"\n'
+                  '            android:exported="false"\n'
+                  '            android:theme="@style/JarvisRapido"\n'
+                  '            android:taskAffinity="com.technoverse.admin.jarvis"\n'
+                  '            android:excludeFromRecents="true"\n'
+                  '            android:launchMode="singleTask"\n'
+                  '            android:windowSoftInputMode="adjustResize|stateHidden" />\n'
+                  '    </application>'
+              )
+              texto = texto.replace('</application>', ventanita, 1)
+              print('Ventanita JarvisRapido declarada en el manifiesto.')
+
+          if 'RECOGNIZE_SPEECH' not in texto:
+              # Android 11+: para hablar (voz del teléfono) y dictar hay que
+              # declarar que la app busca esos servicios.
+              consultas = (
+                  '    <queries>\n'
+                  '        <intent><action android:name="android.intent.action.TTS_SERVICE" /></intent>\n'
+                  '        <intent><action android:name="android.speech.action.RECOGNIZE_SPEECH" /></intent>\n'
+                  '        <intent><action android:name="android.speech.RecognitionService" /></intent>\n'
+                  '    </queries>\n'
+                  '</manifest>'
+              )
+              texto = texto.replace('</manifest>', consultas, 1)
+              print('Consultas de voz (TTS y dictado) declaradas en el manifiesto.')
+
           if 'android:scheme="technoverse"' not in texto:
               enlace = (
                   '            <intent-filter>\n'
@@ -308,7 +345,7 @@ jobs:
           PY
 
           echo "--- AndroidManifest.xml (Jarvis) ---"
-          grep -n "JarvisWidget\|technoverse\|jarvis_atajos" android/app/src/main/AndroidManifest.xml
+          grep -n "JarvisWidget\|JarvisRapido\|RECOGNIZE_SPEECH\|technoverse\|jarvis_atajos" android/app/src/main/AndroidManifest.xml
 
       # Ícono del lanzador con el logo oficial de la tienda, en vez del
       # robot de Capacitor por defecto. Igual que el manifiesto de arriba:
