@@ -312,7 +312,7 @@ async function correrHerramienta(nombre: string, args: Record<string, unknown>, 
       if (sis.cerebro) {
         if (nombre === 'buscar_web') {
           const d = salida.datos as any;
-          const a = sis.cerebro.registrarWeb(String(d?.consulta || ''), d?.resultados || []);
+          const a = await sis.cerebro.registrarWeb(String(d?.consulta || ''), d?.resultados || []);
           if (a) marcarCerebro(sis, 'aprendido', [a.etiqueta]);
         } else sis.cerebro.reforzarModulo(h.modulo);
       }
