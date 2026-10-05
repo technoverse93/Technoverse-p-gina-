@@ -234,18 +234,22 @@ export function crearCerebro(admin: Db, uid: string) {
       };
     },
 
-    /** Cada búsqueda en internet queda como nodo bajo «Internet». */
-    registrarWeb(consulta: string, resultados: { titulo: string; url: string; extracto: string }[]): Aprendido | null {
+    /** Cada búsqueda en internet queda como nodo bajo «Internet».
+     *  FALLO CORREGIDO: antes se avisaba «Aprendí» antes de escribir, y si el
+     *  guardado fallaba (p. ej. tablas sin instalar) el chip mentía. Ahora
+     *  solo devuelve algo si de verdad quedó guardado. */
+    async registrarWeb(consulta: string, resultados: { titulo: string; url: string; extracto: string }[]): Promise<Aprendido | null> {
       const c = limpio(consulta, 80);
       if (c.length < 3 || !resultados?.length || PRIVADO.test(c)) return null;
       const clave = `web:${normalizar(c)}`;
-      enFondo((async () => {
+      try {
         const inter = await dominio('internet', 'Internet');
         const resumen = limpio(resultados.slice(0, 3).map(r => `${r.titulo}: ${r.extracto}`).join(' · '), 1400);
         const n = await asegurarNodo(clave, c, 'fuente', { resumen, fuente: 'internet', url: resultados[0]?.url, usar: true });
-        await enlazar(inter?.id, n?.id, 'buscó');
-      })());
-      return { etiqueta: c, clave, nuevo: true };
+        if (!n) return null;
+        await enlazar(inter?.id, n.id, 'buscó');
+        return { etiqueta: c, clave, nuevo: n.nuevo };
+      } catch (e) { console.log(`cerebro: ${e instanceof Error ? e.message : e}`); return null; }
     },
 
     /** Un «recordá…» queda bajo «Sobre vos». */
