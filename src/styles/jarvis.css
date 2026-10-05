@@ -311,3 +311,26 @@ span.jv-tit:hover { background: transparent; }
 .jv-dia::before, .jv-dia::after { content: ""; flex: 1; height: 1px; background: var(--jv-linea); }
 /* Sin lista de conversaciones, la cabecera arranca con el orbe. */
 .ai-root[data-jarvis] .ai-ch { padding-left: 10px; }
+
+/* Cerebro: filas con «Olvidar» a la derecha y limpieza rápida. */
+.jv-cb-fila.jv-cb-fila-x { padding: 0; gap: 4px; cursor: default; }
+.jv-cb-fila-b { all: unset; box-sizing: border-box; cursor: pointer; flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 2px; }
+.jv-cb-fila-b > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-cb-fila-b small { font: 400 11px var(--jv-f-dato); color: var(--jv-tenue); flex: none; }
+.jv-cb-fila-b em { font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--jv-oro); }
+#admin-panel-root .jv-cb-borrar { min-width: 0 !important; min-height: 0 !important; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; color: var(--jv-tenue); background: transparent; border: 0; flex: none; }
+#admin-panel-root .jv-cb-borrar:hover { color: var(--tv-danger, #B4363B); background: var(--jv-hundido); }
+.jv-cb-conf { display: inline-flex; gap: 4px; flex: none; }
+#admin-panel-root .jv-cb-conf button { min-width: 0 !important; min-height: 0 !important; padding: 5px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--jv-linea); background: var(--jv-sup); color: var(--jv-tinta2); }
+#admin-panel-root .jv-cb-conf button[data-peligro], .jv-cb-link[data-peligro] { color: var(--tv-danger, #B4363B) !important; }
+.jv-cb-limpiar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 6px; font-size: 12.5px; color: var(--jv-tinta2); }
+button.jv-cb-limpiar { display: inline-flex; }
+/* Ficha: renombrar, fuente y conexiones con × */
+.jv-det-renombrar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.jv-det-renombrar input { flex: 1 1 160px; min-width: 0; height: 34px; border-radius: 10px; border: 1px solid var(--jv-linea); background: var(--jv-hundido); color: var(--jv-tinta); padding: 0 10px; font: 600 14px var(--jv-f-ui); }
+.jv-det-fuente { display: inline-flex; align-items: center; gap: 3px; color: var(--jv-acento); font-weight: 600; text-decoration: none; }
+.jv-det-chip { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--jv-linea); border-radius: 999px; background: var(--jv-sup); }
+.ai-root[data-jarvis] .jv-det-con .jv-det-chip > button:first-child { border: 0; background: transparent; }
+#admin-panel-root .jv-det-x { min-width: 0 !important; min-height: 0 !important; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: var(--tv-danger, #B4363B); margin-right: 3px; }
+.jv-cb-panel { display: flex; flex-direction: column; }
+.jv-cb-panel > * { flex: none; }

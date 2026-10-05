@@ -137,22 +137,32 @@ public class JarvisRapido extends BridgeActivity {
         if (intent == null || !"escribir".equals(modoDe(intent))) return null;
         int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
         Rect caja = intent.getSourceBounds();
-        if (id < 0 || caja == null) return null;
+        if (caja == null) return null;
+        if (id < 0) return cajaSola(caja);
         try {
             Bundle o = AppWidgetManager.getInstance(this).getAppWidgetOptions(id);
             float d = getResources().getDisplayMetrics().density;
             boolean vertical = getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE;
             int anchoDp = o.getInt(vertical ? AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH : AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH);
             int altoDp = o.getInt(vertical ? AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT : AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT);
-            if (anchoDp <= 0 || altoDp <= 0) return null;
             int izq = Math.round(caja.left - 10 * d);
             int abajo = Math.round(caja.bottom + 12 * d);
-            int ancho = Math.max(caja.width() + Math.round(62 * d), Math.round(anchoDp * d));
-            Rect r = new Rect(izq, abajo - Math.round(altoDp * d), izq + ancho, abajo);
-            return r.top >= 0 && r.height() > 80 * d ? r : null;
+            int ancho = Math.max(caja.width() + Math.round(62 * d), Math.round(Math.max(0, anchoDp) * d));
+            int alto = altoDp > 0 ? Math.round(altoDp * d) : Math.round(300 * d);
+            // Arriba no puede quedar debajo de la barra de estado; si el widget
+            // es más alto que lo que cabe, el recuadro se ajusta (sigue encima).
+            int tope = Math.round(28 * d);
+            return new Rect(izq, Math.max(tope, abajo - alto), izq + ancho, abajo);
         } catch (Exception e) {
-            return null;
+            return cajaSola(caja);
         }
+    }
+
+    /** Sin el tamaño del widget: un recuadro que crece hacia arriba desde la caja tocada. */
+    private Rect cajaSola(Rect caja) {
+        float d = getResources().getDisplayMetrics().density;
+        int abajo = Math.round(caja.bottom + 12 * d);
+        return new Rect(Math.round(caja.left - 10 * d), Math.max(Math.round(28 * d), abajo - Math.round(300 * d)), Math.round(caja.right + 62 * d), abajo);
     }
 
     /** El marco en px CSS relativos a la página (null si no hay). */

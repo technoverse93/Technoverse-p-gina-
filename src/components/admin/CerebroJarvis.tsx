@@ -25,12 +25,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
 import { Brain, RefreshCw, Search, Plus, Minus, LocateFixed, X, Pencil, Trash2, ExternalLink, MessageCircleQuestion, ArrowLeft } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { nombreHumano, sitioHumano } from '../../utils/nombresCerebro';
 
 type Tipo = 'raiz' | 'dominio' | 'modulo' | 'tema' | 'dato' | 'fuente' | 'recuerdo';
-type Fila = { id: string; clave: string; etiqueta: string; tipo: Tipo; resumen: string | null; fuente: string | null; url: string | null; usos: number; ultimo_uso: string | null; creado_en: string; actualizado_en: string };
+type Fila = { id: string; clave: string; etiqueta: string; tipo: Tipo; resumen: string | null; fuente: string | null; url: string | null; usos: number; ultimo_uso: string | null; creado_en: string; actualizado_en: string;
+  /** Cómo se MUESTRA (lenguaje humano, sin URLs ni sintaxis de búsqueda). */
+  nombre: string };
 type Enlace = { id: string; origen: string; destino: string; relacion: string; peso: number };
 type Grupo = 'centro' | 'temas' | 'datos' | 'internet' | 'vos';
-type Red = { porId: Map<string, Fila>; vecinos: Map<string, { id: string; relacion: string; sale: boolean }[]>; prof: Map<string, number>; padre: Map<string, string>; hijos: Map<string, string[]>; maxP: number; raiz?: Fila };
+type Red = { porId: Map<string, Fila>; vecinos: Map<string, { id: string; relacion: string; sale: boolean; eid: string }[]>; prof: Map<string, number>; padre: Map<string, string>; hijos: Map<string, string[]>; maxP: number; raiz?: Fila };
 
 const GRUPOS: { id: Grupo; nombre: string }[] = [
   { id: 'centro', nombre: 'Negocio' },
@@ -51,7 +54,6 @@ function grupoDe(n: Fila): Grupo {
 }
 const reciente = (f: string | null, h = 24) => !!f && Date.now() - new Date(f).getTime() < h * 3600_000;
 const fecha = (f: string | null) => f ? new Date(f).toLocaleDateString('es-CR', { day: 'numeric', month: 'short', year: 'numeric' }) : '—';
-const dominioDe = (u: string) => { try { return new URL(u).hostname.replace(/^www\./, ''); } catch { return u; } };
 const sinTildes = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
 const sinPrefijo = (t: string) => t.replace(/^(Inventario|Taller|Internet) · /, '');
 function haceCuanto(f: string): string {
@@ -76,7 +78,7 @@ function bajarCerebro() {
       supabase.from('jarvis_enlaces').select('id,origen,destino,relacion,peso').limit(2500),
     ]);
     if (n.error) return { error: /does not exist|relation|schema cache|could not find/i.test(n.error.message) ? 'sin_tablas' as const : 'red' as const };
-    enMemoria = { filas: (n.data || []) as Fila[], enlaces: (e.data || []) as Enlace[] };
+    enMemoria = { filas: ((n.data || []) as Fila[]).map(f => ({ ...f, nombre: nombreHumano(f.etiqueta, f.tipo, f.url) })), enlaces: (e.data || []) as Enlace[] };
     return enMemoria;
   })().finally(() => { bajando = null; });
   return bajando;
@@ -131,12 +133,12 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
   const red = useMemo<Red>(() => {
     const lista = filas || [];
     const porId = new Map(lista.map(f => [f.id, f]));
-    const vecinos = new Map<string, { id: string; relacion: string; sale: boolean }[]>();
+    const vecinos = new Map<string, { id: string; relacion: string; sale: boolean; eid: string }[]>();
     const de = (id: string) => { let l = vecinos.get(id); if (!l) { l = []; vecinos.set(id, l); } return l; };
     for (const e of enlaces) {
       if (!porId.has(e.origen) || !porId.has(e.destino)) continue;
-      de(e.origen).push({ id: e.destino, relacion: e.relacion, sale: true });
-      de(e.destino).push({ id: e.origen, relacion: e.relacion, sale: false });
+      de(e.origen).push({ id: e.destino, relacion: e.relacion, sale: true, eid: e.id });
+      de(e.destino).push({ id: e.origen, relacion: e.relacion, sale: false, eid: e.id });
     }
     const prof = new Map<string, number>();
     const padre = new Map<string, string>();
@@ -162,7 +164,7 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
   const resultados = useMemo(() => {
     const q = sinTildes(buscar.trim());
     if (q.length < 2 || !filas) return [];
-    return filas.filter(f => sinTildes(f.etiqueta).includes(q) || sinTildes(f.resumen || '').includes(q)).slice(0, 6);
+    return filas.filter(f => sinTildes(f.nombre).includes(q) || sinTildes(f.etiqueta).includes(q) || sinTildes(f.resumen || '').includes(q)).slice(0, 8);
   }, [buscar, filas]);
   const ultimos = useMemo(() => (filas || []).filter(f => f.tipo !== 'raiz' && f.tipo !== 'dominio' && f.tipo !== 'modulo')
     .sort((a, b) => b.creado_en.localeCompare(a.creado_en)).slice(0, 8), [filas]);
@@ -180,10 +182,24 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
   const porGrupo = useMemo(() => {
     const m = new Map<Grupo, Fila[]>();
     for (const f of filas || []) { if (f.tipo === 'raiz') continue; const g = grupoDe(f); let l = m.get(g); if (!l) { l = []; m.set(g, l); } l.push(f); }
-    for (const l of m.values()) l.sort((a, b) => (b.usos || 0) - (a.usos || 0) || a.etiqueta.localeCompare(b.etiqueta));
+    for (const l of m.values()) l.sort((a, b) => (b.usos || 0) - (a.usos || 0) || a.nombre.localeCompare(b.nombre));
     return m;
   }, [filas]);
 
+  const borrados = (ids: string[]) => {
+    setSel(s => (s && ids.includes(s) ? null : s));
+    setFilas(fs => (fs || []).filter(f => !ids.includes(f.id)));
+    setEnlaces(es => es.filter(e => !ids.includes(e.origen) && !ids.includes(e.destino)));
+    if (enMemoria) enMemoria = { filas: enMemoria.filas.filter(f => !ids.includes(f.id)), enlaces: enMemoria.enlaces.filter(e => !ids.includes(e.origen) && !ids.includes(e.destino)) };
+  };
+  // Olvidar desde la lista (una idea o varias de una vez).
+  const [confirmar, setConfirmar] = useState<string | null>(null);
+  const olvidarVarios = async (ids: string[]) => {
+    if (!ids.length) return;
+    const { error } = await supabase.from('jarvis_nodos').delete().in('id', ids);
+    setConfirmar(null);
+    if (!error) borrados(ids);
+  };
   const elegir = (id: string) => {
     const f = red.porId.get(id); if (!f) return;
     if (f.tipo === 'raiz') { centrar(); return; }
@@ -209,7 +225,7 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
     setEnsenar('');
     const r = await cargar();
     const etiqueta = String(data.aprendidos?.[0] || t);
-    const n = r?.filas.find(f => sinTildes(f.etiqueta) === sinTildes(etiqueta));
+    const n = r?.filas.find(f => sinTildes(f.etiqueta) === sinTildes(etiqueta) || sinTildes(f.nombre) === sinTildes(etiqueta));
     setAprendiendo({ estado: 'ok', texto: `${etiqueta}${data.aprendidos?.length > 1 ? ` y ${data.aprendidos.length - 1} subtema${data.aprendidos.length === 2 ? '' : 's'}` : ''}. Quedó en ${String(data.guardado_en || 'tu cerebro').replace(/^Technoverse → /, '')}.` });
     if (n) {
       setNuevo(n.id); setFoco(grupoDe(n));
@@ -250,7 +266,7 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
             <div className="jv-cb-ruta">
               <button type="button" onClick={centrar}>Technoverse</button>
               {foco && <> › <button type="button" onClick={() => enfocarGrupo(foco)}>{nombreGrupo(foco)}</button></>}
-              {seleccion && <> › <span>{seleccion.etiqueta}</span></>}
+              {seleccion && <> › <span>{seleccion.nombre}</span></>}
             </div>
           </div>
           <button type="button" className="jv-vidrio jv-cb-ib" aria-label="Actualizar" title="Actualizar" onClick={() => void cargar()} disabled={cargando}>
@@ -278,7 +294,7 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
             seleccion ? (
               <Detalle n={seleccion} red={red} onSel={elegir} onCerrar={() => setSel(null)} onPreguntar={onPreguntar ? pedir : undefined}
                 onCambio={(id, cambios) => setFilas(fs => (fs || []).map(f => f.id === id ? { ...f, ...cambios } : f))}
-                onBorrados={ids => { setSel(null); setFilas(fs => (fs || []).filter(f => !ids.includes(f.id))); setEnlaces(es => es.filter(e => !ids.includes(e.origen) && !ids.includes(e.destino))); }} />
+                onBorrados={borrados} onSinEnlace={eid => setEnlaces(es => es.filter(e => e.id !== eid))} />
             ) : (
               <>
                 <label className="jv-cb-buscar">
@@ -290,19 +306,36 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
                 {buscar.trim().length >= 2 ? (
                   resultados.length ? resultados.map(r => (
                     <button key={r.id} type="button" className="jv-cb-fila" onClick={() => elegir(r.id)}>
-                      <i className="jv-pt" data-g={grupoDe(r)} aria-hidden /><span>{r.etiqueta}</span><small>{NOMBRE_TIPO[r.tipo]}</small>
+                      <i className="jv-pt" data-g={grupoDe(r)} aria-hidden /><span>{r.nombre}</span><small>{NOMBRE_TIPO[r.tipo]}</small>
                     </button>
                   )) : (
                     <p className="jv-cb-nota">No sabe nada de «{buscar.trim().slice(0, 40)}» todavía.{' '}
                       <button type="button" className="jv-cb-link" onClick={() => { setPestana('ensenar'); void aprender(buscar); setBuscar(''); }}>Que lo aprenda</button></p>
                   )
                 ) : foco ? (
-                  (porGrupo.get(foco) || []).slice(0, 60).map(f => (
-                    <button key={f.id} type="button" className="jv-cb-fila" onClick={() => elegir(f.id)}>
-                      <i className="jv-pt" data-g={foco} aria-hidden /><span>{f.etiqueta}</span>
-                      {reciente(f.creado_en) && <em>nuevo</em>}<small>{f.usos || 0} usos</small>
-                    </button>
-                  ))
+                  <>
+                    {(() => {
+                      // Limpieza rápida: las búsquedas de internet que nunca se volvieron a usar.
+                      const sinUso = (porGrupo.get(foco) || []).filter(f => f.tipo === 'fuente' && (f.usos || 0) <= 1);
+                      if (foco !== 'internet' || sinUso.length < 2) return null;
+                      return confirmar === '*' ? (
+                        <p className="jv-cb-limpiar"><span>¿Olvidar {sinUso.length} búsquedas que no volvió a usar?</span>
+                          <button type="button" className="jv-cb-link" data-peligro onClick={() => void olvidarVarios(sinUso.map(f => f.id))}>Sí, olvidar</button>
+                          <button type="button" className="jv-cb-link" onClick={() => setConfirmar(null)}>No</button></p>
+                      ) : <button type="button" className="jv-cb-link jv-cb-limpiar" onClick={() => setConfirmar('*')}><Trash2 className="w-3.5 h-3.5" />Limpiar {sinUso.length} búsquedas sin usar</button>;
+                    })()}
+                    {(porGrupo.get(foco) || []).slice(0, 80).map(f => (
+                      <div key={f.id} className="jv-cb-fila jv-cb-fila-x">
+                        <button type="button" className="jv-cb-fila-b" onClick={() => elegir(f.id)}>
+                          <i className="jv-pt" data-g={foco} aria-hidden /><span>{f.nombre}</span>
+                          {reciente(f.creado_en) && <em>nuevo</em>}<small>{f.usos || 0} usos</small>
+                        </button>
+                        {f.tipo !== 'raiz' && f.tipo !== 'modulo' && f.tipo !== 'dominio' && (confirmar === f.id ? (
+                          <span className="jv-cb-conf"><button type="button" data-peligro onClick={() => void olvidarVarios([f.id])}>Olvidar</button><button type="button" onClick={() => setConfirmar(null)}>No</button></span>
+                        ) : <button type="button" className="jv-cb-borrar" aria-label={`Olvidar ${f.nombre}`} title="Olvidar" onClick={() => setConfirmar(f.id)}><Trash2 className="w-3.5 h-3.5" /></button>)}
+                      </div>
+                    ))}
+                  </>
                 ) : !filas?.length ? (
                   <p className="jv-cb-nota">Todavía está en blanco. Cada tema que le enseñes, cada búsqueda en internet y cada «recordá…» aparece aquí como una estrella nueva.</p>
                 ) : (
@@ -336,7 +369,7 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
               </div>
               {ultimos.map(u => (
                 <button key={u.id} type="button" className="jv-cb-fila" onClick={() => elegir(u.id)}>
-                  <small className="jv-cb-cuando">{haceCuanto(u.creado_en)}</small><span>Aprendió <b>{u.etiqueta}</b></span>
+                  <small className="jv-cb-cuando">{haceCuanto(u.creado_en)}</small><span>Aprendió <b>{u.nombre}</b></span>
                 </button>
               ))}
               {!ultimos.length && <p className="jv-cb-nota">Todavía no aprendió nada nuevo.</p>}
@@ -472,69 +505,127 @@ function Escena3D({ filas, enlaces, red, foco, sel, nuevo, margenes, onSel, onGr
     };
   }, []);
 
+  // ---- Caché de dibujo: lo caro se pinta UNA vez y luego solo se copia ----
+  // (fondo del cielo por tamaño y tema; un halo por color; anchos de los
+  // nombres). Antes cada estrella armaba 3 gradientes por cuadro y cada fibra
+  // se trazaba en 14 pedacitos: con cientos de ideas se trababa.
+  const cacheRef = useRef({ fondo: null as HTMLCanvasElement | null, fondoClave: '', halos: new Map<string, HTMLCanvasElement>(), anchos: new Map<string, number>() });
+  const halo = (col: string) => {
+    const c = cacheRef.current;
+    let h = c.halos.get(col);
+    if (!h) {
+      h = document.createElement('canvas'); h.width = h.height = 64;
+      const x = h.getContext('2d')!;
+      const g = x.createRadialGradient(32, 32, 0, 32, 32, 32);
+      g.addColorStop(0, hexA(col, 1)); g.addColorStop(0.3, hexA(col, 0.45)); g.addColorStop(1, hexA(col, 0));
+      x.fillStyle = g; x.fillRect(0, 0, 64, 64);
+      c.halos.set(col, h);
+    }
+    return h;
+  };
+  const ancho = (ctx: CanvasRenderingContext2D, fuente: string, txt: string) => {
+    const k = fuente + '|' + txt, c = cacheRef.current.anchos;
+    let w = c.get(k);
+    if (w === undefined) { ctx.font = fuente; w = ctx.measureText(txt).width; if (c.size > 3000) c.clear(); c.set(k, w); }
+    return w;
+  };
+
   const dibujar = useCallback((t: number) => {
     const c = lienzoRef.current; if (!c) return;
     const ctx = c.getContext('2d'); if (!ctx) return;
     const s = est.current, P = s.pal; if (!P) return;
+    const cache = cacheRef.current;
     ctx.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
-    // Cielo
-    const g = ctx.createRadialGradient(s.w * 0.5, s.h * 0.4, 10, s.w * 0.5, s.h * 0.45, Math.max(s.w, s.h) * 0.9);
-    g.addColorStop(0, P.c1); g.addColorStop(1, P.c2);
-    ctx.fillStyle = g; ctx.fillRect(0, 0, s.w, s.h);
+    // Cielo: pintado una vez por tamaño y tema.
+    const claveFondo = `${s.w}x${s.h}|${P.c1}|${P.c2}`;
+    if (cache.fondoClave !== claveFondo) {
+      const f = document.createElement('canvas'); f.width = Math.round(s.w * s.dpr); f.height = Math.round(s.h * s.dpr);
+      const x = f.getContext('2d')!; x.setTransform(s.dpr, 0, 0, s.dpr, 0, 0);
+      const g = x.createRadialGradient(s.w * 0.5, s.h * 0.4, 10, s.w * 0.5, s.h * 0.45, Math.max(s.w, s.h) * 0.9);
+      g.addColorStop(0, P.c1); g.addColorStop(1, P.c2); x.fillStyle = g; x.fillRect(0, 0, s.w, s.h);
+      cache.fondo = f; cache.fondoClave = claveFondo; cache.halos.clear();
+    }
+    ctx.drawImage(cache.fondo!, 0, 0, s.w, s.h);
 
     const cx = s.w / 2, cy = s.arriba + (s.h - s.arriba - s.abajo) / 2;
     const base = Math.min(s.w * 0.44, Math.max(120, s.h - s.arriba - s.abajo) * 0.5) * s.zoom;
     const cyw = Math.cos(s.yaw), syw = Math.sin(s.yaw), cp = Math.cos(s.pitch), sp = Math.sin(s.pitch);
     const D = 3.2;
-    const proy = (p: V3): [number, number, number, number] => {
+    const P2 = { x: 0, y: 0, z: 0, e: 1 };
+    const proy = (p: V3) => {
       const x1 = p.x * cyw + p.z * syw, z1 = -p.x * syw + p.z * cyw;
       const y2 = p.y * cp - z1 * sp, z2 = p.y * sp + z1 * cp;
       const e = D / (D + z2);
-      return [cx + x1 * e * base, cy + y2 * e * base, z2, e];
+      P2.x = cx + x1 * e * base; P2.y = cy + y2 * e * base; P2.z = z2; P2.e = e;
+      return P2;
     };
-    // Polvo de estrellas (da profundidad al girar).
+    // Polvo de estrellas: un solo color, dos brillos.
+    ctx.fillStyle = `rgba(${P.polvo},${P.oscuro ? 0.32 : 0.18})`;
     for (const d of s.polvo) {
-      const [x, y, z] = proy(d.p);
-      if (x < 0 || y < 0 || x > s.w || y > s.h) continue;
-      ctx.fillStyle = `rgba(${P.polvo},${(0.08 + d.m * (P.oscuro ? 0.4 : 0.22)) * (z > 0 ? 0.55 : 1)})`;
-      const k = d.m > 0.93 ? 1.7 : 1; ctx.fillRect(x, y, k, k);
+      const q = proy(d.p);
+      if (q.x < 0 || q.y < 0 || q.x > s.w || q.y > s.h) continue;
+      const k = d.m > 0.93 ? 1.7 : 1; ctx.fillRect(q.x, q.y, k, k);
     }
-    for (const n of s.neuronas) { const q = proy(n.p); n.sx = q[0]; n.sy = q[1]; n.sz = q[2]; n.e = q[3]; }
+    for (const n of s.neuronas) { const q = proy(n.p); n.sx = q.x; n.sy = q.y; n.sz = q.z; n.e = q.e; }
     const vecinos = new Set<string>();
     if (s.sel) { vecinos.add(s.sel); for (const v of red.vecinos.get(s.sel) || []) vecinos.add(v.id); }
     const zoomR = Math.min(1.6, Math.max(0.75, s.zoom));
 
-    // Fibras, de atrás para adelante.
-    const N = s.fibras.length > 600 ? 4 : liviano ? 8 : 14;
-    const orden = [...s.fibras].sort((p, q) => (q.a.sz + q.b.sz) - (p.a.sz + p.b.sz));
-    ctx.lineCap = 'round';
-    for (const l of orden) {
+    // Fibras: curvas en pantalla (puntos de control proyectados) y agrupadas
+    // por color y transparencia → un solo trazo por grupo.
+    const grupos = new Map<string, Path2D>();
+    const vivas: Fibra[] = [];
+    for (const l of s.fibras) {
       const viva = !!s.sel && (l.a.f.id === s.sel || l.b.f.id === s.sel);
-      const apagar = !!s.foco && l.a.g !== s.foco && l.b.g !== s.foco && !viva;
-      const col = viva ? P.oro : l.eje ? P.eje : P.g[l.b.g];
-      const z = (l.a.sz + l.b.sz) / 2, prof = Math.max(0.25, Math.min(1, 0.75 - z * 0.35));
-      const alfa = (apagar ? 0.08 : viva ? 0.95 : s.sel ? 0.16 : l.eje ? 0.3 : 0.5) * prof;
-      ctx.strokeStyle = hexA(col, alfa);
-      let ant = [l.a.sx, l.a.sy, l.a.e];
+      if (viva) { vivas.push(l); continue; }
+      const apagar = (!!s.foco && l.a.g !== s.foco && l.b.g !== s.foco) || !!s.sel;
+      const col = l.eje ? P.eje : P.g[l.b.g];
+      const z = (l.a.sz + l.b.sz) / 2, prof = z > 0.3 ? 0 : z > -0.3 ? 1 : 2;
+      const k = `${col}|${apagar ? 'a' : l.eje ? 'e' : 'n'}|${prof}`;
+      let path = grupos.get(k); if (!path) { path = new Path2D(); grupos.set(k, path); }
+      const c1 = proy(l.c1); const c1x = c1.x, c1y = c1.y;
+      const c2 = proy(l.c2);
+      path.moveTo(l.a.sx, l.a.sy); path.bezierCurveTo(c1x, c1y, c2.x, c2.y, l.b.sx, l.b.sy);
+    }
+    ctx.lineCap = 'round';
+    for (const [k, path] of grupos) {
+      const [col, tipo, prof] = k.split('|');
+      const pf = prof === '0' ? 0.45 : prof === '1' ? 0.75 : 1;
+      ctx.strokeStyle = hexA(col, (tipo === 'a' ? 0.08 : tipo === 'e' ? 0.3 : 0.5) * pf);
+      ctx.lineWidth = (tipo === 'a' ? 0.7 : 1.1 + (prof === '2' ? 0.5 : 0)) * zoomR;
+      ctx.stroke(path);
+    }
+    // Lo elegido: dorado, afinándose como un axón (pocas fibras, sí en tramos).
+    for (const l of vivas) {
+      ctx.strokeStyle = hexA(P.oro, 0.92);
+      let ax = l.a.sx, ay = l.a.sy;
+      const N = 10;
       for (let i = 1; i <= N; i++) {
         const k = i / N, q = proy(bez(l.a.p, l.c1, l.c2, l.b.p, k));
-        // Más gruesa en las puntas, fina al medio: como un axón.
-        ctx.lineWidth = Math.min(viva ? 3.2 : 2.4, Math.max(0.5, (viva ? 1.7 : 1.2) * (0.35 + 0.65 * Math.pow(Math.abs(k - 0.5) * 2, 1.6)) * ant[2] * 1.4 * zoomR));
-        ctx.beginPath(); ctx.moveTo(ant[0], ant[1]); ctx.lineTo(q[0], q[1]); ctx.stroke();
-        ant = [q[0], q[1], q[3]];
+        ctx.lineWidth = Math.min(3.2, Math.max(0.8, 1.7 * (0.35 + 0.65 * Math.pow(Math.abs(k - 0.5) * 2, 1.6)) * q.e * 1.4 * zoomR));
+        ctx.beginPath(); ctx.moveTo(ax, ay); ctx.lineTo(q.x, q.y); ctx.stroke(); ax = q.x; ay = q.y;
       }
-      // Señal que viaja por la fibra.
-      if (!quieto && !apagar && (viva || l.vivo || (!liviano && l.senal))) {
+    }
+    // Señales que viajan (con el halo ya pintado, se copia).
+    if (!quieto) {
+      let cuantas = 0;
+      const tope = liviano ? 16 : 40;
+      for (const l of vivas.length ? vivas : s.fibras) {
+        if (cuantas >= tope) break;
+        const viva = vivas.length > 0;
+        if (!viva && !(l.vivo || (!liviano && l.senal))) continue;
+        if (!viva && s.foco && l.a.g !== s.foco && l.b.g !== s.foco) continue;
         const k = ((t / (viva ? 1400 : 3200)) + l.fase) % 1, q = proy(bez(l.a.p, l.c1, l.c2, l.b.p, k));
-        const r = 3.6 * q[3] * zoomR, hg = ctx.createRadialGradient(q[0], q[1], 0, q[0], q[1], r * 3);
-        hg.addColorStop(0, hexA(viva ? P.oro : col, 0.95)); hg.addColorStop(1, hexA(col, 0));
-        ctx.fillStyle = hg; ctx.beginPath(); ctx.arc(q[0], q[1], r * 3, 0, 7); ctx.fill();
+        const r = 3.6 * q.e * zoomR * 3;
+        ctx.drawImage(halo(viva ? P.oro : P.g[l.b.g]), q.x - r, q.y - r, r * 2, r * 2);
+        cuantas++;
       }
     }
 
     // Neuronas, de atrás para adelante.
     const ns = [...s.neuronas].sort((a, b) => b.sz - a.sz);
     const etiquetas: { n: Neurona; r: number }[] = [];
+    const ramas = new Map<string, Path2D>();
     for (const n of ns) {
       const { sx: x, sy: y, sz: z, e } = n;
       if (x < -40 || y < -40 || x > s.w + 40 || y > s.h + 40) continue;
@@ -543,71 +634,80 @@ function Escena3D({ filas, enlaces, red, foco, sel, nuevo, margenes, onSel, onGr
       const esSel = n.f.id === s.sel;
       const col = esSel ? P.oro : n.f.tipo === 'raiz' ? (P.oscuro ? '#FFFFFF' : P.tinta) : P.g[n.g];
       const prof = Math.max(0.35, Math.min(1, 0.8 - z * 0.3)), r = Math.max(1.6, n.r * 0.55 * e * zoomR);
-      // Ramitas (dendritas): cortas, curvas, que se desvanecen.
-      if (!(liviano && n.f.tipo === 'tema') && !tenue) for (const b of n.ramas) {
-        const p1 = { x: n.p.x + b.v.x * b.l * 0.5 + b.giro * 0.03, y: n.p.y + b.v.y * b.l * 0.5, z: n.p.z + b.v.z * b.l * 0.5 - b.giro * 0.03 };
-        const p2 = { x: n.p.x + b.v.x * b.l, y: n.p.y + b.v.y * b.l, z: n.p.z + b.v.z * b.l };
-        const [x1, y1] = proy(p1), [x2, y2] = proy(p2);
-        const gr = ctx.createLinearGradient(x, y, x2, y2); gr.addColorStop(0, hexA(col, 0.45 * prof)); gr.addColorStop(1, hexA(col, 0));
-        ctx.strokeStyle = gr; ctx.lineWidth = Math.max(0.5, r * 0.35); ctx.beginPath(); ctx.moveTo(x, y); ctx.quadraticCurveTo(x1, y1, x2, y2); ctx.stroke();
+      // Ramitas (dendritas), juntas por color: solo en lo grande o cercano.
+      if (!tenue && !liviano && (n.f.tipo !== 'dato' && n.f.tipo !== 'fuente') && r > 2.2) {
+        let path = ramas.get(col); if (!path) { path = new Path2D(); ramas.set(col, path); }
+        for (const b of n.ramas) {
+          const p2 = proy({ x: n.p.x + b.v.x * b.l, y: n.p.y + b.v.y * b.l, z: n.p.z + b.v.z * b.l }); const x2 = p2.x, y2 = p2.y;
+          const p1 = proy({ x: n.p.x + b.v.x * b.l * 0.5 + b.giro * 0.03, y: n.p.y + b.v.y * b.l * 0.5, z: n.p.z + b.v.z * b.l * 0.5 - b.giro * 0.03 });
+          path.moveTo(x, y); path.quadraticCurveTo(p1.x, p1.y, x2, y2);
+        }
       }
       const hr = r * (n.f.tipo === 'raiz' ? 5 : n.f.tipo === 'dominio' ? 4.5 : n.f.tipo === 'tema' || n.f.tipo === 'modulo' ? 3.6 : 2.6);
-      const halo = ctx.createRadialGradient(x, y, 0, x, y, hr);
-      halo.addColorStop(0, hexA(col, (tenue ? 0.06 : P.oscuro ? 0.4 : 0.22) * prof)); halo.addColorStop(1, hexA(col, 0));
-      ctx.fillStyle = halo; ctx.beginPath(); ctx.arc(x, y, hr, 0, 7); ctx.fill();
-      const nuc = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, 0, x, y, r);
-      nuc.addColorStop(0, '#FFFFFF'); nuc.addColorStop(0.45, hexA(col, tenue ? 0.3 : 1)); nuc.addColorStop(1, hexA(col, tenue ? 0.15 : 0.8));
-      ctx.fillStyle = nuc; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+      ctx.globalAlpha = (tenue ? 0.12 : P.oscuro ? 0.55 : 0.35) * prof;
+      ctx.drawImage(halo(col), x - hr, y - hr, hr * 2, hr * 2);
+      ctx.globalAlpha = tenue ? 0.3 : 1;
+      ctx.fillStyle = col; ctx.beginPath(); ctx.arc(x, y, r, 0, 7); ctx.fill();
+      ctx.globalAlpha = tenue ? 0.2 : 0.7;
+      ctx.fillStyle = '#FFFFFF'; ctx.beginPath(); ctx.arc(x - r * 0.3, y - r * 0.3, r * 0.4, 0, 7); ctx.fill();
+      ctx.globalAlpha = 1;
       if ((n.f.id === s.nuevo || esSel) && !quieto) {
         ctx.strokeStyle = hexA(P.oro, 0.85); ctx.lineWidth = 1.2;
         ctx.beginPath(); ctx.arc(x, y, r + 6 + (n.f.id === s.nuevo ? Math.sin(t / 180) * 3 : 0), 0, 7); ctx.stroke();
       }
       if (!tenue || esSel) etiquetas.push({ n, r });
     }
+    ctx.lineWidth = 0.9;
+    for (const [col, path] of ramas) { ctx.strokeStyle = hexA(col, 0.32); ctx.stroke(path); }
 
-    // Nombres: constelaciones (ramas) en versalitas arriba de la estrella;
-    // temas al costado cuando se acerca o se elige. El que choca se omite.
+    // Nombres: constelaciones en versalitas arriba; ideas al costado cuando
+    // se acerca o se elige. El que choca con otro se omite.
     const puestos: number[][] = [];
     const PRIO: Record<string, number> = { raiz: 0, dominio: 1, modulo: 2, tema: 3, recuerdo: 4, dato: 5, fuente: 5 };
     etiquetas.sort((a, b) => Number(b.n.f.id === s.sel) - Number(a.n.f.id === s.sel) || PRIO[a.n.f.tipo] - PRIO[b.n.f.tipo] || a.n.sz - b.n.sz);
-    ctx.textBaseline = 'alphabetic'; ctx.lineJoin = 'round';
+    ctx.textBaseline = 'alphabetic'; ctx.lineJoin = 'round'; ctx.lineWidth = 4; ctx.strokeStyle = P.borde;
     const conLetras = 'letterSpacing' in ctx;
+    const fG = `600 12px ${P.astro}`, fR = `600 13px ${P.astro}`, fT = `500 11.5px ${P.ui}`;
+    const choca = (b: number[]) => puestos.some(p => b[0] < p[2] && b[2] > p[0] && b[1] < p[3] && b[3] > p[1]);
+    let dibujados = 0;
     for (const { n, r } of etiquetas) {
+      if (dibujados > 40) break;
       const grande = n.f.tipo === 'raiz' || n.f.tipo === 'dominio';
       const ver = grande || n.f.id === s.sel || n.f.id === s.nuevo || vecinos.has(n.f.id)
         || (n.f.tipo === 'modulo' && s.zoom > 0.95) || (s.zoom > 1.25 && n.sz < 0.2 && (!s.foco || n.g === s.foco));
       if (!ver) continue;
-      let x: number, y: number, txt: string;
       if (grande) {
-        ctx.font = `600 ${n.f.tipo === 'raiz' ? 13 : 12}px ${P.astro}`; ctx.textAlign = 'center';
+        const fuente = n.f.tipo === 'raiz' ? fR : fG;
+        ctx.font = fuente; ctx.textAlign = 'center';
         if (conLetras) (ctx as any).letterSpacing = '2px';
-        txt = n.f.etiqueta.toUpperCase().slice(0, 26);
-        const mw = ctx.measureText(txt).width / 2 + 6;
-        x = Math.min(s.w - mw, Math.max(mw, n.sx)); y = n.sy - r - 10;
+        const txt = n.f.nombre.toUpperCase().slice(0, 26);
+        const mw = ancho(ctx, fuente + '2', txt) / 2 + 6;
+        const x = Math.min(s.w - mw, Math.max(mw, n.sx)), y = n.sy - r - 10;
         const caja = [x - mw, y - 13, x + mw, y + 3];
-        if (puestos.some(p => caja[0] < p[2] && caja[2] > p[0] && caja[1] < p[3] && caja[3] > p[1]) && n.f.id !== s.sel) { if (conLetras) (ctx as any).letterSpacing = '0px'; continue; }
+        if (n.f.id !== s.sel && choca(caja)) { if (conLetras) (ctx as any).letterSpacing = '0px'; continue; }
         puestos.push(caja);
-        ctx.lineWidth = 4; ctx.strokeStyle = P.borde; ctx.strokeText(txt, x, y);
-        ctx.fillStyle = n.f.tipo === 'raiz' ? P.tinta : hexA(P.g[n.g], Math.max(0.75, Math.min(1, 0.8 - n.sz * 0.3)));
-        if (!!s.foco && n.g !== s.foco && n.f.tipo !== 'raiz') ctx.fillStyle = hexA(P.g[n.g], 0.3);
+        ctx.strokeText(txt, x, y);
+        ctx.fillStyle = n.f.tipo === 'raiz' ? P.tinta : hexA(P.g[n.g], !!s.foco && n.g !== s.foco ? 0.3 : 0.95);
         ctx.fillText(txt, x, y);
         if (conLetras) (ctx as any).letterSpacing = '0px';
       } else {
-        ctx.font = `500 11.5px ${P.ui}`; ctx.textAlign = 'left';
-        txt = n.f.etiqueta.length > 26 ? n.f.etiqueta.slice(0, 25) + '…' : n.f.etiqueta;
-        const w = ctx.measureText(txt).width;
-        x = n.sx + r + 6; y = n.sy + 4;
+        ctx.font = fT; ctx.textAlign = 'left';
+        const txt = n.f.nombre.length > 28 ? n.f.nombre.slice(0, 27) + '…' : n.f.nombre;
+        const w = ancho(ctx, fT, txt);
+        let x = n.sx + r + 6; const y = n.sy + 4;
         if (x + w > s.w - 4) { ctx.textAlign = 'right'; x = n.sx - r - 6; }
         const caja = ctx.textAlign === 'right' ? [x - w, y - 11, x, y + 3] : [x, y - 11, x + w, y + 3];
-        if (n.f.id !== s.sel && puestos.some(p => caja[0] < p[2] && caja[2] > p[0] && caja[1] < p[3] && caja[3] > p[1])) continue;
+        if (n.f.id !== s.sel && choca(caja)) continue;
         puestos.push(caja);
-        ctx.lineWidth = 4; ctx.strokeStyle = P.borde; ctx.strokeText(txt, x, y);
+        ctx.strokeText(txt, x, y);
         ctx.fillStyle = n.f.id === s.sel ? P.oro : P.tinta; ctx.fillText(txt, x, y);
       }
+      dibujados++;
     }
   }, [red, liviano, quieto]);
 
-  // Bucle: corre mientras se ve; en equipos livianos a ~30 cps.
+  // Bucle: 60 cps mientras se toca o viaja; 30 cps girando solo; y después
+  // de 20 s sin tocarlo se queda quieto (no gasta batería ni traba el panel).
   const bucle = useCallback(() => {
     if (rafRef.current) return;
     let previo = 0;
@@ -615,9 +715,12 @@ function Escena3D({ filas, enlaces, red, foco, sel, nuevo, margenes, onSel, onGr
       const s = est.current;
       rafRef.current = 0;
       if (document.hidden || !s.visible) return;
+      const activo = !!s.meta || Math.abs(s.vYaw) > 0.00005 || Math.abs(s.vPitch) > 0.00005 || Date.now() - s.ultimoToque < 1500;
+      const dormido = !activo && Date.now() - s.ultimoToque > 20000;
+      if (dormido || (quieto && !activo)) { dibujar(t); return; }
       rafRef.current = requestAnimationFrame(paso);
       const dt = previo ? Math.min(64, t - previo) : 16;
-      if (previo && dt < (liviano ? 32 : 14)) return;
+      if (previo && dt < (activo ? (liviano ? 22 : 14) : 32)) return;
       previo = t;
       if (s.meta) {
         // Viaje hacia lo elegido.
@@ -631,8 +734,6 @@ function Escena3D({ filas, enlaces, red, foco, sel, nuevo, margenes, onSel, onGr
         s.vYaw *= Math.pow(0.93, dt / 16); s.vPitch *= Math.pow(0.93, dt / 16);
       } else if (!quieto && !s.sel && !s.foco && Date.now() - s.ultimoToque > 2500) {
         s.yaw += 0.0001 * dt; // gira despacio sola
-      } else if (quieto && !s.sel) {
-        dibujar(t); cancelAnimationFrame(rafRef.current); rafRef.current = 0; return;
       }
       dibujar(t);
     };
@@ -806,26 +907,29 @@ function Escena3D({ filas, enlaces, red, foco, sel, nuevo, margenes, onSel, onGr
 // ---------------------------------------------------------------------
 // DETALLE de un punto: lo que sabe, conexiones, corregir y olvidar
 // ---------------------------------------------------------------------
-function Detalle({ n, red, onSel, onCerrar, onPreguntar, onCambio, onBorrados }: {
+function Detalle({ n, red, onSel, onCerrar, onPreguntar, onCambio, onBorrados, onSinEnlace }: {
   n: Fila; red: Red; onSel: (id: string) => void; onCerrar: () => void; onPreguntar?: (t: string) => void;
-  onCambio: (id: string, c: Partial<Fila>) => void; onBorrados: (ids: string[]) => void;
+  onCambio: (id: string, c: Partial<Fila>) => void; onBorrados: (ids: string[]) => void; onSinEnlace: (eid: string) => void;
 }) {
-  const [editando, setEditando] = useState(false);
+  const [modo, setModo] = useState<'ver' | 'corregir' | 'renombrar' | 'olvidar' | 'conexiones'>('ver');
   const [texto, setTexto] = useState(n.resumen || '');
-  const [borrar, setBorrar] = useState(false);
+  const [nombre, setNombre] = useState(n.nombre);
   const [aviso, setAviso] = useState('');
   const [ocupado, setOcupado] = useState(false);
-  useEffect(() => { setEditando(false); setBorrar(false); setAviso(''); setTexto(n.resumen || ''); }, [n.id, n.resumen]);
+  useEffect(() => { setModo('ver'); setAviso(''); setTexto(n.resumen || ''); setNombre(n.nombre); }, [n.id, n.resumen, n.nombre]);
   const vecinos = (red.vecinos.get(n.id) || []).map(v => ({ ...v, f: red.porId.get(v.id)! })).filter(v => v.f);
   const fijo = n.tipo === 'raiz' || n.tipo === 'modulo' || ['dom:internet', 'dom:dueno', 'dom:negocio'].includes(n.clave);
+  // Lo que sabe, sin direcciones web ni marcas de formato: eso es de la IA.
+  const resumen = (n.resumen || '').replace(/https?:\/\/\S+/g, '').replace(/[*_`#>|]+/g, '').replace(/\s{2,}/g, ' ').trim();
+  const sitio = n.url ? sitioHumano(n.url) : '';
 
-  const guardar = async () => {
+  const guardar = async (cambios: Partial<Fila>, ok: string) => {
     setOcupado(true);
-    const r = texto.replace(/\s+/g, ' ').trim().slice(0, 1500);
-    const { error } = await supabase.from('jarvis_nodos').update({ resumen: r || null, fuente: 'vos', actualizado_en: new Date().toISOString() }).eq('id', n.id);
+    const { nombre: _soloPantalla, ...columnas } = cambios; // «nombre» no es columna: se calcula
+    const { error } = await supabase.from('jarvis_nodos').update({ ...columnas, actualizado_en: new Date().toISOString() }).eq('id', n.id);
     setOcupado(false);
     if (error) { setAviso('No se pudo guardar. Revisá la conexión y probá de nuevo.'); return; }
-    onCambio(n.id, { resumen: r || null, fuente: 'vos' }); setEditando(false); setAviso('Corregido. Jarvis va a usar esta versión.');
+    onCambio(n.id, cambios); setModo('ver'); setAviso(ok);
   };
   const olvidar = async () => {
     setOcupado(true);
@@ -838,57 +942,76 @@ function Detalle({ n, red, onSel, onCerrar, onPreguntar, onCambio, onBorrados }:
     if (n.tipo === 'recuerdo' && n.resumen) await supabase.from('jarvis_memoria').delete().eq('texto', n.resumen);
     onBorrados(ids);
   };
+  const quitarConexion = async (eid: string) => {
+    const { error } = await supabase.from('jarvis_enlaces').delete().eq('id', eid);
+    if (error) { setAviso('No se pudo quitar la conexión.'); return; }
+    onSinEnlace(eid);
+  };
 
   return (
-    <section className="jv-cerebro-detalle" aria-label={`Lo que sabe de ${n.etiqueta}`}>
+    <section className="jv-cerebro-detalle" aria-label={`Lo que sabe de ${n.nombre}`}>
       <div className="jv-det-cab">
         <div className="jv-det-tt">
           <small>{NOMBRE_TIPO[n.tipo].toUpperCase()} · {(GRUPOS.find(g => g.id === grupoDe(n))?.nombre || '').toUpperCase()}</small>
-          <b>{n.etiqueta}</b>
-          {n.fuente && <span>Lo sabe por {NOMBRE_FUENTE[n.fuente] || n.fuente}</span>}
+          {modo === 'renombrar' ? (
+            <form className="jv-det-renombrar" onSubmit={e => { e.preventDefault(); const t = nombre.replace(/\s+/g, ' ').trim().slice(0, 80); if (t.length >= 2) void guardar({ etiqueta: t, nombre: t }, 'Renombrado.'); }}>
+              <input value={nombre} onChange={e => setNombre(e.target.value)} maxLength={80} aria-label="Nombre de esta idea" autoFocus />
+              <button type="submit" className="ai-chip" data-primario disabled={ocupado || nombre.trim().length < 2}>Guardar</button>
+              <button type="button" className="ai-chip" onClick={() => setModo('ver')}>Cancelar</button>
+            </form>
+          ) : <b>{n.nombre}</b>}
+          {(n.fuente || sitio) && modo !== 'renombrar' && (
+            <span>Lo sabe por {sitio ? <>{sitio}</> : NOMBRE_FUENTE[n.fuente || ''] || n.fuente}
+              {n.url && <> · <a href={n.url} target="_blank" rel="noopener noreferrer" className="jv-det-fuente"><ExternalLink className="w-3 h-3" />Abrir la fuente</a></>}
+            </span>
+          )}
         </div>
         <button type="button" className="jv-cerebro-ic" aria-label="Cerrar ficha" title="Cerrar" onClick={onCerrar}><X className="w-4 h-4" /></button>
       </div>
-      {editando ? (
+      {modo === 'corregir' ? (
         <textarea className="jv-det-edit" value={texto} onChange={e => setTexto(e.target.value)} rows={5} maxLength={1500} aria-label="Lo que Jarvis sabe de esto" autoFocus />
       ) : (
-        <p className="jv-det-res">{n.resumen || (n.tipo === 'dominio' || n.tipo === 'raiz' || n.tipo === 'modulo' ? `Agrupa ${vecinos.length} conexión${vecinos.length === 1 ? '' : 'es'}.` : 'Sin resumen todavía.')}</p>
+        <p className="jv-det-res">{resumen || (n.tipo === 'dominio' || n.tipo === 'raiz' || n.tipo === 'modulo' ? `Agrupa ${vecinos.length} conexión${vecinos.length === 1 ? '' : 'es'}.` : 'Sin resumen todavía.')}</p>
       )}
-      {n.url && <a className="jv-det-url" href={n.url} target="_blank" rel="noopener noreferrer"><ExternalLink className="w-3.5 h-3.5 shrink-0" /><span>{dominioDe(n.url)}</span></a>}
       {!!vecinos.length && (
         <div className="jv-det-con">
-          <span>Conectado con</span>
+          <span>Conectado con{modo === 'conexiones' ? ' · tocá × para quitar' : ''}</span>
           <div>
-            {vecinos.slice(0, 14).map(v => (
-              <button key={v.id} type="button" onClick={() => onSel(v.id)} title={v.relacion}>
-                <i data-g={grupoDe(v.f)} aria-hidden /><span>{v.f.etiqueta}</span>
-              </button>
+            {vecinos.slice(0, modo === 'conexiones' ? 60 : 14).map(v => (
+              <span key={v.eid} className="jv-det-chip">
+                <button type="button" onClick={() => onSel(v.id)} title={v.relacion}><i data-g={grupoDe(v.f)} aria-hidden /><span>{v.f.nombre}</span></button>
+                {modo === 'conexiones' && v.f.tipo !== 'raiz' && <button type="button" className="jv-det-x" aria-label={`Quitar la conexión con ${v.f.nombre}`} onClick={() => void quitarConexion(v.eid)}><X className="w-3 h-3" /></button>}
+              </span>
             ))}
-            {vecinos.length > 14 && <small>y {vecinos.length - 14} más</small>}
+            {modo !== 'conexiones' && vecinos.length > 14 && <small>y {vecinos.length - 14} más</small>}
           </div>
         </div>
       )}
       <p className="jv-det-meta">Usado {n.usos || 0} {n.usos === 1 ? 'vez' : 'veces'} · último uso {fecha(n.ultimo_uso)} · aprendido {fecha(n.creado_en)}</p>
       {aviso && <p className="jv-det-aviso" role="status">{aviso}</p>}
       <div className="jv-det-acc">
-        {editando ? (
+        {modo === 'corregir' ? (
           <>
-            <button type="button" className="ai-chip" data-primario disabled={ocupado} onClick={() => void guardar()}>Guardar</button>
-            <button type="button" className="ai-chip" disabled={ocupado} onClick={() => { setEditando(false); setTexto(n.resumen || ''); }}>Cancelar</button>
+            <button type="button" className="ai-chip" data-primario disabled={ocupado} onClick={() => { const r = texto.replace(/\s+/g, ' ').trim().slice(0, 1500); void guardar({ resumen: r || null, fuente: 'vos' }, 'Corregido. Jarvis va a usar esta versión.'); }}>Guardar</button>
+            <button type="button" className="ai-chip" disabled={ocupado} onClick={() => { setModo('ver'); setTexto(n.resumen || ''); }}>Cancelar</button>
           </>
-        ) : borrar ? (
+        ) : modo === 'olvidar' ? (
           <>
-            <span className="jv-det-preg">¿Olvidar «{n.etiqueta.slice(0, 30)}»?</span>
+            <span className="jv-det-preg">¿Olvidar «{n.nombre.slice(0, 30)}»?</span>
             <button type="button" className="ai-chip" data-peligro disabled={ocupado} onClick={() => void olvidar()}>Sí, olvidar</button>
-            <button type="button" className="ai-chip" disabled={ocupado} onClick={() => setBorrar(false)}>No</button>
+            <button type="button" className="ai-chip" disabled={ocupado} onClick={() => setModo('ver')}>No</button>
           </>
-        ) : (
+        ) : modo === 'conexiones' ? (
+          <button type="button" className="ai-chip" data-primario onClick={() => setModo('ver')}>Listo</button>
+        ) : modo === 'ver' ? (
           <>
-            {onPreguntar && n.tipo !== 'raiz' && <button type="button" className="ai-chip" onClick={() => onPreguntar(`¿Qué sabés de ${sinPrefijo(n.etiqueta)}?`)}><MessageCircleQuestion className="w-4 h-4" />Preguntar</button>}
-            {n.tipo !== 'raiz' && <button type="button" className="ai-chip" onClick={() => setEditando(true)}><Pencil className="w-4 h-4" />Corregir</button>}
-            {!fijo && <button type="button" className="ai-chip" onClick={() => setBorrar(true)}><Trash2 className="w-4 h-4" />Olvidar</button>}
+            {onPreguntar && n.tipo !== 'raiz' && <button type="button" className="ai-chip" onClick={() => onPreguntar(`¿Qué sabés de ${sinPrefijo(n.nombre)}?`)}><MessageCircleQuestion className="w-4 h-4" />Preguntar</button>}
+            {n.tipo !== 'raiz' && <button type="button" className="ai-chip" onClick={() => setModo('corregir')}><Pencil className="w-4 h-4" />Corregir</button>}
+            {!fijo && <button type="button" className="ai-chip" onClick={() => setModo('renombrar')}>Renombrar</button>}
+            {!!vecinos.length && <button type="button" className="ai-chip" onClick={() => setModo('conexiones')}>Conexiones</button>}
+            {!fijo && <button type="button" className="ai-chip" onClick={() => setModo('olvidar')}><Trash2 className="w-4 h-4" />Olvidar</button>}
           </>
-        )}
+        ) : null}
       </div>
     </section>
   );

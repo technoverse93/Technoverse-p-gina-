@@ -8,7 +8,13 @@ export default defineConfig(() => {
     plugins: [react(), tailwindcss()],
     // Identifica la compilación que corre en cada aparato (ver el
     // diagnóstico de la consola de supervisión).
-    define: { __BUILD_ID__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')) },
+    // __COMMIT__: el commit con que se compiló (en GitHub Actions). La APK
+    // lo usa para saber que ya trae la versión publicada por OTA y no
+    // bajarla de nuevo (eso provocaba una recarga extra al abrir).
+    define: {
+      __BUILD_ID__: JSON.stringify(new Date().toISOString().slice(0, 16).replace('T', ' ')),
+      __COMMIT__: JSON.stringify((process.env.GITHUB_SHA || '').slice(0, 7)),
+    },
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
