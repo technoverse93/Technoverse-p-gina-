@@ -21,6 +21,7 @@
 // =====================================================================
 
 import React, { Suspense, lazy, useCallback, useEffect, useState } from 'react';
+import { Orbe } from './JarvisVisual';
 import { useUnaSolaCapa } from './capaFlotante';
 import { Sparkles, Minus, Maximize2, Minimize2, MessageCircleQuestion } from 'lucide-react';
 import { Z } from '../ui/Overlays';
@@ -96,14 +97,14 @@ export default function JarvisFlotante({ currentUser, onAbrirModulo, sinBoton, p
   return (
     <>
       {!abierto && !sinBoton && (
-        <button type="button" className="jv-fab" style={{ zIndex: Z.fab }} onClick={abrir} aria-label={`Abrir ${nombre}`} title={nombre}>
-          <Icono className="w-5 h-5" />
+        <button type="button" className="jv-fab" data-jarvis={jarvis || undefined} style={{ zIndex: Z.fab }} onClick={abrir} aria-label={`Abrir ${nombre}`} title={nombre}>
+          {jarvis ? <Orbe tam={26} /> : <Icono className="w-5 h-5" />}
         </button>
       )}
       {montado && (
-        <div className="jv-hoja glass-panel-strong" data-grande={grande || undefined} role="dialog" aria-label={nombre} hidden={!abierto} style={{ zIndex: Z.floating }}>
+        <div className="jv-hoja glass-panel-strong" data-grande={grande || undefined} data-jarvis={jarvis || undefined} role="dialog" aria-label={nombre} hidden={!abierto} style={{ zIndex: Z.floating }}>
           <div className="jv-hoja-cab">
-            <span><Icono className="w-3.5 h-3.5" />{nombre}</span>
+            <span>{jarvis ? <Orbe tam={18} /> : <Icono className="w-3.5 h-3.5" />}{nombre}</span>
             <button type="button" className="jv-hoja-btn jv-solo-pc" aria-label={grande ? 'Achicar' : 'Agrandar'} title={grande ? 'Achicar' : 'Agrandar'}
               onClick={() => setGrande(v => !v)}>{grande ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}</button>
             <button type="button" className="jv-hoja-btn" aria-label="Minimizar" title="Minimizar" onClick={() => setAbierto(false)}><Minus className="w-4 h-4" /></button>

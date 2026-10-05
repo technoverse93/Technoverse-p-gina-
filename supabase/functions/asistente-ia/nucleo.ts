@@ -632,6 +632,37 @@ async function transcribir(audio: string, tipo: string): Promise<string | null> 
   return await transcribirGroq(audio, tipo);
 }
 
+/** «Enseñar» del cerebro, sin pasar por el chat: arma rama, resumen y
+ *  subtemas con Flash-Lite (JSON) y lo guarda con aprenderTema, que además
+ *  cruza inventario, taller e internet. Si Google no responde, se aprende
+ *  igual con lo del negocio y la búsqueda. */
+async function planDeTema(tema: string): Promise<{ rama: string; resumen: string; subtemas: { nombre: string; resumen?: string }[]; buscar: string }> {
+  const vacio = { rama: 'Temas', resumen: '', subtemas: [] as { nombre: string; resumen?: string }[], buscar: '' };
+  const clave = Deno.env.get('GEMINI_API_KEY');
+  if (!clave) return vacio;
+  const pedido = `Sos Jarvis, asistente de Technoverse Costa Rica (tienda y taller de celulares y accesorios). El dueño te pidió aprender sobre: «${tema}».
+Respondé SOLO un JSON: {"rama": categoría madre corta (p. ej. "Dispositivos electrónicos", "Accesorios", "Reparaciones", "Proveedores", "Finanzas"), "resumen": 2 a 5 frases útiles para el negocio, "subtemas": hasta 6 objetos {"nombre","resumen"} concretos (modelos, variantes, partes), "buscar": qué buscar en internet para completar}. Sin datos de personas.`;
+  for (const modelo of [GEMINI_RESPALDO, GEMINI_MODEL]) {
+    if (!disponibleModelo(modelo)) continue;
+    try {
+      const r = await conTope(`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(modelo)}:generateContent`, {
+        method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: pedido }] }], generationConfig: { responseMimeType: 'application/json', ...(modelo === GEMINI_RESPALDO ? { thinkingConfig: { thinkingLevel: 'minimal' } } : {}) } }),
+      }, 20000);
+      if (!r.ok) { if (r.status === 429 || r.status >= 500) pausar(modelo, r.status); continue; }
+      const d = await r.json();
+      const t = (d?.candidates?.[0]?.content?.parts || []).filter((x: any) => x?.text && !x?.thought).map((x: any) => x.text).join('');
+      const j = JSON.parse(t.replace(/^```(json)?|```$/g, '').trim());
+      return {
+        rama: String(j.rama || 'Temas').slice(0, 60), resumen: String(j.resumen || '').slice(0, 1200),
+        subtemas: (Array.isArray(j.subtemas) ? j.subtemas : []).slice(0, 6).map((x: any) => ({ nombre: String(x?.nombre || '').slice(0, 60), resumen: String(x?.resumen || '').slice(0, 600) })).filter((x: any) => x.nombre.length >= 2),
+        buscar: String(j.buscar || '').slice(0, 200),
+      };
+    } catch (e) { console.log(`aprender ${modelo}: ${e instanceof Error ? e.message : e}`); }
+  }
+  return vacio;
+}
+
 /** Respaldo de la voz: Whisper en Groq (gratis, muy rápido). */
 async function transcribirGroq(audio: string, tipo: string): Promise<string | null> {
   const clave = claveGroq();
@@ -730,6 +761,20 @@ export async function atender(req: Request): Promise<Response> {
     const antes = armarCupo(mio, equipo || []);
 
     if (accion === 'cupo') return responder({ ok: true, cupo: antes });
+
+    // ------------- CEREBRO: «Enseñar» aprende directo, sin el chat -------------
+    if (accion === 'aprender') {
+      if (!esSuper) return responder({ ok: false, error: 'Solo el superadmin.' }, 403);
+      const tema = String(cuerpo?.tema || '').replace(/\s+/g, ' ').trim().slice(0, 60);
+      if (tema.length < 2) return responder({ ok: false, error: 'Decime un tema.' }, 400);
+      const plan = await planDeTema(tema);
+      const cb = crearCerebro(admin, uid);
+      const r = await cb.aprenderTema({ tema, rama: plan.rama, resumen: plan.resumen, subtemas: plan.subtemas, ...(plan.buscar ? { buscar: plan.buscar } : {}) }, false);
+      await cb.esperar();
+      const d = r.datos as any;
+      if (d?.error) return responder({ ok: false, error: d.error }, 400);
+      return responder({ ok: true, guardado_en: d?.guardado_en, aprendidos: r.aprendidos.map(x => x.etiqueta), fuentes: r.fuentes, resumen: plan.resumen });
+    }
 
     // Las consultas al sistema y las acciones de Jarvis se hacen con la
     // SESIÓN DE QUIEN PREGUNTA (no con service_role): la base aplica las

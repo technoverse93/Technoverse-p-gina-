@@ -11,6 +11,7 @@
 
 import './index.css';
 import './styles/admin.css';
+import './styles/jarvis.css';
 import './styles/ventanita.css';
 
 // Solo en su propia página (nunca dentro de la app ni del sitio).

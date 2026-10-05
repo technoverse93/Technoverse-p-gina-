@@ -7,6 +7,7 @@ import './index.css';
 // contiene está limitado a `#admin-panel-root` o a clases `tv-`: la
 // tienda pública no puede verse afectada por este archivo.
 import './styles/admin.css';
+import './styles/jarvis.css';
 import { iniciarTema } from './utils/tema';
 
 // ANTES de montar React, no dentro de un efecto: un efecto corre después

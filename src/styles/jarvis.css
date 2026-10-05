@@ -1,0 +1,307 @@
+/* =====================================================================
+   JARVIS · SISTEMA VISUAL (diseño aprobado, claro y oscuro)
+   =====================================================================
+   El cerebro marca el estilo de todo Jarvis: cielo de fondo con estrellas
+   tenues, cada área con su color de constelación, fibras curvas, señales
+   que viajan y versalitas para los rótulos. Claro = observatorio de día;
+   oscuro = cielo nocturno. Solo aplica a Jarvis (superadmin): el resto
+   del personal sigue con «Asistencia de IA» como siempre.
+
+   Todo color sale de los tokens --jv-*; además se reasignan los del panel
+   (--bg-surface, --accent…) dentro de Jarvis, así cada pieza existente
+   (tarjetas, menús, tablas) toma la paleta sin tocarla una por una.
+   Movimiento: solo opacidad y posición (0,2 s), lo que el Galaxy A12
+   resuelve sin trabarse; «reducir movimiento» lo apaga.
+   ===================================================================== */
+
+.ai-root[data-jarvis], .jv-hoja[data-jarvis], .jv-fab[data-jarvis] {
+  --jv-fondo: #EDF3F3; --jv-sup: #FFFFFF; --jv-hundido: #E5EEEF; --jv-tile: #DFEFF0;
+  --jv-tinta: #12262B; --jv-tinta2: #4C666C; --jv-tenue: #7B9096; --jv-linea: #D3E1E2;
+  --jv-acento-rgb: 12, 108, 120; --jv-acento: #0C6C78; --jv-tinta-ac: #FFFFFF;
+  --jv-oro: #A8761C; --jv-oro-suave: rgba(168, 118, 28, .12);
+  --jv-cielo-1: #F7FBFB; --jv-cielo-2: #D6E5E8; --jv-polvo: 18, 38, 43; --jv-borde-txt: rgba(255, 255, 255, .9); --jv-eje: #7B9096; --jv-oscuro: 0;
+  --jv-a-neg: #0C7A74; --jv-a-dis: #3460C8; --jv-a-tal: #B8641E; --jv-a-int: #7A4FD0; --jv-a-vos: #C2416E;
+  --jv-f-astro: "Spectral SC", "Iowan Old Style", Georgia, serif;
+  --jv-f-ui: "Inter", system-ui, -apple-system, "Segoe UI", sans-serif;
+  --jv-f-dato: "JetBrains Mono", ui-monospace, Menlo, monospace;
+  --jv-sombra: 0 6px 20px -14px rgba(18, 38, 43, .45);
+}
+.dark .ai-root[data-jarvis], .dark .jv-hoja[data-jarvis], .dark .jv-fab[data-jarvis] {
+  --jv-fondo: #070B14; --jv-sup: #0E1422; --jv-hundido: #141C2E; --jv-tile: #1A2740;
+  --jv-tinta: #E8EDF7; --jv-tinta2: #A6B1C7; --jv-tenue: #7C88A2; --jv-linea: #22304A;
+  --jv-acento-rgb: 127, 216, 207; --jv-acento: #7FD8CF; --jv-tinta-ac: #05201C;
+  --jv-oro: #E8C27A; --jv-oro-suave: rgba(232, 194, 122, .13);
+  --jv-cielo-1: #121C33; --jv-cielo-2: #04070D; --jv-polvo: 215, 225, 255; --jv-borde-txt: rgba(4, 7, 13, .85); --jv-eje: #7C88A2; --jv-oscuro: 1;
+  --jv-a-neg: #7FD8CF; --jv-a-dis: #8FB4FF; --jv-a-tal: #F0B37E; --jv-a-int: #C3A3FF; --jv-a-vos: #F49BB6;
+  --jv-sombra: 0 10px 30px -16px rgba(0, 0, 0, .8);
+}
+/* Los tokens del panel, reasignados dentro de Jarvis. */
+.ai-root[data-jarvis], .jv-hoja[data-jarvis] {
+  --bg-base: var(--jv-fondo); --bg-surface: var(--jv-sup); --bg-sunken: var(--jv-hundido); --tile: var(--jv-tile);
+  --text-primary: var(--jv-tinta); --text-secondary: var(--jv-tinta2); --text-muted: var(--jv-tenue);
+  --border-color: var(--jv-linea); --border-soft: var(--jv-linea);
+  --accent: var(--jv-acento); --accent-rgb: var(--jv-acento-rgb); --accent-ink: var(--jv-tinta-ac);
+  --tv-accent-soft: rgba(var(--jv-acento-rgb), .12); --tv-accent-line: rgba(var(--jv-acento-rgb), .4);
+  /* Colores de las constelaciones del cerebro. */
+  --jv-n-centro: var(--jv-a-neg); --jv-n-temas: var(--jv-a-dis); --jv-n-datos: var(--jv-a-tal); --jv-n-internet: var(--jv-a-int); --jv-n-vos: var(--jv-a-vos);
+  font-family: var(--jv-f-ui);
+}
+
+/* ---------- Ventana flotante y botón ---------- */
+.jv-hoja[data-jarvis] { background: var(--jv-fondo); border-color: var(--jv-linea); }
+.jv-hoja[data-jarvis] .jv-hoja-cab { background: var(--jv-hundido); border-color: var(--jv-linea); }
+.jv-hoja[data-jarvis] .jv-hoja-cab span { color: var(--jv-tinta); font-family: var(--jv-f-ui); }
+.jv-fab[data-jarvis] { background: var(--jv-sup); color: var(--jv-acento); border: 1px solid var(--jv-linea); box-shadow: var(--jv-sombra), 0 0 0 4px rgba(var(--jv-acento-rgb), .1); }
+
+/* ---------- Orbe: la constelación-logo de Jarvis ---------- */
+.jv-orbe { flex: none; display: block; overflow: visible; }
+.jv-orbe .f { fill: none; stroke: var(--jv-acento); stroke-width: 1.1; opacity: .45; }
+.jv-orbe .p { fill: none; stroke: var(--jv-oro); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 3 140; animation: jv-senal 2.8s linear infinite; }
+.jv-orbe .p.b { animation-delay: -1.4s; stroke: var(--jv-acento); }
+.jv-orbe circle { fill: var(--jv-acento); }
+.jv-orbe circle.c { fill: var(--jv-tinta); }
+@keyframes jv-senal { to { stroke-dashoffset: -143; } }
+
+/* ---------- Punto de constelación (señales, sugerencias, historial, ajustes) ---------- */
+.jv-pt { --k: var(--jv-a-neg); display: inline-block; flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--k); box-shadow: 0 0 0 3px color-mix(in srgb, var(--k) 18%, transparent); }
+[data-area="neg"] { --k: var(--jv-a-neg); } [data-area="dis"] { --k: var(--jv-a-dis); } [data-area="tal"] { --k: var(--jv-a-tal); }
+[data-area="int"] { --k: var(--jv-a-int); } [data-area="vos"] { --k: var(--jv-a-vos); }
+.jv-pt[data-g="centro"] { --k: var(--jv-a-neg); } .jv-pt[data-g="temas"] { --k: var(--jv-a-dis); } .jv-pt[data-g="datos"] { --k: var(--jv-a-tal); }
+.jv-pt[data-g="internet"] { --k: var(--jv-a-int); } .jv-pt[data-g="vos"] { --k: var(--jv-a-vos); }
+.ai-herr .jv-pt { display: none; }
+.ai-root[data-jarvis] .ai-herr .jv-pt { display: inline-block; }
+
+/* ---------- Fondo: cielo tenue con estrellas ---------- */
+.ai-root[data-jarvis] { background: var(--jv-fondo); color: var(--jv-tinta); }
+.ai-root[data-jarvis] .ai-panel {
+  background:
+    radial-gradient(120% 60% at 50% 0%, rgba(var(--jv-acento-rgb), .1), transparent 60%),
+    url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='360' height='420'%3E%3Cg fill='%237E8BA0'%3E%3Ccircle cx='21' cy='34' r='.8' opacity='.35'/%3E%3Ccircle cx='88' cy='12' r='.6' opacity='.25'/%3E%3Ccircle cx='140' cy='70' r='1' opacity='.3'/%3E%3Ccircle cx='212' cy='28' r='.7' opacity='.28'/%3E%3Ccircle cx='300' cy='54' r='.9' opacity='.32'/%3E%3Ccircle cx='340' cy='150' r='.6' opacity='.22'/%3E%3Ccircle cx='60' cy='160' r='.7' opacity='.26'/%3E%3Ccircle cx='180' cy='190' r='.5' opacity='.2'/%3E%3Ccircle cx='255' cy='240' r='1' opacity='.3'/%3E%3Ccircle cx='30' cy='300' r='.8' opacity='.24'/%3E%3Ccircle cx='120' cy='330' r='.6' opacity='.3'/%3E%3Ccircle cx='320' cy='320' r='.7' opacity='.26'/%3E%3Ccircle cx='200' cy='390' r='.9' opacity='.22'/%3E%3Ccircle cx='86' cy='400' r='.5' opacity='.2'/%3E%3C/g%3E%3C/svg%3E"),
+    var(--jv-fondo);
+}
+.ai-root[data-jarvis] .ai-lado, .ai-root[data-jarvis] .ai-tele { background: var(--jv-sup); border-color: var(--jv-linea); }
+
+/* ---------- Cabecera ---------- */
+.ai-root[data-jarvis] .ai-ch { border-bottom-color: transparent; background: transparent; }
+#admin-panel-root .ai-root[data-jarvis] .ai-ch .ai-menu { border-color: transparent; }
+#admin-panel-root .ai-root[data-jarvis] .ai-ch .ai-chip { border-color: transparent; background: transparent; }
+#admin-panel-root .ai-root[data-jarvis] .ai-ch .ai-chip:hover, #admin-panel-root .ai-root[data-jarvis] .ai-ch .ai-menu:hover { background: var(--jv-hundido); }
+.ai-root[data-jarvis] .ai-cupo-pill { display: none; }
+.jv-tit { display: flex; align-items: center; gap: 9px; min-width: 0; flex: 0 1 auto; text-align: left; padding: 4px 8px 4px 4px; border-radius: 14px; background: transparent; border: 0; color: inherit; cursor: pointer; }
+#admin-panel-root .jv-tit { min-width: 0 !important; min-height: 0 !important; }
+.jv-tit:hover { background: var(--jv-hundido); }
+.jv-tit > span { display: grid; min-width: 0; }
+.jv-tit b { display: inline-flex; align-items: center; gap: 4px; font: 600 15px/1.2 var(--jv-f-ui); color: var(--jv-tinta); }
+.jv-tit b svg { color: var(--jv-tenue); }
+.jv-tit small { display: flex; align-items: center; gap: 5px; font-size: 11.5px; color: var(--jv-tinta2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.jv-tit small::before { content: ""; flex: none; width: 6px; height: 6px; border-radius: 50%; background: var(--jv-acento); box-shadow: 0 0 0 3px rgba(var(--jv-acento-rgb), .14); }
+span.jv-tit { cursor: default; }
+span.jv-tit:hover { background: transparent; }
+
+/* Cambiar de apartado: entra suave (opacidad y posición, 0,2 s). */
+.ai-root[data-jarvis] .ai-msgs, .ai-root[data-jarvis] .ai-ajustes { animation: jv-entra .2s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes jv-entra { from { opacity: 0; transform: translateY(6px); } }
+
+/* ---------- Inicio ---------- */
+.ai-root[data-jarvis] .ai-hola { gap: 10px; }
+.jv-orbe-grande { margin-bottom: 2px; }
+.jv-astro { font: 600 11px var(--jv-f-astro); letter-spacing: .2em; color: var(--jv-tenue); }
+.ai-root[data-jarvis] .ai-hola h3 { font: 600 22px/1.2 var(--jv-f-ui); letter-spacing: -.01em; margin-top: 4px; }
+.ai-root[data-jarvis] .ai-hola p { font-size: 13.5px; color: var(--jv-tinta2); max-width: 34ch; }
+.ai-root[data-jarvis] .ai-sug { margin-top: 8px; }
+.ai-root[data-jarvis] .ai-sug button { display: grid; gap: 3px; padding: 11px 12px; border-radius: 14px; border: 1px solid var(--jv-linea); background: var(--jv-sup); font-size: 12px; color: var(--jv-tinta2); transition: transform .15s, border-color .15s; }
+.ai-root[data-jarvis] .ai-sug button:hover { border-color: var(--jv-acento); background: var(--jv-sup); transform: translateY(-1px); }
+.ai-root[data-jarvis] .ai-sug b { display: flex; align-items: center; gap: 7px; font-size: 13px; }
+
+/* ---------- Conversación ---------- */
+.ai-root[data-jarvis] .ai-yo { background: var(--jv-tile); border-radius: 18px 18px 6px 18px; }
+.ai-root[data-jarvis] .ai-ia { gap: 7px; animation: jv-msg .22s ease-out both; }
+.ai-root[data-jarvis] .ai-yo-g { animation: jv-msg .2s ease-out both; }
+@keyframes jv-msg { from { opacity: 0; transform: translateY(4px); } }
+/* Señales: los módulos que consultó, como chips con el punto de su área. */
+.ai-root[data-jarvis] .ai-herrs { display: flex; flex-wrap: wrap; gap: 5px; }
+.ai-root[data-jarvis] .ai-herr:not([data-panel]) { border-radius: 999px; background: var(--jv-sup); max-width: 100%; }
+.ai-root[data-jarvis] .ai-herr:not([data-panel]) summary { gap: 6px; padding: 3px 10px 3px 8px; font-size: 11.5px; }
+.ai-root[data-jarvis] .ai-herr:not([data-panel]) .ai-herr-ic,
+.ai-root[data-jarvis] .ai-herr:not([data-panel]) .ai-herr-chip,
+.ai-root[data-jarvis] .ai-herr:not([data-panel]) .ai-herr-chev { display: none; }
+.ai-root[data-jarvis] .ai-herr:not([data-panel]) small { font-size: 10.5px; }
+.ai-root[data-jarvis] .ai-herr:not([data-panel])[open] { border-radius: 14px; flex-basis: 100%; }
+.ai-root[data-jarvis] .ai-herr[data-panel] { flex-basis: 100%; }
+.ai-root[data-jarvis] .ai-herr[data-panel] .ai-herr-ic { display: none; }
+/* Pensando: una señal entre tres neuronas. */
+.jv-pensando { display: flex; align-items: center; gap: 8px; font-size: 12.5px; color: var(--jv-tinta2); }
+.jv-pensando svg { width: 46px; height: 16px; flex: none; }
+.jv-pensando path { fill: none; stroke: var(--jv-linea); stroke-width: 1.4; }
+.jv-pensando .s { stroke: var(--jv-acento); stroke-width: 2.4; stroke-linecap: round; stroke-dasharray: 4 60; animation: jv-senal2 1.1s linear infinite; }
+.jv-pensando circle { fill: var(--jv-acento); }
+@keyframes jv-senal2 { to { stroke-dashoffset: -64; } }
+/* Debajo de cada respuesta: velocidad, tokens y tiempo, en letra chica. */
+.jv-meta { display: flex; flex-wrap: wrap; gap: 8px; font: 400 10.5px var(--jv-f-dato); color: var(--jv-tenue); font-variant-numeric: tabular-nums; }
+.ai-root[data-jarvis] .ai-pie .ai-tok, .ai-root[data-jarvis] .ai-pie > span:not(.ai-escuchar) { display: none; }
+.ai-root[data-jarvis] .ai-pie { gap: 2px; margin-top: -2px; }
+#admin-panel-root .ai-root[data-jarvis] .ai-pie button { width: 30px; height: 30px; }
+/* Memoria y cerebro: líneas como las de «hecho». */
+.ai-root[data-jarvis] .ai-mem { border-radius: 14px; background: var(--jv-sup); border-color: var(--jv-linea); }
+
+/* ---------- Lo que hace solo: una línea ---------- */
+.ai-root[data-jarvis] .ai-acc-linea { background: rgba(var(--jv-acento-rgb), .12); color: var(--jv-acento); }
+
+/* ---------- Confirmar: solo lo delicado, con línea dorada ---------- */
+.ai-root[data-jarvis] .ai-acc { position: relative; border-radius: 16px; background: var(--jv-sup); border-color: var(--jv-linea); animation: jv-msg .22s ease-out both; }
+.ai-root[data-jarvis] .ai-acc::before { content: ""; position: absolute; inset: 0 0 auto 0; height: 2px; background: linear-gradient(90deg, transparent, var(--jv-oro), transparent); }
+.ai-root[data-jarvis] .ai-acc[data-estado="hecha"]::before, .ai-root[data-jarvis] .ai-acc[data-estado="cancelada"]::before,
+.ai-root[data-jarvis] .ai-acc[data-estado="vencida"]::before, .ai-root[data-jarvis] .ai-acc[data-estado="deshecha"]::before { display: none; }
+.ai-root[data-jarvis] .ai-acc-ic { background: var(--jv-oro-suave) !important; color: var(--jv-oro) !important; border-radius: 10px; }
+.ai-root[data-jarvis] .ai-acc-tt small { font: 600 10px var(--jv-f-astro); letter-spacing: .16em; text-transform: uppercase; color: var(--jv-oro); }
+.ai-root[data-jarvis] .ai-acc-dl > div { border-color: var(--jv-linea); }
+.ai-root[data-jarvis] .ai-acc-dur[aria-pressed="true"] { border-color: var(--jv-acento); background: rgba(var(--jv-acento-rgb), .12); color: var(--jv-tinta); }
+.ai-root[data-jarvis] .ai-acc-pie { flex-wrap: wrap; }
+.ai-root[data-jarvis] .ai-acc-meta { flex-basis: 100%; font: 400 11px var(--jv-f-dato); color: var(--jv-tenue); }
+.ai-root[data-jarvis] .ai-acc-ok { background: var(--jv-acento); color: var(--jv-tinta-ac); }
+.ai-root[data-jarvis] .ai-acc-ok[data-tono="peligro"] { background: var(--tv-danger, #B4363B); color: #fff; }
+
+/* ---------- Caja de escribir ---------- */
+.ai-root[data-jarvis] .ai-caja { border-radius: 22px; border-color: var(--jv-linea); background: var(--jv-sup); box-shadow: var(--jv-sombra); }
+.ai-root[data-jarvis] .ai-caja:focus-within { border-color: var(--jv-acento); box-shadow: 0 0 0 3px rgba(var(--jv-acento-rgb), .12); }
+#admin-panel-root .ai-root[data-jarvis] .ai-vel { height: 30px; padding: 0 10px 0 8px; background: var(--jv-hundido); font-size: 12px; }
+#admin-panel-root .ai-root[data-jarvis] .ai-caja .ai-ib { width: 34px; height: 34px; background: var(--jv-hundido); }
+#admin-panel-root .ai-root[data-jarvis] .ai-caja .ai-env { width: 36px; height: 36px; }
+.jv-tokens { margin-left: auto; font: 400 11px var(--jv-f-dato); color: var(--jv-tenue); white-space: nowrap; font-variant-numeric: tabular-nums; padding: 0 4px; }
+.ai-root[data-jarvis] .ai-bot .ai-sp { display: none; }
+.ai-root[data-jarvis] .ai-nota { display: none; }
+
+/* ---------- Historial ---------- */
+.ai-root[data-jarvis] .ai-cajon { background: var(--jv-sup); border-color: var(--jv-linea); animation: jv-cajon .24s cubic-bezier(.2, .8, .2, 1) both; }
+@keyframes jv-cajon { from { opacity: 0; transform: translateX(-30px); } }
+.ai-root[data-jarvis] .ai-nuevo { background: var(--jv-acento); color: var(--jv-tinta-ac); border: 0; font-weight: 600; }
+.jv-buscar { display: flex; align-items: center; gap: 8px; height: 38px; margin: 0 10px 6px; padding: 0 10px 0 12px; border-radius: 12px; background: var(--jv-hundido); color: var(--jv-tenue); }
+.jv-buscar input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--jv-tinta); font: 13px var(--jv-f-ui); }
+.jv-buscar input::placeholder { color: var(--jv-tenue); }
+#admin-panel-root .jv-buscar button { min-width: 0 !important; min-height: 0 !important; width: 24px; height: 24px; border-radius: 50%; color: var(--jv-tenue); }
+.ai-root[data-jarvis] .ai-hk { font: 600 10.5px var(--jv-f-astro); letter-spacing: .18em; color: var(--jv-tenue); padding: 10px 14px 2px; }
+.ai-root[data-jarvis] .ai-hi > button:first-child { display: grid; gap: 3px; white-space: normal; padding: 8px 10px; }
+.jv-hi-t { font-size: 13px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; color: var(--jv-tinta); }
+.jv-hi-m { display: flex; align-items: center; gap: 5px; font-size: 11px; font-weight: 500; color: var(--jv-tinta2); min-width: 0; }
+.jv-hi-m .jv-pt { width: 6px; height: 6px; }
+.jv-hi-m > span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-hi-m small { margin-left: auto; font: 400 10.5px var(--jv-f-dato); color: var(--jv-tenue); flex: none; }
+.ai-root[data-jarvis] .ai-hi[data-on] { background: var(--jv-hundido); }
+.jv-cupo { margin: 8px 10px 10px; padding: 10px 12px; border-radius: 12px; border: 1px solid var(--jv-linea); display: grid; gap: 6px; font-size: 12px; color: var(--jv-tinta2); flex: none; }
+.jv-cupo > span { display: flex; justify-content: space-between; gap: 8px; }
+.jv-cupo b { font: 500 12px var(--jv-f-dato); color: var(--jv-tinta); font-variant-numeric: tabular-nums; }
+.jv-barra { height: 6px; border-radius: 9px; background: var(--jv-hundido); overflow: hidden; }
+.jv-barra i { display: block; height: 100%; background: var(--jv-acento); border-radius: 9px; transition: width .3s; }
+
+/* ---------- Ajustes: grupos como constelaciones ---------- */
+.ai-root[data-jarvis][data-vista="ajustes"] .ai-ajustes > [data-orden="1"] { order: 1; }
+.ai-root[data-jarvis][data-vista="ajustes"] .ai-ajustes > [data-orden="2"] { order: 2; }
+.ai-root[data-jarvis][data-vista="ajustes"] .ai-ajustes > [data-orden="3"] { order: 3; }
+.ai-root[data-jarvis][data-vista="ajustes"] .ai-ajustes > [data-orden="4"] { order: 4; }
+.ai-root[data-jarvis][data-vista="ajustes"] .ai-ajustes > [data-orden="5"] { order: 5; }
+.ai-root[data-jarvis][data-vista="ajustes"] .ai-ajustes > [data-orden="6"] { order: 6; }
+.ai-root[data-jarvis][data-vista="ajustes"] .ai-ajustes > [data-orden="7"] { order: 7; }
+.ai-root[data-jarvis][data-vista="ajustes"] .ai-ajustes > [data-orden="8"] { order: 8; }
+.ai-root[data-jarvis][data-vista="ajustes"] .ai-ajustes > [data-orden="9"] { order: 9; }
+.ai-root[data-jarvis] .jv-voz { display: grid; gap: 14px; }
+.ai-root[data-jarvis] .ai-ajustes { gap: 18px; }
+.ai-root[data-jarvis] .ai-aj { border: 0; border-radius: 0; overflow: visible; display: grid; }
+.ai-root[data-jarvis] .ai-aj h4 { justify-content: flex-start; align-items: center; gap: 8px; flex-wrap: wrap; border: 0; padding: 0 2px 6px; font: 600 11px var(--jv-f-astro); letter-spacing: .18em; text-transform: uppercase; color: var(--jv-tinta2); }
+.ai-root[data-jarvis] .ai-aj h4 small { font: 500 11px var(--jv-f-ui); letter-spacing: 0; text-transform: none; color: var(--jv-tenue); }
+.ai-root[data-jarvis] .ai-aj > :is(.ai-modu, .ai-campo, .ai-per, form) { background: var(--jv-sup); border: 1px solid var(--jv-linea); margin-top: -1px; }
+.ai-root[data-jarvis] .ai-aj > :is(.ai-modu, .ai-campo, .ai-per, form):nth-child(2) { border-radius: 14px 14px 0 0; margin-top: 0; }
+.ai-root[data-jarvis] .ai-aj > :is(.ai-modu, .ai-campo, .ai-per, form):last-child { border-radius: 0 0 14px 14px; }
+.ai-root[data-jarvis] .ai-aj > :is(.ai-modu, .ai-campo, .ai-per, form):nth-child(2):last-child { border-radius: 14px; }
+.ai-root[data-jarvis] .ai-aj > :is(.ai-modu, .ai-campo, .ai-per, form) + :is(.ai-modu, .ai-campo, .ai-per, form) { border-top: 1px solid var(--jv-linea); }
+.ai-root[data-jarvis] .ai-aj > p { margin: 4px 2px 0 !important; }
+.ai-root[data-jarvis] .ai-modu-ic { background: var(--jv-hundido); }
+.ai-root[data-jarvis] .ai-sw[data-on] { background: var(--jv-acento); }
+.ai-root[data-jarvis] .ai-sw::after { transition: left .2s cubic-bezier(.2, .8, .2, 1); }
+.ai-root[data-jarvis] .ai-seg button[data-on] { background: var(--jv-acento); color: var(--jv-tinta-ac); box-shadow: none; }
+
+/* ---------- Cerebro a pantalla completa ---------- */
+.ai-root[data-jarvis][data-vista="cerebro"] .ai-ch { display: none; }
+.ai-root[data-jarvis][data-vista="cerebro"] .ai-ajustes { padding: 0; overflow: hidden; animation: none; }
+.ai-root[data-jarvis] .jv-cerebro { position: relative; flex: 1 1 auto; height: 100%; min-height: 460px; margin: 0; border: 0; border-radius: 0; background: var(--jv-cielo-2); display: block; overflow: hidden; }
+.ai-root[data-jarvis] .jv-cerebro.jv-cerebro-solo { display: grid; place-items: center; background: transparent; }
+.ai-root[data-jarvis] .jv-cb-escena { position: absolute; inset: 0; height: auto; border: 0; border-radius: 0; background: transparent; }
+.jv-vidrio { background: color-mix(in srgb, var(--jv-sup) 72%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid var(--jv-linea); }
+.jv-cb-hud { position: absolute; left: 10px; right: 10px; top: 8px; z-index: 4; display: grid; gap: 8px; pointer-events: none; }
+.jv-cb-hud > * { pointer-events: auto; }
+.jv-cb-cab { display: flex; align-items: center; gap: 8px; }
+.jv-cb-tit { flex: 1; min-width: 0; }
+.jv-cb-tit b { display: block; font: 600 15px var(--jv-f-ui); color: var(--jv-tinta); text-shadow: 0 0 8px var(--jv-cielo-1); }
+.jv-cb-ruta { font: 400 11px var(--jv-f-dato); color: var(--jv-tinta2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#admin-panel-root .jv-cb-ruta button { all: unset; cursor: pointer; color: var(--jv-acento); min-width: 0 !important; min-height: 0 !important; }
+.jv-cb-ib { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; color: var(--jv-tinta); flex: none; cursor: pointer; }
+#admin-panel-root .jv-cb-ib { min-width: 0 !important; min-height: 0 !important; }
+.jv-cb-ib:focus-visible, .jv-cb-seg button:focus-visible, .jv-cb-fila:focus-visible { outline: 2px solid var(--jv-acento); outline-offset: 2px; }
+.jv-cb-metr { display: flex; gap: 6px; }
+.jv-cb-metr > div { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 10px; }
+.jv-cb-metr b { display: block; font: 500 15px var(--jv-f-dato); color: var(--jv-tinta); font-variant-numeric: tabular-nums; }
+.jv-cb-metr span { font-size: 10.5px; color: var(--jv-tinta2); }
+.jv-cb-zoom { position: absolute; right: 10px; top: 44%; z-index: 4; display: grid; gap: 6px; }
+.jv-cb-hoja { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; border-radius: 22px 22px 0 0; border-bottom: 0; padding: 8px 14px calc(12px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 10px; background: color-mix(in srgb, var(--jv-sup) 90%, transparent); }
+.jv-cb-asa { width: 36px; height: 4px; border-radius: 9px; background: var(--jv-linea); margin: 0 auto; }
+.jv-cb-seg { display: flex; border-radius: 11px; background: var(--jv-hundido); padding: 3px; gap: 2px; }
+.jv-cb-seg button { flex: 1; text-align: center; padding: 6px 0; border-radius: 9px; font: 500 12.5px var(--jv-f-ui); color: var(--jv-tinta2); background: transparent; border: 0; cursor: pointer; }
+#admin-panel-root .jv-cb-seg button { min-width: 0 !important; min-height: 0 !important; }
+.jv-cb-seg button[aria-selected="true"] { background: var(--jv-sup); color: var(--jv-tinta); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
+.jv-cb-panel { max-height: min(34vh, 260px); overflow-y: auto; display: grid; align-content: start; gap: 2px; overscroll-behavior: contain; scrollbar-width: thin; }
+.jv-cb-fila { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--jv-linea); font-size: 13px; color: var(--jv-tinta); min-width: 0; }
+#admin-panel-root .jv-cb-fila { min-width: 0 !important; min-height: 0 !important; }
+.jv-cb-fila > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-cb-fila small { margin-left: auto; font: 400 11px var(--jv-f-dato); color: var(--jv-tenue); flex: none; }
+.jv-cb-fila em { font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--jv-oro); }
+.jv-cb-fila .jv-cb-cuando { margin: 0; width: 70px; }
+.jv-cb-buscar { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 8px 0 10px; border-radius: 11px; background: var(--jv-hundido); color: var(--jv-tenue); margin-bottom: 2px; }
+.jv-cb-buscar input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--jv-tinta); font: 13px var(--jv-f-ui); }
+#admin-panel-root .jv-cb-buscar button { min-width: 0 !important; min-height: 0 !important; width: 26px; height: 26px; border-radius: 50%; color: var(--jv-tenue); }
+.jv-cb-nota { margin: 6px 2px; font-size: 12.5px; color: var(--jv-tinta2); }
+.jv-cb-link { all: unset; cursor: pointer; color: var(--jv-acento); font-weight: 600; }
+.jv-cb-ensenar { display: flex; gap: 8px; }
+.jv-cb-ensenar input { flex: 1; min-width: 0; height: 40px; border-radius: 11px; border: 1px solid var(--jv-linea); background: var(--jv-hundido); color: var(--jv-tinta); padding: 0 12px; font: 14px var(--jv-f-ui); }
+.jv-cb-ensenar input:focus { outline: 2px solid var(--jv-acento); outline-offset: 1px; }
+.jv-cb-pri { flex: none; min-width: 92px; height: 40px; padding: 0 14px; border-radius: 11px; border: 0; background: var(--jv-acento); color: var(--jv-tinta-ac); font: 600 13px var(--jv-f-ui); display: grid; place-items: center; cursor: pointer; }
+.jv-cb-pri:disabled { opacity: .5; cursor: default; }
+.jv-cb-log { margin: 0; min-height: 20px; font-size: 12.5px; color: var(--jv-tinta2); }
+.jv-cb-log b { color: var(--jv-acento); font-weight: 600; }
+.jv-cb-log[data-estado="error"] { color: var(--tv-danger, #B4363B); }
+.jv-cb-barras { display: flex; align-items: flex-end; gap: 4px; height: 60px; padding-bottom: 4px; border-bottom: 1px solid var(--jv-linea); margin-bottom: 4px; }
+.jv-cb-barras i { flex: 1; border-radius: 3px 3px 0 0; background: var(--jv-tile); }
+.jv-cb-barras i[data-hoy] { background: var(--jv-acento); }
+/* Ficha de una idea */
+.ai-root[data-jarvis] .jv-cerebro-detalle { margin: 0; padding: 0; border: 0; background: transparent; display: grid; gap: 8px; }
+.ai-root[data-jarvis] .jv-det-cab { padding: 0; border: 0; display: flex; align-items: flex-start; gap: 8px; }
+.ai-root[data-jarvis] .jv-det-tt { display: grid; gap: 2px; flex: 1; min-width: 0; }
+.ai-root[data-jarvis] .jv-det-tt small { font: 600 10.5px var(--jv-f-astro); letter-spacing: .16em; color: var(--jv-oro); }
+.ai-root[data-jarvis] .jv-det-tt b { font: 600 17px var(--jv-f-ui); color: var(--jv-tinta); }
+.ai-root[data-jarvis] .jv-det-tt span { font-size: 11.5px; color: var(--jv-tinta2); }
+.ai-root[data-jarvis] .jv-det-res { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--jv-tinta); }
+.ai-root[data-jarvis] .jv-det-meta { margin: 0; font: 400 10.5px var(--jv-f-dato); color: var(--jv-tenue); }
+.ai-root[data-jarvis] .jv-det-con button { border-radius: 999px; }
+/* En la ventanita del widget, el cerebro también ocupa toda la hoja. */
+.vj-hoja .ai-root[data-jarvis] .jv-cb-escena { height: auto; }
+
+@media (prefers-reduced-motion: reduce) {
+  .jv-orbe .p, .jv-pensando .s { animation: none; }
+  .ai-root[data-jarvis] .ai-msgs, .ai-root[data-jarvis] .ai-ajustes, .ai-root[data-jarvis] .ai-ia, .ai-root[data-jarvis] .ai-yo-g,
+  .ai-root[data-jarvis] .ai-acc, .ai-root[data-jarvis] .ai-cajon { animation: none; }
+}
+
+/* Ajustes finos (prioridad sobre las reglas del panel con #admin-panel-root). */
+#admin-panel-root .ai-root[data-jarvis] .ai-ch .ai-cupo-pill { display: none !important; }
+#admin-panel-root .ai-root[data-jarvis] .ai-sug { grid-template-columns: repeat(2, minmax(0, 1fr)) !important; text-align: left; }
+#admin-panel-root .ai-root[data-jarvis] .ai-sug button { text-align: left; justify-items: start; align-content: start; min-height: 0 !important; }
+#admin-panel-root .ai-root[data-jarvis] .ai-sug b { justify-content: flex-start; }
+.ai-root[data-jarvis] .ai-herr:not([data-panel]) summary { flex-wrap: nowrap; }
+.ai-root[data-jarvis] .ai-herr:not([data-panel]) .ai-herr-t { white-space: nowrap; }
+/* El cerebro viejo definía sus colores en .jv-cerebro: aquí mandan los del diseño. */
+.ai-root[data-jarvis] .jv-cerebro {
+  --jv-n-centro: var(--jv-a-neg); --jv-n-temas: var(--jv-a-dis); --jv-n-datos: var(--jv-a-tal); --jv-n-internet: var(--jv-a-int); --jv-n-vos: var(--jv-a-vos);
+  --g-centro: var(--jv-a-neg); --g-temas: var(--jv-a-dis); --g-datos: var(--jv-a-tal); --g-internet: var(--jv-a-int); --g-vos: var(--jv-a-vos);
+  min-height: min(680px, calc(100dvh - 140px));
+}
+.jv-cb-panel { max-height: min(26vh, 210px); }
+#admin-panel-root .ai-root[data-jarvis] .ai-hi > button:first-child { justify-content: stretch !important; justify-items: stretch; align-items: start !important; text-align: left; width: 100%; min-height: 0 !important; }
+.jv-hi-m { width: 100%; }

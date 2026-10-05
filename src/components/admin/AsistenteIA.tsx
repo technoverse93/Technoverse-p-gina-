@@ -15,7 +15,7 @@ import {
   Sparkles, Plus, Lock, Globe, ArrowUp, Copy, Settings, Menu, BarChart3, Trash2, X, Clock, Info, ShieldCheck, ArrowLeft,
   Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight, ShieldAlert, Wallet, MapPin,
   Paperclip, Square, RotateCcw, Pencil, Link2, Code2, FileText,
-  Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot, ThumbsUp, ThumbsDown, MessageCircleQuestion,
+  Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot, ThumbsUp, ThumbsDown, MessageCircleQuestion, SlidersHorizontal, Search,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
@@ -34,10 +34,13 @@ import { grabarNotaDeVoz, puedeGrabarVoz } from '../../utils/grabadorVoz';
 import type { GrabacionEnCurso } from '../../utils/grabadorVoz';
 import { aparatoActual } from '../../seguridad/killSwitch';
 import { separarPrivados, restaurarPrivados } from '../../utils/privados';
+import { Orbe, Pensando, IconoConstelacion, areaDe, saludo } from './JarvisVisual';
 
 /** Abre un módulo del panel en su pestaña (lo da AdminPanel). */
 const AbrirModuloCtx = React.createContext<((m: string) => void) | undefined>(undefined);
 const VerCerebroCtx = React.createContext<(() => void) | undefined>(undefined);
+/** Jarvis (superadmin) usa el diseño de constelaciones; el resto del personal, el de siempre. */
+const JarvisCtx = React.createContext(false);
 
 interface Conversacion { id: string; titulo: string; actualizado_en: string }
 /** Una consulta al sistema que hizo la IA (la tarjeta encima de la respuesta). */
@@ -383,8 +386,9 @@ function TarjetaConsulta({ c }: { c: Consulta }) {
   const Icono = c.sinPermiso ? Ban : (ICONO_MODULO[c.modulo] || Package);
   // Lo del superadmin (con panel) se abre solo: es justo lo que pidió ver.
   return (
-    <details className="ai-herr" data-no={c.sinPermiso || undefined} open={!!c.panel || undefined}>
+    <details className="ai-herr" data-no={c.sinPermiso || undefined} data-area={areaDe(c.modulo)} data-panel={c.panel ? '' : undefined} open={!!c.panel || undefined}>
       <summary>
+        <i className="jv-pt" aria-hidden="true" />
         <span className="ai-herr-ic"><Icono className="w-4 h-4" /></span>
         <span className="ai-herr-t"><b>{c.modulo}</b> · {c.desc}</span>
         {!c.sinPermiso && !SIN_ETIQUETA.has(c.modulo) && (c.panel
@@ -435,12 +439,13 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
   const acciones = (m.consultas || []).filter(c => c.tipo === 'accion' && c.id);
   const perfil = PERFILES.find(p => p.id === m.perfil);
   const esRequerimiento = m.persona === 'arquitecto' && /REQUERIMIENTO:/.test(m.texto);
+  const jv = React.useContext(JarvisCtx);
   return (
     <div className="ai-ia" aria-live={enVivo ? 'polite' : undefined}>
       {!!lecturas.length && <div className="ai-herrs">{lecturas.map((c, i) => <React.Fragment key={i}><TarjetaConsulta c={c} /></React.Fragment>)}</div>}
       {m.texto
         ? <div className="ai-tx"><Formato texto={m.texto} />{enVivo && <span className="ai-cursor" />}</div>
-        : enVivo && <div className="ai-buscando"><span className="ai-puntos"><i /><i /><i /></span>{m.estado || 'Pensando…'}</div>}
+        : enVivo && (jv ? <Pensando texto={m.estado || 'Pensando…'} /> : <div className="ai-buscando"><span className="ai-puntos"><i /><i /><i /></span>{m.estado || 'Pensando…'}</div>)}
       {graficos.map((c, i) => <React.Fragment key={`g${i}`}><GraficoComparado g={c.grafico!} /></React.Fragment>)}
       {irs.map((c, i) => <React.Fragment key={`n${i}`}><IrModulo titulo={c.desc} destino={c.destino!} /></React.Fragment>)}
       {acciones.map(c => <React.Fragment key={c.id}><TarjetaAccion id={c.id!} /></React.Fragment>)}
@@ -456,6 +461,14 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
           {m.fuentes.map((f, i) => (
             <a key={i} href={f.url} target="_blank" rel="noopener noreferrer"><b>{i + 1}</b><span>{f.titulo || 'Fuente'}</span></a>
           ))}
+        </div>
+      )}
+      {!enVivo && jv && (
+        <div className="jv-meta" title={`${nombreModelo(m.modelo, m.proveedor)}${m.busco ? ' · buscó en internet' : ''}`}>
+          {perfil && <span>{m.persona === 'arquitecto' ? 'Arquitecto · ' : ''}{perfil.nombre}{m.escalado ? ' (subió solo)' : ''}</span>}
+          <span>{((m.tokens_in || 0) + (m.tokens_out || 0)).toLocaleString('es-CR')} tokens</span>
+          {!!m.ms && <span>{segundos(m.ms)}</span>}
+          {m.proveedor && m.proveedor !== 'gemini' && <span>{nombreModelo(m.modelo, m.proveedor)}</span>}
         </div>
       )}
       {!enVivo && <div className="ai-pie">
@@ -608,11 +621,13 @@ function PanelCupo({ cupo, tokensConv }: { cupo: Cupo | null; tokensConv: number
   );
 }
 
-const SUGERENCIAS_JARVIS = [
-  { t: 'Ventas', d: 'Esta semana contra la anterior', p: 'Compará las ventas de esta semana con las de la semana pasada.' },
-  { t: 'Sesiones', d: '¿Quién tiene sesión abierta?', p: '¿Quién del personal tiene sesión abierta ahora y desde qué equipo?' },
-  { t: 'Seguridad', d: 'Intentos fallidos de hoy', p: '¿Hubo intentos de ingreso fallidos hoy? ¿Desde dónde?' },
-  { t: 'Responder', d: 'Escribirle a un cliente', p: 'Respondele al último chat que ya le contesto en un momento.' },
+// Las dos primeras se mandan de una; las otras dos dejan la orden empezada
+// en la caja (crear o aprender necesita que digás qué).
+const SUGERENCIAS_JARVIS: { t: string; d: string; p: string; area: string; enviar?: boolean }[] = [
+  { t: 'Ventas de hoy', d: 'Total, cantidad y comparación', p: '¿Cuánto vendimos hoy y cómo vamos contra el mismo día de la semana pasada?', area: 'neg', enviar: true },
+  { t: 'Órdenes listas', d: 'Lo que se puede entregar', p: '¿Qué órdenes del taller están listas para entregar?', area: 'tal', enviar: true },
+  { t: 'Crear productos', d: 'Uno o varios, de una vez', p: 'Creá ', area: 'dis' },
+  { t: 'Aprender algo', d: 'Queda en su cerebro', p: 'Aprendé todo sobre ', area: 'int' },
 ];
 const SUGERENCIAS_ARQ = [
   { t: 'Evaluar', d: 'Una idea para la tienda', p: 'Quiero que los clientes puedan apartar un producto 24 horas pagando una parte. ¿Qué implicaría?' },
@@ -649,6 +664,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   // El globo FUERZA la búsqueda en internet para el próximo mensaje; sin él,
   // la IA decide sola cuándo buscar.
   const [buscar, setBuscar] = useState(false);
+  const [filtroConv, setFiltroConv] = useState('');
   const [adjuntos, setAdjuntos] = useState<Adjunto[]>([]);
   const [editando, setEditando] = useState(false);
   const cortar = useRef<AbortController | null>(null);
@@ -1045,29 +1061,70 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     try { await navigator.clipboard.writeText(t); toast.success('Copiado.'); } catch { toast.error('No se pudo copiar.'); }
   }, [toast]);
 
+  // Jarvis: cada conversación muestra los puntos de las áreas que tocó
+  // (de lo que ya está en caché; las demás, sin puntos) y la hora.
+  const areasDe = (id: string): string[] => {
+    const ms = cache.get(id);
+    if (!ms) return [];
+    const mods = new Set<string>();
+    for (const m of ms) for (const c of m.consultas || []) if (c.modulo) mods.add(c.modulo);
+    return [...mods].slice(0, 3);
+  };
+  const horaDe = (iso: string) => {
+    const d = new Date(iso), hoy = new Date();
+    if (Date.now() - d.getTime() < 2 * 86400_000 || d.toDateString() === hoy.toDateString()) return d.toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' });
+    return d.toLocaleDateString('es-CR', { weekday: 'short' }).replace('.', '');
+  };
+  const qConv = filtroConv.trim().toLowerCase();
+  const convsVistas = qConv ? convs.filter(c => c.titulo.toLowerCase().includes(qConv)) : convs;
   const listaConvs = (
     <>
       <div className="ai-lh"><b>Tus conversaciones</b><Lock className="w-4 h-4" aria-label="Privadas" /></div>
       <button type="button" className="ai-nuevo" onClick={nueva}><Plus className="w-4 h-4" />Conversación nueva</button>
+      {jarvis && (
+        <label className="jv-buscar">
+          <Search className="w-4 h-4 shrink-0" aria-hidden="true" />
+          <input value={filtroConv} onChange={e => setFiltroConv(e.target.value)} placeholder="Buscar en tus conversaciones" aria-label="Buscar en tus conversaciones" enterKeyHint="search" />
+          {filtroConv && <button type="button" aria-label="Borrar búsqueda" onClick={() => setFiltroConv('')}><X className="w-3.5 h-3.5" /></button>}
+        </label>
+      )}
       <div className="ai-hl">
-        {convs.length === 0 && <p className="ai-vacio-l">Todavía no hay conversaciones.</p>}
-        {convs.map((c, i) => {
+        {convsVistas.length === 0 && <p className="ai-vacio-l">{qConv ? 'Ninguna conversación con ese nombre.' : 'Todavía no hay conversaciones.'}</p>}
+        {convsVistas.map((c, i) => {
           const dia = diaDe(c.actualizado_en);
-          const nuevoDia = i === 0 || diaDe(convs[i - 1].actualizado_en) !== dia;
+          const nuevoDia = i === 0 || diaDe(convsVistas[i - 1].actualizado_en) !== dia;
+          const areas = jarvis ? areasDe(c.id) : [];
           return (
             <React.Fragment key={c.id}>
               {nuevoDia && <div className="ai-hk">{dia}</div>}
               <div className="ai-hi" data-on={activa === c.id || undefined}>
-                <button type="button"
+                <button type="button" aria-current={activa === c.id || undefined}
                   onPointerDown={() => { if (!cache.has(c.id)) void leerMensajes(c.id); }}
-                  onClick={() => { setActiva(c.id); setVista('chat'); setCajon(null); setAviso(null); }}>{c.titulo}</button>
+                  onClick={() => { setActiva(c.id); setVista('chat'); setCajon(null); setAviso(null); }}>
+                  {jarvis ? (
+                    <>
+                      <b className="jv-hi-t">{c.titulo}</b>
+                      <span className="jv-hi-m">
+                        {areas.map(a => <i key={a} className="jv-pt" data-area={areaDe(a)} aria-hidden="true" />)}
+                        <span>{areas.length ? areas.join(', ') : 'Conversación'}</span>
+                        <small>{horaDe(c.actualizado_en)}</small>
+                      </span>
+                    </>
+                  ) : c.titulo}
+                </button>
                 <button type="button" className="ai-borrar" aria-label="Borrar conversación" onClick={() => void borrarConv(c)}><Trash2 className="w-3.5 h-3.5" /></button>
               </div>
             </React.Fragment>
           );
         })}
       </div>
-      <div className="ai-priv"><ShieldCheck className="w-4 h-4 shrink-0" /><span>Solo vos ves tus conversaciones.</span></div>
+      {jarvis ? (
+        <div className="jv-cupo">
+          <span><span>Mensajes de hoy</span><b>{cupo?.usados ?? 0}{cupo?.limite ? ` / ${cupo.limite}` : ''}</b></span>
+          <div className="jv-barra"><i style={{ width: `${Math.min(100, Math.max(3, cupo?.limite ? (cupo.usados / cupo.limite) * 100 : ((cupo?.equipo.gemini ?? 0) / (cupo?.equipo.cupoGemini || 1)) * 100))}%` }} /></div>
+          <span><span>Tokens de hoy</span><b>{(cupo?.tokensHoy ?? 0).toLocaleString('es-CR')}</b></span>
+        </div>
+      ) : <div className="ai-priv"><ShieldCheck className="w-4 h-4 shrink-0" /><span>Solo vos ves tus conversaciones.</span></div>}
     </>
   );
 
@@ -1076,7 +1133,8 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   return (
     <AbrirModuloCtx.Provider value={onAbrirModulo}>
     <VerCerebroCtx.Provider value={jarvis ? verCerebro : undefined}>
-    <div className="ai-root" id="view-asistente">
+    <JarvisCtx.Provider value={jarvis}>
+    <div className="ai-root" id="view-asistente" data-jarvis={jarvis || undefined} data-vista={vista}>
       <aside className="ai-lado">{listaConvs}</aside>
 
       <section className="ai-panel">
@@ -1084,12 +1142,21 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
           {vista !== 'chat' ? (
             <>
               <button type="button" className="ai-menu ai-atras" aria-label="Volver al chat" title="Volver al chat" onClick={() => setVista('chat')}><ArrowLeft className="w-5 h-5" /></button>
-              <b className="ai-titulo">{vista === 'cerebro' ? 'Cerebro de Jarvis' : 'Ajustes del asistente'}</b>
+              {jarvis && vista === 'ajustes'
+                ? <span className="jv-tit"><span><b>Ajustes de Jarvis</b><small>Se aplican al instante</small></span></span>
+                : <b className="ai-titulo">{vista === 'cerebro' ? 'Cerebro de Jarvis' : 'Ajustes del asistente'}</b>}
             </>
           ) : (
             <>
               <button type="button" className="ai-menu" aria-label="Conversaciones" onClick={() => setCajon('historial')}><Menu className="w-5 h-5" /></button>
               {jarvis ? (
+                <button type="button" className="jv-tit" data-menu-btn
+                  aria-haspopup="menu" aria-expanded={menu === 'persona'} aria-label={`Modo: ${persona === 'arquitecto' ? 'Arquitecto' : 'Jarvis'}. Cambiar`}
+                  onClick={() => setMenu(m => (m === 'persona' ? null : 'persona'))}>
+                  <Orbe tam={30} />
+                  <span><b>{persona === 'arquitecto' ? 'Arquitecto' : 'Jarvis'}<ChevronDown className="w-3.5 h-3.5" aria-hidden="true" /></b><small>{enviando ? 'Trabajando…' : `En línea · ${perfilActual.nombre}`}</small></span>
+                </button>
+              ) : jarvis ? (
                 <button type="button" className="ai-modelo ai-persona" data-p={persona === 'arquitecto' ? 'arquitecto' : 'operador'} data-menu-btn
                   aria-haspopup="menu" aria-expanded={menu === 'persona'} aria-label={`Modo: ${persona === 'arquitecto' ? 'Arquitecto' : 'Jarvis'}`}
                   onClick={() => setMenu(m => (m === 'persona' ? null : 'persona'))}>
@@ -1106,14 +1173,14 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             {cupo?.disponibles === null || !cupo ? <><b>{cupo?.usados ?? 0}</b><span className="ai-lbl"> hoy</span></> : <><b>{cupo.disponibles}</b><span className="ai-lbl"> disponibles</span></>}
           </button>
           {jarvis && vista === 'chat' && (
-            <button type="button" className="ai-chip ai-ajustes-btn" onClick={() => setVista('cerebro')} aria-label="Cerebro de Jarvis" title="Cerebro de Jarvis"><Brain className="w-[18px] h-[18px]" /><span className="ai-lbl">Cerebro</span></button>
+            <button type="button" className="ai-chip ai-ajustes-btn" onClick={() => setVista('cerebro')} aria-label="Cerebro de Jarvis" title="Cerebro de Jarvis"><IconoConstelacion /><span className="ai-lbl">Cerebro</span></button>
           )}
           {soySuper && vista === 'chat' && (
-            <button type="button" className="ai-chip ai-ajustes-btn" onClick={() => setVista('ajustes')} aria-label="Ajustes" title="Ajustes"><Settings className="w-[18px] h-[18px]" /><span className="ai-lbl">Ajustes</span></button>
+            <button type="button" className="ai-chip ai-ajustes-btn" onClick={() => setVista('ajustes')} aria-label="Ajustes" title="Ajustes">{jarvis ? <SlidersHorizontal className="w-[18px] h-[18px]" /> : <Settings className="w-[18px] h-[18px]" />}<span className="ai-lbl">Ajustes</span></button>
           )}
         </header>
 
-        {vista === 'cerebro' && jarvis ? <div className="ai-ajustes"><React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando el cerebro"><i /><i /><i /></div>}><CerebroJarvis onPreguntar={t => { setVista('chat'); void enviar(t); }} /></React.Suspense></div> : vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} /> : (
+        {vista === 'cerebro' && jarvis ? <div className="ai-ajustes"><React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando el cerebro"><i /><i /><i /></div>}><CerebroJarvis onPreguntar={t => { setVista('chat'); void enviar(t); }} onVolver={() => setVista('chat')} /></React.Suspense></div> : vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} /> : (
           <>
             {aviso && (
               <div className="ai-aviso" data-tipo={aviso.tipo}>
@@ -1132,16 +1199,21 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                 </div>
               ) : mensajes.length === 0 ? (
                 <div className="ai-hola">
-                  <span className="ai-logo">{jarvis && persona === 'arquitecto' ? <Lightbulb className="w-7 h-7" /> : <Sparkles className="w-7 h-7" />}</span>
+                  {jarvis && persona === 'jarvis'
+                    ? <><Orbe tam={96} className="jv-orbe-grande" /><span className="jv-astro">{saludo()}</span></>
+                    : <span className="ai-logo">{jarvis && persona === 'arquitecto' ? <Lightbulb className="w-7 h-7" /> : <Sparkles className="w-7 h-7" />}</span>}
                   <h3>{jarvis ? (persona === 'arquitecto' ? '¿Qué idea evaluamos?' : '¿Qué hacemos hoy?') : '¿En qué te ayudo?'}</h3>
                   <p>{jarvis
                     ? (persona === 'arquitecto'
                       ? 'Contame una idea o un cambio. Te digo qué implica en el sistema y te dejo el requerimiento listo para programar. No ejecuto nada.'
-                      : `Preguntá por cualquier módulo o dame una orden: «respondele a Laura que ya está lista», «pasá la orden TKT-104 a Lista», «bloqueá el modelo…». Lo delicado te lo muestro en una tarjeta para confirmar.${conVoz ? ' También por voz.' : ''}`)
+                      : 'Preguntame por cualquier módulo o dame una orden. Lo hago y te aviso en una línea.')
                     : <>{conSistema ? 'Preguntá por el inventario, las ventas o el taller, o pedí ayuda para redactar.' : 'Preguntas, redactar, explicar o resumir.'} No escribás cédulas, teléfonos ni datos de clientes.</>}</p>
                   <div className="ai-sug">
-                    {(jarvis ? (persona === 'arquitecto' ? SUGERENCIAS_ARQ : SUGERENCIAS_JARVIS) : sugerencias).map(s => (
-                      <button key={s.t} type="button" onClick={() => { setTexto(s.p); cajaRef.current?.focus(); }}><b>{s.t}</b>{s.d}</button>
+                    {(jarvis ? (persona === 'arquitecto' ? SUGERENCIAS_ARQ : SUGERENCIAS_JARVIS) : sugerencias).map((s: { t: string; d: string; p: string; area?: string; enviar?: boolean }) => (
+                      <button key={s.t} type="button" data-area={s.area}
+                        onClick={() => { if (s.enviar && !agotado) { void enviar(s.p); return; } setTexto(s.p); setTimeout(() => { const c = cajaRef.current; if (c) { c.focus(); c.setSelectionRange(c.value.length, c.value.length); } }, 0); }}>
+                        <b>{s.area && <i className="jv-pt" aria-hidden="true" />}{s.t}</b>{s.d}
+                      </button>
                     ))}
                   </div>
                 </div>
@@ -1194,6 +1266,13 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                 )}
                 <input ref={archivoRef} type="file" accept="image/*,application/pdf,text/plain,text/csv,text/markdown,application/json,.txt,.csv,.md,.json,.tsv,.log,.doc,.docx,.xls,.xlsx" multiple hidden onChange={e => void alElegirArchivos(e.target.files)} />
                 <div className="ai-bot">
+                  {jarvis && (
+                    <button type="button" className="ai-vel" data-menu-btn aria-haspopup="menu" aria-expanded={menu === 'vel'} aria-label={`Velocidad: ${perfilActual.nombre}`}
+                      onClick={() => setMenu(m => (m === 'vel' ? null : 'vel'))}>
+                      <span className="ai-vel-ic"><perfilActual.icono className="w-4 h-4" /></span>
+                      <span className="ai-vel-tx">{perfilActual.nombre}</span>
+                    </button>
+                  )}
                   {jarvis && !editando && (archivosPermitidos || busquedaPermitida) && (
                     <button type="button" className="ai-ib" data-menu-btn data-on={buscar || undefined} aria-haspopup="menu" aria-expanded={menu === 'mas'}
                       aria-label="Adjuntar o buscar en internet" title="Adjuntar o buscar en internet" disabled={!!voz}
@@ -1223,12 +1302,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                   )}
                   <span className="ai-sp" />
                   {jarvis ? (
-                    <button type="button" className="ai-vel" data-menu-btn aria-haspopup="menu" aria-expanded={menu === 'vel'} aria-label={`Velocidad: ${perfilActual.nombre}`}
-                      onClick={() => setMenu(m => (m === 'vel' ? null : 'vel'))}>
-                      <span className="ai-vel-ic"><perfilActual.icono className="w-4 h-4" /></span>
-                      <span className="ai-vel-tx">{perfilActual.nombre}</span>
-                      <span className="ai-chev"><ChevronDown className="w-4 h-4" /></span>
-                    </button>
+                    <span className="jv-tokens" title="Tokens usados en esta conversación">{tokensConv.toLocaleString('es-CR')} tokens</span>
                   ) : (
                     <span className="ai-cont" title="Tokens estimados de tu texto · contexto usado de la conversación">
                       ≈ <b>{estimarTokens(texto)}</b><span className="ai-lbl"> tokens</span>
@@ -1313,6 +1387,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
         </div>
       )}
     </div>
+    </JarvisCtx.Provider>
     </VerCerebroCtx.Provider>
     </AbrirModuloCtx.Provider>
   );
@@ -1347,10 +1422,13 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
   const tope = aj.limite_diario;
   const modulos: Modulos = { inventario: true, facturacion: true, taller: true, errores: true, seguridad: true, finanzas: true, internet: true, enlaces: true, archivos: true, codigo: true, acciones: true, chat_directo: true, taller_directo: true, inventario_directo: true, ...(aj.modulos || {}) };
   const maxConsultas = Math.max(1, ...consultasHoy.map(c => c.consultas));
+  // Jarvis: los grupos van como constelaciones (punto de color y versalitas)
+  // y en el orden del diseño: lo que hace solo, voz y tono, memoria, uso.
+  const H = ({ area, children }: { area: string; children: React.ReactNode }) => <h4><i className="jv-pt" data-area={area} aria-hidden="true" />{children}</h4>;
   return (
     <div className="ai-ajustes">
-      <div className="ai-aj">
-        <h4>Capacidades <small>gratis</small></h4>
+      <div className="ai-aj" data-orden="4">
+        <H area="int">Capacidades <small>gratis</small></H>
         {CAPACIDADES.map(m => (
           <div key={m.id} className="ai-modu">
             <span className="ai-modu-ic"><m.icono className="w-4 h-4" /></span>
@@ -1362,10 +1440,25 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
           </div>
         ))}
       </div>
-      <AjusteVoz />
-      {cupo?.perfiles && <React.Suspense fallback={null}><MiniWidgetAjustes /></React.Suspense>}
-      {cupo?.perfiles && <div className="ai-aj">
-        <h4>Jarvis <small>solo superadmin</small></h4>
+      <div data-orden="2" className="jv-voz">
+        {cupo?.perfiles && (
+          <div className="ai-aj">
+            <H area="vos">Voz y tono</H>
+            <div className="ai-campo" data-tono>
+              <span>Tono de Jarvis</span>
+              <span className="ai-seg">
+                {([['formal', 'Formal'], ['tico_moderado', 'Tico moderado'], ['tico_suelto', 'Tico suelto']] as const).map(([v, l]) => (
+                  <button key={v} type="button" data-on={(aj.tono || 'tico_moderado') === v || undefined} onClick={() => void guardar({ tono: v })}>{l}</button>
+                ))}
+              </span>
+            </div>
+          </div>
+        )}
+        <AjusteVoz />
+      </div>
+      {cupo?.perfiles && <div data-orden="8"><React.Suspense fallback={null}><MiniWidgetAjustes /></React.Suspense></div>}
+      {cupo?.perfiles && <div className="ai-aj" data-orden="1">
+        <H area="neg">Lo que hace solo <small>solo superadmin</small></H>
         <div className="ai-modu">
           <span className="ai-modu-ic"><Bot className="w-4 h-4" /></span>
           <span className="ai-modu-t"><b>Acciones con confirmación</b><span>Prepara bloqueos, desbloqueos y cierres de sesión; nada se ejecuta sin tu «Confirmar». Nunca toca el código.</span></span>
@@ -1382,18 +1475,10 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
               onClick={() => void guardar({ modulos: { ...modulos, [k]: !modulos[k] } })} aria-label={n} />
           </div>
         ))}
-        <div className="ai-campo">
-          <span>Tono de Jarvis</span>
-          <span className="ai-seg">
-            {([['formal', 'Formal'], ['tico_moderado', 'Tico moderado'], ['tico_suelto', 'Tico suelto']] as const).map(([v, l]) => (
-              <button key={v} type="button" data-on={(aj.tono || 'tico_moderado') === v || undefined} onClick={() => void guardar({ tono: v })}>{l}</button>
-            ))}
-          </span>
-        </div>
       </div>}
-      {cupo?.perfiles && <MemoriaJarvis />}
-      <div className="ai-aj">
-        <h4>Datos del sistema <small>solo lectura · sin datos de clientes</small></h4>
+      {cupo?.perfiles && <div data-orden="3"><MemoriaJarvis /></div>}
+      <div className="ai-aj" data-orden="5">
+        <H area="dis">Datos del sistema <small>solo lectura · sin datos de clientes</small></H>
         {MODULOS.map(m => (
           <div key={m.id} className="ai-modu">
             <span className="ai-modu-ic"><m.icono className="w-4 h-4" /></span>
@@ -1403,8 +1488,8 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
           </div>
         ))}
       </div>
-      <div className="ai-aj">
-        <h4>Límites <small>se aplican desde ya</small></h4>
+      <div className="ai-aj" data-orden="6">
+        <H area="tal">Límites <small>se aplican desde ya</small></H>
         <div className="ai-campo">
           <span>Mensajes por persona al día</span>
           <span className="ai-num-g">
@@ -1437,8 +1522,8 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
         </div>
       </div>
       {consultasHoy.length > 0 && (
-        <div className="ai-aj">
-          <h4>Consultas de hoy <small>qué módulo, no qué se preguntó</small></h4>
+        <div className="ai-aj" data-orden="7">
+          <H area="tal">Consultas de hoy <small>qué módulo, no qué se preguntó</small></H>
           {consultasHoy.map(c => (
             <div key={c.modulo} className="ai-per">
               <b>{MODULOS.find(m => m.id === c.modulo)?.nombre || c.modulo}</b>
@@ -1448,8 +1533,8 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
           ))}
         </div>
       )}
-      <div className="ai-aj">
-        <h4>Uso de hoy <small>sin leer conversaciones</small></h4>
+      <div className="ai-aj" data-orden="7">
+        <H area="tal">Uso de hoy <small>sin leer conversaciones</small></H>
         {uso.length === 0 && <p className="ai-prov" style={{ margin: 14 }}>Nadie lo ha usado hoy.</p>}
         {uso.map(u => (
           <div key={u.email} className="ai-per">
@@ -1459,7 +1544,7 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
           </div>
         ))}
       </div>
-      <p className="ai-prov">Las claves de Google y Groq viven como secretos en el servidor; nadie del personal las ve.</p>
+      <p className="ai-prov" data-orden="9">Las claves de Google y Groq viven como secretos en el servidor; nadie del personal las ve.</p>
     </div>
   );
 }
@@ -1493,7 +1578,7 @@ function MemoriaJarvis() {
   const TIPO: Record<string, string> = { preferencia: 'Preferencia', negocio: 'Negocio', forma_de_hablar: 'Forma de hablar' };
   return (
     <div className="ai-aj">
-      <h4>Memoria de Jarvis <small>sin datos de clientes · viaja a Google</small></h4>
+      <h4><i className="jv-pt" data-area="vos" aria-hidden="true" />Memoria <small>sin datos de clientes · viaja a Google</small></h4>
       {sinTabla ? <p className="ai-prov" style={{ margin: 14 }}>Se activa cuando se aplique la migración de memoria.</p> : (
         <>
           {items === null && <p className="ai-prov" style={{ margin: 14 }}>Cargando…</p>}
