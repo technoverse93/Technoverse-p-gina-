@@ -43,15 +43,16 @@ const TarjetaAccion = lazy(() => import('./JarvisPiezas').then(m => ({ default: 
 // perder el primero mientras la pantalla todavía arma.
 let ultimoPedido: PedidoVentanita | null = null;
 const alPedir = new Set<(p: PedidoVentanita) => void>();
-if (widgetNativo.disponible()) {
+if (widgetNativo.enApp()) {
   void widgetNativo.alPedir(p => { ultimoPedido = p; alPedir.forEach(f => f(p)); }).catch(() => { /* sin pedidos: se abre sin micrófono */ });
 }
 
-type Fase = 'cargando' | 'listo' | 'fuera' | 'apagado' | 'sin_sesion' | 'no_super' | 'bloqueado' | 'sin_red';
+type Fase = 'cargando' | 'listo' | 'fuera' | 'sin_puente' | 'apagado' | 'sin_sesion' | 'no_super' | 'bloqueado' | 'sin_red';
 type Boton = 'app' | 'panel' | 'reintentar';
 
 const AVISOS: Record<Exclude<Fase, 'cargando' | 'listo'>, { icono: LucideIcon; titulo: string; texto: string; boton?: Boton }> = {
   fuera: { icono: Smartphone, titulo: 'Esta es la ventanita del widget', texto: 'Se abre desde el widget de Jarvis en el teléfono. Jarvis completo está en el panel.', boton: 'panel' },
+  sin_puente: { icono: Smartphone, titulo: 'No se pudo abrir Jarvis aquí', texto: 'Abrí Jarvis en la app; si vuelve a pasar, reinstalá la APK más nueva.', boton: 'app' },
   apagado: { icono: Power, titulo: 'El mini-widget está apagado', texto: 'Activalo en la app: Jarvis → Ajustes → Mini-widget → «Activar en este teléfono».', boton: 'app' },
   sin_sesion: { icono: LogIn, titulo: 'No hay sesión en este teléfono', texto: 'Entrá a la app una vez con tu cuenta y el widget queda listo.', boton: 'app' },
   no_super: { icono: ShieldAlert, titulo: 'Solo para la cuenta del dueño', texto: 'El mini-widget de Jarvis es del superadmin.', boton: 'app' },
@@ -138,11 +139,20 @@ export default function VentanitaJarvis() {
   useEffect(() => {
     let vivo = true;
     (async () => {
-      const e = await widgetNativo.estado();
+      // En la web esta página no hace nada (se abre desde el widget del teléfono).
+      if (!widgetNativo.enApp()) { setFase('fuera'); return; }
+      // En el teléfono SIEMPRE es la ventanita: el puente puede tardar un
+      // instante en contestar al arrancar, así que se reintenta.
+      let e = await widgetNativo.estado();
+      for (let i = 0; i < 4 && !e.version; i++) {
+        await new Promise(ok => setTimeout(ok, 350));
+        if (!vivo) return;
+        e = await widgetNativo.estado();
+      }
       if (!vivo) return;
       setModo(m => m || e.modo);
       setConversacion(e.conversacion || conversacionDelWidget());
-      if (!e.enVentanita) { setFase('fuera'); return; }
+      if (!e.version) { setFase('sin_puente'); return; }
       if (!e.activo) { setFase('apagado'); return; }
       void conexionBloqueada().then(b => { if (b && vivo) setFase('bloqueado'); });
       try {
@@ -222,7 +232,8 @@ export default function VentanitaJarvis() {
   const alResponder = useCallback((pregunta: string, respuesta: string) => { void widgetNativo.ultimaRespuesta(pregunta, respuesta); }, []);
 
   const aviso = fase !== 'cargando' && fase !== 'listo' ? AVISOS[fase] : null;
-  const nativa = fase !== 'fuera';
+  // En el teléfono siempre hay cómo cerrar (X, tocar afuera o atrás).
+  const nativa = widgetNativo.enApp();
   // En el recuadro: nada a la vista (salvo un aviso que pida algo), o solo
   // la barrita para escribir.
   const enRecuadro = modo === 'voz' || (modo === 'escribir' && !aviso);

@@ -55,14 +55,23 @@ const Plugin = registerPlugin<PluginJarvisWidget>('JarvisWidget');
 export type EstadoWidget = { activo: boolean; enVentanita: boolean; version: number; modo: ModoVentanita; conversacion: string | null };
 
 const nada = () => { /* fuera de la ventanita o APK vieja: no hay nada que hacer */ };
+const salir = async () => {
+  try { const { App } = await import('@capacitor/app'); await App.exitApp(); } catch { /* en la web no hay nada que cerrar */ }
+};
 
 export const widgetNativo = {
+  /** Corre dentro de la APK (la app o la ventanita del widget). */
+  enApp(): boolean {
+    return Capacitor.isNativePlatform();
+  },
   disponible(): boolean {
     return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('JarvisWidget');
   },
   async estado(): Promise<EstadoWidget> {
     const vacio: EstadoWidget = { activo: false, enVentanita: false, version: 0, modo: 'hoja', conversacion: null };
-    if (!this.disponible()) return vacio;
+    // En la APK se pregunta siempre (aunque la lista de complementos todavía
+    // no esté): si no responde, `version` queda en 0 y quien llama decide.
+    if (!Capacitor.isNativePlatform()) return vacio;
     try {
       const e = await Plugin.estado();
       return { activo: !!e.activo, enVentanita: !!e.enVentanita, version: Number(e.version) || 1, modo: e.modo || 'hoja', conversacion: e.conversacion || null };
@@ -75,8 +84,10 @@ export const widgetNativo = {
   async ponerEnInicio(): Promise<boolean> {
     try { return (await Plugin.ponerEnInicio()).pedido; } catch { return false; }
   },
-  cerrar: () => Plugin.cerrar().catch(nada),
-  abrirApp: (modulo?: string) => Plugin.abrirApp(modulo ? { modulo } : {}).catch(nada),
+  // Si el puente fallara, igual se sale: la ventanita nunca puede quedar
+  // tapando la pantalla.
+  cerrar: () => Plugin.cerrar().catch(salir),
+  abrirApp: (modulo?: string) => Plugin.abrirApp(modulo ? { modulo } : {}).catch(salir),
   ultimaRespuesta: (pregunta: string, respuesta: string, extra: { conversacion?: string | null; accion?: boolean } = {}) =>
     Plugin.ultimaRespuesta({
       pregunta: pregunta.slice(0, 300), respuesta: respuesta.slice(0, 1500),
