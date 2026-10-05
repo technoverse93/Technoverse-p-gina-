@@ -20,6 +20,9 @@ import {
 import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
 const CerebroJarvis = React.lazy(() => import('./CerebroJarvis'));
+import { BotonEscuchar, BarraLectura, AjusteVoz } from './LectorPiezas';
+import { lector, modoLectura } from '../../utils/lectorVoz';
+const MiniWidgetAjustes = React.lazy(() => import('./MiniWidgetAjustes'));
 import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../../supabaseClient';
 import { cabeceraClientInfo } from '../../utils/dispositivo';
 import { useToast, useConfirm } from '../ui/Overlays';
@@ -69,6 +72,8 @@ interface Cupo {
   usados: number; limite: number | null; disponibles: number | null; tokensHoy: number;
   equipo: { gemini: number; groq: number; cupoGemini: number; cupoGroq: number };
   busqueda: boolean; respaldo: boolean; groqConfigurado: boolean;
+  /** IAs de respaldo configuradas, en orden («Groq», «Cerebras»…). */
+  respaldos?: string[];
   modulos?: string[]; consultasHoy?: number;
   busquedaWeb?: boolean; busquedasMes?: number; cupoBusquedas?: number;
   capacidades?: { enlaces: boolean; codigo: boolean; archivos: boolean };
@@ -170,7 +175,10 @@ async function prepararArchivo(f: File): Promise<Adjunto | null> {
 }
 
 /** «gemini-3.8-flash» → «Gemini 3.8 Flash». */
-function nombreModelo(m?: string | null): string {
+const NOMBRE_PROVEEDOR: Record<string, string> = { groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', local: 'servidor propio' };
+/** Quién respondió: el modelo de Gemini o la IA de respaldo que contestó. */
+function nombreModelo(m?: string | null, proveedor?: string | null): string {
+  if (proveedor && proveedor !== 'gemini') return `${NOMBRE_PROVEEDOR[proveedor] || proveedor} (respaldo)`;
   if (!m) return 'Gemini Flash';
   if (/llama|groq/i.test(m)) return 'Groq (respaldo)';
   return m.replace(/-latest$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
@@ -471,6 +479,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
       )}
       {!enVivo && <div className="ai-pie">
         <button type="button" aria-label="Copiar respuesta" onClick={() => onCopiar(m.texto)}><Copy className="w-4 h-4" /></button>
+        <BotonEscuchar id={m.id} texto={m.texto} />
         {onRegenerar && <button type="button" aria-label="Regenerar respuesta" onClick={onRegenerar}><RotateCcw className="w-4 h-4" /></button>}
         {valorable && <>
           <button type="button" aria-label="Me gustó" aria-pressed={m.valoracion === 1} data-on={m.valoracion === 1 || undefined} onClick={() => { setNota(null); onValorar!(m.id, m.valoracion === 1 ? null : 1); }}><ThumbsUp className="w-4 h-4" /></button>
@@ -478,9 +487,9 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
         </>}
         <span className="ai-tok">↑ <i>{k(m.tokens_in || 0)}</i> · ↓ <i>{k(m.tokens_out || 0)}</i> tokens</span>
         {perfil ? (
-          <span className="ai-modo-tag"><perfil.icono className="w-3.5 h-3.5" />{m.persona === 'arquitecto' ? 'Arquitecto · ' : ''}{perfil.nombre}{m.escalado ? ' (subió solo)' : ''} · {nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.ms ? ` · ${segundos(m.ms)}` : ''}{m.busco ? ' · buscó en internet' : ''}{lecturas.length ? ` · consultó ${lecturas.length} ${lecturas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
+          <span className="ai-modo-tag"><perfil.icono className="w-3.5 h-3.5" />{m.persona === 'arquitecto' ? 'Arquitecto · ' : ''}{perfil.nombre}{m.escalado ? ' (subió solo)' : ''} · {nombreModelo(m.modelo, m.proveedor)}{m.ms ? ` · ${segundos(m.ms)}` : ''}{m.busco ? ' · buscó en internet' : ''}{lecturas.length ? ` · consultó ${lecturas.length} ${lecturas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
         ) : (
-          <span>{nombreModelo(m.modelo || (m.proveedor === 'groq' ? 'groq' : null))}{m.busco ? ' · buscó en internet' : ''}{m.consultas?.length ? ` · consultó ${m.consultas.length} ${m.consultas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
+          <span>{nombreModelo(m.modelo, m.proveedor)}{m.busco ? ' · buscó en internet' : ''}{m.consultas?.length ? ` · consultó ${m.consultas.length} ${m.consultas.length === 1 ? 'vez' : 'veces'}` : ''}</span>
         )}
       </div>}
       {nota !== null && (
@@ -600,7 +609,7 @@ function PanelCupo({ cupo, tokensConv }: { cupo: Cupo | null; tokensConv: number
       )}
       {cupo?.respaldo && cupo.groqConfigurado && (
         <div className="ai-mini">
-          <span><span>Respaldo (Groq)</span><b className="tabular-nums">{eq?.groq ?? 0} / {eq?.cupoGroq ?? '—'}</b></span>
+          <span><span>Respaldo ({cupo.respaldos?.join(', ') || 'Groq'})</span><b className="tabular-nums">{eq?.groq ?? 0} / {eq?.cupoGroq ?? '—'}</b></span>
           <div className="ai-bt"><i style={{ width: `${pctR}%` }} /></div>
         </div>
       )}
@@ -613,7 +622,7 @@ function PanelCupo({ cupo, tokensConv }: { cupo: Cupo | null; tokensConv: number
           <div className="ai-kv"><span>Módulos que puede leer</span><b className="tabular-nums">{cupo.modulos.filter(m => m !== 'internet').length}</b></div>
         </>
       )}
-      <p className="ai-prov">Gratis con Gemini de Google{cupo?.respaldo && cupo.groqConfigurado ? ' y Groq de respaldo' : ''}. Las consultas al sistema se hacen con tus permisos y quedan en la bitácora.</p>
+      <p className="ai-prov">Gratis con Gemini de Google{cupo?.respaldo && cupo.groqConfigurado ? ` y, si falla, ${cupo.respaldos?.join(', ') || 'Groq'} de respaldo` : ''}. Las consultas al sistema se hacen con tus permisos y quedan en la bitácora.</p>
     </>
   );
 }
@@ -680,6 +689,12 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
   const conVoz = jarvis && puedeGrabarVoz();
   const privadosRef = useRef<Record<string, string>>({});
   useEffect(() => { privadosRef.current = {}; }, [activa]);
+  // La voz se calla si la app pasa a segundo plano o se cierra el asistente.
+  useEffect(() => {
+    const oculto = () => { if (document.hidden) lector.callar(); };
+    document.addEventListener('visibilitychange', oculto);
+    return () => { document.removeEventListener('visibilitychange', oculto); lector.callar(); };
+  }, []);
   const valorar = useCallback((id: string, v: number | null, nota?: string) => {
     setMensajes(prev => prev.map(m => (m.id === id ? { ...m, valoracion: v } : m)));
     void supabase.functions.invoke('asistente-ia', { body: { accion: 'valorar', id, valor: v, nota } }).then(({ data }) => {
@@ -756,6 +771,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
     // Por voz, el texto lo pone el servidor al transcribir (un solo viaje).
     const t = opciones.audio ? '🎤 …' : sep.texto;
     if (!t || enviando || agotado) return;
+    lector.callar();
     // Editar el último mensaje = regenerar con el texto nuevo.
     const regenerar = opciones.regenerar || editando;
     const mios = regenerar ? [] : adjuntos;
@@ -865,7 +881,12 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
       }
       setMensajes(prev => [...prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false, ...(res.pregunta ? { texto: res.pregunta } : {}) } : m)), { id: `a-${Date.now()}`, ...res.mensaje }]);
       setCupo(res.cupo);
-      if (res.respaldo) setAviso({ tipo: 'respaldo', texto: 'Google llegó a su límite por ahora; respondió el respaldo (Groq).' });
+      // Respuesta hablada: siempre, o cuando la pregunta fue por voz.
+      const lectura = modoLectura();
+      if (res.mensaje?.texto && (lectura === 'siempre' || (lectura === 'voz' && (opciones.audio || opciones.porVoz)))) {
+        void lector.hablar(res.mensaje.texto, res.mensaje.id || `a-${Date.now()}`);
+      }
+      if (res.respaldo) setAviso({ tipo: 'respaldo', texto: `Google no respondió a tiempo; contestó ${NOMBRE_PROVEEDOR[res.mensaje?.proveedor] || 'la IA de respaldo'}.` });
       setBuscar(false);
       if (!activa || res.nueva) { recienCreada.current = res.conversacionId; setActiva(res.conversacionId); }
       void cargarConvs();
@@ -902,6 +923,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
   // en la APK), se transcribe en el servidor y se manda como mensaje.
   const empezarVoz = async () => {
     if (voz || enviando) return;
+    lector.callar();
     setMenu(null);
     try {
       grabacion.current = await grabarNotaDeVoz();
@@ -1106,6 +1128,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
                 <div className="ai-editando"><Pencil className="w-3.5 h-3.5" /><span>Editando tu último mensaje</span>
                   <button type="button" onClick={() => { setEditando(false); setTexto(''); }}>Cancelar</button></div>
               )}
+              <BarraLectura />
               <div className="ai-caja" data-grabando={voz === 'grabando' || undefined} data-transcribiendo={voz === 'transcribiendo' || undefined}>
                 {!!adjuntos.length && (
                   <div className="ai-adj">
@@ -1313,6 +1336,8 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
           </div>
         ))}
       </div>
+      <AjusteVoz />
+      {cupo?.perfiles && <React.Suspense fallback={null}><MiniWidgetAjustes /></React.Suspense>}
       {cupo?.perfiles && <div className="ai-aj">
         <h4>Jarvis <small>solo superadmin</small></h4>
         <div className="ai-modu">
@@ -1363,7 +1388,7 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
           </span>
         </div>
         <div className="ai-campo">
-          <span>Usar el respaldo (Groq) cuando Google se agote</span>
+          <span>Si Google falla, pasar sola a otra IA (Groq y demás)</span>
           <button type="button" role="switch" aria-checked={aj.respaldo} className="ai-sw" data-on={aj.respaldo || undefined} onClick={() => void guardar({ respaldo: !aj.respaldo })} aria-label="Usar respaldo" />
         </div>
         <div className="ai-campo">
