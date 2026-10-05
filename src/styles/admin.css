@@ -2208,8 +2208,12 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
    regleta. Todo lo que venía después en la página y también formaba capa
    (el espejo de Supervisión, el riel de Ciberseguridad, tarjetas con
    desenfoque) se pintaba encima del menú. La regleta entera sube por
-   encima del contenido; los modales (z 70+) siguen por encima de ella. */
-#admin-panel-root .tv-regleta { position: relative; z-index: 60; }
+   encima del contenido; los modales (z 100) siguen por encima de ella.
+   Va en 75, por encima de las ventanas flotantes de Jarvis y del chat
+   (z 70): con 60 sus menús («Actualizar», «Cerrar sesión») quedaban
+   tapados por esas ventanas. No se pisan: las ventanas empiezan justo
+   debajo de la regleta (--tv-borde-cab). */
+#admin-panel-root .tv-regleta { position: relative; z-index: 75; }
 /* Visitantes en teléfono: las acciones bajan a su propia línea para que el
    nombre del aparato no se aplaste ni se monte con los botones. */
 @container (max-width: 640px) {
