@@ -95,6 +95,23 @@ export function useOtaStatus(): OtaStatus {
   return status;
 }
 
+/**
+ * Solo el aviso de «arrancó bien», sin buscar ni bajar versiones. Lo usa
+ * la ventanita del mini-widget (src/rapido.tsx): corre la MISMA versión
+ * que la app y, si fuera la primera en abrirla tras una actualización,
+ * sin este aviso el plugin creería que la versión vino rota y volvería a
+ * la anterior. Las descargas las sigue haciendo solo la app.
+ */
+export async function avisarArranqueOta(): Promise<void> {
+  if (!isNative()) return;
+  try {
+    const { CapacitorUpdater } = await import('@capgo/capacitor-updater');
+    await CapacitorUpdater.notifyAppReady();
+  } catch {
+    /* sin el plugin o sin respuesta: la ventanita sigue igual */
+  }
+}
+
 export async function initOtaUpdater(): Promise<void> {
   if (!isNative()) return;
   setOtaStatus({ isNative: true });

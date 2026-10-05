@@ -640,7 +640,11 @@ const SUGERENCIAS_ARQ = [
   { t: 'Priorizar', d: 'Qué hacer primero', p: 'De estas ideas, ¿cuál conviene hacer primero y por qué?: ' },
 ];
 
-function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser: User | null; onAbrirModulo?: (m: string) => void; pedirVoz?: number }) {
+function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta }: {
+  currentUser: User | null; onAbrirModulo?: (m: string) => void; pedirVoz?: number;
+  /** La ventanita del widget lo usa para dejar la última respuesta a la vista. */
+  onRespuesta?: (pregunta: string, respuesta: string) => void;
+}) {
   const toast = useToast();
   const confirm = useConfirm();
   const soySuper = esSuperadmin(currentUser?.role);
@@ -885,6 +889,11 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
       const lectura = modoLectura();
       if (res.mensaje?.texto && (lectura === 'siempre' || (lectura === 'voz' && (opciones.audio || opciones.porVoz)))) {
         void lector.hablar(res.mensaje.texto, res.mensaje.id || `a-${Date.now()}`);
+      }
+      if (onRespuesta && res.mensaje?.texto) {
+        // Con los datos reales en vez de las marcas del carril privado: es la pantalla del dueño.
+        const real = (x: string) => x.replace(/\[([A-ZÉ]+·\d+)\]/g, (m, k: string) => privadosRef.current[k] ?? m);
+        onRespuesta(real(opciones.audio ? (res.pregunta || '') : crudo), real(res.mensaje.texto));
       }
       if (res.respaldo) setAviso({ tipo: 'respaldo', texto: `Google no respondió a tiempo; contestó ${NOMBRE_PROVEEDOR[res.mensaje?.proveedor] || 'la IA de respaldo'}.` });
       setBuscar(false);

@@ -1,11 +1,9 @@
 // =====================================================================
 // ASISTENTE IA — NÚCLEO (chat de consulta del personal, con IA gratuita)
 // =====================================================================
-// Este archivo es el núcleo. Lo usan DOS PUERTAS:
-//   · index.ts  — la app (panel): identifica a la persona por su sesión.
-//   · widget.ts — el mini-widget del teléfono del superadmin: entra con la
-//                 llave del widget (llaves.ts), sin huella y sin abrir la
-//                 app, y SOLO puede preguntar (sin acciones).
+// Este archivo es el núcleo; index.ts es su puerta (identifica a la persona
+// por su sesión). El mini-widget del teléfono usa esta misma puerta con la
+// sesión de la app (ver native-android/jarvis/JarvisRapido.java).
 //
 // Recibe un mensaje, lo manda a Gemini (Google) y, si Google falla (sin
 // cupo, saturado, tarda demasiado o da error), pasa sola a la siguiente IA
@@ -72,7 +70,6 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { disponibles, ejecutar, NOMBRE_MODULO, type Consulta, type Contexto } from './herramientas.ts';
 import { ACCIONES, MODULOS_PANEL, NAVEGAR, pideToken, validarOpciones, type CtxAccion, type Resultado as ResultadoAccion, type Tarjeta } from './acciones.ts';
 import { normalizarDictado, restaurarPrivados, separarPrivados } from './privados.ts';
-import { crearLlave, validarLlaveWidget } from './llaves.ts';
 import { APRENDER, crearCerebro, type Cerebro } from './cerebro.ts';
 import { FORMATO_REQUERIMIENTO, GLOSARIO_TICO, MAPA_SISTEMA, TONOS, type Tono } from './mapa.ts';
 
@@ -630,37 +627,18 @@ async function transcribirGroq(audio: string, tipo: string): Promise<string | nu
   }
 }
 
-/** Por qué puerta entra el pedido (ver el encabezado). */
-export type Puerta = { widget?: boolean };
-
-/** Estilo del mini-widget: ventanita chica que casi siempre se escucha. */
-const ESTILO_WIDGET = `\n\nESTÁS EN EL MINI-WIDGET DEL TELÉFONO (una ventanita sobre la pantalla de inicio que muchas veces se escucha en voz alta): respondé corto y directo, de 1 a 3 frases, sin tablas, sin títulos y sin listas largas. Las cifras, completas y claras. Usá tus consultas igual que siempre. Desde aquí NO podés ejecutar acciones (cobrar, responder chats, mover órdenes, ajustar inventario, bloquear): si te pide una, decí en una frase que eso se hace abriendo Jarvis con el botón «Abrir en la app» de arriba, y no digas que lo hiciste.`;
-
-export async function atender(req: Request, puerta: Puerta = {}): Promise<Response> {
+export async function atender(req: Request): Promise<Response> {
   if (req.method === 'OPTIONS') return new Response('ok', { headers: CORS });
 
   try {
-    const widget = puerta.widget === true;
-    const jwt = widget ? '' : (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
+    const jwt = (req.headers.get('Authorization') || '').replace(/^Bearer\s+/i, '');
     const admin = createClient(Deno.env.get('SUPABASE_URL')!, Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!);
     const cuerpo = await req.json().catch(() => ({}));
     const accion = String(cuerpo?.accion || 'enviar');
     const dia = diaCR();
     let convId: string | null = cuerpo?.conversacionId ? String(cuerpo.conversacionId) : null;
 
-    // ¿Quién pregunta? En la app, su sesión. En el mini-widget, la llave que
-    // el superadmin activó en su teléfono (llaves.ts); desde ahí solo se
-    // puede preguntar.
-    let quien: { user: { id: string; email?: string | null } } | null = null;
-    if (widget) {
-      if (accion !== 'enviar') return responder({ ok: false, error: 'Desde el widget solo se puede preguntar.' }, 403);
-      const llave = await validarLlaveWidget(admin, req.headers.get('x-jarvis-widget') || '');
-      if ('error' in llave) return responder({ ok: false, codigo: llave.codigo, error: llave.error }, llave.status);
-      quien = { user: llave.usuario };
-    } else {
-      const { data } = await admin.auth.getUser(jwt);
-      quien = data?.user ? { user: data.user } : null;
-    }
+    const { data: quien } = await admin.auth.getUser(jwt);
     const uid = quien?.user?.id;
     if (!uid) return responder({ ok: false, error: 'Sesión no válida.' }, 401);
     const ipPropia = (req.headers.get('cf-connecting-ip') || (req.headers.get('x-forwarded-for') || '').split(',')[0] || '').trim() || null;
@@ -683,7 +661,6 @@ export async function atender(req: Request, puerta: Puerta = {}): Promise<Respon
     ]);
     const rol = perfilCuenta?.role as string | undefined;
     const esSuper = rol === 'superadmin';
-    if (widget && !esSuper) return responder({ ok: false, codigo: 'llave', error: 'El mini-widget es solo del superadmin.' }, 403);
     const acceso = ajustes?.acceso || 'personal';
     const permitido = esSuper
       || (acceso === 'personal' && (rol === 'admin' || rol === 'empleado'))
@@ -723,11 +700,7 @@ export async function atender(req: Request, puerta: Puerta = {}): Promise<Respon
     // Las consultas al sistema y las acciones de Jarvis se hacen con la
     // SESIÓN DE QUIEN PREGUNTA (no con service_role): la base aplica las
     // mismas reglas que en el panel.
-    // En el mini-widget no hay sesión: las consultas (solo lectura) van con
-    // la llave de servicio, que para el superadmin ve lo mismo que su sesión.
-    // Excepción: funciones de la base que exigen la sesión real (p. ej.
-    // «sesiones abiertas») responden que no se pudo leer.
-    const comoUsuario = widget ? admin : createClient(Deno.env.get('SUPABASE_URL')!, req.headers.get('apikey') || Deno.env.get('SUPABASE_ANON_KEY')!, {
+    const comoUsuario = createClient(Deno.env.get('SUPABASE_URL')!, req.headers.get('apikey') || Deno.env.get('SUPABASE_ANON_KEY')!, {
       global: { headers: { Authorization: `Bearer ${jwt}` } },
       auth: { persistSession: false, autoRefreshToken: false },
     });
@@ -746,32 +719,6 @@ export async function atender(req: Request, puerta: Puerta = {}): Promise<Respon
       });
       if (error) console.log(`bitácora: ${error.message}`);
     };
-
-    // ------------- MINI-WIDGET: activar / revocar (desde la app) -------------
-    if (accion === 'widget_activar' || accion === 'widget_revocar') {
-      if (!esSuper || widget) return responder({ ok: false, error: 'Solo el superadmin, desde la app.' }, 403);
-      const ahora = new Date().toISOString();
-      const dispositivo = yo.device || null;
-      const sinTabla = (m: string) => /does not exist|schema cache|could not find/i.test(m);
-      if (accion === 'widget_activar') {
-        const { llave, hash } = await crearLlave();
-        // Una llave viva por teléfono: la anterior de este aparato se revoca.
-        if (dispositivo) await admin.from('ia_widget_llaves').update({ revocada_en: ahora }).eq('user_id', uid).eq('dispositivo', dispositivo).is('revocada_en', null);
-        const { data: fila, error } = await admin.from('ia_widget_llaves').insert({ user_id: uid, hash, dispositivo, modelo: yo.modelo || null }).select('id').single();
-        if (error) return responder({ ok: false, codigo: sinTabla(error.message) ? 'sin_tabla' : 'error', error: sinTabla(error.message) ? 'Falta instalar el mini-widget en la base de datos (migracion_jarvis_widget.sql).' : error.message }, 500);
-        await bitacora('Mini-widget activado', `Teléfono: ${yo.modelo || 'sin nombre'}`);
-        // La llave viaja UNA vez, al teléfono que la pidió; aquí no queda.
-        return responder({ ok: true, id: fila.id, llave, url: `${Deno.env.get('SUPABASE_URL')}/functions/v1/jarvis-widget` });
-      }
-      let q = admin.from('ia_widget_llaves').update({ revocada_en: ahora }).eq('user_id', uid).is('revocada_en', null);
-      if (cuerpo?.id) q = q.eq('id', String(cuerpo.id));
-      else if (dispositivo) q = q.eq('dispositivo', dispositivo);
-      else return responder({ ok: false, error: 'Falta cuál revocar.' }, 400);
-      const { error } = await q;
-      if (error) return responder({ ok: false, error: error.message }, 500);
-      await bitacora('Mini-widget revocado', cuerpo?.id ? `Llave ${String(cuerpo.id).slice(0, 8)}` : `Teléfono: ${yo.modelo || 'este'}`);
-      return responder({ ok: true });
-    }
 
     // ------------------------- JARVIS: VOZ -------------------------
     if (accion === 'transcribir') {
@@ -904,7 +851,7 @@ export async function atender(req: Request, puerta: Puerta = {}): Promise<Respon
     }
 
     if (accion !== 'enviar') return responder({ ok: false, error: 'Acción desconocida.' }, 400);
-    const modo: Modo = esSuper ? (!widget && cuerpo?.persona === 'arquitecto' ? 'arquitecto' : 'jarvis') : 'normal';
+    const modo: Modo = esSuper ? (cuerpo?.persona === 'arquitecto' ? 'arquitecto' : 'jarvis') : 'normal';
     const perfil: Perfil | null = esSuper ? ((['rapido', 'equilibrado', 'profundo'] as string[]).includes(cuerpo?.perfil) ? cuerpo.perfil as Perfil : 'rapido') : null;
     const porVoz = esSuper && Number(cuerpo?.porVoz) > 0 ? Math.min(600, Math.round(Number(cuerpo.porVoz))) : 0;
 
@@ -952,7 +899,7 @@ export async function atender(req: Request, puerta: Puerta = {}): Promise<Respon
     if (convId && !conv?.data) convId = null;
     let nueva = false;
     if (!convId) {
-      const titulo = `${widget ? 'Widget · ' : ''}${texto.replace(/\s+/g, ' ')}`.slice(0, 60);
+      const titulo = texto.replace(/\s+/g, ' ').slice(0, 60);
       const { data: c, error } = await admin.from('ia_conversaciones').insert({ user_id: uid, titulo }).select('id').single();
       if (error) throw error;
       convId = c.id; nueva = true;
@@ -1059,8 +1006,6 @@ export async function atender(req: Request, puerta: Puerta = {}): Promise<Respon
       }
     }
 
-    if (widget) extra += ESTILO_WIDGET;
-
     // ---------------------------------------------------------------
     // Conversación con la IA. `emitir` manda eventos en vivo si el panel
     // los pidió; si no, no hace nada y al final se responde con JSON.
@@ -1101,7 +1046,7 @@ export async function atender(req: Request, puerta: Puerta = {}): Promise<Respon
           limite: tiempoPropio ? Math.max(limiteT, Date.now() + TOPE_RESPALDO_MS) : limiteT,
           caps, forzarWeb: cuerpo?.buscar === true, adjuntos: adjuntos.map(a => ({ mimeType: a.mimeType, data: a.data })), fuentes,
           modo, pensar: conf.pensar, intento: conf.intento,
-          acciones: modo === 'jarvis' && mods.acciones !== false && !adjuntos.length && !widget,
+          acciones: modo === 'jarvis' && mods.acciones !== false && !adjuntos.length,
           leyoAfuera: adjuntos.length > 0, ctxAcc: modo === 'jarvis' ? ctxAcc : null, guardarPropuesta, propuestas,
           extra, rondas, memoria: memoriaFns, cerebro,
         };
@@ -1233,9 +1178,7 @@ export async function atender(req: Request, puerta: Puerta = {}): Promise<Respon
       : 'Google y las IAs de respaldo están saturados en este momento. Intenta en unos minutos.';
     const final = (r: { res: Resultado; respaldo: boolean }) => ({
       ok: true, conversacionId: convId, nueva, respaldo: r.respaldo, sinBusqueda: false, ...(transcrito ? { pregunta, privados } : {}),
-      // En el widget, la respuesta llega con los datos reales (en la base
-      // quedan las marcas): es la pantalla del dueño, no la IA.
-      mensaje: { id: idRespuesta, idPregunta, escalado: perfilUsado !== perfil, rol: 'assistant', texto: widget ? restaurarPrivados(r.res.texto, privados) : r.res.texto, fuentes: r.res.fuentes, tokens_in: r.res.tokensIn, tokens_out: r.res.tokensOut, proveedor: r.res.proveedor, modelo: r.res.modelo, busco: r.res.busco, consultas: r.res.consultas, perfil: perfilUsado, persona: modo === 'normal' ? null : modo, ms: r.res.ms ?? null },
+      mensaje: { id: idRespuesta, idPregunta, escalado: perfilUsado !== perfil, rol: 'assistant', texto: r.res.texto, fuentes: r.res.fuentes, tokens_in: r.res.tokensIn, tokens_out: r.res.tokensOut, proveedor: r.res.proveedor, modelo: r.res.modelo, busco: r.res.busco, consultas: r.res.consultas, perfil: perfilUsado, persona: modo === 'normal' ? null : modo, ms: r.res.ms ?? null },
       cupo: cupoDespues(r.res),
     });
     const descartarNueva = async () => { if (nueva) await admin.from('ia_conversaciones').delete().eq('id', convId); };

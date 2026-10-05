@@ -259,11 +259,12 @@ jobs:
       #   · JarvisWidget: el widget (barra para escribir, micrófono y la
       #     última respuesta).
       #   · JarvisRapido: la ventanita que se abre ENCIMA de la pantalla de
-      #     inicio y contesta ahí mismo, sin abrir la app ni pedir huella
-      #     (lo pidió el dueño, 2026-10-05). Solo pregunta; las órdenes van
-      #     en la app.
-      #   · JarvisLlave: la llave del widget, cifrada con el Keystore.
-      #   · JarvisWidgetPlugin: el puente con la app para activarlo.
+      #     inicio: un segundo puente de Capacitor con la página liviana
+      #     jarvis-rapido.html, el mismo Jarvis de la app con la misma
+      #     sesión, sin huella y sin abrir la app (lo pidió el dueño,
+      #     2026-10-05: «hacer todo como lo haría con mi sesión»).
+      #   · JarvisWidgetPlugin: el puente con la web, en los dos puentes
+      #     (activarlo desde la app; cerrar y abrir la app desde la ventanita).
       # El atajo del ícono y la marca del widget siguen abriendo la app con
       # technoverse://jarvis (src/mobile/jarvisAtajo.ts).
       - name: Instalar el mini-widget de Jarvis y el atajo del ícono
@@ -297,6 +298,8 @@ jobs:
 
           if 'JarvisRapido' not in texto:
               # Tarea propia y fuera de «Recientes»: es una ventanita, no la app.
+              # Los mismos configChanges que MainActivity: girar el teléfono o
+              # cambiar el tema no recrea la página (ni corta lo que Jarvis hacía).
               ventanita = (
                   '        <activity\n'
                   '            android:name=".JarvisRapido"\n'
@@ -305,6 +308,7 @@ jobs:
                   '            android:taskAffinity="com.technoverse.admin.jarvis"\n'
                   '            android:excludeFromRecents="true"\n'
                   '            android:launchMode="singleTask"\n'
+                  '            android:configChanges="orientation|keyboardHidden|keyboard|screenSize|locale|smallestScreenSize|screenLayout|uiMode|navigation|density"\n'
                   '            android:windowSoftInputMode="adjustResize|stateHidden" />\n'
                   '    </application>'
               )

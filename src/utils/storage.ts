@@ -1714,6 +1714,27 @@ function initSettingsRealtimeSync() {
   refreshSettingsFromSupabase().then(() => { settingsReady = true; });
 }
 
+/**
+ * Espera a que esas tablas hayan bajado del servidor al menos una vez.
+ *
+ * Lo usa Jarvis antes de ejecutar una orden en el aparato (mover una
+ * orden del taller, ajustar inventario, responder un chat, cobrar). Al
+ * arrancar —sobre todo la ventanita del mini-widget, que abre en frío—
+ * solo están el catálogo y la configuración de la copia local, quizá
+ * viejos, y las demás tablas vacías: una orden ejecutada en ese instante
+ * no encontraba la fila o calculaba el stock con el número de ayer.
+ * Devuelve false si no llegaron a tiempo (y entonces no se ejecuta nada).
+ */
+export async function esperarDatosListos(claves: (keyof Database | 'chat' | 'settings')[], topeMs = 12000): Promise<boolean> {
+  const listo = () => claves.every(k => (k === 'chat' ? chatReady : k === 'settings' ? settingsReady : !!genericReady[k as string]));
+  const fin = Date.now() + topeMs;
+  while (!listo()) {
+    if (Date.now() > fin) return false;
+    await new Promise(r => setTimeout(r, 150));
+  }
+  return true;
+}
+
 // Coalescing de recargas por Realtime: un mismo guardado suele disparar varios
 // eventos postgres_changes seguidos (varias filas, o INSERT+UPDATE). Sin esto,
 // CADA evento lanzaba un .select('*') de la tabla ENTERA — descargas y parseos

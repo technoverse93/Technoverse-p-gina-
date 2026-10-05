@@ -14,15 +14,24 @@ import android.widget.RemoteViews;
  * Mini-widget «Jarvis» de la pantalla de inicio.
  *
  * La barra «Preguntale a Jarvis…» y el micrófono abren la ventanita
- * (JarvisRapido) ENCIMA de la pantalla de inicio: se escribe o se habla y
- * la respuesta sale ahí mismo, sin huella y sin abrir la app (lo pidió el
- * dueño; el teléfono es solo suyo). Abajo queda la última respuesta. La
- * marca «Jarvis» abre Jarvis completo en la app (con su huella de siempre).
+ * (JarvisRapido) ENCIMA de la pantalla de inicio: el mismo Jarvis de la app
+ * con tu sesión, sin huella y sin abrir la app (lo pidió el dueño; el
+ * teléfono es solo suyo). Abajo queda la última respuesta. La marca
+ * «Jarvis» abre Jarvis en la app (con su huella de siempre).
  *
  * Sin activar (Jarvis → Ajustes → Mini-widget), la ventanita explica cómo.
  */
 public class JarvisWidget extends AppWidgetProvider {
     static final String PREFS = "jarvis_widget";
+    static final String ACTIVO = "activo";
+
+    static SharedPreferences prefs(Context ctx) {
+        return ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
+    }
+
+    static boolean activo(Context ctx) {
+        return prefs(ctx).getBoolean(ACTIVO, false);
+    }
 
     private static PendingIntent ventanita(Context ctx, boolean voz, int codigo) {
         Intent intent = new Intent(ctx, JarvisRapido.class);
@@ -51,12 +60,10 @@ public class JarvisWidget extends AppWidgetProvider {
     }
 
     private static void pintar(Context ctx, AppWidgetManager manager, int[] ids) {
-        SharedPreferences p = ctx.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-        boolean activo = JarvisLlave.leer(ctx) != null;
-        String ultima = p.getString("ultima_respuesta", null);
-        String abajo = !activo
+        String ultima = prefs(ctx).getString("ultima_respuesta", null);
+        String abajo = !activo(ctx)
             ? "Tocá para activarlo: Jarvis → Ajustes → Mini-widget."
-            : ultima != null ? ultima : "Preguntale lo que quieras del negocio.";
+            : ultima != null ? ultima : "Preguntale o pedile lo que quieras del negocio.";
         for (int id : ids) {
             RemoteViews vista = new RemoteViews(ctx.getPackageName(), R.layout.widget_jarvis);
             vista.setTextViewText(R.id.jarvis_ultima, abajo);
@@ -66,5 +73,19 @@ public class JarvisWidget extends AppWidgetProvider {
             vista.setOnClickPendingIntent(R.id.jarvis_marca, app(ctx, 14));
             manager.updateAppWidget(id, vista);
         }
+    }
+
+    /** La respuesta sin el formato del chat (negritas, títulos, tablas), para el widget. */
+    static String textoPlano(String md) {
+        if (md == null) return "";
+        String t = md.replaceAll("(?s)```.*?```", "(Hay un bloque de código: miralo en Jarvis.)");
+        StringBuilder sb = new StringBuilder();
+        for (String linea : t.split("\n")) {
+            String l = linea.trim();
+            if (l.matches("^\\|.*\\|$")) continue;
+            l = l.replaceAll("^#{1,6}\\s*", "").replaceAll("^[-*]\\s+", "• ");
+            if (!l.isEmpty()) sb.append(l).append('\n');
+        }
+        return sb.toString().replace("**", "").replace("__", "").replace("`", "").trim();
     }
 }

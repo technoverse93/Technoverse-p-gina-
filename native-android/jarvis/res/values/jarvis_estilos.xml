@@ -1,14 +1,19 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Ventanita de Jarvis sobre la pantalla de inicio: actividad
-         translúcida a pantalla completa (la capa oscura y la tarjeta las
-         dibuja jarvis_rapido.xml). Tema del sistema, sin AppCompat. -->
-    <style name="JarvisRapido" parent="@android:style/Theme.DeviceDefault.NoActionBar">
+    <!-- Ventanita de Jarvis sobre la pantalla de inicio (JarvisRapido): un
+         puente de Capacitor (AppCompat), translúcido y a pantalla completa.
+         Lo que se ve lo dibuja la página jarvis-rapido.html; detrás queda la
+         pantalla de inicio, oscurecida. -->
+    <style name="JarvisRapido" parent="Theme.AppCompat.DayNight.NoActionBar">
         <item name="android:windowIsTranslucent">true</item>
         <item name="android:windowBackground">@android:color/transparent</item>
         <item name="android:windowNoTitle">true</item>
-        <item name="android:windowAnimationStyle">@android:style/Animation.InputMethod</item>
-        <item name="android:colorAccent">#26A99E</item>
-        <item name="android:textColorHint">#7F96AC</item>
+        <item name="windowNoTitle">true</item>
+        <item name="windowActionBar">false</item>
+        <item name="android:backgroundDimEnabled">true</item>
+        <item name="android:backgroundDimAmount">0.5</item>
+        <item name="android:windowAnimationStyle">@android:style/Animation.Translucent</item>
+        <item name="android:statusBarColor">@android:color/transparent</item>
+        <item name="android:navigationBarColor">@android:color/transparent</item>
     </style>
 </resources>

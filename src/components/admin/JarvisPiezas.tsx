@@ -31,6 +31,21 @@ export const tarjetasVivas = new Map<string, Fila>();
 const DURACIONES: [number | null, string][] = [[30, '30 min'], [120, '2 horas'], [1440, '24 horas'], [null, 'Para siempre']];
 const ICONO = { ban: Ban, unlock: Unlock, 'log-out': LogOut, receipt: Receipt, message: MessageSquare, wrench: Wrench, package: Package };
 const hora = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' }) : '');
+/**
+ * Lo que tiene que estar bajado del servidor antes de ejecutar una orden en
+ * este aparato (ver `esperarDatosListos`): sin eso, recién abierta la app o
+ * la ventanita del widget, la orden no encontraba la fila o usaba el stock
+ * de la copia vieja.
+ */
+const TABLAS_DE: Record<NonNullable<DatosTarjeta['enCliente']>, ('chat' | 'settings' | 'products' | 'repair_orders')[]> = {
+  chat: ['chat'], taller: ['repair_orders'], inventario: ['products'], cobro: ['products', 'settings'],
+};
+async function datosListos(tipo: DatosTarjeta['enCliente']): Promise<boolean> {
+  if (!tipo) return true;
+  const { esperarDatosListos } = await import('../../utils/storage');
+  return esperarDatosListos(TABLAS_DE[tipo]);
+}
+const SIN_DATOS = 'Los datos del negocio todavía están bajando. Probá de nuevo en unos segundos.';
 
 async function llamar(cuerpo: Record<string, unknown>) {
   const { data, error } = await supabase.functions.invoke('asistente-ia', { body: cuerpo });
@@ -89,6 +104,7 @@ export function TarjetaAccion({ id }: { id: string }) {
   };
   const confirmar = async () => {
     setOcupado(true); setError(null);
+    if (!(await datosListos(t.enCliente))) { setOcupado(false); setError(SIN_DATOS); return; }
     const opciones: Record<string, any> = {};
     for (const o of t.opciones) opciones[o.id] = valor(o);
     const r = await llamar({ accion: 'confirmar', id, opciones, token: pide ? token : undefined });
@@ -159,6 +175,7 @@ export function TarjetaAccion({ id }: { id: string }) {
   };
   const deshacer = async () => {
     setOcupado(true); setError(null);
+    if (!(await datosListos(t.enCliente))) { setOcupado(false); setError(SIN_DATOS); return; }
     // Lo que hizo el panel, lo deshace el panel antes de avisar.
     const datos = fila.resultado?.datos || {};
     try {
