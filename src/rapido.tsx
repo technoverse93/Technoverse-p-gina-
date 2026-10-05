@@ -11,6 +11,7 @@
 
 import './index.css';
 import './styles/admin.css';
+import './styles/panel.css';
 import './styles/jarvis.css';
 import './styles/ventanita.css';
 

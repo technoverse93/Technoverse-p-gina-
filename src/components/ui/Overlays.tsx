@@ -619,34 +619,6 @@ export function Dropdown({ button, children, align = 'start', width }: DropdownP
   );
 }
 
-export function DropdownItem({
-  children,
-  onSelect,
-  danger = false,
-  disabled = false,
-}: {
-  children: React.ReactNode;
-  onSelect?: () => void;
-  danger?: boolean;
-  disabled?: boolean;
-}) {
-  return (
-    <button
-      type="button"
-      role="menuitem"
-      disabled={disabled}
-      onClick={onSelect}
-      className={`w-full text-left px-3 py-2 rounded-lg text-xs font-medium transition flex items-center gap-2 disabled:opacity-40 disabled:cursor-not-allowed ${
-        danger
-          ? 'text-rose-500 hover:bg-rose-500/10'
-          : 'text-[var(--text-secondary)] hover:text-[var(--text-primary)] hover:bg-[var(--bg-surface)]'
-      }`}
-    >
-      {children}
-    </button>
-  );
-}
-
 /* ══════════════════════════════════════════════════════════════════════════
    TOOLTIP  (por Portal — reemplaza el atributo title="")
    ══════════════════════════════════════════════════════════════════════════ */

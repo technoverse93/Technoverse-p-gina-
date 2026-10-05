@@ -877,6 +877,13 @@ export async function atender(req: Request): Promise<Response> {
       return responder({ ok: true, guardado_en: d?.guardado_en, aprendidos: r.aprendidos.map(x => x.etiqueta), fuentes: r.fuentes, resumen: plan.resumen });
     }
 
+    // Cambios a mano desde el cerebro 3D (agregar punto o tema, mover).
+    if (accion === 'cerebro') {
+      if (!esSuper) return responder({ ok: false, error: 'Solo el superadmin.' }, 403);
+      const r = await crearCerebro(admin, uid).editar(String(cuerpo?.op || ''), (cuerpo?.datos && typeof cuerpo.datos === 'object') ? cuerpo.datos : {});
+      return responder(r, r.ok ? 200 : 400);
+    }
+
     // Las consultas al sistema y las acciones de Jarvis se hacen con la
     // SESIÓN DE QUIEN PREGUNTA (no con service_role): la base aplica las
     // mismas reglas que en el panel.

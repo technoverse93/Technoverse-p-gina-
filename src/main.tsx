@@ -2,12 +2,11 @@ import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
 import './index.css';
-// Sistema visual del panel de administración. Va DESPUÉS de index.css
-// para que sus reglas puedan afinar las de la marca, y todo lo que
-// contiene está limitado a `#admin-panel-root` o a clases `tv-`: la
-// tienda pública no puede verse afectada por este archivo.
+// Clases `tv-` que comparten la tienda y el panel. Va DESPUÉS de
+// index.css para que sus reglas puedan afinar las de la marca. Lo que es
+// SOLO del panel (panel.css y jarvis.css) se carga con AdminPanel: la
+// tienda no lo descarga.
 import './styles/admin.css';
-import './styles/jarvis.css';
 import { iniciarTema } from './utils/tema';
 
 // ANTES de montar React, no dentro de un efecto: un efecto corre después

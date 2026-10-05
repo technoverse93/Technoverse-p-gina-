@@ -222,66 +222,6 @@ span.jv-tit:hover { background: transparent; }
 /* ---------- Cerebro a pantalla completa ---------- */
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ch { display: none; }
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ajustes { padding: 0; overflow: hidden; animation: none; }
-.ai-root[data-jarvis] .jv-cerebro { position: relative; flex: 1 1 auto; height: 100%; min-height: 460px; margin: 0; border: 0; border-radius: 0; background: var(--jv-cielo-2); display: block; overflow: hidden; }
-.ai-root[data-jarvis] .jv-cerebro.jv-cerebro-solo { display: grid; place-items: center; background: transparent; }
-.ai-root[data-jarvis] .jv-cb-escena { position: absolute; inset: 0; height: auto; border: 0; border-radius: 0; background: transparent; }
-.jv-vidrio { background: color-mix(in srgb, var(--jv-sup) 72%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid var(--jv-linea); }
-.jv-cb-hud { position: absolute; left: 10px; right: 10px; top: 8px; z-index: 4; display: grid; gap: 8px; pointer-events: none; }
-.jv-cb-hud > * { pointer-events: auto; }
-.jv-cb-cab { display: flex; align-items: center; gap: 8px; }
-.jv-cb-tit { flex: 1; min-width: 0; }
-.jv-cb-tit b { display: block; font: 600 15px var(--jv-f-ui); color: var(--jv-tinta); text-shadow: 0 0 8px var(--jv-cielo-1); }
-.jv-cb-ruta { font: 400 11px var(--jv-f-dato); color: var(--jv-tinta2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
-#admin-panel-root .jv-cb-ruta button { all: unset; cursor: pointer; color: var(--jv-acento); min-width: 0 !important; min-height: 0 !important; }
-.jv-cb-ib { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; color: var(--jv-tinta); flex: none; cursor: pointer; }
-#admin-panel-root .jv-cb-ib { min-width: 0 !important; min-height: 0 !important; }
-.jv-cb-ib:focus-visible, .jv-cb-seg button:focus-visible, .jv-cb-fila:focus-visible { outline: 2px solid var(--jv-acento); outline-offset: 2px; }
-.jv-cb-metr { display: flex; gap: 6px; }
-.jv-cb-metr > div { flex: 1; min-width: 0; padding: 6px 8px; border-radius: 10px; }
-.jv-cb-metr b { display: block; font: 500 15px var(--jv-f-dato); color: var(--jv-tinta); font-variant-numeric: tabular-nums; }
-.jv-cb-metr span { font-size: 10.5px; color: var(--jv-tinta2); }
-.jv-cb-zoom { position: absolute; right: 10px; top: 44%; z-index: 4; display: grid; gap: 6px; }
-.jv-cb-hoja { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; border-radius: 22px 22px 0 0; border-bottom: 0; padding: 8px 14px calc(12px + env(safe-area-inset-bottom, 0px)); display: grid; gap: 10px; background: color-mix(in srgb, var(--jv-sup) 90%, transparent); }
-.jv-cb-asa { width: 36px; height: 4px; border-radius: 9px; background: var(--jv-linea); margin: 0 auto; }
-.jv-cb-seg { display: flex; border-radius: 11px; background: var(--jv-hundido); padding: 3px; gap: 2px; }
-.jv-cb-seg button { flex: 1; text-align: center; padding: 6px 0; border-radius: 9px; font: 500 12.5px var(--jv-f-ui); color: var(--jv-tinta2); background: transparent; border: 0; cursor: pointer; }
-#admin-panel-root .jv-cb-seg button { min-width: 0 !important; min-height: 0 !important; }
-.jv-cb-seg button[aria-selected="true"] { background: var(--jv-sup); color: var(--jv-tinta); box-shadow: 0 1px 3px rgba(0, 0, 0, .12); }
-.jv-cb-panel { max-height: min(34vh, 260px); overflow-y: auto; display: grid; align-content: start; gap: 2px; overscroll-behavior: contain; scrollbar-width: thin; }
-.jv-cb-fila { all: unset; box-sizing: border-box; cursor: pointer; display: flex; align-items: center; gap: 10px; padding: 8px 2px; border-bottom: 1px solid var(--jv-linea); font-size: 13px; color: var(--jv-tinta); min-width: 0; }
-#admin-panel-root .jv-cb-fila { min-width: 0 !important; min-height: 0 !important; }
-.jv-cb-fila > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.jv-cb-fila small { margin-left: auto; font: 400 11px var(--jv-f-dato); color: var(--jv-tenue); flex: none; }
-.jv-cb-fila em { font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--jv-oro); }
-.jv-cb-fila .jv-cb-cuando { margin: 0; width: 70px; }
-.jv-cb-buscar { display: flex; align-items: center; gap: 8px; height: 36px; padding: 0 8px 0 10px; border-radius: 11px; background: var(--jv-hundido); color: var(--jv-tenue); margin-bottom: 2px; }
-.jv-cb-buscar input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; color: var(--jv-tinta); font: 13px var(--jv-f-ui); }
-#admin-panel-root .jv-cb-buscar button { min-width: 0 !important; min-height: 0 !important; width: 26px; height: 26px; border-radius: 50%; color: var(--jv-tenue); }
-.jv-cb-nota { margin: 6px 2px; font-size: 12.5px; color: var(--jv-tinta2); }
-.jv-cb-link { all: unset; cursor: pointer; color: var(--jv-acento); font-weight: 600; }
-.jv-cb-ensenar { display: flex; gap: 8px; }
-.jv-cb-ensenar input { flex: 1; min-width: 0; height: 40px; border-radius: 11px; border: 1px solid var(--jv-linea); background: var(--jv-hundido); color: var(--jv-tinta); padding: 0 12px; font: 14px var(--jv-f-ui); }
-.jv-cb-ensenar input:focus { outline: 2px solid var(--jv-acento); outline-offset: 1px; }
-.jv-cb-pri { flex: none; min-width: 92px; height: 40px; padding: 0 14px; border-radius: 11px; border: 0; background: var(--jv-acento); color: var(--jv-tinta-ac); font: 600 13px var(--jv-f-ui); display: grid; place-items: center; cursor: pointer; }
-.jv-cb-pri:disabled { opacity: .5; cursor: default; }
-.jv-cb-log { margin: 0; min-height: 20px; font-size: 12.5px; color: var(--jv-tinta2); }
-.jv-cb-log b { color: var(--jv-acento); font-weight: 600; }
-.jv-cb-log[data-estado="error"] { color: var(--tv-danger, #B4363B); }
-.jv-cb-barras { display: flex; align-items: flex-end; gap: 4px; height: 60px; padding-bottom: 4px; border-bottom: 1px solid var(--jv-linea); margin-bottom: 4px; }
-.jv-cb-barras i { flex: 1; border-radius: 3px 3px 0 0; background: var(--jv-tile); }
-.jv-cb-barras i[data-hoy] { background: var(--jv-acento); }
-/* Ficha de una idea */
-.ai-root[data-jarvis] .jv-cerebro-detalle { margin: 0; padding: 0; border: 0; background: transparent; display: grid; gap: 8px; }
-.ai-root[data-jarvis] .jv-det-cab { padding: 0; border: 0; display: flex; align-items: flex-start; gap: 8px; }
-.ai-root[data-jarvis] .jv-det-tt { display: grid; gap: 2px; flex: 1; min-width: 0; }
-.ai-root[data-jarvis] .jv-det-tt small { font: 600 10.5px var(--jv-f-astro); letter-spacing: .16em; color: var(--jv-oro); }
-.ai-root[data-jarvis] .jv-det-tt b { font: 600 17px var(--jv-f-ui); color: var(--jv-tinta); }
-.ai-root[data-jarvis] .jv-det-tt span { font-size: 11.5px; color: var(--jv-tinta2); }
-.ai-root[data-jarvis] .jv-det-res { margin: 0; font-size: 12.5px; line-height: 1.5; color: var(--jv-tinta); }
-.ai-root[data-jarvis] .jv-det-meta { margin: 0; font: 400 10.5px var(--jv-f-dato); color: var(--jv-tenue); }
-.ai-root[data-jarvis] .jv-det-con button { border-radius: 999px; }
-/* En la ventanita del widget, el cerebro también ocupa toda la hoja. */
-.vj-hoja .ai-root[data-jarvis] .jv-cb-escena { height: auto; }
 
 @media (prefers-reduced-motion: reduce) {
   .jv-orbe .p, .jv-pensando .s { animation: none; }
@@ -296,13 +236,6 @@ span.jv-tit:hover { background: transparent; }
 #admin-panel-root .ai-root[data-jarvis] .ai-sug b { justify-content: flex-start; }
 .ai-root[data-jarvis] .ai-herr:not([data-panel]) summary { flex-wrap: nowrap; }
 .ai-root[data-jarvis] .ai-herr:not([data-panel]) .ai-herr-t { white-space: nowrap; }
-/* El cerebro viejo definía sus colores en .jv-cerebro: aquí mandan los del diseño. */
-.ai-root[data-jarvis] .jv-cerebro {
-  --jv-n-centro: var(--jv-a-neg); --jv-n-temas: var(--jv-a-dis); --jv-n-datos: var(--jv-a-tal); --jv-n-internet: var(--jv-a-int); --jv-n-vos: var(--jv-a-vos);
-  --g-centro: var(--jv-a-neg); --g-temas: var(--jv-a-dis); --g-datos: var(--jv-a-tal); --g-internet: var(--jv-a-int); --g-vos: var(--jv-a-vos);
-  min-height: min(680px, calc(100dvh - 140px));
-}
-.jv-cb-panel { max-height: min(26vh, 210px); }
 #admin-panel-root .ai-root[data-jarvis] .ai-hi > button:first-child { justify-content: stretch !important; justify-items: stretch; align-items: start !important; text-align: left; width: 100%; min-height: 0 !important; }
 .jv-hi-m { width: 100%; }
 
@@ -312,25 +245,89 @@ span.jv-tit:hover { background: transparent; }
 /* Sin lista de conversaciones, la cabecera arranca con el orbe. */
 .ai-root[data-jarvis] .ai-ch { padding-left: 10px; }
 
-/* Cerebro: filas con «Olvidar» a la derecha y limpieza rápida. */
-.jv-cb-fila.jv-cb-fila-x { padding: 0; gap: 4px; cursor: default; }
-.jv-cb-fila-b { all: unset; box-sizing: border-box; cursor: pointer; flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; padding: 8px 2px; }
-.jv-cb-fila-b > span { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.jv-cb-fila-b small { font: 400 11px var(--jv-f-dato); color: var(--jv-tenue); flex: none; }
-.jv-cb-fila-b em { font-style: normal; font-size: 10.5px; font-weight: 600; color: var(--jv-oro); }
-#admin-panel-root .jv-cb-borrar { min-width: 0 !important; min-height: 0 !important; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; color: var(--jv-tenue); background: transparent; border: 0; flex: none; }
-#admin-panel-root .jv-cb-borrar:hover { color: var(--tv-danger, #B4363B); background: var(--jv-hundido); }
-.jv-cb-conf { display: inline-flex; gap: 4px; flex: none; }
-#admin-panel-root .jv-cb-conf button { min-width: 0 !important; min-height: 0 !important; padding: 5px 9px; border-radius: 999px; font-size: 12px; font-weight: 600; border: 1px solid var(--jv-linea); background: var(--jv-sup); color: var(--jv-tinta2); }
-#admin-panel-root .jv-cb-conf button[data-peligro], .jv-cb-link[data-peligro] { color: var(--tv-danger, #B4363B) !important; }
-.jv-cb-limpiar { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin: 2px 0 6px; font-size: 12.5px; color: var(--jv-tinta2); }
-button.jv-cb-limpiar { display: inline-flex; }
-/* Ficha: renombrar, fuente y conexiones con × */
-.jv-det-renombrar { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
-.jv-det-renombrar input { flex: 1 1 160px; min-width: 0; height: 34px; border-radius: 10px; border: 1px solid var(--jv-linea); background: var(--jv-hundido); color: var(--jv-tinta); padding: 0 10px; font: 600 14px var(--jv-f-ui); }
-.jv-det-fuente { display: inline-flex; align-items: center; gap: 3px; color: var(--jv-acento); font-weight: 600; text-decoration: none; }
-.jv-det-chip { display: inline-flex; align-items: center; gap: 0; border: 1px solid var(--jv-linea); border-radius: 999px; background: var(--jv-sup); }
-.ai-root[data-jarvis] .jv-det-con .jv-det-chip > button:first-child { border: 0; background: transparent; }
-#admin-panel-root .jv-det-x { min-width: 0 !important; min-height: 0 !important; width: 24px; height: 24px; border-radius: 50%; display: grid; place-items: center; color: var(--tv-danger, #B4363B); margin-right: 3px; }
-.jv-cb-panel { display: flex; flex-direction: column; }
-.jv-cb-panel > * { flex: none; }
+/* =====================================================================
+   CEREBRO 3D (diseño aprobado). La escena es siempre de noche (estética);
+   la cabecera, el zoom y la hoja siguen el tema claro u oscuro de Jarvis.
+   Todo va bajo :is(#admin-panel-root, body) .jv-cerebro para ganarle a las reglas generales de botones y cajas
+   del panel sin usar !important. Los botones se reinician a mano: con
+   `all: unset` el panel los dejaba de 0 px de alto.
+   ===================================================================== */
+.jv-vidrio { background: color-mix(in srgb, var(--jv-sup) 74%, transparent); -webkit-backdrop-filter: blur(10px); backdrop-filter: blur(10px); border: 1px solid var(--jv-linea); }
+:is(#admin-panel-root, body) .jv-cerebro { position: relative; flex: 1 1 auto; height: 100%; min-height: min(680px, calc(100dvh - 140px)); overflow: hidden; background: #02040A; color: var(--jv-tinta); font-family: var(--jv-f-ui); }
+:is(#admin-panel-root, body) .jv-cerebro.jv-cb-solo { display: grid; place-items: center; background: transparent; }
+:is(#admin-panel-root, body) .jv-cerebro button { min-width: 0; min-height: 0; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-lienzo { position: absolute; inset: 0; width: 100%; height: 100%; display: block; touch-action: none; cursor: grab; outline: none; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-lienzo:active { cursor: grabbing; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-espera { position: absolute; inset: 0; display: grid; place-items: center; margin: 0; color: #A6B1C7; font-size: 13px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-vacio { display: grid; justify-items: center; gap: 8px; max-width: 34ch; text-align: center; padding: 24px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-vacio p { margin: 0; font-size: 13px; color: var(--jv-tinta2); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-logo { width: 44px; height: 44px; border-radius: 14px; display: grid; place-items: center; background: var(--jv-hundido); color: var(--jv-acento); }
+
+/* Cabecera y zoom */
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-hud { position: absolute; left: 10px; right: 10px; top: 8px; z-index: 4; display: flex; align-items: center; gap: 8px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-tit { flex: 1; min-width: 0; color: #E8EDF7; text-shadow: 0 1px 6px rgba(2, 4, 10, .9); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-tit b { display: block; font: 600 15px/1.25 var(--jv-f-ui); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-ruta { font: 400 11px/1.4 var(--jv-f-dato); color: #A6B1C7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-ruta button { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; color: #7FD8CF; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-ib { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; flex: none; color: var(--jv-tinta); cursor: pointer; padding: 0; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-ib:disabled { opacity: .6; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-zoom { position: absolute; right: 10px; top: 62px; z-index: 4; display: grid; gap: 6px; }
+
+/* Hoja de información */
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-hoja { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; height: 44%; display: flex; flex-direction: column; border-radius: 22px 22px 0 0; border-bottom: 0; background: color-mix(in srgb, var(--jv-sup) 92%, transparent); box-shadow: 0 -12px 30px -18px rgba(0, 0, 0, .5); transition: height .28s cubic-bezier(.2, .7, .2, 1); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-hoja[data-alto] { height: 74%; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-asa { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; flex: none; height: 22px; display: grid; place-items: center; cursor: pointer; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-asa i { width: 36px; height: 4px; border-radius: 9px; background: var(--jv-linea); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-panel { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 14px calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; scrollbar-width: thin; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-panel > * { flex: none; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-atras { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; align-self: flex-start; font: 500 12px var(--jv-f-ui); color: var(--jv-acento); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-kicker { font: 600 10.5px var(--jv-f-astro); letter-spacing: .16em; text-transform: uppercase; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-titulo { display: flex; align-items: flex-start; gap: 6px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-titulo .jv-cb-h3 { margin: 0; flex: 1; min-width: 0; font: 600 18px/1.25 var(--jv-f-ui); text-wrap: balance; overflow-wrap: anywhere; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-meta { margin: 0; font: 400 11px/1.45 var(--jv-f-dato); color: var(--jv-tenue); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-meta b { color: var(--jv-acento); font-weight: 600; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-meta[data-estado="error"] { color: var(--tv-danger, #C2363B); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-texto { margin: 0; font-size: 13.5px; line-height: 1.5; color: var(--jv-tinta); overflow-wrap: anywhere; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-bloque { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+:is(#admin-panel-root, body) .jv-cerebro :is(.jv-cb-bloque, .jv-cb-editor, .jv-cb-confirmar) > * { min-width: 0; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-bcab { display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-bcab .jv-cb-h4 { margin: 0; font: 600 11px var(--jv-f-ui); letter-spacing: .08em; text-transform: uppercase; color: var(--jv-tenue); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-lapiz { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; font: 500 12px var(--jv-f-ui); color: var(--jv-acento); padding: 2px 4px; border-radius: 6px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-cifras { display: flex; gap: 6px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-cifras div { flex: 1; padding: 7px 8px; border-radius: 10px; background: var(--jv-hundido); border: 1px solid var(--jv-linea); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-cifras b { display: block; font: 500 15px var(--jv-f-dato); font-variant-numeric: tabular-nums; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-cifras span { font-size: 10.5px; color: var(--jv-tenue); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-fila { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; box-sizing: border-box; cursor: pointer; width: 100%; display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; align-items: center; gap: 10px; padding: 9px 2px; border-bottom: 1px solid var(--jv-linea); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-fila b { display: block; font: 500 13.5px var(--jv-f-ui); color: var(--jv-tinta); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-fila em { display: block; font-style: normal; font-size: 12px; color: var(--jv-tenue); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-fila small { font: 400 11px var(--jv-f-dato); color: var(--jv-tenue); font-variant-numeric: tabular-nums; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-pt { width: 8px; height: 8px; border-radius: 50%; box-shadow: 0 0 8px currentColor; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-buscar { display: flex; align-items: center; gap: 8px; height: 38px; padding: 0 10px; border-radius: 11px; border: 1px solid var(--jv-linea); background: var(--jv-hundido); color: var(--jv-tenue); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-buscar input { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; flex: 1; min-width: 0; font: 14px var(--jv-f-ui); color: var(--jv-tinta); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-buscar button { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; display: grid; place-items: center; width: 24px; height: 24px; border-radius: 50%; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-puntos { display: grid; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-punto { display: grid; grid-template-columns: 12px minmax(0, 1fr) auto auto; align-items: center; gap: 4px; padding: 3px 0; border-bottom: 1px solid var(--jv-linea); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-punto[data-marcado] { background: linear-gradient(90deg, var(--jv-oro-suave), transparent); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-punto > i { width: 5px; height: 5px; border-radius: 50%; background: var(--jv-oro); box-shadow: 0 0 6px var(--jv-oro); justify-self: center; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-ptxt { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; min-width: 0; padding: 6px 0; font-size: 13.5px; line-height: 1.4; color: var(--jv-tinta); overflow-wrap: anywhere; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-ptxt small { color: var(--jv-acento); font-weight: 600; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-mini { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: var(--jv-tenue); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-mini:hover { color: var(--jv-tinta); background: var(--jv-hundido); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-agregar { display: flex; gap: 6px; }
+:is(#admin-panel-root, body) .jv-cerebro :is(.jv-cb-agregar input, .jv-cb-editor input, .jv-cb-editor textarea, .jv-cb-acciones select) { flex: 1; min-width: 0; border-radius: 10px; border: 1px solid var(--jv-linea); background: var(--jv-hundido); color: var(--jv-tinta); font: 13.5px/1.45 var(--jv-f-ui); padding: 8px 10px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-editor textarea { min-height: 84px; resize: vertical; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-editor { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-botones { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-btn { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 12px; border-radius: 10px; font: 600 12.5px var(--jv-f-ui); background: var(--jv-hundido); color: var(--jv-tinta); border: 1px solid var(--jv-linea); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-btn[data-pri] { background: var(--jv-acento); color: var(--jv-tinta-ac); border-color: transparent; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-btn[data-mal] { background: transparent; color: var(--tv-danger, #C2363B); border-color: color-mix(in srgb, var(--tv-danger, #C2363B) 40%, transparent); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-btn:disabled { opacity: .5; cursor: default; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-chips { display: flex; flex-wrap: wrap; gap: 6px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-chips button { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; font-size: 12px; padding: 4px 10px; border-radius: 999px; border: 1px solid var(--jv-linea); color: var(--jv-tinta); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-fuente { display: inline-flex; align-items: center; gap: 4px; font-size: 12.5px; font-weight: 600; color: var(--jv-acento); text-decoration: none; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-acciones { display: flex; gap: 8px; flex-wrap: wrap; align-items: center; padding-top: 6px; border-top: 1px solid var(--jv-linea); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-acciones select { flex: 1 1 150px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-confirmar { display: grid; gap: 8px; padding: 10px; border-radius: 12px; font-size: 13px; border: 1px solid color-mix(in srgb, var(--tv-danger, #C2363B) 35%, transparent); background: color-mix(in srgb, var(--tv-danger, #C2363B) 7%, transparent); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-aviso { position: absolute; left: 12px; right: 12px; z-index: 8; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: 12px; font-size: 12.5px; background: var(--jv-tile); color: var(--jv-tinta); border: 1px solid var(--jv-linea); box-shadow: var(--jv-sombra); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-aviso button { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; font-weight: 700; color: var(--jv-oro); }
+@media (prefers-reduced-motion: reduce) { :is(#admin-panel-root, body) .jv-cerebro .jv-cb-hoja { transition: none; } }

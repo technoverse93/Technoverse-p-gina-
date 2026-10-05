@@ -59,8 +59,3 @@ export async function activarFlagSecure(): Promise<void> {
 export async function fijarFlagSecureSegunCorreo(esAdmin: boolean): Promise<void> {
   await fijar(!esAdmin);
 }
-
-/** ¿Corre dentro de la APK? */
-export function esNativo(): boolean {
-  try { return Capacitor.isNativePlatform(); } catch { return false; }
-}

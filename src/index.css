@@ -341,35 +341,6 @@ html.sin-vidrio .tv-regleta {
   box-shadow: var(--glass-shadow);
 }
 
-.glass-card {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: var(--radius-card);
-  box-shadow: var(--shadow-sm);
-  contain: layout style;
-  /* Solo se animan transform y sombra: son propiedades que el compositor
-     resuelve sin recalcular el layout, así el hover no produce saltos. */
-  transition: transform 0.18s cubic-bezier(0.16, 1, 0.3, 1),
-              box-shadow 0.18s ease,
-              border-color 0.18s ease;
-}
-@media (hover: hover) {
-  .glass-card:hover {
-    transform: translateY(-2px);
-    box-shadow: var(--float-shadow);
-  }
-}
-.glass-card:active { transform: translateY(0); }
-
-.glass-pill {
-  background: var(--bg-surface);
-  border: 1px solid var(--border-color);
-  border-radius: 999px;
-  transition: background 0.18s ease, border-color 0.18s ease, transform 0.18s ease;
-}
-.glass-pill:hover { background: var(--bg-sunken); }
-.glass-pill:active { transform: scale(0.96); }
-
 .btn-glass-primary {
   background: var(--accent);
   color: var(--accent-ink);
@@ -400,12 +371,6 @@ html.sin-vidrio .tv-regleta {
 }
 .glass-input::placeholder { color: var(--text-muted); }
 
-.glass-gold {
-  background: var(--gold-soft);
-  border: 1px solid var(--gold-line);
-  border-radius: var(--radius-card);
-}
-
 /* Foco visible por teclado en toda la interfaz (accesibilidad). */
 :where(a, button, input, select, textarea, [tabindex]):focus-visible {
   outline: 2px solid var(--accent);
@@ -423,7 +388,7 @@ h1, h2, h3, h4, h5 {
   text-wrap: balance;
   overflow-wrap: break-word;
 }
-h1, .text-4xl, .text-5xl {
+h1 {
   font-size: clamp(1.35rem, 1.18rem + 0.8vw, 1.85rem) !important;
   line-height: 1.18;
   letter-spacing: -0.022em;
@@ -484,8 +449,7 @@ h5, .text-lg {
    WORDMARK — serif elegante de alto contraste con degradado sutil.
    Se aplica sobre el marcado existente: ningún .tsx cambia por esto.
    ========================================================================== */
-header .font-display,
-.brand-wordmark {
+header .font-display {
   font-family: 'Gloock', var(--font-display), Georgia, serif;
   font-weight: 400;
   font-size: 1.2rem !important;
@@ -508,7 +472,6 @@ header .font-display,
 svg.lucide:not([class*="w-"]):not([class*="h-"]) { width: 20px; height: 20px; }
 
 button:has(> svg.lucide),
-.icon-button,
 [role="button"]:has(> svg.lucide) {
   min-width: 40px !important;
   min-height: 40px !important;
@@ -520,7 +483,6 @@ button:has(> svg.lucide),
 /* En pantallas táctiles el objetivo mínimo sube a 44 px (guía de Apple). */
 @media (pointer: coarse) {
   button:has(> svg.lucide),
-  .icon-button,
   [role="button"]:has(> svg.lucide) {
     min-width: 44px !important;
     min-height: 44px !important;
@@ -538,14 +500,6 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   50% { transform: scale(1.15); }
 }
 .animate-cart-bounce { animation: cartBounce 200ms ease-in-out; }
-
-.hide-scrollbar::-webkit-scrollbar { display: none; }
-.hide-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-  -webkit-overflow-scrolling: touch;
-  overscroll-behavior-x: contain;
-}
 
 /* ===================== Vitrina de producto (.product-media) =====================
    Con fondo blanco (único tema), un producto en PNG transparente ya tiene
@@ -618,13 +572,7 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
    significado con un verde que contrasta bien en los dos modos. */
 .text-emerald-500,
 .text-emerald-600,
-.text-emerald-700,
-.text-emerald-800,
-.text-emerald-100,
-.text-emerald-300,
 .text-emerald-400 { color: var(--ok) !important; }
-.hover\:text-emerald-100:hover,
-.hover\:text-emerald-300:hover { color: var(--ok) !important; }
 
 .border-emerald-200,
 .border-emerald-500,
@@ -634,7 +582,6 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 
 .ring-emerald-500 { --tw-ring-color: var(--accent) !important; }
 .shadow-emerald-500\/10 { box-shadow: var(--shadow-sm) !important; }
-.from-emerald-500 { --tw-gradient-from: var(--accent) !important; }
 
 
 /* ==========================================================================
@@ -668,23 +615,20 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
   color: var(--accent-ink) !important;
 }
 .bg-sky-500 *, .bg-sky-600 *, .bg-blue-500 *, .bg-blue-600 * { color: inherit !important; }
-.hover\:bg-sky-600:hover, .hover\:bg-blue-600:hover, .hover\:bg-blue-700:hover {
+.hover\:bg-sky-600:hover {
   background-color: var(--accent-hover) !important;
 }
-.bg-sky-50, .bg-blue-50, .hover\:bg-sky-100:hover, .hover\:bg-blue-50:hover,
-.bg-sky-500\/10, .bg-blue-500\/10 {
+.bg-sky-50, .bg-blue-50, .hover\:bg-blue-50:hover, .bg-sky-500\/10, .bg-blue-500\/10 {
   background-color: rgba(var(--accent-rgb), 0.10) !important;
 }
-.text-sky-300, .text-sky-400, .text-sky-500, .text-sky-600,
-.text-blue-500, .text-blue-600, .text-blue-700,
-.hover\:text-blue-600:hover, .hover\:text-sky-400:hover {
+.text-sky-300, .text-sky-400, .text-sky-500, .text-sky-600, .text-blue-500, .text-blue-600, .text-blue-700, .hover\:text-blue-600:hover {
   color: var(--accent) !important;
 }
 .border-sky-500, .border-blue-500, .border-blue-100,
 .focus\:border-sky-500:focus, .focus\:border-blue-500:focus {
   border-color: var(--accent) !important;
 }
-.focus\:ring-sky-500:focus, .focus\:ring-blue-500:focus, .ring-blue-500\/20 {
+.focus\:ring-blue-500:focus, .ring-blue-500\/20 {
   --tw-ring-color: rgba(var(--accent-rgb), 0.25) !important;
 }
 .to-blue-600 { --tw-gradient-to: var(--accent) !important; }
@@ -733,18 +677,15 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
    estiraban a lo ancho de la pantalla, con la foto y el texto deformados.
    El ancho ya lo limita cada modal con su propia utilidad, y no
    desbordan porque el contenedor que los centra lleva `p-4`. */
-.tv-overlay-panel,
 [data-overlay-panel] {
   max-height: 90dvh;
 }
 @supports not (height: 1dvh) {
   /* Navegadores antiguos: se conserva el comportamiento anterior. */
-  .tv-overlay-panel, [data-overlay-panel] { max-height: 90vh; }
+  [data-overlay-panel] { max-height: 90vh; }
 }
 
 /* Respeto de las zonas del sistema (muesca, barra de gestos) en la APK. */
-.tv-safe-bottom { padding-bottom: max(0px, env(safe-area-inset-bottom)); }
-.tv-safe-top    { padding-top: max(0px, env(safe-area-inset-top)); }
 
 /* Pie de acción de cualquier overlay: siempre visible, nunca comprimido y
    por encima de la barra de gestos. */
@@ -781,11 +722,8 @@ button, [role="tab"], [role="menuitem"] { min-width: 0; }
 }
 
 /* Botón que ocupa el ancho disponible sin deformarse (pies de modal). */
-.tv-btn-fill { flex: 1 1 0; min-width: 0; }
 
 /* Grupo de botones que debe repartirse el ancho por igual y no desbordar. */
-.tv-btn-row { display: flex; gap: 8px; min-width: 0; }
-.tv-btn-row > * { flex: 1 1 0; min-width: 0; }
 
 /* --- 3 · Scroll para texto largo --------------------------------------- */
 
@@ -804,7 +742,6 @@ button, [role="tab"], [role="menuitem"] { min-width: 0; }
    hay un contenedor flexible que reparta el espacio. */
 .tv-text-scroll-sm { max-height: 96px; }
 .tv-text-scroll-md { max-height: 160px; }
-.tv-text-scroll-lg { max-height: 240px; }
 
 /* Zona flexible con scroll dentro de un overlay de tres partes
    (cabecera fija · contenido con scroll · pie fijo). El `min-height: 0`
@@ -819,15 +756,13 @@ button, [role="tab"], [role="menuitem"] { min-width: 0; }
 
 /* Recorte por número de líneas: el nombre de un producto o de un módulo
    ocupa siempre el mismo alto, así una fila de tarjetas nunca se desalinea. */
-.tv-clamp-1, .tv-clamp-2, .tv-clamp-3 {
+.tv-clamp-2 {
   display: -webkit-box;
   -webkit-box-orient: vertical;
   overflow: hidden;
   overflow-wrap: anywhere;
 }
-.tv-clamp-1 { -webkit-line-clamp: 1; }
 .tv-clamp-2 { -webkit-line-clamp: 2; }
-.tv-clamp-3 { -webkit-line-clamp: 3; }
 
 /* Texto de una sola línea que se recorta con puntos (SKU, correo, nombre
    de cliente en una fila estrecha). Requiere que el padre tenga min-width:0. */
@@ -843,11 +778,6 @@ button, [role="tab"], [role="menuitem"] { min-width: 0; }
 .tv-break { overflow-wrap: anywhere; word-break: break-word; }
 
 /* Tabla ancha: hace scroll dentro de su caja, nunca mueve la página. */
-.tv-table-scroll {
-  overflow-x: auto;
-  max-width: 100%;
-  -webkit-overflow-scrolling: touch;
-}
 
 /* Fila de filtros o pestañas que no cabe: se desplaza en horizontal sin
    barra visible y sin romper el ancho de la pantalla. */
@@ -919,8 +849,7 @@ a[role="button"] > svg,
   text-align: center;
   overflow: hidden;
 }
-.tv-cta > span,
-.tv-cta > .tv-cta-text {
+.tv-cta > span {
   display: -webkit-box;
   -webkit-line-clamp: 2;
   -webkit-box-orient: vertical;
@@ -970,28 +899,16 @@ input, select, textarea { max-width: 100%; }
 
 /* --- superficies --- */
 .dark .bg-white { background-color: var(--bg-surface) !important; }
-.dark .bg-slate-50,
-.dark .bg-slate-100,
 .dark .bg-slate-200,
-.dark .hover\:bg-slate-100:hover,
 .dark .hover\:bg-slate-200:hover { background-color: var(--bg-sunken) !important; }
 
 /* --- bordes --- */
-.dark .border-white,
-.dark .border-slate-100,
-.dark .border-slate-200,
-.dark .border-slate-300 { border-color: var(--border-color) !important; }
+.dark .border-white { border-color: var(--border-color) !important; }
 /* `border-white/40` y similares con opacidad: se apagan, si no dibujan un
    filo blanco sobre el carbón. */
 .dark [class*="border-white/"] { border-color: rgba(255, 255, 255, 0.10) !important; }
 
 /* --- texto oscuro fijo, que en oscuro sería ilegible --- */
-.dark .text-slate-900,
-.dark .text-slate-800,
-.dark .text-slate-700 { color: var(--text-primary) !important; }
-.dark .text-slate-600,
-.dark .text-slate-500 { color: var(--text-secondary) !important; }
-.dark .text-slate-400 { color: var(--text-muted) !important; }
 
 /* --- estados semánticos: fondos suaves claros → versiones oscuras --- */
 .dark .bg-emerald-50 { background-color: var(--ok-soft) !important; }
@@ -999,7 +916,7 @@ input, select, textarea { max-width: 100%; }
 .dark .border-rose-100 { border-color: #4A2226 !important; }
 .dark .text-rose-600 { color: #F2807E !important; }
 .dark .bg-amber-50   { background-color: #2A2113 !important; }
-.dark .text-amber-700, .dark .text-amber-800 { color: #E0B368 !important; }
+.dark .text-amber-700 { color: #E0B368 !important; }
 /* Las utilidades ámbar con opacidad (avisos del chat y del taller) ya se
    ven bien sobre oscuro; solo se sube el texto para que contraste. */
 .dark .text-amber-500, .dark .text-amber-600 { color: #E0B368 !important; }
@@ -1177,7 +1094,6 @@ input, select, textarea { max-width: 100%; }
 #admin-panel-root .bg-sky-500, #store-page-root .bg-sky-500 { background-color: var(--accent) !important; }
 #admin-panel-root .bg-sky-600, #store-page-root .bg-sky-600 { background-color: var(--accent) !important; }
 #admin-panel-root .bg-slate-200, #store-page-root .bg-slate-200 { background-color: var(--bg-sunken) !important; }
-#admin-panel-root .bg-slate-400, #store-page-root .bg-slate-400 { background-color: var(--bg-sunken) !important; }
 #admin-panel-root .border-blue-100, #store-page-root .border-blue-100 { border-color: var(--accent) !important; }
 #admin-panel-root .border-blue-500, #store-page-root .border-blue-500 { border-color: var(--accent) !important; }
 #admin-panel-root .border-emerald-200, #store-page-root .border-emerald-200 { border-color: var(--ok) !important; }

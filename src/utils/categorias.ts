@@ -269,18 +269,3 @@ export function esRepuesto(categoria?: string | null): boolean {
 export function esInsumo(categoria?: string | null): boolean {
   return CATEGORIAS_INSUMO.includes((categoria || '').trim());
 }
-
-/**
- * ¿Es material de uso interno —repuesto o insumo— y por tanto NO debe
- * verse en la tienda?
- *
- * Existe para que la exclusión del catálogo se pregunte en UN solo sitio.
- * Cuando solo había repuestos, la tienda preguntaba `esRepuesto()`
- * directamente; al añadir los insumos, ese mismo filtro habría dejado
- * los temperados y las micas a la venta al precio de costo, junto a los
- * teléfonos. Con esta función, añadir una tercera familia mañana no
- * obliga a acordarse de tocar la tienda.
- */
-export function esInterno(categoria?: string | null): boolean {
-  return esRepuesto(categoria) || esInsumo(categoria);
-}

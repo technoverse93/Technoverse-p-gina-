@@ -456,22 +456,6 @@ export async function ocultarModelo(
   return null;
 }
 
-/** Vuelve a mostrar un modelo escondido. */
-export async function mostrarModelo(
-  categoria: string,
-  marca: string,
-  modelo: string
-): Promise<string | null> {
-  const { error } = await supabase
-    .from('device_catalog')
-    .update({ oculto: false })
-    .match({ categoria, marca, modelo });
-  if (error) return error.message;
-
-  recargarCatalogo();
-  return null;
-}
-
 /** Cuántos modelos tiene el catálogo en total. Para mostrarlo en el panel. */
 export function contarModelos(catalogo: Catalogo): number {
   let total = 0;

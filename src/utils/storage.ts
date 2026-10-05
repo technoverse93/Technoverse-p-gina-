@@ -257,14 +257,6 @@ function notifySyncError(message: string) {
   }
 }
 
-export function checkQuotaError(err: any) {
-  if (err) console.error('[Supabase Error]', err?.message || err);
-}
-
-export function isFirebaseQuotaExceeded() {
-  return false;
-}
-
 export function getDB(): Database {
   // `structuredClone` hace la misma copia profunda e independiente que antes
   // (nadie puede mutar `localCache` a través del objeto devuelto: sigue
