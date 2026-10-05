@@ -6,9 +6,10 @@
 // suyo). Se usa EN EL PROPIO RECUADRO de la pantalla de inicio:
 //   · Micrófono  → dictado del teléfono; la respuesta aparece (y se lee)
 //                  en el widget, sin abrir ninguna ventana (modo «voz»).
-//   · Escribir   → Android no deja escribir dentro de un widget: sale solo
-//                  una barrita sobre el teclado y la respuesta vuelve al
-//                  widget (modo «escribir»).
+//   · Escribir   → el chat se dibuja EXACTAMENTE encima del recuadro del
+//                  widget (APK v4: el widget dice dónde está), sin oscurecer,
+//                  con el teclado abajo; la respuesta queda en el widget.
+//                  APK anterior: una barrita sobre el teclado.
 //   · «Abrir conversación» → Jarvis completo en una hoja (modo «hoja»),
 //                  para confirmar acciones, ver tablas o seguir hablando.
 // Todo corre en la página `jarvis-rapido.html` (src/rapido.tsx).
@@ -38,7 +39,7 @@ export interface PedidoVentanita {
 interface PluginJarvisWidget {
   activar(): Promise<{ ok: boolean }>;
   desactivar(): Promise<{ ok: boolean }>;
-  estado(): Promise<{ activo: boolean; enVentanita?: boolean; version?: number; modo?: ModoVentanita; conversacion?: string }>;
+  estado(): Promise<{ activo: boolean; enVentanita?: boolean; version?: number; modo?: ModoVentanita; conversacion?: string; marco?: MarcoWidget; noche?: boolean; historial?: string }>;
   ponerEnInicio(): Promise<{ pedido: boolean }>;
   cerrar(): Promise<void>;
   abrirApp(o: { modulo?: string }): Promise<void>;
@@ -52,7 +53,14 @@ interface PluginJarvisWidget {
 
 const Plugin = registerPlugin<PluginJarvisWidget>('JarvisWidget');
 
-export type EstadoWidget = { activo: boolean; enVentanita: boolean; version: number; modo: ModoVentanita; conversacion: string | null };
+/** Dónde está el widget en la pantalla (px CSS de la ventanita): el chat se dibuja ahí. */
+export type MarcoWidget = { x: number; y: number; ancho: number; alto: number };
+export type VueltaWidget = { p: string; r: string; t?: number };
+export type EstadoWidget = {
+  activo: boolean; enVentanita: boolean; version: number; modo: ModoVentanita; conversacion: string | null;
+  /** APK con versión 4: el recuadro del widget, su tema y su conversación. */
+  marco: MarcoWidget | null; noche: boolean; historial: VueltaWidget[];
+};
 
 const nada = () => { /* fuera de la ventanita o APK vieja: no hay nada que hacer */ };
 const salir = async () => {
@@ -68,13 +76,17 @@ export const widgetNativo = {
     return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('JarvisWidget');
   },
   async estado(): Promise<EstadoWidget> {
-    const vacio: EstadoWidget = { activo: false, enVentanita: false, version: 0, modo: 'hoja', conversacion: null };
+    const vacio: EstadoWidget = { activo: false, enVentanita: false, version: 0, modo: 'hoja', conversacion: null, marco: null, noche: false, historial: [] };
     // En la APK se pregunta siempre (aunque la lista de complementos todavía
     // no esté): si no responde, `version` queda en 0 y quien llama decide.
     if (!Capacitor.isNativePlatform()) return vacio;
     try {
       const e = await Plugin.estado();
-      return { activo: !!e.activo, enVentanita: !!e.enVentanita, version: Number(e.version) || 1, modo: e.modo || 'hoja', conversacion: e.conversacion || null };
+      let historial: VueltaWidget[] = [];
+      try { historial = JSON.parse(e.historial || '[]'); } catch { /* sin historial */ }
+      const m = e.marco;
+      const marco = m && m.ancho > 120 && m.alto > 80 ? m : null;
+      return { activo: !!e.activo, enVentanita: !!e.enVentanita, version: Number(e.version) || 1, modo: e.modo || 'hoja', conversacion: e.conversacion || null, marco, noche: !!e.noche, historial: Array.isArray(historial) ? historial : [] };
     } catch {
       return vacio;
     }

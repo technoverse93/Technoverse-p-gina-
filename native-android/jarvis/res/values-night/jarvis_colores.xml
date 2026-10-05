@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!-- Colores del widget de Jarvis = los del administrador (tema oscuro). -->
+<resources>
+    <color name="jv_sup">#161B19</color>
+    <color name="jv_sup_fondo">#F2161B19</color>
+    <color name="jv_hundido">#1D2421</color>
+    <color name="jv_base">#0E1211</color>
+    <color name="jv_tile">#1A2A2B</color>
+    <color name="jv_tinta">#E6EDE9</color>
+    <color name="jv_tinta2">#93A29B</color>
+    <color name="jv_tenue">#7C8A84</color>
+    <color name="jv_borde">#272F2B</color>
+    <color name="jv_acento">#4FD1C5</color>
+    <color name="jv_tinta_ac">#04140F</color>
+</resources>

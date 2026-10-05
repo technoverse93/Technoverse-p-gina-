@@ -165,3 +165,43 @@ html.tv-ventanita #root { height: 100%; }
 #admin-panel-root .vj-barra-env:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 .vj-barra-espera { flex: 1; align-self: center; font-size: 14px; color: var(--text-secondary); }
 @media (prefers-reduced-motion: reduce) { .vj-barra { animation: none; } }
+
+/* ---------------------------------------------------------------------
+   SOBRE EL RECUADRO DEL WIDGET (APK v4, diseño aprobado)
+   El chat ocupa exactamente el lugar del widget, con sus colores (los del
+   administrador, claro u oscuro como el widget) y sin oscurecer nada:
+   a la vista es el mismo widget que se activa.
+   --------------------------------------------------------------------- */
+.vj-recuadro {
+  --w-base: #EEF4F3; --w-sup: #FFFFFF; --w-hundido: #EAF2F3; --w-tile: #E7F3F4; --w-txt: #12262B; --w-txt2: #4C666C; --w-tenue: #7B9096;
+  --w-borde: #DDE8E9; --w-acento: #0C6C78; --w-tinta-ac: #FFFFFF; --w-suave: rgba(12, 108, 120, .12);
+  position: fixed; z-index: 2; display: flex; flex-direction: column; overflow: hidden;
+  border-radius: 24px; background: var(--w-sup); border: 1px solid var(--w-borde); color: var(--w-txt);
+  font-family: "Inter", system-ui, sans-serif;
+  box-shadow: 0 10px 30px rgba(0, 0, 0, .3);
+  transition: top .18s ease, box-shadow .2s;
+  animation: vj-rc-entra .16s ease-out both;
+}
+.vj-recuadro[data-tema="oscuro"] {
+  --w-base: #0E1211; --w-sup: #161B19; --w-hundido: #1D2421; --w-tile: #1A2A2B; --w-txt: #E6EDE9; --w-txt2: #93A29B; --w-tenue: #7C8A84;
+  --w-borde: #272F2B; --w-acento: #4FD1C5; --w-tinta-ac: #04140F; --w-suave: rgba(79, 209, 197, .14);
+}
+.vj-recuadro[data-activo] { box-shadow: 0 0 0 2px var(--w-acento), 0 16px 40px rgba(0, 0, 0, .35); }
+@keyframes vj-rc-entra { from { opacity: .4; transform: scale(.99); } }
+.vj-rc-cab { flex: none; display: flex; align-items: center; gap: 8px; height: 44px; padding: 0 6px 0 12px; background: var(--w-hundido); border-bottom: 1px solid var(--w-borde); }
+.vj-rc-cab b { font-size: 14px; font-weight: 600; }
+.vj-rc-marca { width: 26px; height: 26px; border-radius: 9px; display: grid; place-items: center; background: var(--w-tile); color: var(--w-acento); flex: none; }
+.vj-rc-est { flex: 1; min-width: 0; font-size: 11.5px; font-weight: 500; color: var(--w-acento); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+#admin-panel-root .vj-rc-cab button { min-width: 0 !important; min-height: 0 !important; width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; color: var(--w-txt2); background: transparent; }
+.vj-rc-conv { flex: 1; min-height: 0; overflow-y: auto; display: flex; flex-direction: column; gap: 9px; padding: 12px 12px 8px; background: var(--w-base); scrollbar-width: none; }
+.vj-rc-conv::-webkit-scrollbar { display: none; }
+.vj-rc-yo { align-self: flex-end; max-width: 80%; background: var(--w-tile); padding: 8px 12px; border-radius: 18px 18px 6px 18px; font-size: 13px; white-space: pre-wrap; overflow-wrap: anywhere; }
+.vj-rc-ia { align-self: flex-start; max-width: 94%; font-size: 13px; line-height: 1.5; white-space: pre-wrap; overflow-wrap: anywhere; animation: vj-rc-entra .2s ease-out both; }
+.vj-rc-vacio { margin: auto; font-size: 13px; color: var(--w-tenue); text-align: center; }
+.vj-rc-caja { flex: none; display: flex; align-items: center; gap: 6px; margin: 8px; padding: 4px 4px 4px 14px; border: 1px solid var(--w-borde); border-radius: 24px; background: var(--w-sup); }
+.vj-rc-caja:focus-within { border-color: var(--w-acento); box-shadow: 0 0 0 3px var(--w-suave); }
+.vj-rc-caja input { flex: 1; min-width: 0; height: 36px; border: 0; outline: 0; background: transparent; color: var(--w-txt); font: 15px "Inter", system-ui, sans-serif; }
+.vj-rc-caja input::placeholder { color: var(--w-tenue); }
+#admin-panel-root .vj-rc-caja button { min-width: 0 !important; min-height: 0 !important; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--w-acento); color: var(--w-tinta-ac); flex: none; }
+#admin-panel-root .vj-rc-caja button:disabled { opacity: .5; }
+@media (prefers-reduced-motion: reduce) { .vj-recuadro, .vj-rc-ia { animation: none; transition: none; } }

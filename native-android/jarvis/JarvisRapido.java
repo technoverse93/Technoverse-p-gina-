@@ -1,6 +1,9 @@
 package com.technoverse.admin;
 
+import android.appwidget.AppWidgetManager;
 import android.content.ActivityNotFoundException;
+import android.content.res.Configuration;
+import android.graphics.Rect;
 import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
@@ -10,6 +13,8 @@ import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebView;
+
+import com.getcapacitor.JSObject;
 
 import androidx.activity.OnBackPressedCallback;
 import androidx.activity.result.ActivityResult;
@@ -36,8 +41,9 @@ import java.util.ArrayList;
  *    va a Jarvis y la respuesta sale en el widget (y se lee). Mientras
  *    contesta, esta ventana no tapa nada: los toques pasan a la pantalla
  *    de inicio.
- *  · «escribir»: una barrita sobre el teclado (Android no deja escribir
- *    dentro de un widget); la respuesta vuelve al widget.
+ *  · «escribir»: el chat se dibuja exactamente encima del recuadro del
+ *    widget (sin oscurecer), con el teclado abajo; la respuesta queda en el
+ *    widget. Si no se sabe dónde está el widget, una barrita sobre el teclado.
  *  · «hoja»: Jarvis completo, para confirmar acciones o ver tablas.
  *
  * La página decide si puede abrir: widget activado en este teléfono, sesión
@@ -54,6 +60,8 @@ public class JarvisRapido extends BridgeActivity {
     private boolean creada = false;
     private String modo = "hoja";
     private ActivityResultLauncher<Intent> dictado;
+    /** Dónde está el widget en la pantalla (px), si se abrió desde su caja. */
+    private Rect marco = null;
 
     static String modoDe(Intent intent) {
         if (intent == null) return "hoja";
@@ -73,6 +81,7 @@ public class JarvisRapido extends BridgeActivity {
         registerPlugin(JarvisWidgetPlugin.class);
         config = configConPagina();
         modo = modoDe(getIntent());
+        marco = marcoDe(getIntent());
         super.onCreate(savedInstanceState);
         dictado = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::alDictar);
 
@@ -114,15 +123,65 @@ public class JarvisRapido extends BridgeActivity {
         if (!creada || intent == null) return;
         setIntent(intent);
         modo = modoDe(intent);
+        marco = marcoDe(intent);
         aplicarModo();
         if ("voz".equals(modo)) dictar();
+    }
+
+    /**
+     * El recuadro del widget en la pantalla, a partir de la caja que se tocó
+     * (el lanzador da su posición) y del tamaño del widget (sus opciones).
+     * La caja va abajo del widget, con 10 dp a los lados y abajo.
+     */
+    private Rect marcoDe(Intent intent) {
+        if (intent == null || !"escribir".equals(modoDe(intent))) return null;
+        int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
+        Rect caja = intent.getSourceBounds();
+        if (id < 0 || caja == null) return null;
+        try {
+            Bundle o = AppWidgetManager.getInstance(this).getAppWidgetOptions(id);
+            float d = getResources().getDisplayMetrics().density;
+            boolean vertical = getResources().getConfiguration().orientation != Configuration.ORIENTATION_LANDSCAPE;
+            int anchoDp = o.getInt(vertical ? AppWidgetManager.OPTION_APPWIDGET_MIN_WIDTH : AppWidgetManager.OPTION_APPWIDGET_MAX_WIDTH);
+            int altoDp = o.getInt(vertical ? AppWidgetManager.OPTION_APPWIDGET_MAX_HEIGHT : AppWidgetManager.OPTION_APPWIDGET_MIN_HEIGHT);
+            if (anchoDp <= 0 || altoDp <= 0) return null;
+            int izq = Math.round(caja.left - 10 * d);
+            int abajo = Math.round(caja.bottom + 12 * d);
+            int ancho = Math.max(caja.width() + Math.round(62 * d), Math.round(anchoDp * d));
+            Rect r = new Rect(izq, abajo - Math.round(altoDp * d), izq + ancho, abajo);
+            return r.top >= 0 && r.height() > 80 * d ? r : null;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /** El marco en px CSS relativos a la página (null si no hay). */
+    JSObject marcoCss() {
+        if (marco == null) return null;
+        WebView vista = getBridge() != null ? getBridge().getWebView() : null;
+        if (vista == null) return null;
+        int[] en = new int[2];
+        vista.getLocationOnScreen(en);
+        float d = getResources().getDisplayMetrics().density;
+        JSObject m = new JSObject();
+        m.put("x", (marco.left - en[0]) / d);
+        m.put("y", (marco.top - en[1]) / d);
+        m.put("ancho", marco.width() / d);
+        m.put("alto", marco.height() / d);
+        return m;
+    }
+
+    boolean noche() {
+        return (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
     }
 
     /** Cuánto se oscurece y si la ventana recibe toques, según el modo. */
     private void aplicarModo() {
         Window ventana = getWindow();
         ventana.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
-        if ("voz".equals(modo)) {
+        if ("voz".equals(modo) || ("escribir".equals(modo) && marco != null)) {
+            // Por voz no se ve nada; al escribir sobre el widget, el chat ocupa
+            // su recuadro y la pantalla de inicio queda tal cual (sin oscurecer).
             ventana.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         } else {
             ventana.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);

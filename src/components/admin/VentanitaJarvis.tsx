@@ -27,7 +27,7 @@ import { OverlayProvider } from '../ui/Overlays';
 import { supabase } from '../../supabaseClient';
 import { conexionBloqueada, conTope } from '../../utils/adminLogin';
 import { esSuperadmin } from '../../utils/roles';
-import { widgetNativo, type PedidoVentanita, type ModoVentanita } from '../../mobile/jarvisWidget';
+import { widgetNativo, type PedidoVentanita, type ModoVentanita, type MarcoWidget, type VueltaWidget } from '../../mobile/jarvisWidget';
 import { preguntarDesdeWidget, conversacionDelWidget, esperarAcciones } from '../../mobile/preguntaWidget';
 import { iniciarKillSwitch, fijarHuellaAparato, fijarModeloAparato } from '../../seguridad/killSwitch';
 import { obtenerHuellaAparato } from '../../utils/fingerprint';
@@ -126,6 +126,59 @@ function BarraEscribir({ onEnviar, onHoja, onCerrar }: { onEnviar: (t: string) =
   );
 }
 
+/**
+ * El chat dibujado EXACTAMENTE encima del recuadro del widget (diseño
+ * aprobado): mismo lugar, tamaño y colores del administrador (claro u
+ * oscuro, como el widget), sin oscurecer la pantalla. Cabecera gris-verdosa,
+ * la conversación del widget, la caja con el cursor y el botón de enviar.
+ * Si el teclado tapa el widget, el recuadro sube lo justo para quedar encima.
+ */
+function RecuadroWidget({ marco, noche, historial, listo, estado, onEnviar, onHoja, onCerrar }: {
+  marco: MarcoWidget; noche: boolean; historial: VueltaWidget[]; listo: boolean; estado: string;
+  onEnviar: (t: string) => void; onHoja: () => void; onCerrar: () => void;
+}) {
+  const [texto, setTexto] = useState('');
+  const [alto, setAlto] = useState(() => window.visualViewport?.height || window.innerHeight);
+  const caja = useRef<HTMLInputElement>(null);
+  const lista = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const vv = window.visualViewport;
+    const medir = () => setAlto(vv?.height || window.innerHeight);
+    vv?.addEventListener('resize', medir); window.addEventListener('resize', medir);
+    return () => { vv?.removeEventListener('resize', medir); window.removeEventListener('resize', medir); };
+  }, []);
+  useEffect(() => { if (listo && !estado) { const t = setTimeout(() => caja.current?.focus(), 60); return () => clearTimeout(t); } }, [listo, estado]);
+  useEffect(() => { const l = lista.current; if (l) l.scrollTop = l.scrollHeight; }, [historial.length, estado]);
+  const top = Math.max(8, Math.min(marco.y, alto - marco.alto - 8));
+  const enviar = () => { const t = texto.trim(); if (!t || !listo || estado) return; setTexto(''); caja.current?.blur(); onEnviar(t); };
+  return (
+    <section className="vj-recuadro" data-tema={noche ? 'oscuro' : 'claro'} data-activo={!estado || undefined} role="dialog" aria-label="Jarvis"
+      style={{ left: marco.x, top, width: marco.ancho, height: marco.alto }}>
+      <header className="vj-rc-cab">
+        <span className="vj-rc-marca" aria-hidden><Sparkles className="w-3.5 h-3.5" /></span>
+        <b>Jarvis</b>
+        <span className="vj-rc-est" aria-live="polite">{estado || (listo ? '' : 'Abriendo…')}</span>
+        <button type="button" onClick={onHoja} aria-label="Abrir la conversación completa" title="Abrir la conversación completa"><Maximize2 className="w-4 h-4" /></button>
+        <button type="button" onClick={onCerrar} aria-label="Cerrar" title="Cerrar"><X className="w-4 h-4" /></button>
+      </header>
+      <div className="vj-rc-conv" ref={lista}>
+        {historial.length === 0 && !estado && <p className="vj-rc-vacio">Escribile a Jarvis: la respuesta sale aquí.</p>}
+        {historial.map((v, i) => (
+          <React.Fragment key={i}>
+            {v.p && <div className="vj-rc-yo">{v.p}</div>}
+            {v.r && <div className="vj-rc-ia">{v.r}</div>}
+          </React.Fragment>
+        ))}
+      </div>
+      <form className="vj-rc-caja" onSubmit={e => { e.preventDefault(); enviar(); }}>
+        <input ref={caja} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribile a Jarvis…" aria-label="Pregunta para Jarvis"
+          maxLength={2000} enterKeyHint="send" autoComplete="off" disabled={!listo || !!estado} />
+        <button type="submit" disabled={!texto.trim() || !listo || !!estado} aria-label="Enviar"><ArrowUp className="w-[18px] h-[18px]" /></button>
+      </form>
+    </section>
+  );
+}
+
 export default function VentanitaJarvis() {
   const [fase, setFase] = useState<Fase>('cargando');
   const [usuario, setUsuario] = useState<User | null>(null);
@@ -139,11 +192,17 @@ export default function VentanitaJarvis() {
   // que las cotidianas se ejecuten solas, con el mismo código de la app.
   const [accionesOcultas, setAccionesOcultas] = useState<string[]>([]);
   const [pendiente, setPendiente] = useState<string | null>(null);
+  // Sobre el recuadro del widget (APK v4): dónde está, su tema y su conversación.
+  const [marco, setMarco] = useState<MarcoWidget | null>(null);
+  const [noche, setNoche] = useState(false);
+  const [historial, setHistorial] = useState<VueltaWidget[]>([]);
+  const [estadoRecuadro, setEstadoRecuadro] = useState('');
 
   useEffect(() => {
     const atender = (p: PedidoVentanita) => {
       const m: ModoVentanita = p.modo || (p.voz ? 'voz' : 'hoja');
       setModo(m);
+      if (m === 'escribir') void widgetNativo.estado().then(e => { if (e.version) { setMarco(e.marco); setNoche(e.noche); setHistorial(e.historial.slice(-12)); } });
       if (m === 'voz' && p.texto) setPendiente(p.texto);
       if (m === 'hoja' && p.voz) setPedirVoz(p.n);
     };
@@ -169,6 +228,7 @@ export default function VentanitaJarvis() {
       }
       if (!vivo) return;
       setModo(m => m || e.modo);
+      setMarco(e.marco); setNoche(e.noche); setHistorial(e.historial.slice(-12));
       setConversacion(e.conversacion || conversacionDelWidget());
       if (!e.version) { setFase('sin_puente'); return; }
       // Esta página solo vale dentro de la ventanita del widget. Si por lo
@@ -222,9 +282,10 @@ export default function VentanitaJarvis() {
   // Pregunta EN EL WIDGET: la ventanita deja de tapar, el widget dice
   // «Pensando…», la respuesta queda en el recuadro (y se lee si va por voz)
   // y la ventanita se cierra sola.
-  const responderEnWidget = useCallback(async (texto: string, porVoz: boolean) => {
+  const responderEnWidget = useCallback(async (texto: string, porVoz: boolean, enRecuadro = false) => {
     setTrabajando(true);
-    void widgetNativo.soltar();
+    if (enRecuadro) { setHistorial(h => [...h, { p: texto, r: '' }]); setEstadoRecuadro('Pensando…'); }
+    else void widgetNativo.soltar();
     void widgetNativo.avisar('Pensando…');
     const r = await preguntarDesdeWidget(texto, porVoz);
     if (r.ok === true && 'texto' in r) {
@@ -232,6 +293,7 @@ export default function VentanitaJarvis() {
       let final = r.texto, pendientes = 0;
       if (r.acciones.length) {
         void widgetNativo.avisar('Haciendo lo que pediste…');
+        if (enRecuadro) setEstadoRecuadro('Haciendo lo que pediste…');
         void import('../../utils/storage');
         setAccionesOcultas(r.acciones);
         const a = await esperarAcciones(r.acciones);
@@ -239,13 +301,23 @@ export default function VentanitaJarvis() {
         if (a.hechas.length) final = `${final}\n${a.hechas.join('\n')}`;
       }
       await widgetNativo.ultimaRespuesta(texto, final, { conversacion: r.conversacion, accion: pendientes > 0 });
+      if (enRecuadro) {
+        // La respuesta se ve ahí mismo; después el recuadro se va y queda el
+        // widget, que ya muestra lo mismo.
+        setHistorial(h => [...h.slice(0, -1), { p: texto, r: final.replace(/\*\*/g, '') }]);
+        setEstadoRecuadro('');
+        void widgetNativo.soltar();
+        await new Promise(ok => setTimeout(ok, 1800));
+      }
       const lectura = modoLectura();
       if (r.texto && (lectura === 'siempre' || (lectura === 'voz' && porVoz))) {
         void lector.hablar(r.texto, `w-${Date.now()}`);
         await finDeLectura();
       }
     } else {
-      await widgetNativo.ultimaRespuesta(texto, `⚠ ${"error" in r ? r.error : "No se pudo responder."}`);
+      const error = `⚠ ${"error" in r ? r.error : "No se pudo responder."}`;
+      await widgetNativo.ultimaRespuesta(texto, error);
+      if (enRecuadro) { setHistorial(h => [...h.slice(0, -1), { p: texto, r: error }]); setEstadoRecuadro(''); await new Promise(ok => setTimeout(ok, 2400)); }
     }
     void widgetNativo.cerrar();
   }, []);
@@ -283,7 +355,14 @@ export default function VentanitaJarvis() {
               <Suspense fallback={null}>{accionesOcultas.map(id => <TarjetaAccion key={id} id={id} />)}</Suspense>
             </div>
           )}
-          {modo === 'escribir' && !trabajando && (
+          {modo === 'escribir' && marco && (
+            <>
+              {!trabajando && <button type="button" className="vj-velo" aria-label="Cerrar" tabIndex={-1} onClick={cerrar} />}
+              <RecuadroWidget marco={marco} noche={noche} historial={historial} listo={fase === 'listo'} estado={estadoRecuadro}
+                onEnviar={t => void responderEnWidget(t, false, true)} onHoja={verHoja} onCerrar={cerrar} />
+            </>
+          )}
+          {modo === 'escribir' && !marco && !trabajando && (
             <>
               <button type="button" className="vj-velo" aria-label="Cerrar" tabIndex={-1} onClick={cerrar} />
               {fase === 'listo'
