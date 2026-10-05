@@ -138,7 +138,7 @@ public class JarvisWidget extends AppWidgetProvider {
         String estado = !activo ? "Sin activar" : accion ? "Acción por confirmar · tocá abrir" : p.getString(ESTADO, "");
         String ultima = p.getString("ultima_respuesta", null);
         String abajo = !activo
-            ? "Tocá aquí para activarlo: Jarvis → Ajustes → Mini-widget."
+            ? "Sin activar: tocá para abrir la app y activalo en Jarvis → Ajustes → Mini-widget."
             : ultima != null ? ultima : "Hablale o escribile: la respuesta sale aquí.";
         for (int id : ids) {
             RemoteViews vista = new RemoteViews(ctx.getPackageName(), grande ? R.layout.widget_jarvis_grande : R.layout.widget_jarvis);
@@ -146,19 +146,21 @@ public class JarvisWidget extends AppWidgetProvider {
             vista.setViewVisibility(R.id.jarvis_estado, estado == null || estado.isEmpty() ? View.INVISIBLE : View.VISIBLE);
             vista.setOnClickPendingIntent(R.id.jarvis_marca, app(ctx, 14));
             vista.setOnClickPendingIntent(R.id.jarvis_tamano, tamano(ctx, 15));
-            vista.setOnClickPendingIntent(R.id.jarvis_hablar, ventanita(ctx, activo ? "voz" : "hoja", 11));
-            vista.setOnClickPendingIntent(R.id.jarvis_escribir, ventanita(ctx, activo ? "escribir" : "hoja", 12));
+            // Sin activar, el widget no abre nada propio: todo lleva a la app
+            // (Jarvis), donde se activa. Así nunca tapa la pantalla.
+            vista.setOnClickPendingIntent(R.id.jarvis_hablar, activo ? ventanita(ctx, "voz", 11) : app(ctx, 21));
+            vista.setOnClickPendingIntent(R.id.jarvis_escribir, activo ? ventanita(ctx, "escribir", 12) : app(ctx, 22));
             if (grande) {
                 Intent servicio = new Intent(ctx, JarvisWidgetLista.class);
                 servicio.putExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, id);
                 servicio.setData(Uri.parse(servicio.toUri(Intent.URI_INTENT_SCHEME)));
                 vista.setRemoteAdapter(R.id.jarvis_lista, servicio);
                 vista.setEmptyView(R.id.jarvis_lista, R.id.jarvis_vacio);
-                vista.setOnClickPendingIntent(R.id.jarvis_abrir, ventanita(ctx, "hoja", 13));
-                vista.setOnClickPendingIntent(R.id.jarvis_vacio, ventanita(ctx, activo ? "escribir" : "hoja", 16));
+                vista.setOnClickPendingIntent(R.id.jarvis_abrir, activo ? ventanita(ctx, "hoja", 13) : app(ctx, 23));
+                vista.setOnClickPendingIntent(R.id.jarvis_vacio, activo ? ventanita(ctx, "escribir", 16) : app(ctx, 24));
             } else {
                 vista.setTextViewText(R.id.jarvis_ultima, abajo);
-                vista.setOnClickPendingIntent(R.id.jarvis_ultima, ventanita(ctx, "hoja", 13));
+                vista.setOnClickPendingIntent(R.id.jarvis_ultima, activo ? ventanita(ctx, "hoja", 13) : app(ctx, 23));
             }
             manager.updateAppWidget(id, vista);
         }
