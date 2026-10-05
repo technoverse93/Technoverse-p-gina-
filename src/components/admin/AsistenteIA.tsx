@@ -465,7 +465,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
       {!!m.fuentes?.length && (
         <div className="ai-fuentes">
           {m.fuentes.map((f, i) => (
-            <a key={i} href={f.url} target="_blank" rel="noopener noreferrer"><b>{i + 1}</b>{f.titulo || 'Fuente'}</a>
+            <a key={i} href={f.url} target="_blank" rel="noopener noreferrer"><b>{i + 1}</b><span>{f.titulo || 'Fuente'}</span></a>
           ))}
         </div>
       )}
