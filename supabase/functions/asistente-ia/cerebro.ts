@@ -275,6 +275,25 @@ export function crearCerebro(admin: Db, uid: string) {
         .filter(n => n.tipo !== 'recuerdo' && n.resumen && nombre(n).length >= 3 && msg.includes(` ${nombre(n)} `))
         .filter(n => !(esOrden && n.fuente === 'internet'))
         .sort((x, y) => nombre(y).length - nombre(x).length || y.usos - x.usos).slice(0, 4);
+      // Además, por PALABRAS: lo que comparte palabras importantes con el
+      // mensaje (en el nombre pesa más que en el resumen). Así Jarvis revisa
+      // primero lo que ya sabe aunque no se nombre el tema tal cual.
+      const VACIAS = new Set('para como cual cuál cuales donde cuando cuanto cuánto cuantos sobre tiene tienen tengo hacer hace esta este esto estos estas eso esos esas porque pero algo alguna alguno todo toda todos todas muy mas más menos desde hasta entre ahora hoy ayer mañana quiero queres querés podes podés puede pueden decime dime sabes sabés saber jarvis favor también tambien cosa cosas'.split(' '));
+      const palabras = [...new Set(normalizar(texto).split(/[^a-z0-9ñ]+/).filter(w => w.length >= 4 && !VACIAS.has(w)))];
+      if (palabras.length) {
+        const ya = new Set(directos.map(n => n.id));
+        const puntuados = ((nodos || []) as Nodo[])
+          .filter(n => !ya.has(n.id) && n.tipo !== 'recuerdo' && n.resumen && !(esOrden && n.fuente === 'internet'))
+          .map(n => {
+            const et = normalizar(n.etiqueta), res = normalizar(n.resumen || '');
+            let p = 0;
+            for (const w of palabras) { if (et.includes(w)) p += 3; else if (res.includes(w)) p += 1; }
+            return { n, p };
+          })
+          .filter(x => x.p >= 3 || (x.p >= 2 && palabras.length <= 3))
+          .sort((x, y) => y.p - x.p || y.n.usos - x.n.usos).slice(0, Math.max(0, 6 - directos.length));
+        directos.push(...puntuados.map(x => x.n));
+      }
       if (!directos.length) return { bloque: '', usados: [] };
       const ids = directos.map(n => n.id);
       const { data: enl } = await admin.from('jarvis_enlaces').select('origen,destino,relacion')

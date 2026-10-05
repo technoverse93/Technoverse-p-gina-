@@ -70,6 +70,8 @@ interface Mensaje {
   escalado?: boolean;
   /** Segundos de la nota de voz, si el mensaje se dictó (solo en vivo). */
   porVoz?: number;
+  /** Cuándo se dijo (para los separadores de día de Jarvis). */
+  creado_en?: string;
 }
 interface Adjunto { nombre: string; tipo: string; datos: string; vista?: string }
 interface Cupo {
@@ -159,7 +161,7 @@ async function prepararArchivo(f: File): Promise<Adjunto | null> {
 }
 
 /** «gemini-3.8-flash» → «Gemini 3.8 Flash». */
-const NOMBRE_PROVEEDOR: Record<string, string> = { groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', local: 'servidor propio' };
+const NOMBRE_PROVEEDOR: Record<string, string> = { groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', local: 'servidor propio', gemma: 'Gemma', cerebro: 'su cerebro' };
 /** Quién respondió: el modelo de Gemini o la IA de respaldo que contestó. */
 function nombreModelo(m?: string | null, proveedor?: string | null): string {
   if (proveedor && proveedor !== 'gemini') return `${NOMBRE_PROVEEDOR[proveedor] || proveedor} (respaldo)`;
@@ -181,7 +183,7 @@ function nombreModelo(m?: string | null, proveedor?: string | null): string {
 const COLUMNAS_BASE = 'id,rol,texto,fuentes,consultas,tokens_in,tokens_out,proveedor,modelo,busco';
 // perfil/persona/ms llegaron con Jarvis; si la base todavía no los tiene,
 // se cae a las columnas de siempre en vez de no mostrar nada.
-let COLUMNAS_MSG = `${COLUMNAS_BASE},perfil,persona,ms,valoracion`;
+let COLUMNAS_MSG = `${COLUMNAS_BASE},perfil,persona,ms,valoracion,creado_en`;
 const CLAVE_CACHE = 'tv_ia_cache';
 const MAX_EN_CACHE = 12;
 const cache = new Map<string, Mensaje[]>();
@@ -217,13 +219,14 @@ function quitarDeCache(id: string) {
 function leerMensajes(id: string): Promise<Mensaje[] | null> {
   const ya = enVuelo.get(id);
   if (ya) return ya;
-  const leer = () => supabase.from('ia_mensajes').select(COLUMNAS_MSG).eq('conversacion_id', id).order('creado_en', { ascending: true });
+  // El hilo de Jarvis es uno solo y crece siempre: se traen los últimos 120.
+  const leer = () => supabase.from('ia_mensajes').select(COLUMNAS_MSG).eq('conversacion_id', id).order('creado_en', { ascending: false }).limit(120);
   const p = Promise.resolve(leer()).then(async r => {
     if (r.error && COLUMNAS_MSG !== COLUMNAS_BASE && /column|columna/i.test(r.error.message)) { COLUMNAS_MSG = COLUMNAS_BASE; return await leer(); }
     return r;
   }).then(({ data, error }) => {
     if (error) return null;
-    const ms = (data as unknown as Mensaje[]) || [];
+    const ms = ((data as unknown as Mensaje[]) || []).slice().reverse();
     guardarEnCache(id, ms);
     return ms;
   }).finally(() => enVuelo.delete(id));
@@ -555,8 +558,12 @@ async function enviarEnVivo(cuerpo: Record<string, unknown>, onEvento: (evento: 
 const ListaMensajes = React.memo(function ListaMensajes({ mensajes, onCopiar, onRegenerar, onEditar, onValorar }: { mensajes: Mensaje[]; onCopiar: (t: string) => void; onRegenerar?: () => void; onEditar?: () => void; onValorar?: (id: string, v: number | null, nota?: string) => void }) {
   // Regenerar y editar solo aplican al último intercambio (como en Claude).
   const ultIA = mensajes.length - 1, ultYo = mensajes[ultIA]?.rol === 'assistant' ? ultIA - 1 : -1;
+  const jv = React.useContext(JarvisCtx);
+  // Jarvis es un solo hilo: el día se marca cuando cambia (Hoy, Ayer, 3 de octubre).
+  const dia = (m: Mensaje) => diaDe(m.creado_en || new Date().toISOString());
   return <>{mensajes.map((m, i) => (
     <React.Fragment key={m.id}>
+      {jv && (i === 0 || dia(mensajes[i - 1]) !== dia(m)) && <div className="jv-dia" role="separator"><span>{dia(m).toUpperCase()}</span></div>}
       <Burbuja m={m} onCopiar={onCopiar} onValorar={onValorar} onRegenerar={i === ultIA && m.rol === 'assistant' ? onRegenerar : undefined} onEditar={i === ultYo ? onEditar : undefined} />
     </React.Fragment>
   ))}</>;
@@ -730,6 +737,14 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     if (data?.ok) setCupo(data.cupo);
   }, [setCupo]);
   useEffect(() => { void cargarConvs(); void cargarCupo(); }, [cargarConvs, cargarCupo]);
+  // Jarvis no tiene lista de conversaciones: siempre está en su hilo, que es
+  // el más reciente (el servidor sigue ese mismo, también desde el widget).
+  // (Solo si no hay hilo abierto o el abierto ya no está: así una respuesta
+  // recién creada no se cambia por la lista vieja.)
+  useEffect(() => {
+    if (!jarvis || !convs[0]?.id || enviando) return;
+    if (!activa || !convs.some(c => c.id === activa)) setActiva(convs[0].id);
+  }, [jarvis, convs, activa, enviando, setActiva]);
 
   useEffect(() => {
     if (!activa) { setMensajes([]); setCargandoConv(false); return; }
@@ -1135,7 +1150,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     <VerCerebroCtx.Provider value={jarvis ? verCerebro : undefined}>
     <JarvisCtx.Provider value={jarvis}>
     <div className="ai-root" id="view-asistente" data-jarvis={jarvis || undefined} data-vista={vista}>
-      <aside className="ai-lado">{listaConvs}</aside>
+      {!jarvis && <aside className="ai-lado">{listaConvs}</aside>}
 
       <section className="ai-panel">
         <header className="ai-ch">
@@ -1148,7 +1163,8 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             </>
           ) : (
             <>
-              <button type="button" className="ai-menu" aria-label="Conversaciones" onClick={() => setCajon('historial')}><Menu className="w-5 h-5" /></button>
+              {/* Jarvis es un solo asistente: sin lista de conversaciones. */}
+              {!jarvis && <button type="button" className="ai-menu" aria-label="Conversaciones" onClick={() => setCajon('historial')}><Menu className="w-5 h-5" /></button>}
               {jarvis ? (
                 <button type="button" className="jv-tit" data-menu-btn
                   aria-haspopup="menu" aria-expanded={menu === 'persona'} aria-label={`Modo: ${persona === 'arquitecto' ? 'Arquitecto' : 'Jarvis'}. Cambiar`}
