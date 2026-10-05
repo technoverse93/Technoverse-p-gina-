@@ -86,7 +86,8 @@ type Motor = { decir: (texto: string) => Promise<void>; callar: () => void };
 let motorNativo: Promise<Motor | null> | null = null;
 function nativo(): Promise<Motor | null> {
   if (!motorNativo) motorNativo = (async () => {
-    if (!Capacitor.isNativePlatform()) return null;
+    // En una APK vieja (sin el complemento) se usa la voz del navegador.
+    if (!Capacitor.isNativePlatform() || !Capacitor.isPluginAvailable('TextToSpeech')) return null;
     try {
       const { TextToSpeech } = await import('@capacitor-community/text-to-speech');
       // El primer español que tenga el teléfono, empezando por el de acá.
@@ -147,7 +148,7 @@ async function motor(): Promise<Motor | null> {
 
 /** ¿Este aparato puede hablar? (para mostrar o no los controles) */
 export function puedeHablar(): boolean {
-  return Capacitor.isNativePlatform() || (typeof window !== 'undefined' && 'speechSynthesis' in window);
+  return (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('TextToSpeech')) || (typeof window !== 'undefined' && 'speechSynthesis' in window);
 }
 
 // ------------------------- el lector -------------------------

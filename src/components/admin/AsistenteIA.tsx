@@ -1391,6 +1391,14 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
           <span>Si Google falla, pasar sola a otra IA (Groq y demás)</span>
           <button type="button" role="switch" aria-checked={aj.respaldo} className="ai-sw" data-on={aj.respaldo || undefined} onClick={() => void guardar({ respaldo: !aj.respaldo })} aria-label="Usar respaldo" />
         </div>
+        {/* Estado real de las claves (lo dice el servidor, sin mostrar la clave). */}
+        {cupo?.respaldos && (
+          <p className="ai-respaldo-estado" data-ok={cupo.respaldos.length > 0 || undefined}>
+            {cupo.respaldos.length
+              ? <><Check className="w-3.5 h-3.5" />IAs de respaldo listas: {cupo.respaldos.join(', ')}.</>
+              : <><TriangleAlert className="w-3.5 h-3.5" />Falta la clave de respaldo: en Supabase → Edge Functions → Secrets tiene que existir «GROQ_API_KEY» (con ese nombre exacto).</>}
+          </p>
+        )}
         <div className="ai-campo">
           <span>Quién puede usarlo</span>
           <span className="ai-seg">

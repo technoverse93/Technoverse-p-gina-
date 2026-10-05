@@ -2906,6 +2906,10 @@ button.jv-arbol-abrir:hover{background:var(--bg-sunken);color:var(--text-primary
 .jv-det-acc .ai-chip[data-peligro]{background:var(--jv-peligro);color:var(--jv-peligro-ink);border-color:transparent}
 .jv-det-acc .ai-chip[data-primario]{background:var(--accent);color:#fff;border-color:transparent}
 .ai-mem[data-cerebro] .ai-chip{flex:none}
+/* Ajustes → estado de las IAs de respaldo */
+.ai-respaldo-estado{display:flex;align-items:flex-start;gap:6px;margin:0;padding:0 14px 10px;font-size:12.5px;line-height:1.45;color:var(--jv-peligro)}
+.ai-respaldo-estado[data-ok]{color:var(--ok)}
+.ai-respaldo-estado svg{flex:none;margin-top:2px}
 /* Ajustes → Mini-widget del teléfono */
 .ai-mw-acc{display:flex;flex-wrap:wrap;gap:8px;padding:2px 14px 12px}
 .ai-mw-acc .ai-chip[data-primario]{background:var(--accent);color:#fff;border-color:transparent}
