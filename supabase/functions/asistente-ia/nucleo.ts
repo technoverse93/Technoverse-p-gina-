@@ -402,8 +402,20 @@ async function preguntarGemini(historial: Turno[], modelo: string, sis: Sistema)
     if (funciones.length && incorporadas.length && ronda < sis.rondas) cuerpo.toolConfig = { includeServerSideToolInvocations: true };
     const restante = sis.limite - Date.now();
     if (restante < 3000) throw new CupoAgotado('sin tiempo');
-    const r = await conTope(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(cuerpo) }, Math.min(sis.intento, restante))
+    let r = await conTope(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(cuerpo) }, Math.min(sis.intento, restante))
       .catch(e => { if (e instanceof CupoAgotado) pausar(modelo, 503); throw e; });
+    // Algunos modelos (el Flash más nuevo) no aceptan «minimal»: se repite
+    // la ronda con el nivel más bajo que sí aceptan en vez de fallar.
+    if (r.status === 400) {
+      const det = await r.clone().text().catch(() => '');
+      if (/thinking level/i.test(det)) {
+        cuerpo.generationConfig = { thinkingConfig: { thinkingLevel: 'low' } };
+        const resta = sis.limite - Date.now();
+        if (resta < 3000) throw new CupoAgotado('sin tiempo');
+        r = await conTope(url, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave }, body: JSON.stringify(cuerpo) }, Math.min(sis.intento, resta))
+          .catch(e => { if (e instanceof CupoAgotado) pausar(modelo, 503); throw e; });
+      }
+    }
     if (!r.ok || !r.body) {
       const det = await r.text().catch(() => '');
       console.log(`gemini ${modelo} ronda=${ronda} -> ${r.status}: ${det.slice(0, 300)}`);
@@ -485,8 +497,29 @@ async function preguntarGemini(historial: Turno[], modelo: string, sis: Sistema)
 type IdProv = 'groq' | 'cerebras' | 'openrouter' | 'local';
 type Compatible = { id: IdProv; url: string; clave: string | null; modelo: string };
 const NOMBRE_PROV: Record<IdProv, string> = { groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', local: 'el servidor propio' };
+/**
+ * La clave de Groq. Primero el nombre de siempre; si no está, cualquier
+ * secreto cuyo NOMBRE diga «groq» y cuyo valor parezca una clave de Groq
+ * («gsk_…»): así un nombre con otra mayúscula o un espacio no deja a
+ * Jarvis sin respaldo (pasó en producción, 2026-10-05).
+ */
+function claveGroq(): string | null {
+  const directa = (Deno.env.get('GROQ_API_KEY') || '').trim();
+  if (directa) return directa;
+  try {
+    for (const [nombre, valor] of Object.entries(Deno.env.toObject())) {
+      const v = String(valor || '').trim();
+      if (/groq/i.test(nombre) && /^gsk_/.test(v)) return v;
+    }
+  } catch { /* sin permiso para listar: queda el nombre de siempre */ }
+  return null;
+}
+/** Nombres (nunca valores) de secretos que mencionan Groq, para el aviso de Ajustes. */
+function nombresGroq(): string[] {
+  try { return Object.keys(Deno.env.toObject()).filter(n => /groq/i.test(n)).slice(0, 5); } catch { return []; }
+}
 function proveedorGroq(): Compatible | null {
-  const clave = Deno.env.get('GROQ_API_KEY');
+  const clave = claveGroq();
   return clave ? { id: 'groq', url: 'https://api.groq.com/openai/v1', clave, modelo: GROQ_MODEL } : null;
 }
 function proveedorLocal(): Compatible | null {
@@ -600,7 +633,7 @@ async function transcribir(audio: string, tipo: string): Promise<string | null> 
 
 /** Respaldo de la voz: Whisper en Groq (gratis, muy rápido). */
 async function transcribirGroq(audio: string, tipo: string): Promise<string | null> {
-  const clave = Deno.env.get('GROQ_API_KEY');
+  const clave = claveGroq();
   if (!clave || !disponibleModelo('groq:voz')) return null;
   try {
     const bytes = Uint8Array.from(atob(audio), c => c.charCodeAt(0));
@@ -683,7 +716,7 @@ export async function atender(req: Request): Promise<Response> {
       // La búsqueda en Google no está en el plan gratis y no se combina con
       // las consultas al sistema: queda apagada.
       busqueda: false, respaldo: ajustes?.respaldo !== false, groqConfigurado: proveedoresRespaldo().length > 0,
-      respaldos: proveedoresRespaldo().map(p => NOMBRE_PROV[p.id]),
+      respaldos: proveedoresRespaldo().map(p => NOMBRE_PROV[p.id]), secretosGroq: nombresGroq(),
       modulos: [...new Set(disponibles(ajustes?.modulos, esSuper).map(h => h.modulo))],
       busquedaWeb: !!Deno.env.get('TAVILY_API_KEY') && mods.internet !== false,
       busquedasMes, cupoBusquedas: Number(Deno.env.get('CUPO_TAVILY_MES') || 1000),
@@ -1005,6 +1038,11 @@ export async function atender(req: Request): Promise<Response> {
 [Orden] Dueño: «Pasá la de Laura a Lista» → «Listo, TKT-104 de Laura quedó en Lista. ¿Le aviso por el chat que ya puede pasar?»`;
       }
     }
+
+    // Desde el mini-widget del teléfono la respuesta se lee en un recuadro
+    // chico (y muchas veces en voz alta): corta y sin tablas. Las acciones
+    // siguen igual que en la app.
+    if (cuerpo?.desde === 'widget') extra += `\n\nESTÁS EN EL MINI-WIDGET DEL TELÉFONO (un recuadro chico en la pantalla de inicio, que muchas veces se escucha en voz alta): respondé corto y directo, de 1 a 4 frases, sin tablas ni títulos. Las cifras, completas. Si preparás una acción que pide confirmación, decí en una frase qué preparaste: el dueño la confirma tocando «Abrir conversación» en el widget.`;
 
     // ---------------------------------------------------------------
     // Conversación con la IA. `emitir` manda eventos en vivo si el panel

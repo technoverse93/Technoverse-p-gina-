@@ -118,3 +118,50 @@ html.tv-ventanita #root { height: 100%; }
 @media (prefers-reduced-motion: reduce) {
   .jv-hoja.vj-hoja { animation: none; }
 }
+
+/* ---------------------------------------------------------------------
+   EN EL RECUADRO DEL WIDGET
+   Por voz no se ve nada aquí (la respuesta sale en el widget). Para
+   escribir, solo esta barrita sobre el teclado: Android no deja escribir
+   dentro de un widget.
+   --------------------------------------------------------------------- */
+.vj-barra {
+  position: fixed;
+  left: 8px;
+  right: 8px;
+  bottom: calc(8px + env(safe-area-inset-bottom, 0px));
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  padding: 8px;
+  border-radius: 22px;
+  border: 1px solid var(--border-color);
+  background: var(--bg-surface);
+  box-shadow: 0 -6px 30px rgba(0, 0, 0, .25), 0 16px 40px rgba(0, 0, 0, .3);
+  animation: vj-sube .18s ease-out both;
+}
+@media (min-width: 640px) { .vj-barra { left: 0; right: 0; margin: 0 auto; width: min(560px, calc(100vw - 32px)); } }
+.vj-barra-marca { flex: none; width: 36px; height: 36px; border-radius: 50%; display: grid; place-items: center; background: var(--bg-sunken); color: var(--accent); }
+.vj-barra textarea {
+  flex: 1;
+  min-width: 0;
+  min-height: 36px;
+  max-height: 120px;
+  resize: none;
+  border: 0;
+  outline: none;
+  background: transparent;
+  color: var(--text-primary);
+  font-size: 15px;
+  line-height: 1.4;
+  padding: 8px 4px;
+}
+.vj-barra textarea::placeholder { color: var(--text-muted); }
+#admin-panel-root .vj-barra-btn,
+#admin-panel-root .vj-barra-env { flex: none; width: 36px; height: 36px; min-width: 0; min-height: 0; border-radius: 50%; display: grid; place-items: center; color: var(--text-secondary); }
+#admin-panel-root .vj-barra-env { background: var(--accent); color: #fff; }
+#admin-panel-root .vj-barra-env:disabled { opacity: .45; }
+#admin-panel-root .vj-barra-btn:focus-visible,
+#admin-panel-root .vj-barra-env:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+.vj-barra-espera { flex: 1; align-self: center; font-size: 14px; color: var(--text-secondary); }
+@media (prefers-reduced-motion: reduce) { .vj-barra { animation: none; } }

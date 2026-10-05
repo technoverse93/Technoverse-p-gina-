@@ -256,8 +256,9 @@ jobs:
       # Igual que el resto de lo nativo: android/ nace de cero en cada
       # corrida, así que el widget vive en `native-android/jarvis/` y se
       # copia aquí:
-      #   · JarvisWidget: el widget (barra para escribir, micrófono y la
-      #     última respuesta).
+      #   · JarvisWidget: el widget, que se usa en el propio recuadro
+      #     (micrófono, barra para escribir, chico o grande con la
+      #     conversación) y JarvisWidgetLista, la lista que se desliza.
       #   · JarvisRapido: la ventanita que se abre ENCIMA de la pantalla de
       #     inicio: un segundo puente de Capacitor con la página liviana
       #     jarvis-rapido.html, el mismo Jarvis de la app con la misma
@@ -289,6 +290,7 @@ jobs:
                   '            </intent-filter>\n'
                   '            <meta-data android:name="android.appwidget.provider" android:resource="@xml/widget_jarvis_info" />\n'
                   '        </receiver>\n'
+                  '        <service android:name=".JarvisWidgetLista" android:permission="android.permission.BIND_REMOTEVIEWS" android:exported="false" />\n'
                   '    </application>'
               )
               if '</application>' not in texto:

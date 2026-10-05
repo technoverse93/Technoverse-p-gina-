@@ -29,8 +29,8 @@ import java.security.KeyStore;
  */
 @CapacitorPlugin(name = "JarvisWidget")
 public class JarvisWidgetPlugin extends Plugin {
-    /** La web la compara: la APK del widget con llave no la mandaba. */
-    static final int VERSION = 2;
+    /** La web la compara: 3 = Jarvis con sesión, usable en el propio recuadro. */
+    static final int VERSION = 3;
 
     private int pedidos = 0;
 
@@ -60,6 +60,9 @@ public class JarvisWidgetPlugin extends Plugin {
         r.put("activo", JarvisWidget.activo(getContext()));
         r.put("enVentanita", getActivity() instanceof JarvisRapido);
         r.put("version", VERSION);
+        if (getActivity() instanceof JarvisRapido) r.put("modo", ((JarvisRapido) getActivity()).modo());
+        String conv = JarvisWidget.prefs(getContext()).getString(JarvisWidget.CONVERSACION, null);
+        if (conv != null) r.put("conversacion", conv);
         call.resolve(r);
     }
 
@@ -106,36 +109,60 @@ public class JarvisWidgetPlugin extends Plugin {
         cerrarVentanita();
     }
 
-    /** La última pregunta y respuesta, para verla en el widget sin abrir nada. */
+    /** La pregunta y la respuesta quedan en la conversación del widget. */
     @PluginMethod
     public void ultimaRespuesta(PluginCall call) {
         String respuesta = JarvisWidget.textoPlano(call.getString("respuesta", ""));
         if (respuesta.isEmpty()) {
+            JarvisWidget.avisar(getContext(), "");
             call.resolve();
             return;
         }
-        JarvisWidget.prefs(getContext()).edit()
-            .putString("ultima_pregunta", recortar(call.getString("pregunta", ""), 300))
-            .putString("ultima_respuesta", recortar(respuesta, 600))
-            .putLong("ultima_hora", System.currentTimeMillis())
-            .apply();
-        JarvisWidget.actualizar(getContext());
+        JarvisWidget.anotar(getContext(), recortar(call.getString("pregunta", ""), 300), recortar(respuesta, 1500),
+            call.getString("conversacion", null), Boolean.TRUE.equals(call.getBoolean("accion", false)));
         call.resolve();
     }
 
+    /** La línea de estado del widget («Pensando…»); vacía la quita. */
+    @PluginMethod
+    public void avisar(PluginCall call) {
+        JarvisWidget.avisar(getContext(), recortar(call.getString("texto", ""), 60));
+        call.resolve();
+    }
+
+    /** Mientras contesta en el widget, la ventanita deja pasar los toques. */
+    @PluginMethod
+    public void soltar(PluginCall call) {
+        call.resolve();
+        if (getActivity() instanceof JarvisRapido) {
+            final JarvisRapido ventanita = (JarvisRapido) getActivity();
+            ventanita.runOnUiThread(ventanita::soltar);
+        }
+    }
+
     /**
-     * Cada toque al widget con la ventanita abierta (y el que la abrió) llega
-     * aquí: se avisa a la página, que con «voz» empieza a escuchar. Se
-     * retiene hasta que la página escuche, para no perder el primero.
+     * Cada toque al widget con la ventanita abierta (y el que la abrió)
+     * llega aquí y se avisa a la página. Lo dictado lo manda la ventanita
+     * cuando el teléfono termina de entenderlo (emitirPedido). Se retiene
+     * hasta que la página escuche, para no perder el primero.
      */
     @Override
     protected void handleOnNewIntent(Intent intent) {
         super.handleOnNewIntent(intent);
         if (intent == null || !(getActivity() instanceof JarvisRapido)) return;
+        String modo = JarvisRapido.modoDe(intent);
+        if ("voz".equals(modo)) return;
+        if ("hoja".equals(modo)) JarvisWidget.prefs(getContext()).edit().putBoolean(JarvisWidget.ACCION, false).apply();
+        emitirPedido(modo, null);
+    }
+
+    void emitirPedido(String modo, String texto) {
         pedidos++;
         JSObject p = new JSObject();
-        p.put("voz", intent.getBooleanExtra(JarvisRapido.EXTRA_VOZ, false));
+        p.put("modo", modo);
+        p.put("voz", "voz".equals(modo));
         p.put("n", pedidos);
+        if (texto != null) p.put("texto", texto);
         notifyListeners("pedido", p, true);
     }
 

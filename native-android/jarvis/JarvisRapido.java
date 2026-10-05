@@ -1,45 +1,70 @@
 package com.technoverse.admin;
 
+import android.content.ActivityNotFoundException;
+import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.speech.RecognizerIntent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
 import android.webkit.WebView;
 
 import androidx.activity.OnBackPressedCallback;
+import androidx.activity.result.ActivityResult;
+import androidx.activity.result.ActivityResultLauncher;
+import androidx.activity.result.contract.ActivityResultContracts;
 
 import com.getcapacitor.BridgeActivity;
 import com.getcapacitor.CapConfig;
+import com.getcapacitor.PluginHandle;
 
 import java.lang.reflect.Field;
+import java.util.ArrayList;
 
 /**
- * Ventanita del mini-widget de Jarvis, ENCIMA de la pantalla de inicio.
+ * Lo que hay detrás del mini-widget de Jarvis: el MISMO Jarvis de la app con
+ * la MISMA sesión (lo pidió el dueño: «hacer todo como lo haría con mi
+ * sesión», sin huella y sin ventanas emergentes; el teléfono es solo suyo).
+ * Es un segundo puente de Capacitor con la página liviana jarvis-rapido.html
+ * (src/rapido.tsx), que comparte con la app el almacenamiento (la sesión) y
+ * la versión OTA instalada.
  *
- * Es el MISMO Jarvis de la app con la MISMA sesión (lo pidió el dueño:
- * «hacer todo como lo haría con mi sesión», sin huella; el teléfono es solo
- * suyo): un segundo puente de Capacitor que abre la página liviana
- * jarvis-rapido.html (src/rapido.tsx) en vez de la app entera. Comparte con
- * la app el almacenamiento (la sesión) y la versión OTA instalada, así que
- * cobra, responde chats, mueve el taller y ajusta inventario por los mismos
- * caminos que la app.
+ * Tres modos (EXTRA_MODO):
+ *  · «voz»: solo el dictado del teléfono. No se ve nada propio: la pregunta
+ *    va a Jarvis y la respuesta sale en el widget (y se lee). Mientras
+ *    contesta, esta ventana no tapa nada: los toques pasan a la pantalla
+ *    de inicio.
+ *  · «escribir»: una barrita sobre el teclado (Android no deja escribir
+ *    dentro de un widget); la respuesta vuelve al widget.
+ *  · «hoja»: Jarvis completo, para confirmar acciones o ver tablas.
  *
- * La página decide si puede abrir: el widget activado en este teléfono (la
- * marca que pone JarvisWidgetPlugin.activar desde la app), la sesión del
- * superadmin y sin bloqueo de aparato. El candado de huella de la app no se
- * toca: la app sigue pidiéndola como siempre.
- *
- * Fondo transparente con la pantalla de inicio oscurecida detrás. Atrás, la
- * X o tocar fuera de la hoja la cierran. Sin capturas de pantalla
- * (FLAG_SECURE), como la app.
+ * La página decide si puede abrir: widget activado en este teléfono, sesión
+ * del superadmin y sin bloqueo de aparato. El candado de huella de la app no
+ * se toca. Sin capturas de pantalla (FLAG_SECURE), como la app.
  */
 public class JarvisRapido extends BridgeActivity {
+    static final String EXTRA_MODO = "modo";
+    /** Widgets puestos antes del modo «voz»: se leían con este dato. */
     static final String EXTRA_VOZ = "voz";
     static final String PAGINA = "/jarvis-rapido.html";
 
     private boolean conPagina = false;
+    private boolean creada = false;
+    private String modo = "hoja";
+    private ActivityResultLauncher<Intent> dictado;
+
+    static String modoDe(Intent intent) {
+        if (intent == null) return "hoja";
+        String m = intent.getStringExtra(EXTRA_MODO);
+        if ("voz".equals(m) || "escribir".equals(m) || "hoja".equals(m)) return m;
+        return intent.getBooleanExtra(EXTRA_VOZ, false) ? "voz" : "hoja";
+    }
+
+    String modo() {
+        return modo;
+    }
 
     @Override
     public void onCreate(Bundle savedInstanceState) {
@@ -47,12 +72,12 @@ public class JarvisRapido extends BridgeActivity {
         // lee la configuración (con la página de inicio de la ventanita).
         registerPlugin(JarvisWidgetPlugin.class);
         config = configConPagina();
+        modo = modoDe(getIntent());
         super.onCreate(savedInstanceState);
+        dictado = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::alDictar);
 
         Window ventana = getWindow();
         ventana.setBackgroundDrawable(new ColorDrawable(Color.TRANSPARENT));
-        ventana.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-        ventana.setDimAmount(0.5f);
         ventana.addFlags(WindowManager.LayoutParams.FLAG_SECURE);
 
         final WebView vista = getBridge() != null ? getBridge().getWebView() : null;
@@ -75,6 +100,85 @@ public class JarvisRapido extends BridgeActivity {
                 cerrar();
             }
         });
+
+        creada = true;
+        aplicarModo();
+        if ("voz".equals(modo)) dictar();
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        // La primera vez la llama el propio puente al arrancar: eso ya lo
+        // resuelve onCreate.
+        if (!creada || intent == null) return;
+        setIntent(intent);
+        modo = modoDe(intent);
+        aplicarModo();
+        if ("voz".equals(modo)) dictar();
+    }
+
+    /** Cuánto se oscurece y si la ventana recibe toques, según el modo. */
+    private void aplicarModo() {
+        Window ventana = getWindow();
+        ventana.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+        if ("voz".equals(modo)) {
+            ventana.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        } else {
+            ventana.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            ventana.setDimAmount("escribir".equals(modo) ? 0.3f : 0.5f);
+        }
+    }
+
+    /** Deja de tapar: los toques pasan a la pantalla de inicio mientras Jarvis contesta. */
+    void soltar() {
+        Window ventana = getWindow();
+        ventana.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        ventana.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+    }
+
+    /** El dictado del propio teléfono (el de Google): solo su cartelito. */
+    private void dictar() {
+        JarvisWidget.avisar(this, "Escuchando…");
+        Intent pedir = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
+        pedir.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
+        pedir.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-CR");
+        pedir.putExtra(RecognizerIntent.EXTRA_PROMPT, "Hablale a Jarvis");
+        try {
+            dictado.launch(pedir);
+        } catch (ActivityNotFoundException e) {
+            // Sin dictado en este teléfono: se ofrece escribir.
+            JarvisWidget.avisar(this, "");
+            modo = "escribir";
+            aplicarModo();
+            JarvisWidgetPlugin p = plugin();
+            if (p != null) p.emitirPedido("escribir", null);
+        }
+    }
+
+    private void alDictar(ActivityResult resultado) {
+        String texto = null;
+        Intent datos = resultado != null ? resultado.getData() : null;
+        if (datos != null) {
+            ArrayList<String> dichos = datos.getStringArrayListExtra(RecognizerIntent.EXTRA_RESULTS);
+            if (dichos != null && !dichos.isEmpty()) texto = dichos.get(0);
+        }
+        if (texto == null || texto.trim().isEmpty()) {
+            JarvisWidget.avisar(this, "");
+            cerrar();
+            return;
+        }
+        JarvisWidget.avisar(this, "Pensando…");
+        soltar();
+        JarvisWidgetPlugin p = plugin();
+        if (p != null) p.emitirPedido("voz", texto.trim());
+        else cerrar();
+    }
+
+    private JarvisWidgetPlugin plugin() {
+        if (getBridge() == null) return null;
+        PluginHandle h = getBridge().getPlugin("JarvisWidget");
+        return h != null && h.getInstance() instanceof JarvisWidgetPlugin ? (JarvisWidgetPlugin) h.getInstance() : null;
     }
 
     /** Cierra la ventanita y su tarea (no queda en «Recientes»). */

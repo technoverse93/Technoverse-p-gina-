@@ -76,7 +76,7 @@ export default function MiniWidgetAjustes() {
         <span className="ai-modu-ic"><Smartphone className="w-4 h-4" /></span>
         <span className="ai-modu-t">
           <b>{titulo}</b>
-          <span>Una ventanita sobre la pantalla de inicio con Jarvis completo y tu sesión: preguntás, cobrás, respondés chats, movés el taller y ajustás inventario igual que aquí, sin huella. Bloquear o cerrar sesiones te sigue pidiendo confirmación.</span>
+          <span>Jarvis en tu pantalla de inicio, con tu sesión y sin huella: le hablás desde el widget y la respuesta sale ahí mismo; se agranda para ver la conversación. «Abrir conversación» da Jarvis completo para cobrar, responder chats, mover el taller o ajustar inventario. Bloquear o cerrar sesiones te sigue pidiendo confirmación.</span>
         </span>
       </div>
       {nativo && !apkVieja && estado && (
