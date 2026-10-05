@@ -2734,7 +2734,7 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
 #admin-panel-root .jv-fab:hover{filter:brightness(1.08)}
 #admin-panel-root .jv-fab:active{transform:scale(.95)}
 @media (min-width:640px){#admin-panel-root .jv-fab{left:20px;bottom:20px}}
-.jv-hoja{position:fixed;left:8px;right:8px;top:calc(8px + env(safe-area-inset-top,0px));bottom:calc(8px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;border-radius:22px;overflow:hidden;border:1px solid var(--border-color);box-shadow:0 24px 60px rgba(0,0,0,.3);background:var(--bg-surface)}
+.jv-hoja{position:fixed;left:8px;right:8px;top:var(--tv-borde-cab,calc(72px + env(safe-area-inset-top,0px)));bottom:calc(8px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;border-radius:22px;overflow:hidden;border:1px solid var(--border-color);box-shadow:0 24px 60px rgba(0,0,0,.3);background:var(--bg-surface)}
 .jv-hoja[hidden]{display:none}
 @media (min-width:640px){.jv-hoja{left:20px;right:auto;top:auto;bottom:20px;width:min(440px,calc(100vw - 40px));height:min(720px,calc(100dvh - 108px))}}
 .jv-hoja-cab{display:flex;align-items:center;gap:4px;height:36px;padding:0 6px 0 12px;border-bottom:1px solid var(--border-color);background:var(--bg-sunken);flex:none}
@@ -2744,3 +2744,34 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
 .jv-hoja-cuerpo{flex:1;min-height:0;display:flex;padding:6px}
 .jv-hoja-cuerpo .ai-root{flex:1;min-height:0;height:auto}
 .jv-hoja-cuerpo .ai-panel{border-radius:16px}
+
+/* =====================================================================
+   NADA ENCIMA DE NADA (A12 y cualquier teléfono)
+   ---------------------------------------------------------------------
+   · El menú de la cuenta crecía con su texto más largo («Hay una
+     actualización descargada…», solo en la APK) y se salía de la pantalla
+     hacia la izquierda. Ahora tiene ancho y alto máximos, y si no cabe,
+     se desplaza por dentro.
+   · Los botones flotantes (Jarvis abajo a la izquierda, chat abajo a la
+     derecha) dejaban el final de cada módulo debajo de ellos: el módulo
+     reserva ese espacio al final para poder subir lo último a la vista.
+   ===================================================================== */
+#admin-panel-root .tv-menu{width:max-content;max-width:min(300px,calc(100vw - 24px));max-height:calc(100dvh - var(--tv-borde-cab,72px) - 16px);overflow-y:auto;overscroll-behavior:contain}
+#admin-panel-root .tv-menu > div:first-child{white-space:normal;overflow-wrap:anywhere}
+@media (max-width:639px){
+  #admin-panel-root .tv-scroll:not([data-pantalla='completa']) > .tv-container{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
+}
+
+/* ---------- Cerebro de Jarvis ---------- */
+.jv-cerebro{margin:12px;border:1px solid var(--border-color);border-radius:18px;background:var(--bg-surface);overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr)}
+.jv-cerebro-cab{display:flex;align-items:center;gap:10px;padding:12px 12px 6px}
+.jv-cerebro-tt{flex:1;min-width:0;display:grid;gap:2px}
+.jv-cerebro-tt b{font-size:14px;color:var(--text-primary)}
+.jv-cerebro-tt span{font-size:12.5px;color:var(--text-secondary);line-height:1.4}
+.jv-cerebro-lienzo{position:relative;width:100%;aspect-ratio:4/3;max-height:520px;touch-action:manipulation}
+.jv-cerebro-lienzo canvas{display:block;cursor:pointer}
+.jv-cerebro-vacio{position:absolute;inset:0;display:grid;place-items:center;margin:0;font-size:13px;color:var(--text-muted)}
+.jv-cerebro-foco{margin:0 12px 8px;padding:8px 10px;border-radius:10px;background:var(--bg-sunken);font-size:12.5px;color:var(--text-primary);line-height:1.45;overflow-wrap:anywhere}
+.jv-cerebro-cifras{display:flex;flex-wrap:wrap;gap:6px 14px;padding:4px 12px 8px;font-size:12px;color:var(--text-secondary)}
+.jv-cerebro-cifras b{color:var(--text-primary);font-variant-numeric:tabular-nums}
+.jv-cerebro-nota{margin:0;padding:8px 12px 12px;border-top:1px solid var(--border-soft);font-size:12px;color:var(--text-muted);line-height:1.45}

@@ -21,7 +21,8 @@
 // así lo que se aprueba es exactamente lo que se instala.
 // =====================================================================
 
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useUnaSolaCapa } from '../admin/capaFlotante';
 import { MessageSquare, Minus } from 'lucide-react';
 import { ChatConversation, User } from '../../types';
 import { Z } from '../ui/Overlays';
@@ -60,7 +61,7 @@ function ultimaActividad(c: ChatConversation): number {
   return m ? new Date(m.timestamp).getTime() : (c.updatedAt ? new Date(c.updatedAt).getTime() : 0);
 }
 
-export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial }: { chat: ChatAdmin; oculto?: boolean; elevada?: boolean; ahoraInicial?: number }) {
+export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial, pestana }: { chat: ChatAdmin; oculto?: boolean; elevada?: boolean; ahoraInicial?: number; pestana?: string }) {
   // null = todo minimizado · 'lista' = lista completa · id = esa conversación
   const [abierta, setAbierta] = useState<string | null>(null);
   const [asomando, setAsomando] = useState<string | null>(null);
@@ -139,6 +140,9 @@ export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial }: { chat
 
   // Al entrar a la pestaña Chat se minimiza todo (allí ya está el chat entero).
   useEffect(() => { if (oculto) setAbierta(null); }, [oculto]);
+  // Una sola ventana flotante a la vez (ver capaFlotante.ts).
+  const cerrarVentana = useCallback(() => setAbierta(null), []);
+  useUnaSolaCapa('chat', abierta !== null, cerrarVentana, pestana);
 
   if (oculto) return null;
 
@@ -224,7 +228,7 @@ export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial }: { chat
       {abierta && (
         <div
           className="fixed flex flex-col glass-panel-strong rounded-[22px] overflow-hidden shadow-2xl border border-[var(--border-color)]
-                     left-2 right-[60px] top-16 bottom-4
+                     left-2 right-[60px] top-[var(--tv-borde-cab,72px)] bottom-4
                      sm:left-auto sm:top-auto sm:right-[72px] sm:bottom-5 sm:w-[360px] sm:h-[min(72vh,620px)]"
           style={{ zIndex: Z.floating }}
           role="dialog"
@@ -281,11 +285,13 @@ interface Props {
   oculto?: boolean;
   /** Más arriba, para no tapar un redactor anclado abajo (Asistente IA). */
   elevada?: boolean;
+  /** Pestaña activa: al cambiarla, la ventana se minimiza. */
+  pestana?: string;
 }
 
-export default function BurbujaChat({ currentUser, onDataChanged, oculto, elevada }: Props) {
+export default function BurbujaChat({ currentUser, onDataChanged, oculto, elevada, pestana }: Props) {
   // `avisar = false`: las notificaciones las dispara la pestaña Chat; si
   // también avisara la burbuja, cada mensaje sonaría dos veces.
   const chat = useChatAdmin(currentUser, onDataChanged, false);
-  return <BurbujaChatVista chat={chat} oculto={oculto} elevada={elevada} />;
+  return <BurbujaChatVista chat={chat} oculto={oculto} elevada={elevada} pestana={pestana} />;
 }
