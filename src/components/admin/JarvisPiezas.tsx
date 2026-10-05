@@ -225,7 +225,7 @@ export function TarjetaAccion({ id }: { id: string }) {
     setFila(f => f && { ...f, estado: 'deshecha', resultado: { ...(f.resultado || {}), deshecho: r.resultado } });
   };
 
-  const cejilla = estado === 'ejecutada' ? `Ejecutada · ${hora(fila.ejecutada_en)}` : estado === 'deshecha' ? 'Deshecha' : estado === 'cancelada' ? 'Cancelada' : estado === 'vencida' ? 'Vencida' : estado === 'fallida' ? 'Falló' : `Acción propuesta · ${t.modulo}`;
+  const cejilla = estado === 'ejecutada' ? `Ejecutada · ${hora(fila.ejecutada_en)}` : estado === 'deshecha' ? 'Deshecha' : estado === 'cancelada' ? 'Cancelada' : estado === 'vencida' ? 'Vencida' : estado === 'fallida' ? 'Falló' : `Para confirmar · ${t.modulo}`;
   const chip = estado === 'ejecutada' ? ['hecha', 'Hecho'] : estado === 'propuesta' || estado === 'ejecutando' ? [t.riesgo === 'reversible' ? 'bajo' : 'acceso', t.chip || (t.riesgo === 'acceso' ? 'Cambia el acceso' : 'Reversible')] : ['neutro', estado === 'deshecha' ? 'Revertido' : estado === 'fallida' ? 'Falló' : 'Sin cambios'];
   const puedeDeshacer = estado === 'ejecutada' && t.deshacible && !!fila.deshacer_hasta && new Date(fila.deshacer_hasta).getTime() > ahora;
   const textoFinal = estado === 'ejecutada' ? fila.resultado?.detalle : estado === 'deshecha' ? fila.resultado?.deshecho?.detalle || 'Se revirtió.'
