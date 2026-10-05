@@ -15,7 +15,7 @@ import {
   Sparkles, Plus, Lock, Globe, ArrowUp, Copy, Settings, Menu, BarChart3, Trash2, X, Clock, Info, ShieldCheck, ArrowLeft,
   Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight, ShieldAlert, Wallet, MapPin,
   Paperclip, Square, RotateCcw, Pencil, Link2, Code2, FileText,
-  Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot, ThumbsUp, ThumbsDown,
+  Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot, ThumbsUp, ThumbsDown, MessageCircleQuestion,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
@@ -628,7 +628,11 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
   const [activa, setActivaEstado] = useState<string | null>(leerActiva);
   const setActiva = useCallback((id: string | null) => { guardarActiva(id); setActivaEstado(id); }, []);
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
-  const [cupo, setCupo] = useState<Cupo | null>(null);
+  // El cupo se recuerda en esta sesión: al abrir, Jarvis aparece de una con
+  // sus controles y se actualiza por detrás (antes esperaba al servidor).
+  const claveCupo = `tv_ia_cupo:${currentUser?.id || 'anon'}`;
+  const [cupo, setCupoEstado] = useState<Cupo | null>(() => { try { return JSON.parse(sessionStorage.getItem(claveCupo) || 'null'); } catch { return null; } });
+  const setCupo = useCallback((c: Cupo | null) => { setCupoEstado(c); try { if (c) sessionStorage.setItem(claveCupo, JSON.stringify(c)); } catch { /* nada */ } }, [claveCupo]);
   const [texto, setTexto] = useState('');
   // El globo FUERZA la búsqueda en internet para el próximo mensaje; sin él,
   // la IA decide sola cuándo buscar.
@@ -681,7 +685,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
   const cargarCupo = useCallback(async () => {
     const { data } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'cupo' } });
     if (data?.ok) setCupo(data.cupo);
-  }, []);
+  }, [setCupo]);
   useEffect(() => { void cargarConvs(); void cargarCupo(); }, [cargarConvs, cargarCupo]);
 
   useEffect(() => {
@@ -768,15 +772,46 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
     };
     const pedirPintar = () => { if (!programado) programado = requestAnimationFrame(pintar); };
     pintar();
+    // Ids propios del pedido: si se corta la conexión, la respuesta se
+    // recupera de la base por su id; si se toca «Detener», se descarta.
+    const nuevoId = () => (crypto as any).randomUUID?.() || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16); });
+    const idPregunta = nuevoId(), idRespuesta = nuevoId();
+    pedidoActual.current = { idPregunta, idRespuesta };
+    let convDelPedido: string | null = activa;
+    const recuperar = () => {
+      // La conexión se cortó: el servidor igual termina y guarda. Se busca
+      // la respuesta por su id durante un minuto.
+      if (!convDelPedido) return false;
+      const conv = convDelPedido;
+      setAviso({ tipo: 'respaldo', texto: 'Se cortó la conexión. Recuperando la respuesta…' });
+      let intentos = 0;
+      const buscar = async () => {
+        intentos++;
+        enVuelo.delete(conv);
+        const ms = await leerMensajes(conv);
+        if (ms?.some(m => m.id === idRespuesta)) {
+          if (!activa) { recienCreada.current = conv; setActiva(conv); }
+          setMensajes(ms);
+          setAviso(null);
+          void cargarConvs();
+          return;
+        }
+        if (intentos < 15) setTimeout(() => void buscar(), 4000);
+        else setAviso({ tipo: 'error', texto: 'No se pudo recuperar la respuesta. Abrí la conversación de nuevo en un rato.' });
+      };
+      setTimeout(() => void buscar(), 2500);
+      return true;
+    };
     try {
       const res = await enviarEnVivo(
         {
-          accion: 'enviar', texto: opciones.audio ? '' : t, conversacionId: activa, buscar: buscar && busquedaPermitida, regenerar, adjuntos: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
+          accion: 'enviar', texto: opciones.audio ? '' : t, conversacionId: activa, idPregunta, idRespuesta, buscar: buscar && busquedaPermitida, regenerar, adjuntos: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
           // Jarvis: el aparato propio va para que nunca proponga bloquearse a sí mismo.
           ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, privados: sep.privados, ...(opciones.audio ? { audio: opciones.audio.datos, tipoAudio: opciones.audio.tipo } : {}), yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
         },
         (evento, d) => {
           if (evento === 'inicio') {
+            if (d.conversacionId) convDelPedido = d.conversacionId;
             // Por voz: aquí llega lo que se entendió, para mostrarlo ya.
             if (d.pregunta) setMensajes(prev => prev.map(m => (m.pendiente && m.rol === 'user' ? { ...m, texto: d.pregunta } : m)));
             return;
@@ -798,6 +833,10 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
         control.signal,
       );
       if (programado) cancelAnimationFrame(programado);
+      if (!res && !control.signal.aborted && recuperar()) {
+        setMensajes(prev => prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false } : m)));
+        return;
+      }
       if (!res?.ok) {
         if (res?.cupo) setCupo(res.cupo);
         setMensajes(prev => prev.filter(m => !m.pendiente && m.id !== BORRADOR));
@@ -818,9 +857,11 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
         setMensajes(antes);
         setTexto(t);
         setAviso({ tipo: 'respaldo', texto: 'Respuesta detenida.' });
+      } else if (recuperar()) {
+        setMensajes(prev => prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false } : m)));
       } else {
         setMensajes(prev => prev.filter(m => !m.pendiente && m.id !== BORRADOR));
-        setTexto(t);
+        setTexto(crudo);
         setAviso({ tipo: 'error', texto: 'No se pudo enviar. Revisa la conexión e intenta de nuevo.' });
       }
     } finally {
@@ -828,7 +869,14 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
       setEnviando(false);
     }
   };
-  const detener = () => cortar.current?.abort();
+  // «Detener» corta y además le avisa al servidor que no guarde: un corte de
+  // conexión, en cambio, sí se guarda (y se recupera al volver).
+  const pedidoActual = useRef<{ idPregunta: string; idRespuesta: string } | null>(null);
+  const detener = () => {
+    cortar.current?.abort();
+    const p = pedidoActual.current;
+    if (p) void supabase.functions.invoke('asistente-ia', { body: { accion: 'descartar', ...p } });
+  };
 
   // ------------------------------ VOZ ------------------------------
   // Se graba con la misma grabadora de las notas de voz del chat (funciona
@@ -980,7 +1028,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
                   <span className="ai-mn">{persona === 'arquitecto' ? 'Arquitecto' : 'Jarvis'}</span>
                   <span className="ai-chev"><ChevronDown className="w-4 h-4" /></span>
                 </button>
-              ) : <span className="ai-modelo" title={nombreModelo(ultimoModelo)}><span className="ai-dot"><Sparkles className="w-3.5 h-3.5" /></span><span className="ai-mn">{nombreModelo(ultimoModelo).startsWith('Gemini ') ? <><span className="ai-lbl">Gemini </span>{nombreModelo(ultimoModelo).slice(7)}</> : nombreModelo(ultimoModelo)}</span></span>}
+              ) : <span className="ai-modelo" title={`Responde: ${nombreModelo(ultimoModelo)}`}><span className="ai-dot"><MessageCircleQuestion className="w-3.5 h-3.5" /></span><span className="ai-mn">{soySuper ? 'Jarvis' : 'Asistencia de IA'}</span></span>}
             </>
           )}
           <span className="ai-sp" />

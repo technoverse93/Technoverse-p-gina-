@@ -2775,3 +2775,82 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
 .jv-cerebro-cifras{display:flex;flex-wrap:wrap;gap:6px 14px;padding:4px 12px 8px;font-size:12px;color:var(--text-secondary)}
 .jv-cerebro-cifras b{color:var(--text-primary);font-variant-numeric:tabular-nums}
 .jv-cerebro-nota{margin:0;padding:8px 12px 12px;border-top:1px solid var(--border-soft);font-size:12px;color:var(--text-muted);line-height:1.45}
+
+/* =====================================================================
+   DENSIDAD EN TELÉFONO (estándar: Galaxy A12, incluso con el «zoom de
+   pantalla» del sistema subido, que deja ~320 px de ancho)
+   ---------------------------------------------------------------------
+   · Todo lo que mide en rem (Tailwind) baja ~6 % en pantallas angostas:
+     letra, rellenos y separaciones a la vez, sin romper proporciones.
+   · El objetivo táctil mínimo global era 44 px con !important y agrandaba
+     cada botón con ícono; en el panel baja a 36 px (sigue siendo cómodo
+     al dedo) y los botones con texto, a 38 px.
+   · Las columnas del Taller caben enteras en la pantalla; las demás se
+     ven deslizando, como siempre.
+   ===================================================================== */
+@media (max-width: 420px) {
+  :root:has(#admin-panel-root) { font-size: 15px; }
+  #admin-panel-root button:has(> svg.lucide),
+  #admin-panel-root .icon-button,
+  #admin-panel-root [role="button"]:has(> svg.lucide) { min-width: 36px !important; min-height: 36px !important; }
+  #admin-panel-root .tv-btn { height: 38px; }
+  #admin-panel-root .tv-kanban-col { width: min(18rem, calc(100vw - 76px)); }
+}
+
+/* =====================================================================
+   CAJAS DE TEXTO SIN RECORTES («P», «Ñ», «Á» con la parte de arriba
+   cortada en Android). En una sola línea, `line-height: normal` deja que
+   el navegador centre el texto con las medidas reales de la fuente; en
+   varias líneas se deja aire arriba y abajo.
+   ===================================================================== */
+html input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) { line-height: normal; }
+html textarea { line-height: 1.45; }
+#admin-panel-root .ai-caja textarea { padding: 3px 0 2px; min-height: 28px; line-height: 1.45; }
+
+/* ---------- Asistente flotante: esqueleto, tamaño grande y cabecera ---------- */
+.jv-esqueleto{flex:1;display:grid;align-content:center;justify-items:center;gap:10px;padding:24px;text-align:center;font-size:13px;color:var(--text-secondary)}
+.jv-esqueleto i{display:block;width:min(260px,80%);height:12px;border-radius:999px;background:var(--bg-sunken);animation:ai-pulso 1.2s ease-in-out infinite}
+.jv-esqueleto i:nth-child(2){width:min(200px,60%)}.jv-esqueleto i:nth-child(3){width:min(230px,70%)}
+.jv-esqueleto p{margin:0}
+.jv-hoja-cab span{display:inline-flex;align-items:center;gap:6px}
+.jv-hoja-cab span .lucide{color:var(--accent);flex:none}
+@media (max-width:639px){ #admin-panel-root .jv-solo-pc{display:none!important} }
+@media (min-width:640px){
+  .jv-hoja[data-grande]{width:min(980px,calc(100vw - 40px));height:calc(100dvh - var(--tv-borde-cab,72px) - 20px)}
+}
+@media (prefers-reduced-motion:reduce){ .jv-esqueleto i{animation:none} }
+
+/* =====================================================================
+   TÍTULOS QUE DEBEN IR EN UNA LÍNEA
+   ---------------------------------------------------------------------
+   index.css le pone a h1–h5 `text-wrap: balance` y `overflow-wrap:
+   break-word` FUERA de capas, y eso le ganaba a `truncate` de Tailwind
+   (que vive en una capa): el nombre de un cliente largo, en el chat, se
+   partía letra por letra en una columna de 30 px. Aquí `truncate` vuelve
+   a mandar, también dentro de títulos.
+   ===================================================================== */
+.truncate, h1.truncate, h2.truncate, h3.truncate, h4.truncate, h5.truncate {
+  overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-wrap: nowrap; overflow-wrap: normal;
+}
+
+/* ---------- Cabecera del chat con un cliente: compacta en teléfono ---------- */
+.tv-chat-cab h4 { font-family: var(--font-display), var(--font-sans), system-ui, sans-serif !important; font-size: 15px !important; line-height: 1.25; }
+@media (max-width: 420px) {
+  .tv-chat-cab { padding: 8px 10px; gap: 6px; }
+  .tv-chat-cab .tv-chat-ib { width: 32px; height: 32px; border-radius: 10px; }
+  .tv-chat-ava--cab { width: 34px; height: 34px; border-radius: 12px; font-size: 14px; }
+  .tv-chat-cab .tv-chat-etq--excl { padding: 4px 6px; font-size: 0; gap: 0; }
+  .tv-chat-cab .tv-chat-etq--excl .lucide { width: 14px; height: 14px; }
+  .tv-chat-cab h4 { font-size: 14px !important; }
+}
+
+/* ---------- Cabecera del asistente en la ventana flotante ---------- */
+@container (max-width: 420px) {
+  #admin-panel-root .ai-ch { gap: 6px; padding: 8px 10px; }
+  #admin-panel-root .ai-root .ai-ch .ai-menu,
+  #admin-panel-root .ai-ch .ai-ajustes-btn { width: 36px; height: 36px; min-width: 0 !important; min-height: 0 !important; padding: 0; }
+  #admin-panel-root .ai-ch .ai-persona { height: 36px; padding: 4px 8px 4px 4px; flex: none; }
+  #admin-panel-root .ai-ch .ai-persona .ai-mn { overflow: visible; text-overflow: clip; max-width: none; }
+  #admin-panel-root .ai-ch .ai-persona .ai-chev { display: none; }
+  #admin-panel-root .ai-root .ai-cupo-pill { height: 36px; padding: 0 8px; }
+}
