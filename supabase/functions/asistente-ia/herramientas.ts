@@ -31,7 +31,7 @@ export type Consulta = {
   detalle: string;      // lo que leyó la IA, resumido (se ve al abrir la tarjeta)
   sinPermiso?: boolean;
   /** Marcas de Jarvis dentro de la respuesta: tarjeta de acción o botón para abrir un módulo. */
-  tipo?: 'accion' | 'navegar' | 'memoria';
+  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro';
   id?: string;
   destino?: string;
   /** Carril de pantalla: detalle completo que NO se manda a la IA. */
