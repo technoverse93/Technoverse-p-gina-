@@ -17,7 +17,7 @@ export type OpcionTarjeta =
   | { id: 'minutos'; tipo: 'duracion'; etiqueta: string; defecto: number | null }
   | { id: string; tipo: 'texto'; etiqueta: string; defecto: string; teclado?: 'email' | 'numeric' | 'tel'; max?: number };
 export interface DatosTarjeta {
-  accion: string; modulo: string; icono: 'ban' | 'unlock' | 'log-out' | 'receipt' | 'message' | 'wrench' | 'package'; titulo: string; riesgo: 'reversible' | 'acceso' | 'fiscal';
+  accion: string; modulo: string; icono: 'ban' | 'unlock' | 'log-out' | 'receipt' | 'message' | 'wrench' | 'package' | 'timer'; titulo: string; riesgo: 'reversible' | 'acceso' | 'fiscal';
   chip?: string; enCliente?: 'cobro' | 'chat' | 'taller' | 'inventario'; auto?: boolean;
   efecto: string; filas: { etiqueta: string; valor: string }[]; opciones: OpcionTarjeta[];
   boton: string; botonSiempre?: string; token: 'nunca' | 'para_siempre'; deshacible: boolean; nota?: string;
@@ -29,7 +29,7 @@ interface Fila { id: string; estado: Estado; vence_en: string; creada_en?: strin
 export const tarjetasVivas = new Map<string, Fila>();
 
 const DURACIONES: [number | null, string][] = [[30, '30 min'], [120, '2 horas'], [1440, '24 horas'], [null, 'Para siempre']];
-const ICONO = { ban: Ban, unlock: Unlock, 'log-out': LogOut, receipt: Receipt, message: MessageSquare, wrench: Wrench, package: Package };
+const ICONO = { ban: Ban, unlock: Unlock, 'log-out': LogOut, receipt: Receipt, message: MessageSquare, wrench: Wrench, package: Package, timer: Timer };
 const hora = (iso?: string | null) => (iso ? new Date(iso).toLocaleTimeString('es-CR', { hour: '2-digit', minute: '2-digit' }) : '');
 /**
  * Lo que tiene que estar bajado del servidor antes de ejecutar una orden en
@@ -101,6 +101,7 @@ export function TarjetaAccion({ id }: { id: string }) {
     const e: string[] = r?.efectos || [];
     if (e.includes('avisar_bloqueos')) await avisarCambioDeBloqueos();
     if (e.includes('avisar_sesion')) await avisarCierreDeSesion();
+    if (e.includes('agenda')) void import('../../mobile/agendaJarvis').then(m => m.sincronizarAgenda());
   };
   const confirmar = async () => {
     setOcupado(true); setError(null);
@@ -122,6 +123,10 @@ export function TarjetaAccion({ id }: { id: string }) {
           const { enviarRespuestaDeSoporte } = await import('../chat/enviarRespuesta');
           const e = await enviarRespuestaDeSoporte(d.convId, d.texto, quien);
           res = { ok: e.ok, mensaje: e.mensaje, extra: { msgId: e.msgId, cliente: d.cliente } };
+        } else if (r.ejecutarEnCliente.tipo === 'taller' && d.crear) {
+          const { abrirOrden } = await import('../../utils/taller');
+          const o = abrirOrden(d.crear, quien);
+          res = { ok: true, mensaje: `Orden ${o.ticket} abierta: ${d.crear.equipo} de ${d.crear.cliente}.`, extra: { ticket: o.ticket, repairId: o.id } };
         } else if (r.ejecutarEnCliente.tipo === 'inventario' && Array.isArray(d.crear)) {
           const { crearProductos } = await import('../../utils/inventario');
           const hechos = await crearProductos(d.crear, d.enTienda !== false, quien, 'Creado por Jarvis');
@@ -189,6 +194,11 @@ export function TarjetaAccion({ id }: { id: string }) {
         const { borrarMensajeParaTodos } = await import('../../utils/storage');
         if (!datos.msgId) throw new Error('No encontré el mensaje.');
         await borrarMensajeParaTodos(datos.msgId);
+      } else if (t.accion === 'crear_orden_taller') {
+        const { cambiarEstadoOrden } = await import('../../utils/taller');
+        const { data: { session } } = await supabase.auth.getSession();
+        if (!datos.repairId) throw new Error('No sé qué orden cancelar.');
+        cambiarEstadoOrden(datos.repairId, 'Cancelada', session?.user?.email || 'admin');
       } else if (t.accion === 'crear_producto') {
         const { retirarProductos } = await import('../../utils/inventario');
         const { data: { session } } = await supabase.auth.getSession();

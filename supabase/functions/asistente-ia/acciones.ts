@@ -34,7 +34,7 @@ export type Opcion =
 export type Tarjeta = {
   accion: string;
   modulo: string;
-  icono: 'ban' | 'unlock' | 'log-out' | 'receipt' | 'message' | 'wrench' | 'package';
+  icono: 'ban' | 'unlock' | 'log-out' | 'receipt' | 'message' | 'wrench' | 'package' | 'timer';
   /** Texto del chip de riesgo (si no, se deduce de `riesgo`). */
   chip?: string;
   /** La acción la termina el panel con su propio proceso. */
@@ -814,5 +814,146 @@ export const ACCIONES: Accion[] = [
       exigir(Array.isArray(objetivo.crear) && objetivo.crear.length, 'No hay productos para crear.');
       return { crear: objetivo.crear, enTienda: objetivo.enTienda !== false };
     },
+  },
+  // -------------------------------------------------------------------
+  // AGENDA del dueño: Jarvis como secretario. Con hora = recordatorio (el
+  // teléfono avisa a esa hora); sin hora = pendiente.
+  {
+    nombre: 'agendar',
+    bitacora: 'Agenda de Jarvis',
+    descripcion: 'ANOTA un recordatorio o un pendiente en la agenda del dueño. Usala cuando diga «recordame…», «avisame a las…», «anotá…», «apuntá…», «no me dejés olvidar…», «tengo que…», o cuando le prometas hacer algo después y no tengas acción para hacerlo ya. Con hora (`cuando` o `en_minutos`) el teléfono le avisa a esa hora; sin hora queda como pendiente. `texto` corto y en infinitivo o como nota («Llamar a Luis por la pantalla del S21»).',
+    parametros: {
+      type: 'object',
+      properties: {
+        texto: { type: 'string', description: 'Lo que hay que recordar o hacer.' },
+        cuando: { type: 'string', description: 'Fecha y hora de Costa Rica, formato AAAA-MM-DDTHH:MM (p. ej. 2026-10-06T09:00). Omitir si no dijo hora.' },
+        en_minutos: { type: 'integer', description: 'En vez de `cuando`: dentro de cuántos minutos («en media hora» = 30).' },
+      },
+      required: ['texto'],
+    },
+    async preparar(args, ctx) {
+      const t = texto(args.texto, 300).replace(/\s+/g, ' ');
+      exigir(t.length >= 2, 'Decime qué anoto.');
+      let cuando: Date | null = null;
+      if (args.en_minutos != null && Number(args.en_minutos) > 0) cuando = new Date(Date.now() + Math.round(Number(args.en_minutos)) * 60_000);
+      else if (args.cuando) {
+        const c = String(args.cuando).trim();
+        // Sin zona horaria = hora de Costa Rica (UTC-6, sin horario de verano).
+        const iso = /[zZ]|[+-]\d\d:?\d\d$/.test(c) ? c : `${c.length === 10 ? `${c}T08:00` : c.slice(0, 16)}:00-06:00`;
+        cuando = new Date(iso);
+        exigir(!isNaN(cuando.getTime()), 'No entendí la hora del recordatorio.');
+      }
+      if (cuando) {
+        exigir(cuando.getTime() > Date.now() - 60_000, 'Esa hora ya pasó: decime otra.');
+        exigir(cuando.getTime() < Date.now() + 366 * 86400_000, 'Solo agendo hasta un año adelante.');
+      }
+      const cuandoTxt = cuando ? fechaCorta(cuando.toISOString()) : null;
+      return {
+        tarjeta: {
+          accion: 'agendar', modulo: 'Agenda', icono: 'timer', titulo: t, riesgo: 'reversible', chip: cuando ? 'Recordatorio' : 'Pendiente', auto: true,
+          efecto: cuando ? `Te aviso en el teléfono el ${cuandoTxt}.` : 'Queda en tu lista de pendientes.',
+          filas: cuando ? [{ etiqueta: 'Cuándo', valor: cuandoTxt! }] : [], opciones: [],
+          boton: 'Anotar', token: 'nunca', deshacible: true, nota: 'Se puede deshacer.',
+        },
+        objetivo: { texto: t, cuando: cuando ? cuando.toISOString() : null },
+        paraIA: { hecho: true, se_hace_solo: true, anotado: t, cuando: cuandoTxt || 'sin hora (pendiente)', instruccion: 'YA QUEDÓ ANOTADO. Confirmalo en una frase corta, como un secretario («Listo, te aviso mañana a las 9»).' },
+      };
+    },
+    async ejecutar(o, _opc, ctx) {
+      const { data, error } = await ctx.db.from('jarvis_agenda').insert({ user_id: ctx.uid, texto: o.texto, cuando: o.cuando }).select('id').single();
+      if (error) throw new Error(/relation|does not exist|schema cache/i.test(error.message) ? 'La agenda todavía no está activada (falta correr migracion_jarvis_agenda.sql).' : error.message);
+      const det = o.cuando ? `Te aviso el ${fechaCorta(o.cuando)}: ${o.texto}` : `Anotado: ${o.texto}`;
+      return { texto: 'Anotado en la agenda.', detalle: det, efectos: ['agenda'], datos: { id: data.id } };
+    },
+    async deshacer(_o, _opc, resultado, ctx) {
+      await ctx.db.from('jarvis_agenda').update({ estado: 'cancelado', cerrado_en: new Date().toISOString() }).eq('id', resultado?.datos?.id).eq('user_id', ctx.uid);
+      return { texto: 'Quitado de la agenda.', detalle: 'Lo quité de la agenda.', efectos: ['agenda'] };
+    },
+  },
+  // -------------------------------------------------------------------
+  {
+    nombre: 'cerrar_pendiente',
+    bitacora: 'Agenda de Jarvis',
+    descripcion: 'MARCA como hecho (o cancela) un recordatorio o pendiente de la agenda del dueño. Usala cuando diga «ya hice lo de…», «ya llamé a…», «tachá…», «quitá el recordatorio de…», «ya no hace falta…». `buscar`: unas palabras del pendiente.',
+    parametros: {
+      type: 'object',
+      properties: {
+        buscar: { type: 'string', description: 'Palabras del pendiente, o «todos» para los vencidos.' },
+        estado: { type: 'string', enum: ['hecho', 'cancelado'] },
+      },
+      required: ['buscar'],
+    },
+    async preparar(args, ctx) {
+      const q = patron(args.buscar);
+      exigir(q.length >= 2, 'Decime cuál pendiente.');
+      const estado = args.estado === 'cancelado' ? 'cancelado' : 'hecho';
+      const { data, error } = await ctx.db.from('jarvis_agenda').select('id,texto,cuando').eq('user_id', ctx.uid).eq('estado', 'pendiente').order('cuando', { ascending: true }).limit(40);
+      if (error) throw new Error('La agenda todavía no está activada.');
+      const plano = (x: string) => x.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
+      const palabras = plano(q).split(/\s+/).filter(w => w.length >= 3);
+      const lista = (data || []).filter((d: any) => palabras.some(w => plano(d.texto).includes(w)))
+        .sort((a: any, b: any) => palabras.filter(w => plano(b.texto).includes(w)).length - palabras.filter(w => plano(a.texto).includes(w)).length).slice(0, 5);
+      exigir(lista.length, `No encontré «${q}» en tus pendientes.`);
+      const auto = lista.length === 1;
+      return {
+        tarjeta: {
+          accion: 'cerrar_pendiente', modulo: 'Agenda', icono: 'timer', titulo: auto ? lista[0].texto : 'Cerrar un pendiente', riesgo: 'reversible', chip: 'Agenda', auto,
+          efecto: estado === 'hecho' ? 'Se marca como hecho y deja de avisar.' : 'Se quita de la agenda.',
+          filas: [], opciones: auto ? [] : [{ id: 'cual', tipo: 'elegir', etiqueta: 'Cuál', defecto: 'p0', valores: lista.map((d: any, i: number) => ({ valor: `p${i}`, texto: d.texto.slice(0, 60), ayuda: d.cuando ? fechaCorta(d.cuando) : 'Sin hora' })) }],
+          boton: estado === 'hecho' ? 'Marcar hecho' : 'Quitar', token: 'nunca', deshacible: true,
+        },
+        objetivo: { items: lista.map((d: any) => ({ id: d.id, texto: d.texto })), estado },
+        paraIA: auto ? { hecho: true, se_hace_solo: true, pendiente: lista[0].texto, instruccion: 'YA SE HIZO. Decilo en una frase.' } : { hecho: false, posibles: lista.length, instruccion: 'Hay varios parecidos: que elija en la tarjeta.' },
+      };
+    },
+    async ejecutar(o, opc, ctx) {
+      const it = o.items?.[opc.cual ? Number(String(opc.cual).slice(1)) : 0];
+      exigir(it, 'Pendiente no válido.');
+      const { error } = await ctx.db.from('jarvis_agenda').update({ estado: o.estado, cerrado_en: new Date().toISOString() }).eq('id', it.id).eq('user_id', ctx.uid);
+      if (error) throw error;
+      return { texto: o.estado === 'hecho' ? 'Marcado como hecho.' : 'Quitado.', detalle: `${o.estado === 'hecho' ? 'Hecho' : 'Quitado'}: ${it.texto}`, efectos: ['agenda'], datos: { id: it.id } };
+    },
+    async deshacer(_o, _opc, resultado, ctx) {
+      await ctx.db.from('jarvis_agenda').update({ estado: 'pendiente', cerrado_en: null }).eq('id', resultado?.datos?.id).eq('user_id', ctx.uid);
+      return { texto: 'Vuelve a estar pendiente.', detalle: 'Volvió a tus pendientes.', efectos: ['agenda'] };
+    },
+  },
+  // -------------------------------------------------------------------
+  {
+    nombre: 'crear_orden_taller',
+    bitacora: 'Orden de taller por Jarvis',
+    descripcion: 'ABRE una orden nueva en el Taller (recibir un equipo). Usala cuando diga «entró un…», «recibí el … de …», «abrí una orden para…», «anotá la reparación de…». Pedí solo lo que falte de lo esencial (cliente, equipo y falla); lo demás es opcional. Garantía mínima 3 meses (Ley 7472).',
+    parametros: {
+      type: 'object',
+      properties: {
+        cliente: { type: 'string', description: 'Nombre del cliente.' },
+        equipo: { type: 'string', description: 'Marca y modelo, p. ej. «Samsung Galaxy A12».' },
+        falla: { type: 'string', description: 'Lo que reporta el cliente.' },
+        categoria: { type: 'string', enum: ['Celular', 'Tablet', 'Laptop', 'PC', 'Consola', 'Otro'] },
+        mano_de_obra: { type: 'number', description: 'Costo de mano de obra en colones, si lo dijo.' },
+        garantia_meses: { type: 'integer' },
+      },
+      required: ['cliente', 'equipo', 'falla'],
+    },
+    async preparar(args) {
+      const cliente = texto(args.cliente, 80), equipo = texto(args.equipo, 80), falla = texto(args.falla, 300);
+      exigir(cliente.length >= 2 && equipo.length >= 2 && falla.length >= 2, 'Para abrir la orden necesito cliente, equipo y falla.');
+      const categoria = ['Celular', 'Tablet', 'Laptop', 'PC', 'Consola', 'Otro'].includes(String(args.categoria)) ? String(args.categoria) : 'Celular';
+      const garantia = Math.max(3, Math.min(24, Math.round(Number(args.garantia_meses) || 3)));
+      const mano = args.mano_de_obra == null ? 0 : Math.max(0, Math.min(5_000_000, Math.round(Number(args.mano_de_obra) || 0)));
+      return {
+        tarjeta: {
+          accion: 'crear_orden_taller', modulo: 'Taller', icono: 'wrench', titulo: `${equipo} · ${cliente}`, riesgo: 'reversible', chip: 'Taller', enCliente: 'taller', auto: true, deshacerMin: 10,
+          efecto: 'Se abre la orden en «Pendiente» en el tablero del taller.',
+          filas: [{ etiqueta: 'Falla', valor: falla }, { etiqueta: 'Garantía', valor: `${garantia} meses` }, ...(mano ? [{ etiqueta: 'Mano de obra', valor: '₡' + mano.toLocaleString('es-CR') }] : [])],
+          opciones: [], boton: 'Abrir orden', token: 'nunca', deshacible: true, nota: 'Se puede deshacer por 10 minutos.',
+        },
+        objetivo: { cliente, equipo, falla, categoria, garantia, mano },
+        paraIA: { hecho: true, se_hace_solo: true, instruccion: 'YA SE ABRIÓ LA ORDEN. Decilo en una frase; el ticket lo ve en pantalla.' },
+      };
+    },
+    ejecutar() { throw new Error('La orden la abre el panel.'); },
+    async deshacer(_o, _opc, resultado) { return { texto: 'Orden cancelada.', detalle: `Se canceló la orden ${resultado?.datos?.ticket || ''}.`.trim() }; },
+    paraCliente(o) { return { crear: { cliente: o.cliente, equipo: o.equipo, falla: o.falla, categoria: o.categoria, garantia: o.garantia, mano: o.mano } }; },
   },
 ];

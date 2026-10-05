@@ -22,7 +22,7 @@ const VIGENCIA_MS = 60_000;
 export const EVENTO_JARVIS = 'tv:jarvis';
 export type PedidoJarvis = { voz: boolean; en: number; modulo?: string };
 
-function manejar(url: string | undefined | null): void {
+export function manejar(url: string | undefined | null): void {
   if (!url || !/^technoverse:\/\/jarvis/i.test(url)) return;
   const modulo = /[?&]modulo=([a-z_]{2,40})(?:&|$)/.exec(url)?.[1];
   const pedido: PedidoJarvis = { voz: /[?&]voz=1/.test(url), en: Date.now(), ...(modulo ? { modulo } : {}) };

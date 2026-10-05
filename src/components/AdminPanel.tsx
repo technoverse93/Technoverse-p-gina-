@@ -207,6 +207,14 @@ export default function AdminPanel({
   >({});
   const [reenviandoFactura, setReenviandoFactura] = useState<string | null>(null);
 
+  // Los recordatorios de la agenda de Jarvis se programan en el teléfono al
+  // abrir el panel (por si se agendaron desde otro equipo o el widget).
+  useEffect(() => {
+    if (!esAdminSupremo(currentUser?.email)) return;
+    const t = setTimeout(() => { void import('../mobile/agendaJarvis').then(m => m.sincronizarAgenda()).catch(() => { /* sin agenda */ }); }, 4000);
+    return () => clearTimeout(t);
+  }, [currentUser?.email]);
+
   useEffect(() => {
     if (activeTab !== 'facturacion') return;
     let vigente = true;
