@@ -26,6 +26,11 @@
 // =====================================================================
 
 type Db = any;
+/** Una idea del cerebro lista para mostrarse a la persona (nombre humano, resumen limpio). */
+export type Nota = { nombre: string; resumen: string; url: string | null; fuente: string | null; peso: number; cubre: number };
+/** De lo guardado de una búsqueda («Título: extracto · Título: extracto…»),
+ *  solo lo del primer resultado y sin el «Planet:» del título al inicio. */
+const primerResultado = (r: string) => r.split(' · ')[0].replace(/^[^.:]{1,40}:\s+/, '');
 export type Nodo = { id: string; clave: string; etiqueta: string; tipo: string; resumen: string | null; fuente: string | null; url: string | null; usos: number };
 export type Aprendido = { etiqueta: string; clave: string; nuevo: boolean };
 
@@ -64,7 +69,7 @@ export const APRENDER = {
   },
 };
 
-import { nombreHumano } from './nombres.ts';
+import { limpiarExtracto, nombreHumano } from './nombres.ts';
 
 export function crearCerebro(admin: Db, uid: string) {
   const cache = new Map<string, string>();
@@ -250,7 +255,7 @@ export function crearCerebro(admin: Db, uid: string) {
       const clave = `web:${normalizar(humano)}`;
       try {
         const inter = await dominio('internet', 'Internet');
-        const resumen = limpio(resultados.slice(0, 3).map(r => `${r.titulo}: ${r.extracto}`).join(' · '), 1400);
+        const resumen = limpio(resultados.slice(0, 3).map(r => { const e = limpiarExtracto(r.extracto, 400); return e ? `${r.titulo}: ${e}` : r.titulo; }).join(' · '), 1400);
         const n = await asegurarNodo(clave, humano, 'fuente', { resumen, fuente: 'internet', url: resultados[0]?.url, usar: true });
         if (!n) return null;
         await enlazar(inter?.id, n.id, 'buscó');
@@ -271,10 +276,10 @@ export function crearCerebro(admin: Db, uid: string) {
     reforzarModulo(id: string) { if (MODULOS[id]) enFondo(modulo(id, true)); },
 
     /** Lo que ya sabe y viene al caso en este mensaje. */
-    async recordarPara(texto: string, esOrden: boolean): Promise<{ bloque: string; usados: string[] }> {
-      const { data: nodos, error } = await admin.from('jarvis_nodos').select('id,clave,etiqueta,tipo,resumen,fuente,usos')
+    async recordarPara(texto: string, esOrden: boolean): Promise<{ bloque: string; usados: string[]; notas: Nota[] }> {
+      const { data: nodos, error } = await admin.from('jarvis_nodos').select('id,clave,etiqueta,tipo,resumen,fuente,url,usos')
         .eq('user_id', uid).in('tipo', ['tema', 'dato', 'fuente', 'recuerdo']).order('usos', { ascending: false }).limit(600);
-      if (error) { vivo = false; return { bloque: '', usados: [] }; }
+      if (error) { vivo = false; return { bloque: '', usados: [], notas: [] }; }
       const msg = ` ${normalizar(texto)} `;
       const nombre = (n: Nodo) => normalizar(n.etiqueta.replace(/^(Inventario|Taller|Internet) · /, ''));
       const directos = ((nodos || []) as Nodo[])
@@ -284,8 +289,12 @@ export function crearCerebro(admin: Db, uid: string) {
       // Además, por PALABRAS: lo que comparte palabras importantes con el
       // mensaje (en el nombre pesa más que en el resumen). Así Jarvis revisa
       // primero lo que ya sabe aunque no se nombre el tema tal cual.
-      const VACIAS = new Set('para como cual cuál cuales donde cuando cuanto cuánto cuantos sobre tiene tienen tengo hacer hace esta este esto estos estas eso esos esas porque pero algo alguna alguno todo toda todos todas muy mas más menos desde hasta entre ahora hoy ayer mañana quiero queres querés podes podés puede pueden decime dime sabes sabés saber jarvis favor también tambien cosa cosas'.split(' '));
-      const palabras = [...new Set(normalizar(texto).split(/[^a-z0-9ñ]+/).filter(w => w.length >= 4 && !VACIAS.has(w)))];
+      // «Costa Rica» y las palabras de pedir («enlaces», «buscame»…) no dicen de
+      // QUÉ se habla: con ellas salía política al pedir enlaces de cargadores.
+      const VACIAS = new Set('para como cual cuál cuales donde cuando cuanto cuánto cuantos sobre tiene tienen tengo hacer hace esta este esto estos estas eso esos esas porque pero algo alguna alguno todo toda todos todas muy mas más menos desde hasta entre ahora hoy ayer mañana quiero queres querés podes podés puede pueden decime dime sabes sabés saber jarvis favor también tambien cosa cosas costa rica enlace enlaces link links pagina paginas sitio sitios busca buscame buscar dame pasame pasar necesito ocupo informacion info mandame envia enviame'.split(' '));
+      // Raíz simple para que «cargadores» encuentre «cargador».
+      const raiz = (w: string) => (w.length > 5 ? w.replace(/(es|s)$/, '') : w);
+      const palabras = [...new Set(normalizar(texto).split(/[^a-z0-9ñ]+/).filter(w => w.length >= 4 && !VACIAS.has(w)).map(raiz))];
       if (palabras.length) {
         const ya = new Set(directos.map(n => n.id));
         const puntuados = ((nodos || []) as Nodo[])
@@ -300,7 +309,10 @@ export function crearCerebro(admin: Db, uid: string) {
           .sort((x, y) => y.p - x.p || y.n.usos - x.n.usos).slice(0, Math.max(0, 6 - directos.length));
         directos.push(...puntuados.map(x => x.n));
       }
-      if (!directos.length) return { bloque: '', usados: [] };
+      if (!directos.length) return { bloque: '', usados: [], notas: [] };
+      // Qué tan relacionada está cada idea con el mensaje (para responder sin IA).
+      const peso = (n: Nodo) => { if (msg.includes(` ${nombre(n)} `)) return 100; const et = normalizar(n.etiqueta), res = normalizar(n.resumen || ''); let p = 0; for (const w of palabras) { if (et.includes(w)) p += 3; else if (res.includes(w)) p += 1; } return p; };
+      const notas: Nota[] = directos.map(n => ({ nombre: nombreHumano(n.etiqueta, n.tipo, n.url), resumen: n.fuente === 'internet' ? limpiarExtracto(primerResultado(n.resumen || ''), 260) : recortar(n.resumen || '', 260), url: n.url, fuente: n.fuente, peso: peso(n), cubre: palabras.length ? palabras.filter(w => normalizar(n.etiqueta + ' ' + (n.resumen || '')).includes(w)).length / palabras.length : 1 }));
       const ids = directos.map(n => n.id);
       const { data: enl } = await admin.from('jarvis_enlaces').select('origen,destino,relacion')
         .eq('user_id', uid).or(`origen.in.(${ids.join(',')}),destino.in.(${ids.join(',')})`).limit(40);
@@ -310,14 +322,44 @@ export function crearCerebro(admin: Db, uid: string) {
         const otro = porId.get(ids.includes(e.origen) ? e.destino : e.origen);
         if (otro && otro.resumen && !ids.includes(otro.id) && !vecinos.includes(otro) && !(esOrden && otro.fuente === 'internet')) vecinos.push(otro);
       }
-      const linea = (n: Nodo) => `- ${n.etiqueta}${n.fuente ? ` [${n.fuente}]` : ''}: ${recortar(n.resumen || '', 500)}`;
+      const linea = (n: Nodo) => `- ${nombreHumano(n.etiqueta, n.tipo, n.url)}${n.fuente ? ` [${n.fuente}]` : ''}: ${n.fuente === 'internet' ? limpiarExtracto(n.resumen || '', 500) : recortar(n.resumen || '', 500)}${n.url ? ` (enlace: ${n.url})` : ''}`;
       const bloque = [...directos.map(linea), ...vecinos.slice(0, 6).map(linea)].join('\n').slice(0, 4000);
       enFondo((async () => {
         const ahora = new Date().toISOString();
         for (const n of directos) await admin.from('jarvis_nodos').update({ usos: (n.usos || 0) + 1, ultimo_uso: ahora }).eq('id', n.id);
       })());
-      return { bloque, usados: directos.map(n => n.etiqueta) };
+      return { bloque, usados: directos.map(n => n.etiqueta), notas };
     },
   };
 }
 export type Cerebro = ReturnType<typeof crearCerebro>;
+
+/**
+ * Cuando ninguna IA contesta, Jarvis responde con su cerebro. Antes tiraba
+ * TODO lo que encontraba, con nombres técnicos y texto de menús. Ahora:
+ *  - solo lo que de verdad trata de lo que se preguntó (lo demás se calla);
+ *  - con nombres humanos y resúmenes limpios;
+ *  - si se pidieron enlaces, da los enlaces;
+ *  - si no tiene nada que sirva, lo dice en vez de rellenar.
+ */
+export function respuestaSinIA(pregunta: string, notas: Nota[]): string {
+  const q = normalizar(pregunta);
+  const pideEnlaces = /\b(enlaces?|links?|url|paginas?|sitios? web|donde (lo )?(venden|compro|comprar|consigo))\b/.test(q);
+  const mejor = Math.max(0, ...notas.map(n => n.peso));
+  let utiles = notas.filter(n => n.peso >= 100 || (n.peso >= 3 && n.peso >= mejor * 0.6 && n.cubre >= 0.5));
+  if (pideEnlaces) utiles = utiles.filter(n => n.url).concat(utiles.filter(n => !n.url)).slice(0, 5);
+  // Lo mismo dicho dos veces (misma página o mismo nombre) se muestra una vez.
+  const vistos = new Set<string>();
+  utiles = utiles.filter(n => { const k = n.url || normalizar(n.nombre); if (vistos.has(k)) return false; vistos.add(k); return true; }).slice(0, pideEnlaces ? 5 : 3);
+  const aviso = 'Las IAs están saturadas ahora mismo';
+  if (!utiles.length) return `${aviso} y en mi cerebro no tengo nada guardado sobre eso. Preguntame de nuevo en unos minutos y lo busco.`;
+  const lineas = utiles.map(n => {
+    if (pideEnlaces && n.url) return `- **${n.nombre}**: ${n.url}${n.resumen && n.resumen.length > 20 ? `\n  ${n.resumen}` : ''}`;
+    return `- **${n.nombre}**: ${n.resumen || 'lo tengo anotado, sin más detalle.'}${n.url ? ` ([fuente](${n.url}))` : ''}`;
+  });
+  const desdeInternet = utiles.some(n => n.fuente === 'internet');
+  const intro = pideEnlaces
+    ? (utiles.some(n => n.url) ? `${aviso}. Estos son los enlaces que tengo guardados:` : `${aviso} y no tengo enlaces guardados de eso; esto es lo que sé:`)
+    : `${aviso}. Esto es lo que tengo guardado sobre eso:`;
+  return `${intro}\n\n${lineas.join('\n')}\n\n${desdeInternet ? 'Lo de internet puede estar desactualizado. ' : ''}Si necesitás algo más actual, preguntame de nuevo en unos minutos.`;
+}

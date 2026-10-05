@@ -102,3 +102,27 @@ export function nombreHumano(etiqueta: string, tipo?: string, url?: string | nul
   }
   return sinPrefijo.length > 48 ? sinPrefijo.slice(0, 47) + '…' : sinPrefijo;
 }
+
+/**
+ * Lo que devuelve una página de internet trae menús, encabezados y basura
+ * («inalambrico Cargador multiplataforma Cargador reloj Cargador Universal…»,
+ * «Opens in new window», «Edición Impresa»). Esto se queda solo con frases
+ * de verdad, para guardarlas y para mostrarlas.
+ */
+export function limpiarExtracto(texto: string, max = 220): string {
+  const t = String(texto || '').replace(/https?:\/\/\S+/g, ' ').replace(/[#*_>|]+/g, ' ').replace(/Opens in new window|Edici[oó]n Impresa|Ver m[aá]s|Leer m[aá]s|Inicio de sesi[oó]n/gi, ' ');
+  const trozos = t.split(/(?<=[.!?])\s+|\s+·\s+|\s{2,}/).map(s => s.replace(/\s+/g, ' ').trim()).filter(Boolean);
+  const buenos = trozos.filter(s => {
+    const w = s.split(' ');
+    if (w.length < 3) return false;
+    // Un menú: muchas palabras seguidas en Mayúscula, sin comas ni verbos.
+    const mayus = w.filter(x => /^[A-ZÁÉÍÓÚÑ]/.test(x)).length / w.length;
+    if (w.length >= 7 && mayus > 0.45 && !/,/.test(s)) return false;
+    // Palabras repetidas una y otra vez (listas de categorías).
+    const unicas = new Set(w.map(x => x.toLowerCase())).size / w.length;
+    return !(w.length >= 8 && unicas < 0.7);
+  });
+  let r = buenos.join(' ').replace(/\s+/g, ' ').trim();
+  if (r.length > max) r = r.slice(0, max - 1).replace(/\s+\S*$/, '') + '…';
+  return r;
+}
