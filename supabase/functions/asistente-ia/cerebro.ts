@@ -64,6 +64,8 @@ export const APRENDER = {
   },
 };
 
+import { nombreHumano } from './nombres.ts';
+
 export function crearCerebro(admin: Db, uid: string) {
   const cache = new Map<string, string>();
   const pendientes: Promise<unknown>[] = [];
@@ -239,16 +241,20 @@ export function crearCerebro(admin: Db, uid: string) {
      *  guardado fallaba (p. ej. tablas sin instalar) el chip mentía. Ahora
      *  solo devuelve algo si de verdad quedó guardado. */
     async registrarWeb(consulta: string, resultados: { titulo: string; url: string; extracto: string }[]): Promise<Aprendido | null> {
-      const c = limpio(consulta, 80);
+      const c = limpio(consulta, 120);
       if (c.length < 3 || !resultados?.length || PRIVADO.test(c)) return null;
-      const clave = `web:${normalizar(c)}`;
+      // Se guarda con NOMBRE HUMANO («Cargador USB tipo C · Planet Group»),
+      // nunca la búsqueda cruda con site:, comillas u OR; y búsquedas que
+      // dicen lo mismo caen en la misma idea en vez de repetirse.
+      const humano = nombreHumano(c, 'fuente', resultados[0]?.url) || c;
+      const clave = `web:${normalizar(humano)}`;
       try {
         const inter = await dominio('internet', 'Internet');
         const resumen = limpio(resultados.slice(0, 3).map(r => `${r.titulo}: ${r.extracto}`).join(' · '), 1400);
-        const n = await asegurarNodo(clave, c, 'fuente', { resumen, fuente: 'internet', url: resultados[0]?.url, usar: true });
+        const n = await asegurarNodo(clave, humano, 'fuente', { resumen, fuente: 'internet', url: resultados[0]?.url, usar: true });
         if (!n) return null;
         await enlazar(inter?.id, n.id, 'buscó');
-        return { etiqueta: c, clave, nuevo: n.nuevo };
+        return { etiqueta: humano, clave, nuevo: n.nuevo };
       } catch (e) { console.log(`cerebro: ${e instanceof Error ? e.message : e}`); return null; }
     },
 

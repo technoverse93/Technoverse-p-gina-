@@ -27,7 +27,10 @@ const config: CapacitorConfig = {
     // revertir sola al bundle anterior por si el nuevo viniera roto.
     CapacitorUpdater: {
       autoUpdate: false,
-      appReadyTimeout: 10000
+      appReadyTimeout: 10000,
+      // Al instalar una APK nueva (versionCode distinto, ver build-android.yml)
+      // se descartan los paquetes OTA viejos: abre directo con lo de la APK.
+      resetWhenUpdate: true
     },
     // FLAG_SECURE nativo — anti-captura para TODOS, sin excepción.
     // `enable: true`: protegido desde el primer fotograma, antes incluso

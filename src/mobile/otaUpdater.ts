@@ -147,6 +147,11 @@ export async function initOtaUpdater(): Promise<void> {
     if (!manifiesto?.version || !manifiesto?.url) return;
     setOtaStatus({ latestVersion: manifiesto.version });
     if (manifiesto.version === versionActual) return; // ya está al día
+    // La APK recién instalada trae su propio código («builtin»): si es el
+    // mismo commit publicado, no hay nada que bajar (antes se bajaba igual y
+    // la app se recargaba sola un rato después).
+    const commitApk = typeof __COMMIT__ === 'string' ? __COMMIT__ : '';
+    if (versionActual === 'builtin' && commitApk && commitApk === manifiesto.version) return;
 
     const nuevoBundle = await CapacitorUpdater.download({
       version: manifiesto.version,

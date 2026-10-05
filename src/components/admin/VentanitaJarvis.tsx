@@ -133,9 +133,11 @@ function BarraEscribir({ onEnviar, onHoja, onCerrar }: { onEnviar: (t: string) =
  * la conversación del widget, la caja con el cursor y el botón de enviar.
  * Si el teclado tapa el widget, el recuadro sube lo justo para quedar encima.
  */
-function RecuadroWidget({ marco, noche, historial, listo, estado, onEnviar, onHoja, onCerrar }: {
+function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, onEnviar, onCerrar }: {
   marco: MarcoWidget; noche: boolean; historial: VueltaWidget[]; listo: boolean; estado: string;
-  onEnviar: (t: string) => void; onHoja: () => void; onCerrar: () => void;
+  /** Si algo impide contestar (sin sesión, sin red…), se dice AQUÍ: nunca se abre otra ventana. */
+  aviso?: { titulo: string; texto: string } | null;
+  onEnviar: (t: string) => void; onCerrar: () => void;
 }) {
   const [texto, setTexto] = useState('');
   const [alto, setAlto] = useState(() => window.visualViewport?.height || window.innerHeight);
@@ -158,17 +160,17 @@ function RecuadroWidget({ marco, noche, historial, listo, estado, onEnviar, onHo
         <span className="vj-rc-marca" aria-hidden><Sparkles className="w-3.5 h-3.5" /></span>
         <b>Jarvis</b>
         <span className="vj-rc-est" aria-live="polite">{estado || (listo ? '' : 'Abriendo…')}</span>
-        <button type="button" onClick={onHoja} aria-label="Abrir la conversación completa" title="Abrir la conversación completa"><Maximize2 className="w-4 h-4" /></button>
         <button type="button" onClick={onCerrar} aria-label="Cerrar" title="Cerrar"><X className="w-4 h-4" /></button>
       </header>
       <div className="vj-rc-conv" ref={lista}>
-        {historial.length === 0 && !estado && <p className="vj-rc-vacio">Escribile a Jarvis: la respuesta sale aquí.</p>}
+        {historial.length === 0 && !estado && !aviso && <p className="vj-rc-vacio">Escribile a Jarvis: la respuesta sale aquí.</p>}
         {historial.map((v, i) => (
           <React.Fragment key={i}>
             {v.p && <div className="vj-rc-yo">{v.p}</div>}
             {v.r && <div className="vj-rc-ia">{v.r}</div>}
           </React.Fragment>
         ))}
+        {aviso && <div className="vj-rc-ia vj-rc-aviso" role="status"><b>{aviso.titulo}.</b> {aviso.texto}</div>}
       </div>
       <form className="vj-rc-caja" onSubmit={e => { e.preventDefault(); enviar(); }}>
         <input ref={caja} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribile a Jarvis…" aria-label="Pregunta para Jarvis"
@@ -337,7 +339,9 @@ export default function VentanitaJarvis() {
   const nativa = widgetNativo.enApp();
   // En el recuadro: nada a la vista (salvo un aviso que pida algo), o solo
   // la barrita para escribir.
-  const enRecuadro = modo === 'voz' || (modo === 'escribir' && !aviso);
+  // Escribir sobre el widget: TODO pasa en el recuadro, también los avisos
+  // (nunca se abre la hoja ni la app desde la caja del widget).
+  const enRecuadro = modo === 'voz' || (modo === 'escribir' && (!aviso || !!marco));
   const verHoja = () => { void widgetNativo.avisar(''); setModo('hoja'); };
   // Por voz no hay ventana: si algo impide contestar (sin sesión, apagado,
   // bloqueo…), se dice en el propio widget.
@@ -359,7 +363,8 @@ export default function VentanitaJarvis() {
             <>
               {!trabajando && <button type="button" className="vj-velo" aria-label="Cerrar" tabIndex={-1} onClick={cerrar} />}
               <RecuadroWidget marco={marco} noche={noche} historial={historial} listo={fase === 'listo'} estado={estadoRecuadro}
-                onEnviar={t => void responderEnWidget(t, false, true)} onHoja={verHoja} onCerrar={cerrar} />
+                aviso={aviso ? { titulo: aviso.titulo, texto: aviso.texto } : null}
+                onEnviar={t => void responderEnWidget(t, false, true)} onCerrar={cerrar} />
             </>
           )}
           {modo === 'escribir' && !marco && !trabajando && (

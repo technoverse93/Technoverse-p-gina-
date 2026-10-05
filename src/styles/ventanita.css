@@ -205,3 +205,4 @@ html.tv-ventanita #root { height: 100%; }
 #admin-panel-root .vj-rc-caja button { min-width: 0 !important; min-height: 0 !important; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: var(--w-acento); color: var(--w-tinta-ac); flex: none; }
 #admin-panel-root .vj-rc-caja button:disabled { opacity: .5; }
 @media (prefers-reduced-motion: reduce) { .vj-recuadro, .vj-rc-ia { animation: none; transition: none; } }
+.vj-rc-aviso { color: var(--w-txt2); }

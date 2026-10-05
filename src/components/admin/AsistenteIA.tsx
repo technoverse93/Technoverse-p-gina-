@@ -235,9 +235,12 @@ function leerMensajes(id: string): Promise<Mensaje[] | null> {
 }
 
 const CLAVE_ACTIVA = 'tv_ia_conversacion';
-const leerActiva = () => { try { return sessionStorage.getItem(`${CLAVE_ACTIVA}:${dueñoCache}`); } catch { return null; } };
+// También en localStorage (solo el id, no los mensajes): al abrir la app en
+// frío, Jarvis ya sabe cuál es su hilo y no muestra el saludo vacío un
+// instante antes de saltar a la conversación.
+const leerActiva = () => { try { const k = `${CLAVE_ACTIVA}:${dueñoCache}`; return sessionStorage.getItem(k) || localStorage.getItem(k); } catch { return null; } };
 const guardarActiva = (id: string | null) => {
-  try { const k = `${CLAVE_ACTIVA}:${dueñoCache}`; if (id) sessionStorage.setItem(k, id); else sessionStorage.removeItem(k); } catch { /* sin almacenamiento */ }
+  try { const k = `${CLAVE_ACTIVA}:${dueñoCache}`; if (id) { sessionStorage.setItem(k, id); localStorage.setItem(k, id); } else { sessionStorage.removeItem(k); localStorage.removeItem(k); } } catch { /* sin almacenamiento */ }
 };
 
 /** Contexto de Gemini Flash: un millón de tokens. */
@@ -657,6 +660,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   prepararCache(currentUser?.id || currentUser?.email || 'anon');
 
   const [convs, setConvs] = useState<Conversacion[]>([]);
+  const [convsListas, setConvsListas] = useState(false);
   // La conversación abierta sobrevive a cambiar de pestaña (el módulo se
   // desmonta al salir); se recuerda solo en esta sesión del navegador.
   const [activa, setActivaEstado] = useState<string | null>(() => conversacionInicial || leerActiva());
@@ -695,7 +699,9 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const inicioVoz = useRef(0);
   // Jarvis se enciende solo cuando el servidor ya lo tiene (la función
   // nueva informa las velocidades en el cupo); antes, todo queda como siempre.
-  const jarvis = soySuper && !!cupo?.perfiles;
+  // El superadmin ES Jarvis desde el primer cuadro: antes, hasta que llegaba
+  // el cupo del servidor se veía un instante el aspecto de «Asistencia de IA».
+  const jarvis = soySuper && (cupo ? !!cupo.perfiles : true);
   const conVoz = jarvis && puedeGrabarVoz();
   // El cerebro (código y datos) se baja mientras el teléfono está libre, para
   // que abra al instante en vez de quedarse un momento en blanco.
@@ -729,6 +735,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     const { data } = await supabase.from('ia_conversaciones').select('id,titulo,actualizado_en').order('actualizado_en', { ascending: false }).limit(60);
     const lista = (data as Conversacion[]) || [];
     setConvs(lista);
+    setConvsListas(true);
     // Precarga en segundo plano de las más recientes: abrirlas es instantáneo.
     lista.slice(0, 3).forEach(c => { if (!cache.has(c.id)) void leerMensajes(c.id); });
   }, []);
@@ -1205,7 +1212,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
               </div>
             )}
             <div className="ai-msgs" ref={msgsRef}>
-              {cargandoConv ? (
+              {cargandoConv || (jarvis && !activa && !convsListas) ? (
                 <div className="ai-esqueleto" aria-label="Cargando conversación"><i /><i /><i /></div>
               ) : agotado && mensajes.length === 0 ? (
                 <div className="ai-agotado">

@@ -433,6 +433,27 @@ jobs:
           print('Ícono del lanzador generado en las 5 densidades.')
           PY
 
+      # Cada APK con su PROPIA versión nativa (antes todas eran 1 / «1.0»).
+      # Así el sistema de actualizaciones (Capgo, resetWhenUpdate) reconoce
+      # que se instaló una APK nueva y arranca con lo que trae ella, en vez
+      # de seguir mostrando un paquete OTA viejo y cambiarlo segundos
+      # después (el «parpadeo» de la versión anterior al abrir).
+      - name: Versión nativa por compilación
+        env:
+          NUMERO: ${{ github.run_number }}
+        run: |
+          python3 - <<'PY'
+          import os, re
+          ruta = 'android/app/build.gradle'
+          texto = open(ruta, encoding='utf-8').read()
+          n = int(os.environ['NUMERO'])
+          texto = re.sub(r'versionCode\s+\d+', f'versionCode {n}', texto, count=1)
+          texto = re.sub(r'versionName\s+"[^"]*"', f'versionName "1.{n}"', texto, count=1)
+          open(ruta, 'w', encoding='utf-8').write(texto)
+          print(f'versionCode {n} · versionName 1.{n}')
+          PY
+          grep -n "versionCode\|versionName" android/app/build.gradle
+
       - name: Build debug APK
         working-directory: android
         run: chmod +x gradlew && ./gradlew assembleDebug --no-daemon
