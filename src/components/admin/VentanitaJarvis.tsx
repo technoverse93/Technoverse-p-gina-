@@ -153,6 +153,11 @@ export default function VentanitaJarvis() {
       setModo(m => m || e.modo);
       setConversacion(e.conversacion || conversacionDelWidget());
       if (!e.version) { setFase('sin_puente'); return; }
+      // Esta página solo vale dentro de la ventanita del widget. Si por lo
+      // que sea se abrió en la app (pasó en un teléfono: se veía «El
+      // mini-widget está apagado» en vez del panel, sin poder cerrarlo), se
+      // cambia en el acto por la app de siempre.
+      if (!e.enVentanita) { location.replace('/'); return; }
       if (!e.activo) { setFase('apagado'); return; }
       void conexionBloqueada().then(b => { if (b && vivo) setFase('bloqueado'); });
       try {
@@ -188,7 +193,12 @@ export default function VentanitaJarvis() {
     return () => { clearTimeout(t); escucha?.subscription?.unsubscribe(); };
   }, [fase]);
 
-  const cerrar = useCallback(() => { lector.callar(); void widgetNativo.cerrar(); }, []);
+  const cerrar = useCallback(() => {
+    lector.callar();
+    void widgetNativo.cerrar();
+    // Si el puente no la cerró, se sale igual: nunca puede quedar tapando.
+    setTimeout(() => { void import('@capacitor/app').then(({ App }) => App.exitApp()).catch(() => location.replace('/')); }, 900);
+  }, []);
 
   // Pregunta EN EL WIDGET: la ventanita deja de tapar, el widget dice
   // «Pensando…», la respuesta queda en el recuadro (y se lee si va por voz)
