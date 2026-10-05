@@ -2762,19 +2762,109 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
   #admin-panel-root .tv-scroll:not([data-pantalla='completa']) > .tv-container{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
 }
 
-/* ---------- Cerebro de Jarvis ---------- */
-.jv-cerebro{margin:12px;border:1px solid var(--border-color);border-radius:18px;background:var(--bg-surface);overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr)}
-.jv-cerebro-cab{display:flex;align-items:center;gap:10px;padding:12px 12px 6px}
-.jv-cerebro-tt{flex:1;min-width:0;display:grid;gap:2px}
-.jv-cerebro-tt b{font-size:14px;color:var(--text-primary)}
-.jv-cerebro-tt span{font-size:12.5px;color:var(--text-secondary);line-height:1.4}
-.jv-cerebro-lienzo{position:relative;width:100%;aspect-ratio:4/3;max-height:520px;touch-action:manipulation}
-.jv-cerebro-lienzo canvas{display:block;cursor:pointer}
-.jv-cerebro-vacio{position:absolute;inset:0;display:grid;place-items:center;margin:0;font-size:13px;color:var(--text-muted)}
-.jv-cerebro-foco{margin:0 12px 8px;padding:8px 10px;border-radius:10px;background:var(--bg-sunken);font-size:12.5px;color:var(--text-primary);line-height:1.45;overflow-wrap:anywhere}
-.jv-cerebro-cifras{display:flex;flex-wrap:wrap;gap:6px 14px;padding:4px 12px 8px;font-size:12px;color:var(--text-secondary)}
-.jv-cerebro-cifras b{color:var(--text-primary);font-variant-numeric:tabular-nums}
-.jv-cerebro-nota{margin:0;padding:8px 12px 12px;border-top:1px solid var(--border-soft);font-size:12px;color:var(--text-muted);line-height:1.45}
+/* ---------- Cerebro de Jarvis (red d3) ---------- */
+.jv-cerebro{--g-centro:var(--accent);--g-temas:var(--jv-actual);--g-datos:var(--ok);--g-internet:var(--tv-warn);--g-vos:var(--jv-peligro);
+  margin:10px;border:1px solid var(--border-color);border-radius:16px;background:var(--bg-surface);overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);min-width:0}
+.jv-cerebro [data-g="centro"]{--g:var(--g-centro)}
+.jv-cerebro [data-g="temas"]{--g:var(--g-temas)}
+.jv-cerebro [data-g="datos"]{--g:var(--g-datos)}
+.jv-cerebro [data-g="internet"]{--g:var(--g-internet)}
+.jv-cerebro [data-g="vos"]{--g:var(--g-vos)}
+.jv-cerebro i[data-g]{flex:none;width:10px;height:10px;border-radius:50%;background:var(--g)}
+.jv-cerebro-cab{display:flex;align-items:center;gap:10px;padding:10px 10px 6px 12px;min-width:0}
+.jv-cerebro-tt{flex:1;min-width:0;display:grid;gap:1px}
+.jv-cerebro-tt > b{font-size:14px;color:var(--text-primary)}
+.jv-cerebro-tt > span{font-size:12px;color:var(--text-secondary);line-height:1.35}
+.jv-cerebro-tt > span b{color:var(--text-primary);font-variant-numeric:tabular-nums}
+.jv-cerebro-ic{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;color:var(--text-secondary);background:transparent;border:0}
+.jv-cerebro-ic:hover{background:var(--bg-sunken);color:var(--text-primary)}
+.jv-cerebro-ic:disabled{opacity:.5}
+.jv-cerebro-ensenar{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:4px 4px 4px 10px;border-radius:12px;background:var(--bg-sunken);color:var(--text-secondary);min-width:0}
+.jv-cerebro-ensenar input{flex:1;min-width:0;background:transparent;border:0;outline:0;font-size:13.5px;line-height:1.4;padding:6px 0;color:var(--text-primary)}
+.jv-cerebro-ensenar input::placeholder{color:var(--text-muted)}
+.jv-cerebro-ensenar:focus-within{box-shadow:0 0 0 2px var(--accent)}
+.jv-cerebro-ensenar .ai-chip{flex:none}
+.jv-cerebro-barra{display:flex;align-items:center;gap:8px;padding:0 10px;min-width:0}
+.jv-cerebro-buscar{flex:1;min-width:0;display:flex;align-items:center;gap:6px;height:38px;padding:0 4px 0 10px;border-radius:12px;border:1px solid var(--border-color);color:var(--text-muted)}
+.jv-cerebro-buscar:focus-within{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
+.jv-cerebro-buscar input{flex:1;min-width:0;height:100%;background:transparent;border:0;outline:0;font-size:13.5px;line-height:1.4;color:var(--text-primary)}
+.jv-cerebro-buscar .jv-cerebro-ic{width:30px;height:30px}
+.jv-cerebro-vistas{flex:none;display:flex;padding:3px;gap:2px;border-radius:12px;background:var(--bg-sunken)}
+.jv-cerebro-vistas button{display:grid;place-items:center;width:34px;height:32px;border-radius:9px;border:0;background:transparent;color:var(--text-secondary)}
+.jv-cerebro-vistas button[aria-pressed="true"]{background:var(--bg-surface);color:var(--text-primary);box-shadow:0 1px 2px rgba(0,0,0,.12)}
+.jv-cerebro-resultados{list-style:none;margin:6px 10px 0;padding:4px;border-radius:12px;border:1px solid var(--border-color);display:grid;gap:2px}
+.jv-cerebro-resultados button{width:100%;display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;background:transparent;border:0;text-align:left;color:var(--text-primary);font-size:13px;min-width:0}
+.jv-cerebro-resultados button:hover,.jv-cerebro-resultados button:focus-visible{background:var(--bg-sunken)}
+.jv-cerebro-resultados span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jv-cerebro-resultados small{flex:none;font-size:11.5px;color:var(--text-muted)}
+.jv-cerebro-sinres{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:6px 10px 0;font-size:12.5px;color:var(--text-secondary);line-height:1.4}
+.jv-cerebro-filtros{display:flex;gap:6px;padding:8px 10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+.jv-cerebro-filtros::-webkit-scrollbar{display:none}
+.jv-cerebro-filtros button{flex:none;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-surface);font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap}
+.jv-cerebro-filtros button i{width:9px;height:9px;border-radius:50%;background:var(--g)}
+.jv-cerebro-filtros button[aria-pressed="false"]{color:var(--text-muted);background:transparent;border-style:dashed}
+.jv-cerebro-filtros button[aria-pressed="false"] i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--g)}
+.jv-cerebro-lienzo{position:relative;width:100%;height:clamp(260px,52vh,460px);border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft);background:
+  radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 70%),var(--bg-surface);overflow:hidden}
+.jv-cerebro-lienzo canvas{display:block;touch-action:none;cursor:grab}
+.jv-cerebro-lienzo canvas:active{cursor:grabbing}
+.jv-cerebro-vacio{position:absolute;inset:0;display:grid;place-items:center;margin:0;padding:16px;text-align:center;font-size:13px;color:var(--text-muted)}
+.jv-cerebro-zoom{position:absolute;right:8px;bottom:8px;display:grid;gap:4px;padding:4px;border-radius:12px;background:color-mix(in srgb,var(--bg-surface) 88%,transparent);border:1px solid var(--border-color);box-shadow:0 2px 8px rgba(0,0,0,.08)}
+.jv-cerebro-zoom button{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;border:0;background:transparent;color:var(--text-primary)}
+.jv-cerebro-zoom button:hover{background:var(--bg-sunken)}
+.jv-cerebro-vacio-caja{display:grid;justify-items:center;gap:8px;padding:28px 18px;text-align:center;color:var(--text-secondary)}
+.jv-cerebro-vacio-caja b{font-size:14px;color:var(--text-primary)}
+.jv-cerebro-vacio-caja p{margin:0;max-width:42ch;font-size:12.5px;line-height:1.5}
+.jv-cerebro-nota{margin:0;padding:8px 12px 12px;font-size:12px;color:var(--text-muted);line-height:1.45}
+/* Lista */
+.jv-arbol{max-height:clamp(260px,58vh,460px);overflow:auto;border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft);padding:6px 6px 6px 2px}
+.jv-arbol ul{list-style:none;margin:0;padding:0}
+.jv-arbol ul ul{padding-left:4px;margin-left:13px;border-left:1px solid var(--border-soft)}
+.jv-arbol-linea{display:flex;align-items:center;gap:2px;min-width:0}
+.jv-arbol-abrir{flex:none;display:grid;place-items:center;width:28px;height:32px;border:0;border-radius:7px;background:transparent;color:var(--text-muted)}
+button.jv-arbol-abrir:hover{background:var(--bg-sunken);color:var(--text-primary)}
+.jv-arbol-chev{transition:transform .15s}
+.jv-arbol-abrir[aria-expanded="true"] .jv-arbol-chev{transform:rotate(90deg)}
+.jv-arbol-fila{flex:1;min-width:0;display:flex;align-items:center;gap:8px;min-height:34px;padding:4px 8px;border-radius:8px;border:0;background:transparent;text-align:left;font-size:13px;color:var(--text-primary);min-width:0}
+.jv-arbol-fila:hover,.jv-arbol-fila:focus-visible{background:var(--bg-sunken)}
+.jv-arbol-fila[aria-current]{background:color-mix(in srgb,var(--accent) 14%,transparent);font-weight:700}
+.jv-arbol-fila span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jv-arbol-fila small{flex:none;font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.jv-arbol-fila em{flex:none;font-style:normal;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:999px;background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
+@media (prefers-reduced-motion: reduce){.jv-arbol-chev{transition:none}}
+/* Detalle */
+.jv-cerebro-detalle{display:grid;gap:8px;padding:10px 12px 12px;min-width:0}
+.jv-det-cab{display:flex;align-items:center;gap:10px;min-width:0}
+.jv-det-cab > i[data-g]{width:12px;height:12px}
+.jv-det-tt{flex:1;min-width:0;display:grid;gap:1px}
+.jv-det-tt b{font-size:14.5px;color:var(--text-primary);overflow-wrap:anywhere;line-height:1.3}
+.jv-det-tt span{font-size:12px;color:var(--text-secondary)}
+.jv-det-res{margin:0;font-size:13px;line-height:1.55;color:var(--text-primary);overflow-wrap:anywhere;white-space:pre-line;max-height:12.5em;overflow:auto}
+.jv-det-edit{width:100%;font:inherit;font-size:13px;line-height:1.5;padding:8px 10px;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-sunken);color:var(--text-primary);resize:vertical}
+.jv-det-edit:focus{outline:2px solid var(--accent);outline-offset:0}
+.jv-det-url{display:inline-flex;align-items:center;gap:6px;justify-self:start;max-width:100%;font-size:12.5px;font-weight:600;color:var(--accent);text-decoration:none}
+.jv-det-url span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jv-det-url:hover span{text-decoration:underline}
+.jv-det-con{display:grid;gap:6px}
+.jv-det-con > span{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)}
+.jv-det-con > div{display:flex;flex-wrap:wrap;gap:6px}
+.jv-det-con button{display:inline-flex;align-items:center;gap:6px;max-width:100%;height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-surface);font-size:12px;color:var(--text-primary)}
+.jv-det-con button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jv-det-con button i{width:8px;height:8px}
+.jv-det-con small{align-self:center;font-size:12px;color:var(--text-muted)}
+.jv-det-meta{margin:0;font-size:11.5px;color:var(--text-muted);font-variant-numeric:tabular-nums}
+.jv-det-aviso{margin:0;font-size:12.5px;color:var(--text-secondary)}
+.jv-det-acc{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
+.jv-det-preg{flex-basis:100%;font-size:12.5px;font-weight:600;color:var(--text-primary)}
+.jv-det-acc .ai-chip[data-peligro]{background:var(--jv-peligro);color:var(--jv-peligro-ink);border-color:transparent}
+.jv-det-acc .ai-chip[data-primario]{background:var(--accent);color:#fff;border-color:transparent}
+.ai-mem[data-cerebro] .ai-chip{flex:none}
+@media (max-width:420px){.jv-cerebro{margin:6px 2px}.jv-cerebro-tt > b{font-size:13.5px}
+  .jv-arbol-fila em{font-size:0;width:8px;height:8px;padding:0;background:var(--ok)}
+  .jv-arbol span.jv-arbol-abrir{width:12px}}
+/* Dentro de la ventana flotante la red se ve entera sin desplazar. */
+.jv-hoja .jv-cerebro-lienzo,.jv-hoja .jv-arbol{height:clamp(240px,44vh,420px);max-height:none}
+.jv-hoja .jv-arbol{height:auto;max-height:clamp(240px,44vh,420px)}
 
 /* =====================================================================
    DENSIDAD EN TELÉFONO (estándar: Galaxy A12, incluso con el «zoom de

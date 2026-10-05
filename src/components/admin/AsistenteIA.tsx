@@ -33,6 +33,7 @@ import { aparatoActual } from '../../seguridad/killSwitch';
 
 /** Abre un módulo del panel en su pestaña (lo da AdminPanel). */
 const AbrirModuloCtx = React.createContext<((m: string) => void) | undefined>(undefined);
+const VerCerebroCtx = React.createContext<(() => void) | undefined>(undefined);
 
 interface Conversacion { id: string; titulo: string; actualizado_en: string }
 /** Una consulta al sistema que hizo la IA (la tarjeta encima de la respuesta). */
@@ -40,7 +41,7 @@ interface Panel { columnas: string[]; filas: (string | number | null)[][]; punto
 interface Consulta {
   modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean; panel?: Panel;
   /** Jarvis: «accion» es una propuesta (tarjeta con confirmar); «navegar», un botón para abrir un módulo. */
-  tipo?: 'accion' | 'navegar' | 'memoria'; id?: string; destino?: string; grafico?: Grafico;
+  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro'; id?: string; destino?: string; grafico?: Grafico;
 }
 type Perfil = 'rapido' | 'equilibrado' | 'profundo';
 type Persona = 'jarvis' | 'arquitecto';
@@ -436,6 +437,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
   // módulo y acciones por confirmar— después del texto, que lo explica.
   const lecturas = (m.consultas || []).filter(c => !c.tipo);
   const memorias = (m.consultas || []).filter(c => c.tipo === 'memoria');
+  const cerebros = (m.consultas || []).filter(c => c.tipo === 'cerebro');
   const valorable = !!onValorar && !!m.persona && /^[0-9a-f-]{36}$/i.test(m.id);
   const graficos = lecturas.filter(c => c.grafico);
   const irs = (m.consultas || []).filter(c => c.tipo === 'navegar' && c.destino);
@@ -452,6 +454,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
       {irs.map((c, i) => <React.Fragment key={`n${i}`}><IrModulo titulo={c.desc} destino={c.destino!} /></React.Fragment>)}
       {acciones.map(c => <React.Fragment key={c.id}><TarjetaAccion id={c.id!} /></React.Fragment>)}
       {memorias.map((c, i) => <React.Fragment key={`m${i}`}><ChipMemoria id={c.id} texto={c.desc} estado={c.filas} detalle={c.detalle} /></React.Fragment>)}
+      {cerebros.map((c, i) => <React.Fragment key={`c${i}`}><ChipCerebro texto={c.desc} aprendido={c.filas === 'aprendido'} /></React.Fragment>)}
       {esRequerimiento && !enVivo && (
         <div className="ai-graf-pie" style={{ padding: 0 }}>
           <button type="button" className="ai-chip" onClick={() => onCopiar(m.texto)}><Copy className="w-4 h-4" />Copiar como prompt</button>
@@ -489,6 +492,17 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
   );
 });
 const BORRADOR = 'borrador-en-vivo';
+/** «Aprendí: iPhone · iPhone 15» o «Usé lo que sé de: …», con atajo al cerebro. */
+function ChipCerebro({ texto, aprendido }: { texto: string; aprendido: boolean }) {
+  const ver = React.useContext(VerCerebroCtx);
+  return (
+    <div className="ai-mem" data-cerebro={aprendido ? 'aprendido' : 'usado'}>
+      <span className="ai-herr-ic"><Brain className="w-4 h-4" /></span>
+      <span className="ai-mem-tx"><b>{aprendido ? 'Aprendí' : 'Usé lo que sé de'}</b>{texto}</span>
+      {ver && <button type="button" className="ai-chip" onClick={ver}>Ver en el cerebro</button>}
+    </div>
+  );
+}
 function IrModulo({ titulo, destino }: { titulo: string; destino: string }) {
   const abrir = React.useContext(AbrirModuloCtx);
   return <TarjetaIr titulo={titulo} destino={destino} onAbrir={abrir} />;
@@ -814,6 +828,8 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
             if (d.conversacionId) convDelPedido = d.conversacionId;
             // Por voz: aquí llega lo que se entendió, para mostrarlo ya.
             if (d.pregunta) setMensajes(prev => prev.map(m => (m.pendiente && m.rol === 'user' ? { ...m, texto: d.pregunta } : m)));
+            // Lo dictado también pasa por el carril privado (en el servidor): se guardan sus marcas.
+            if (d.privados && typeof d.privados === 'object') privadosRef.current = { ...privadosRef.current, ...d.privados };
             return;
           }
           if (evento === 'texto') { borrador.texto += d.delta || ''; borrador.estado = undefined; }
@@ -827,6 +843,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
             borrador.consultas = [...(borrador.consultas || []), { tipo: 'accion', id: d.id, modulo: d.tarjeta?.modulo || 'Jarvis', desc: d.tarjeta?.titulo || 'Acción', filas: 'propuesta', detalle: '' }];
           }
           else if (evento === 'navegar' || evento === 'memoria') borrador.consultas = [...(borrador.consultas || []), d];
+          else if (evento === 'cerebro') borrador.consultas = [...(borrador.consultas || []).filter(c => !(c.tipo === 'cerebro' && c.filas === d.filas)), d];
           else return;
           pedirPintar();
         },
@@ -1005,8 +1022,10 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
   );
 
   const perfilActual = PERFILES.find(p => p.id === perfil) || PERFILES[1];
+  const verCerebro = () => setVista('cerebro');
   return (
     <AbrirModuloCtx.Provider value={onAbrirModulo}>
+    <VerCerebroCtx.Provider value={jarvis ? verCerebro : undefined}>
     <div className="ai-root" id="view-asistente">
       <aside className="ai-lado">{listaConvs}</aside>
 
@@ -1044,7 +1063,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
           )}
         </header>
 
-        {vista === 'cerebro' && jarvis ? <div className="ai-ajustes"><React.Suspense fallback={null}><CerebroJarvis /></React.Suspense></div> : vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} /> : (
+        {vista === 'cerebro' && jarvis ? <div className="ai-ajustes"><React.Suspense fallback={null}><CerebroJarvis onPreguntar={t => { setVista('chat'); void enviar(t); }} /></React.Suspense></div> : vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} /> : (
           <>
             {aviso && (
               <div className="ai-aviso" data-tipo={aviso.tipo}>
@@ -1243,6 +1262,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
         </div>
       )}
     </div>
+    </VerCerebroCtx.Provider>
     </AbrirModuloCtx.Provider>
   );
 }

@@ -412,9 +412,15 @@ export const ACCIONES: Accion[] = [
       const valorDe = (pref: string) => marcas.filter(m => m.startsWith(pref)).map(m => ctx.privados[m]).find(Boolean) || '';
       let cedula = valorDe('CÉDULA').replace(/\D/g, '');
       let correo = valorDe('CORREO').toLowerCase();
-      const telefono = valorDe('TEL').replace(/\D/g, '');
-      let nombre = crudo.replace(/\[[^\]]*\]/g, ' ').replace(/\s+/g, ' ').trim();
-      let idTipo = cedula.length === 10 ? '02' : '01';
+      let telefono = valorDe('TEL').replace(/\D/g, '');
+      // Si igual llegaron crudos (nombre, cédula y correo en una sola tira),
+      // se separan aquí: cada dato a su casilla y el nombre queda limpio.
+      let resto = crudo.replace(/\[[^\]]*\]/g, ' ');
+      resto = resto.replace(/[^\s@]+@[^\s@]+\.[a-z]{2,}/gi, m => { if (!correo) correo = m.replace(/[.,;:]+$/, '').toLowerCase(); return ' '; });
+      resto = resto.replace(/\b\d-?\d{4}-?\d{4}\b|\b\d{9,12}\b/g, m => { if (!cedula) cedula = m.replace(/\D/g, ''); return ' '; });
+      resto = resto.replace(/(?:\+?506[\s-]?)?\b[2-8]\d{3}[\s-]?\d{4}\b/g, m => { if (!telefono) telefono = m.replace(/\D/g, '').slice(-8); return ' '; });
+      let nombre = resto.replace(/\b(c[eé]dula|correo|tel[eé]fono|cel(ular)?|email|n[uú]mero)\b:?/gi, ' ').replace(/[,;:]+/g, ' ').replace(/\s+/g, ' ').trim();
+      let idTipo = cedula.length === 10 ? '02' : cedula.length >= 11 ? '03' : '01';
       let previo = false;
       const cols = 'customer_name,customer_identification,customer_identification_type,customer_email';
       const { data: ant } = cedula
