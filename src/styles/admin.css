@@ -2774,23 +2774,33 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
   #admin-panel-root .tv-scroll:not([data-pantalla='completa']) > .tv-container{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
 }
 
-/* ---------- Cerebro de Jarvis (red d3) ---------- */
-.jv-cerebro{--g-centro:var(--accent);--g-temas:var(--jv-actual);--g-datos:var(--ok);--g-internet:var(--tv-warn);--g-vos:var(--jv-peligro);
-  margin:10px;border:1px solid var(--border-color);border-radius:16px;background:var(--bg-surface);overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);min-width:0}
+/* ---------- Cerebro de Jarvis (3D) ---------- */
+/* Colores de las neuronas: en claro, tonos profundos sobre un laboratorio
+   luminoso; en oscuro, tonos encendidos sobre el espacio. */
+.jv-cerebro{--jv-n-centro:#0B6E7A;--jv-n-temas:#0790A6;--jv-n-datos:#1E8A55;--jv-n-internet:#B86A0E;--jv-n-vos:#C2363B;
+  --jv-esc-1:#F4FAFA;--jv-esc-2:#DCEBEC;--jv-esc-texto:#0F2A2E;--jv-esc-halo:rgba(244,250,250,.92);--jv-esc-oscuro:0;--jv-esc-borde:#CFE0E2;
+  --g-centro:var(--jv-n-centro);--g-temas:var(--jv-n-temas);--g-datos:var(--jv-n-datos);--g-internet:var(--jv-n-internet);--g-vos:var(--jv-n-vos);
+  margin:10px;border:1px solid var(--border-color);border-radius:18px;background:var(--bg-surface);overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);min-width:0}
+.dark .jv-cerebro{--jv-n-centro:#6FF0E6;--jv-n-temas:#3FCFE6;--jv-n-datos:#5BE09A;--jv-n-internet:#FFBE63;--jv-n-vos:#FF7A80;
+  --jv-esc-1:#0F2326;--jv-esc-2:#04090A;--jv-esc-texto:#E6F4F3;--jv-esc-halo:rgba(4,9,10,.85);--jv-esc-oscuro:1;--jv-esc-borde:#173236}
 .jv-cerebro [data-g="centro"]{--g:var(--g-centro)}
 .jv-cerebro [data-g="temas"]{--g:var(--g-temas)}
 .jv-cerebro [data-g="datos"]{--g:var(--g-datos)}
 .jv-cerebro [data-g="internet"]{--g:var(--g-internet)}
 .jv-cerebro [data-g="vos"]{--g:var(--g-vos)}
-.jv-cerebro i[data-g]{flex:none;width:10px;height:10px;border-radius:50%;background:var(--g)}
-.jv-cerebro-cab{display:flex;align-items:center;gap:10px;padding:10px 10px 6px 12px;min-width:0}
-.jv-cerebro-tt{flex:1;min-width:0;display:grid;gap:1px}
-.jv-cerebro-tt > b{font-size:14px;color:var(--text-primary)}
-.jv-cerebro-tt > span{font-size:12px;color:var(--text-secondary);line-height:1.35}
-.jv-cerebro-tt > span b{color:var(--text-primary);font-variant-numeric:tabular-nums}
+.jv-cerebro i[data-g]{flex:none;width:10px;height:10px;border-radius:50%;background:var(--g);box-shadow:0 0 0 3px color-mix(in srgb,var(--g) 18%,transparent)}
 .jv-cerebro-ic{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;color:var(--text-secondary);background:transparent;border:0}
 .jv-cerebro-ic:hover{background:var(--bg-sunken);color:var(--text-primary)}
 .jv-cerebro-ic:disabled{opacity:.5}
+/* Resumen: cifras y curva de crecimiento */
+.jv-cb-resumen{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;align-items:center;gap:6px;padding:12px 10px 10px 14px}
+.jv-cb-cifra{display:grid;gap:0;min-width:0;position:relative}
+.jv-cb-cifra b{font-size:22px;line-height:1.1;font-weight:800;letter-spacing:-.02em;color:var(--text-primary);font-variant-numeric:tabular-nums}
+.jv-cb-cifra span{font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.jv-cb-crece b{color:var(--jv-n-datos)}
+.jv-cb-curva{display:block;width:100%;max-width:90px;height:16px;margin-top:3px;overflow:visible}
+.jv-cb-curva polygon{fill:color-mix(in srgb,var(--jv-n-datos) 16%,transparent)}
+.jv-cb-curva polyline{fill:none;stroke:var(--jv-n-datos);stroke-width:1.6;vector-effect:non-scaling-stroke;stroke-linejoin:round}
 .jv-cerebro-ensenar{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:4px 4px 4px 10px;border-radius:12px;background:var(--bg-sunken);color:var(--text-secondary);min-width:0}
 .jv-cerebro-ensenar input{flex:1;min-width:0;background:transparent;border:0;outline:0;font-size:13.5px;line-height:1.4;padding:6px 0;color:var(--text-primary)}
 .jv-cerebro-ensenar input::placeholder{color:var(--text-muted)}
@@ -2816,18 +2826,31 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
 .jv-cerebro-filtros button i{width:9px;height:9px;border-radius:50%;background:var(--g)}
 .jv-cerebro-filtros button[aria-pressed="false"]{color:var(--text-muted);background:transparent;border-style:dashed}
 .jv-cerebro-filtros button[aria-pressed="false"] i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--g)}
-.jv-cerebro-lienzo{position:relative;width:100%;height:clamp(260px,52vh,460px);border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft);background:
-  radial-gradient(circle at 50% 50%,color-mix(in srgb,var(--accent) 7%,transparent),transparent 70%),var(--bg-surface);overflow:hidden}
-.jv-cerebro-lienzo canvas{display:block;touch-action:none;cursor:grab}
-.jv-cerebro-lienzo canvas:active{cursor:grabbing}
-.jv-cerebro-vacio{position:absolute;inset:0;display:grid;place-items:center;margin:0;padding:16px;text-align:center;font-size:13px;color:var(--text-muted)}
-.jv-cerebro-zoom{position:absolute;right:8px;bottom:8px;display:grid;gap:4px;padding:4px;border-radius:12px;background:color-mix(in srgb,var(--bg-surface) 88%,transparent);border:1px solid var(--border-color);box-shadow:0 2px 8px rgba(0,0,0,.08)}
-.jv-cerebro-zoom button{display:grid;place-items:center;width:32px;height:32px;border-radius:9px;border:0;background:transparent;color:var(--text-primary)}
-.jv-cerebro-zoom button:hover{background:var(--bg-sunken)}
+/* Escena 3D */
+.jv-cb-escena{position:relative;width:100%;height:clamp(300px,56vh,520px);overflow:hidden;
+  background:radial-gradient(ellipse at 50% 45%,var(--jv-esc-1) 0%,var(--jv-esc-2) 78%);border-top:1px solid var(--jv-esc-borde);border-bottom:1px solid var(--jv-esc-borde)}
+.jv-cb-escena canvas{display:block;touch-action:none;cursor:grab;outline:none}
+.jv-cb-escena canvas:active{cursor:grabbing}
+.jv-cb-escena canvas:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
+.jv-cb-ayuda{position:absolute;left:50%;top:10px;transform:translateX(-50%);margin:0;padding:5px 12px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap;max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis;pointer-events:none;
+  color:var(--jv-esc-texto);background:color-mix(in srgb,var(--jv-esc-1) 70%,transparent);border:1px solid var(--jv-esc-borde);backdrop-filter:blur(6px)}
+.jv-cb-controles{position:absolute;right:8px;bottom:8px;display:grid;gap:2px;padding:4px;border-radius:14px;
+  background:color-mix(in srgb,var(--jv-esc-1) 78%,transparent);border:1px solid var(--jv-esc-borde);backdrop-filter:blur(8px)}
+.jv-cb-controles button{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;border:0;background:transparent;color:var(--jv-esc-texto)}
+.jv-cb-controles button:hover{background:color-mix(in srgb,var(--jv-esc-texto) 10%,transparent)}
+.jv-cerebro-vacio{position:absolute;inset:0;display:grid;place-items:center;margin:0;padding:16px;text-align:center;font-size:13px;color:var(--jv-esc-texto);opacity:.7}
 .jv-cerebro-vacio-caja{display:grid;justify-items:center;gap:8px;padding:28px 18px;text-align:center;color:var(--text-secondary)}
 .jv-cerebro-vacio-caja b{font-size:14px;color:var(--text-primary)}
 .jv-cerebro-vacio-caja p{margin:0;max-width:42ch;font-size:12.5px;line-height:1.5}
-.jv-cerebro-nota{margin:0;padding:8px 12px 12px;font-size:12px;color:var(--text-muted);line-height:1.45}
+.jv-cb-logo{display:grid;place-items:center;width:48px;height:48px;border-radius:16px;color:var(--jv-n-temas);background:color-mix(in srgb,var(--jv-n-temas) 14%,transparent)}
+/* Lo último que aprendió */
+.jv-cb-ultimos{padding:12px 12px 14px;display:grid;gap:8px}
+.jv-cb-ultimos h4{display:flex;align-items:center;gap:6px;margin:0;font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted)}
+.jv-cb-ultimos ul{list-style:none;margin:0;padding:0;display:grid;gap:2px}
+.jv-cb-ultimos button{width:100%;display:flex;align-items:center;gap:10px;min-height:36px;padding:6px 8px;border-radius:10px;border:0;background:transparent;text-align:left;color:var(--text-primary);font-size:13px;min-width:0}
+.jv-cb-ultimos button:hover,.jv-cb-ultimos button:focus-visible{background:var(--bg-sunken)}
+.jv-cb-ultimos span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.jv-cb-ultimos small{flex:none;font-size:11.5px;color:var(--text-muted);font-variant-numeric:tabular-nums}
 /* Lista */
 .jv-arbol{max-height:clamp(260px,58vh,460px);overflow:auto;border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft);padding:6px 6px 6px 2px}
 .jv-arbol ul{list-style:none;margin:0;padding:0}
@@ -2872,11 +2895,11 @@ button.jv-arbol-abrir:hover{background:var(--bg-sunken);color:var(--text-primary
 .jv-det-acc .ai-chip[data-primario]{background:var(--accent);color:#fff;border-color:transparent}
 .ai-mem[data-cerebro] .ai-chip{flex:none}
 .ai-acc-solo{display:flex;align-items:center;gap:8px;margin:0;padding:8px 14px 12px;font-size:13px;color:var(--text-secondary)}
-@media (max-width:420px){.jv-cerebro{margin:6px 2px}.jv-cerebro-tt > b{font-size:13.5px}
+@media (max-width:420px){.jv-cerebro{margin:6px 2px}.jv-cb-cifra b{font-size:19px}
   .jv-arbol-fila em{font-size:0;width:8px;height:8px;padding:0;background:var(--ok)}
   .jv-arbol span.jv-arbol-abrir{width:12px}}
 /* Dentro de la ventana flotante la red se ve entera sin desplazar. */
-.jv-hoja .jv-cerebro-lienzo,.jv-hoja .jv-arbol{height:clamp(240px,44vh,420px);max-height:none}
+.jv-hoja .jv-cb-escena{height:clamp(260px,46vh,440px)}
 .jv-hoja .jv-arbol{height:auto;max-height:clamp(240px,44vh,420px)}
 
 /* =====================================================================
