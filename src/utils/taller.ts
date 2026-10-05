@@ -47,3 +47,44 @@ export function cambiarEstadoOrden(repairId: string, newStatus: RepairOrder['sta
   );
   return prevStatus;
 }
+
+// ---------------------------------------------------------------------
+// Abrir una orden (Jarvis: «entró un A12 de Laura, no carga»). Igual que
+// el formulario del tablero: estado Pendiente, bitácora y bitácora
+// general. Sin correo ni teléfono (no se piden por voz): se completan en
+// el tablero si hacen falta, y por eso no se crea ficha de cliente.
+// ---------------------------------------------------------------------
+export type OrdenNueva = { cliente: string; equipo: string; falla: string; categoria: string; garantia: number; mano: number };
+
+export function abrirOrden(n: OrdenNueva, quien: string): RepairOrder {
+  const db = getDB();
+  const usados = new Set(db.repair_orders.map(r => r.ticket));
+  let numero = 0;
+  do { numero = Math.floor(100 + Math.random() * 900); } while (usados.has(`TKT-${numero}`) && usados.size < 900);
+  const [marca, ...resto] = n.equipo.trim().split(/\s+/);
+  const ahora = new Date().toISOString();
+  const orden: RepairOrder = {
+    id: `GT-${numero}`,
+    ticket: `TKT-${numero}`,
+    customerId: `CUST-${Math.floor(1000 + Math.random() * 9000)}`,
+    customerName: n.cliente.trim(),
+    customerEmail: '',
+    device: `${n.equipo.trim()} (${n.categoria})`,
+    deviceCategory: n.categoria,
+    deviceBrand: marca,
+    deviceModel: resto.join(' ') || marca,
+    damageReported: n.falla.trim(),
+    repuestos: [],
+    laborCost: Math.max(0, Math.round(n.mano || 0)),
+    totalCost: Math.max(0, Math.round(n.mano || 0)),
+    status: 'Pendiente',
+    warrantyMonths: Math.max(3, Math.round(n.garantia || 3)),
+    bitacora: [{ status: 'Pendiente', notes: 'Orden abierta por Jarvis. Equipo recibido para diagnóstico.', timestamp: ahora, user: quien }],
+    createdAt: ahora,
+    repairLocation: 'Taller en casa',
+  };
+  db.repair_orders.push(orden);
+  void saveDB(db);
+  addAuditLog(quien, 'Taller', 'Crear Orden', `Orden ${orden.id} (${orden.ticket}) abierta por Jarvis para ${orden.customerName}: ${orden.device}.`);
+  return orden;
+}

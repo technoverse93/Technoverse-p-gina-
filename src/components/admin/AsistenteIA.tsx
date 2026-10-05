@@ -737,7 +737,33 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     if (activa && !cargandoConv && mensajes.length && !mensajes.some(m => m.pendiente)) guardarEnCache(activa, mensajes);
   }, [activa, mensajes, cargandoConv]);
 
-  useEffect(() => { finRef.current?.scrollIntoView({ block: 'end' }); }, [mensajes.length, enviando]);
+  // La conversación queda PEGADA AL FONDO (la última respuesta a la vista)
+  // al abrir Jarvis, al volver del cerebro o los ajustes y mientras crece
+  // (tarjetas, tablas y gráficos que terminan de cargar después). Si la
+  // persona sube a leer algo, se respeta hasta que vuelva a bajar.
+  const msgsRef = useRef<HTMLDivElement>(null);
+  const pegado = useRef(true);
+  const alFondo = useCallback(() => { const el = msgsRef.current; if (el) el.scrollTop = el.scrollHeight; }, []);
+  useEffect(() => {
+    const el = msgsRef.current;
+    if (!el) return;
+    pegado.current = true;
+    alFondo();
+    const alMover = () => { pegado.current = el.scrollHeight - el.scrollTop - el.clientHeight < 80; };
+    el.addEventListener('scroll', alMover, { passive: true });
+    // Cualquier cambio de tamaño del contenido (o de la caja) re-pega.
+    const ro = new ResizeObserver(() => { if (pegado.current) alFondo(); });
+    ro.observe(el);
+    for (const hijo of Array.from(el.children) as Element[]) ro.observe(hijo);
+    const mo = new MutationObserver(() => {
+      for (const hijo of Array.from(el.children) as Element[]) ro.observe(hijo);
+      if (pegado.current) alFondo();
+    });
+    mo.observe(el, { childList: true, subtree: true, characterData: true });
+    return () => { el.removeEventListener('scroll', alMover); ro.disconnect(); mo.disconnect(); };
+  }, [vista, cargandoConv, alFondo]);
+  // Conversación distinta o mensaje nuevo: siempre al fondo.
+  useEffect(() => { pegado.current = true; alFondo(); }, [activa, mensajes.length, enviando, alFondo]);
 
   // La caja crece con el texto hasta un tope, como en la app de Claude.
   useEffect(() => {
@@ -1095,7 +1121,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                 <button type="button" aria-label="Cerrar aviso" onClick={() => setAviso(null)}><X className="w-4 h-4" /></button>
               </div>
             )}
-            <div className="ai-msgs">
+            <div className="ai-msgs" ref={msgsRef}>
               {cargandoConv ? (
                 <div className="ai-esqueleto" aria-label="Cargando conversación"><i /><i /><i /></div>
               ) : agotado && mensajes.length === 0 ? (
