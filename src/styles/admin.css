@@ -3018,3 +3018,13 @@ html textarea { line-height: 1.45; }
   #admin-panel-root .ai-ch .ai-persona .ai-chev { display: none; }
   #admin-panel-root .ai-root .ai-cupo-pill { height: 36px; padding: 0 8px; }
 }
+
+/* Acción que Jarvis hizo sola: una línea discreta, como un asistente. */
+.ai-acc-linea{display:inline-flex;align-items:center;gap:7px;align-self:flex-start;max-width:100%;padding:5px 6px 5px 10px;border-radius:999px;background:var(--tv-accent-soft);color:var(--accent);font-size:12.5px;font-weight:600;animation:ai-linea-in .18s ease-out both}
+.ai-acc-linea>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.ai-acc-linea[data-estado="deshecha"]{background:var(--bg-sunken);color:var(--text-secondary)}
+#admin-panel-root .ai-acc-linea button{all:unset;cursor:pointer;padding:2px 8px;border-radius:999px;color:var(--text-secondary);font-weight:600}
+#admin-panel-root .ai-acc-linea button:hover{color:var(--text-primary);background:var(--bg-surface)}
+#admin-panel-root .ai-acc-linea button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+@keyframes ai-linea-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+@media (prefers-reduced-motion:reduce){.ai-acc-linea{animation:none}}

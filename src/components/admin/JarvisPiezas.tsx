@@ -122,6 +122,12 @@ export function TarjetaAccion({ id }: { id: string }) {
           const { enviarRespuestaDeSoporte } = await import('../chat/enviarRespuesta');
           const e = await enviarRespuestaDeSoporte(d.convId, d.texto, quien);
           res = { ok: e.ok, mensaje: e.mensaje, extra: { msgId: e.msgId, cliente: d.cliente } };
+        } else if (r.ejecutarEnCliente.tipo === 'inventario' && Array.isArray(d.crear)) {
+          const { crearProductos } = await import('../../utils/inventario');
+          const hechos = await crearProductos(d.crear, d.enTienda !== false, quien, 'Creado por Jarvis');
+          res = hechos.length
+            ? { ok: true, mensaje: hechos.length === 1 ? `Creado: ${hechos[0].nombre}.` : `Creados: ${hechos.map(h => h.nombre).join(', ')}.`, extra: { creados: JSON.stringify(hechos.map(h => h.id)) } }
+            : { ok: false, mensaje: 'Esos productos ya existen en el inventario.' };
         } else if (r.ejecutarEnCliente.tipo === 'inventario') {
           const { editarProducto } = await import('../../utils/inventario');
           const antes = editarProducto(d.productId, { modo: d.modo, stock: d.stock ?? undefined, precio: d.precio ?? undefined }, quien, 'Pedido a Jarvis');
@@ -183,6 +189,13 @@ export function TarjetaAccion({ id }: { id: string }) {
         const { borrarMensajeParaTodos } = await import('../../utils/storage');
         if (!datos.msgId) throw new Error('No encontré el mensaje.');
         await borrarMensajeParaTodos(datos.msgId);
+      } else if (t.accion === 'crear_producto') {
+        const { retirarProductos } = await import('../../utils/inventario');
+        const { data: { session } } = await supabase.auth.getSession();
+        let ids: string[] = [];
+        try { ids = JSON.parse(datos.creados || '[]'); } catch { /* sin ids */ }
+        if (!ids.length) throw new Error('No sé qué productos retirar.');
+        await retirarProductos(ids, session?.user?.email || 'admin', 'Deshecho desde Jarvis');
       } else if (t.enCliente === 'inventario') {
         const { editarProducto } = await import('../../utils/inventario');
         const { data: { session } } = await supabase.auth.getSession();
@@ -214,6 +227,23 @@ export function TarjetaAccion({ id }: { id: string }) {
   // para reintentar o corregir.
   const recienCreada = tarjetasVivas.has(id) || autoHecho.current || (!!fila.creada_en && Date.now() - new Date(fila.creada_en).getTime() < 30_000);
   const enviandoSolo = !!t.auto && (estado === 'propuesta' || estado === 'ejecutando') && !error && recienCreada;
+
+  // Lo que Jarvis hace solo (un mensaje, una orden, el inventario) se
+  // confirma como un asistente: una línea discreta con «Deshacer», no una
+  // tarjeta grande. Si falla, vuelve la tarjeta completa para reintentar.
+  if (t.auto && !error && (enviandoSolo || estado === 'ejecutada' || estado === 'deshecha')) {
+    const cliente = fila.resultado?.datos?.cliente;
+    const linea = estado === 'deshecha' ? (fila.resultado?.deshecho?.detalle || 'Deshecho.')
+      : estado === 'ejecutada' ? (t.accion === 'responder_chat' ? `Enviado${cliente ? ` a ${cliente}` : ''}` : (fila.resultado?.detalle || 'Hecho.'))
+      : t.accion === 'responder_chat' ? 'Enviando…' : 'Haciéndolo…';
+    return (
+      <div className="ai-acc-linea" data-estado={estado === 'ejecutada' ? 'hecha' : estado} role="status">
+        {estado === 'ejecutada' ? <CircleCheck className="w-4 h-4" aria-hidden="true" /> : estado === 'deshecha' ? <Undo2 className="w-4 h-4" aria-hidden="true" /> : <span className="ai-giro" aria-hidden="true" />}
+        <span>{linea}</span>
+        {puedeDeshacer && <button type="button" onClick={() => void deshacer()} disabled={ocupado}>Deshacer</button>}
+      </div>
+    );
+  }
 
   return (
     <div className="ai-acc" data-estado={estado === 'ejecutada' ? 'hecha' : estado} data-riesgo={t.riesgo === 'reversible' ? 'bajo' : 'acceso'}>
