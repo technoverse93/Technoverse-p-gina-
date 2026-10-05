@@ -839,6 +839,31 @@ export function iniciarSincronizacionBiometrica(): void {
 }
 
 /**
+ * Para la ventanita del mini-widget (src/rapido.tsx), que usa la misma
+ * sesión que la app sin pasar por la huella.
+ *
+ * Si la ventanita renueva la sesión mientras la app está cerrada, el pase
+ * guardado detrás de la huella quedaría viejo y la huella fallaría después
+ * («la sesión guardada caducó»): por eso se guarda igual que en la app.
+ *
+ * A diferencia de `iniciarSincronizacionBiometrica`, NO toca el candado
+ * (`marcarBloqueo`): supabase-js emite SIGNED_IN también al recuperar una
+ * sesión guardada, y la ventanita no debe abrir la app que quedó cerrada
+ * con llave. La app sigue pidiendo su huella como siempre.
+ */
+export function sincronizarPaseSinTocarCandado(): void {
+  try {
+    supabase.auth.onAuthStateChange((evento, sesion) => {
+      if (esAplicacionNativa() && (evento === 'SIGNED_IN' || evento === 'TOKEN_REFRESHED' || evento === 'INITIAL_SESSION')) {
+        void guardarPaseActual(sesion?.refresh_token, sesion?.user?.email);
+      }
+    });
+  } catch {
+    /* sin sincronización la huella puede pedir la contraseña una vez; nada se rompe */
+  }
+}
+
+/**
  * Termina la sesión de la forma que corresponda a este aparato.
  *
  * ---------------------------------------------------------------------

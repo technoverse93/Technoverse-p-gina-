@@ -1,8 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Mini-widget «Jarvis», CHICO. Se usa en el propio recuadro: el micrófono
-     pregunta por voz y la respuesta sale aquí (y se lee); «Escribile…» abre
-     solo una barrita sobre el teclado. El botón de arriba lo agranda para
-     ver la conversación. Colores de la hoja de Jarvis en tema oscuro. -->
+<!-- Mini-widget «Jarvis», GRANDE: la conversación del widget (se desliza)
+     y, arriba, «Abrir conversación» (Jarvis completo, para confirmar
+     acciones o ver tablas) y el botón para achicarlo. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -54,27 +53,50 @@
             android:textSize="12sp" />
 
         <ImageView
+            android:id="@+id/jarvis_abrir"
+            android:layout_width="34dp"
+            android:layout_height="34dp"
+            android:contentDescription="Abrir la conversación completa"
+            android:padding="7dp"
+            android:src="@drawable/jarvis_ic_abrir" />
+
+        <ImageView
             android:id="@+id/jarvis_tamano"
             android:layout_width="34dp"
             android:layout_height="34dp"
-            android:contentDescription="Agrandar el widget"
+            android:contentDescription="Achicar el widget"
             android:padding="7dp"
-            android:src="@drawable/jarvis_ic_expandir" />
+            android:src="@drawable/jarvis_ic_achicar" />
     </LinearLayout>
 
-    <TextView
-        android:id="@+id/jarvis_ultima"
+    <FrameLayout
         android:layout_width="match_parent"
         android:layout_height="0dp"
-        android:layout_weight="1"
-        android:ellipsize="end"
-        android:maxLines="4"
-        android:paddingTop="2dp"
-        android:paddingEnd="4dp"
-        android:paddingBottom="6dp"
-        android:text="Hablale o escribile: la respuesta sale aquí."
-        android:textColor="#D9E4E0"
-        android:textSize="13sp" />
+        android:layout_marginTop="2dp"
+        android:layout_marginBottom="8dp"
+        android:layout_weight="1">
+
+        <ListView
+            android:id="@+id/jarvis_lista"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:divider="@null"
+            android:dividerHeight="0dp"
+            android:paddingEnd="4dp"
+            android:scrollbars="none"
+            android:stackFromBottom="true"
+            android:transcriptMode="alwaysScroll" />
+
+        <TextView
+            android:id="@+id/jarvis_vacio"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:padding="12dp"
+            android:text="Hablale o escribile a Jarvis: la conversación queda aquí."
+            android:textColor="#8FA39D"
+            android:textSize="13sp" />
+    </FrameLayout>
 
     <LinearLayout
         android:layout_width="match_parent"

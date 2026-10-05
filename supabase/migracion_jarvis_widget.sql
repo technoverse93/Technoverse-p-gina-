@@ -1,6 +1,12 @@
 -- =====================================================================
--- JARVIS · llaves del MINI-WIDGET del teléfono
+-- JARVIS · llaves del MINI-WIDGET del teléfono  — YA NO SE USA
 -- =====================================================================
+-- Desde que el widget abre el mismo Jarvis de la app con la sesión del
+-- teléfono («hacer todo como con mi sesión», ver src/rapido.tsx), ya no
+-- hay llaves aparte: nada lee ni escribe esta tabla. Se deja el archivo
+-- como registro de lo que existe en la base; borrar la tabla es opcional
+-- y queda a decisión del dueño.
+-- ---------------------------------------------------------------------
 -- El dueño pidió (2026-10-05) que el mini-widget conteste SIN huella y sin
 -- abrir la app, con acceso a todas las consultas («solo yo tengo acceso a
 -- este teléfono»). Para eso, al activarlo desde la app se crea una llave

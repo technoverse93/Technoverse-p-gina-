@@ -14,6 +14,17 @@ export default defineConfig(() => {
         '@': path.resolve(__dirname, '.'),
       },
     },
+    // Dos páginas: la app (index.html) y la ventanita del mini-widget de
+    // Jarvis en el teléfono (jarvis-rapido.html, ver src/rapido.tsx), que
+    // carga solo lo de Jarvis para abrir rápido.
+    build: {
+      rollupOptions: {
+        input: {
+          main: path.resolve(__dirname, 'index.html'),
+          rapido: path.resolve(__dirname, 'jarvis-rapido.html'),
+        },
+      },
+    },
     server: {
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modifyâfile watching is disabled to prevent flickering during agent edits.

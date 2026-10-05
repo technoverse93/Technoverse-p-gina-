@@ -2,11 +2,12 @@
 // ATAJO A JARVIS — widget de la pantalla de inicio y atajo del ícono
 // =====================================================================
 // El atajo de mantener presionado el ícono, la marca «Jarvis» del widget
-// y el botón «Abrir en la app» de su ventanita abren la app con
-// `technoverse://jarvis` (`?voz=1` para empezar a escuchar de una). Aquí se
-// recibe ese enlace, se lleva al panel si hacía falta y se avisa con el
-// evento `tv:jarvis`. (Las preguntas del mini-widget NO pasan por aquí: se
-// contestan en su ventanita nativa, ver native-android/jarvis/.)
+// y el botón «Abrir la app» de su ventanita abren la app con
+// `technoverse://jarvis` (`?voz=1` para empezar a escuchar de una;
+// `?modulo=taller` para abrir ese módulo en vez de Jarvis, cuando la
+// ventanita manda a «Ir a…»). Aquí se recibe ese enlace, se lleva al panel
+// si hacía falta y se avisa con el evento `tv:jarvis`. (Lo que se hace en
+// la ventanita NO pasa por aquí: es su propia página, src/rapido.tsx.)
 //
 // El pedido queda guardado unos segundos en sessionStorage: si el panel
 // todavía no está montado (arranque en frío, bloqueo con huella), lo
@@ -19,14 +20,16 @@ import { isNative } from './platform';
 const CLAVE = 'tv_jarvis_pedido';
 const VIGENCIA_MS = 60_000;
 export const EVENTO_JARVIS = 'tv:jarvis';
-export type PedidoJarvis = { voz: boolean; en: number };
+export type PedidoJarvis = { voz: boolean; en: number; modulo?: string };
 
 function manejar(url: string | undefined | null): void {
   if (!url || !/^technoverse:\/\/jarvis/i.test(url)) return;
-  const pedido: PedidoJarvis = { voz: /[?&]voz=1/.test(url), en: Date.now() };
+  const modulo = /[?&]modulo=([a-z_]{2,40})(?:&|$)/.exec(url)?.[1];
+  const pedido: PedidoJarvis = { voz: /[?&]voz=1/.test(url), en: Date.now(), ...(modulo ? { modulo } : {}) };
   try { sessionStorage.setItem(CLAVE, JSON.stringify(pedido)); } catch { /* sin almacenamiento: va solo el evento */ }
   if (!window.location.pathname.startsWith('/admin')) {
-    window.history.pushState(null, '', '/admin');
+    // En frío, el panel arranca directo en el módulo pedido (lee la dirección).
+    window.history.pushState(null, '', modulo ? `/admin/${modulo}` : '/admin');
     window.dispatchEvent(new PopStateEvent('popstate'));
   }
   window.dispatchEvent(new CustomEvent(EVENTO_JARVIS, { detail: pedido }));

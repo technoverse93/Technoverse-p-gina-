@@ -33,6 +33,7 @@ import type { Grafico } from './JarvisPiezas';
 import { grabarNotaDeVoz, puedeGrabarVoz } from '../../utils/grabadorVoz';
 import type { GrabacionEnCurso } from '../../utils/grabadorVoz';
 import { aparatoActual } from '../../seguridad/killSwitch';
+import { separarPrivados, restaurarPrivados } from '../../utils/privados';
 
 /** Abre un módulo del panel en su pestaña (lo da AdminPanel). */
 const AbrirModuloCtx = React.createContext<((m: string) => void) | undefined>(undefined);
@@ -74,6 +75,7 @@ interface Cupo {
   busqueda: boolean; respaldo: boolean; groqConfigurado: boolean;
   /** IAs de respaldo configuradas, en orden («Groq», «Cerebras»…). */
   respaldos?: string[];
+  secretosGroq?: string[];
   modulos?: string[]; consultasHoy?: number;
   busquedaWeb?: boolean; busquedasMes?: number; cupoBusquedas?: number;
   capacidades?: { enlaces: boolean; codigo: boolean; archivos: boolean };
@@ -117,27 +119,6 @@ const leerPref = <T extends string>(k: string, def: T, validos: readonly string[
   try { const v = localStorage.getItem(k); return v && validos.includes(v) ? v as T : def; } catch { return def; }
 };
 const guardarPref = (k: string, v: string) => { try { localStorage.setItem(k, v); } catch { /* sin almacenamiento */ } };
-/**
- * Carril privado de Jarvis: cédulas, correos y teléfonos que escriba el
- * superadmin se sacan del texto ANTES de mandarlo. La IA (Google) solo ve
- * marcas como [CÉDULA·1]; los datos van aparte y solo los usan las tarjetas.
- */
-function separarPrivados(t: string, previos: Record<string, string>): { texto: string; privados: Record<string, string> } {
-  const privados = { ...previos };
-  const cuenta: Record<string, number> = {};
-  for (const k of Object.keys(previos)) { const [p, n] = k.split('·'); cuenta[p] = Math.max(cuenta[p] || 0, Number(n) || 0); }
-  const marcar = (pref: string, valor: string) => {
-    const ya = Object.entries(privados).find(([k, v]) => k.startsWith(pref) && v === valor);
-    if (ya) return `[${ya[0]}]`;
-    cuenta[pref] = (cuenta[pref] || 0) + 1;
-    const k = `${pref}·${cuenta[pref]}`; privados[k] = valor; return `[${k}]`;
-  };
-  const texto = t
-    .replace(/[^\s@\[\]]+@[^\s@]+\.[a-z]{2,}/gi, m => marcar('CORREO', m))
-    .replace(/\b\d-?\d{4}-?\d{4}\b|\b\d{9,12}\b/g, m => marcar('CÉDULA', m.replace(/\D/g, '')))
-    .replace(/(?:\+?506[\s-]?)?\b[2-8]\d{3}[\s-]?\d{4}\b/g, m => marcar('TEL', m.replace(/\D/g, '').slice(-8)));
-  return { texto, privados };
-}
 const aBase64 = (b: Blob) => new Promise<string>((ok, mal) => {
   const r = new FileReader(); r.onload = () => ok(String(r.result).split(',')[1] || ''); r.onerror = () => mal(r.error); r.readAsDataURL(b);
 });
@@ -640,7 +621,13 @@ const SUGERENCIAS_ARQ = [
   { t: 'Priorizar', d: 'Qué hacer primero', p: 'De estas ideas, ¿cuál conviene hacer primero y por qué?: ' },
 ];
 
-function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser: User | null; onAbrirModulo?: (m: string) => void; pedirVoz?: number }) {
+function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, conversacionInicial }: {
+  currentUser: User | null; onAbrirModulo?: (m: string) => void; pedirVoz?: number;
+  /** La ventanita del widget lo usa para dejar la última respuesta a la vista. */
+  onRespuesta?: (pregunta: string, respuesta: string) => void;
+  /** Abrir en esta conversación (la del mini-widget, para seguirla aquí). */
+  conversacionInicial?: string | null;
+}) {
   const toast = useToast();
   const confirm = useConfirm();
   const soySuper = esSuperadmin(currentUser?.role);
@@ -650,7 +637,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
   const [convs, setConvs] = useState<Conversacion[]>([]);
   // La conversación abierta sobrevive a cambiar de pestaña (el módulo se
   // desmonta al salir); se recuerda solo en esta sesión del navegador.
-  const [activa, setActivaEstado] = useState<string | null>(leerActiva);
+  const [activa, setActivaEstado] = useState<string | null>(() => conversacionInicial || leerActiva());
   const setActiva = useCallback((id: string | null) => { guardarActiva(id); setActivaEstado(id); }, []);
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
   // El cupo se recuerda en esta sesión: al abrir, Jarvis aparece de una con
@@ -885,6 +872,10 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0 }: { currentUser
       const lectura = modoLectura();
       if (res.mensaje?.texto && (lectura === 'siempre' || (lectura === 'voz' && (opciones.audio || opciones.porVoz)))) {
         void lector.hablar(res.mensaje.texto, res.mensaje.id || `a-${Date.now()}`);
+      }
+      if (onRespuesta && res.mensaje?.texto) {
+        // Con los datos reales en vez de las marcas del carril privado: es la pantalla del dueño.
+        onRespuesta(restaurarPrivados(opciones.audio ? (res.pregunta || '') : crudo, privadosRef.current), restaurarPrivados(res.mensaje.texto, privadosRef.current));
       }
       if (res.respaldo) setAviso({ tipo: 'respaldo', texto: `Google no respondió a tiempo; contestó ${NOMBRE_PROVEEDOR[res.mensaje?.proveedor] || 'la IA de respaldo'}.` });
       setBuscar(false);
@@ -1396,7 +1387,9 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
           <p className="ai-respaldo-estado" data-ok={cupo.respaldos.length > 0 || undefined}>
             {cupo.respaldos.length
               ? <><Check className="w-3.5 h-3.5" />IAs de respaldo listas: {cupo.respaldos.join(', ')}.</>
-              : <><TriangleAlert className="w-3.5 h-3.5" />Falta la clave de respaldo: en Supabase → Edge Functions → Secrets tiene que existir «GROQ_API_KEY» (con ese nombre exacto).</>}
+              : cupo.secretosGroq?.length
+                ? <><TriangleAlert className="w-3.5 h-3.5" />Encontré el secreto «{cupo.secretosGroq.join('», «')}», pero su valor no es una clave de Groq (empieza con «gsk_»). Copiala de nuevo desde console.groq.com → API Keys.</>
+                : <><TriangleAlert className="w-3.5 h-3.5" />El servidor no ve ninguna clave de Groq. Va en Supabase → Edge Functions → Secrets (no en Vault ni en Settings → API), con el nombre «GROQ_API_KEY».</>}
           </p>
         )}
         <div className="ai-campo">

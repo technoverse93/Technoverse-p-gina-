@@ -599,9 +599,10 @@ function Escena3D({ filas, enlaces, red, ocultos, sel, onSel, enfocarRef }: {
       if (inicio && Math.hypot(e.clientX - inicio.x, e.clientY - inicio.y) > 6) movio = true;
       if (!movio) return;
       const dx = e.clientX - antes.x, dy = e.clientY - antes.y;
-      s.yaw += dx * 0.009; s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch + dy * 0.009));
+      // La cara de adelante sigue al dedo (antes iba al revés en horizontal).
+      s.yaw -= dx * 0.009; s.pitch = Math.max(-1.35, Math.min(1.35, s.pitch + dy * 0.009));
       const now = performance.now(), dt = Math.max(1, now - ultimo.t);
-      s.vYaw = (e.clientX - ultimo.x) * 0.009 / dt; s.vPitch = (e.clientY - ultimo.y) * 0.009 / dt;
+      s.vYaw = -(e.clientX - ultimo.x) * 0.009 / dt; s.vPitch = (e.clientY - ultimo.y) * 0.009 / dt;
       ultimo = { x: e.clientX, y: e.clientY, t: now };
       dibujar();
     };
@@ -630,7 +631,7 @@ function Escena3D({ filas, enlaces, red, ocultos, sel, onSel, enfocarRef }: {
     const rueda = (e: WheelEvent) => { e.preventDefault(); tocar(); s.meta = null; s.zoom = Math.max(0.55, Math.min(3.2, s.zoom * Math.exp(-e.deltaY * 0.0015))); dibujar(); };
     const teclas = (e: KeyboardEvent) => {
       const paso = 0.18;
-      if (e.key === 'ArrowLeft') s.yaw -= paso; else if (e.key === 'ArrowRight') s.yaw += paso;
+      if (e.key === 'ArrowLeft') s.yaw += paso; else if (e.key === 'ArrowRight') s.yaw -= paso;
       else if (e.key === 'ArrowUp') s.pitch = Math.max(-1.35, s.pitch - paso); else if (e.key === 'ArrowDown') s.pitch = Math.min(1.35, s.pitch + paso);
       else if (e.key === '+' || e.key === '=') s.zoom = Math.min(3.2, s.zoom * 1.2); else if (e.key === '-') s.zoom = Math.max(0.55, s.zoom / 1.2);
       else return;

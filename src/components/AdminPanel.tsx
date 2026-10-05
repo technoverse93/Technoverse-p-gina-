@@ -18,7 +18,7 @@ import { CATEGORIAS_TIENDA, normalizarCategoria, esRepuesto } from '../utils/cat
 import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog } from '../types';
 import { useToast, useConfirm } from './ui/Overlays';
 import { esGestion, esSuperadmin, esStaff } from '../utils/roles';
-import { EVENTO_JARVIS, tomarPedidoJarvis } from '../mobile/jarvisAtajo';
+import { EVENTO_JARVIS, tomarPedidoJarvis, type PedidoJarvis } from '../mobile/jarvisAtajo';
 
 // ---------------------------------------------------------------------
 // TECHNOVERSE CONSOLE
@@ -1064,26 +1064,28 @@ export default function AdminPanel({
    * no `pushState` para no llenar el historial: quien pulsa "atrás"
    * espera salir del panel, no recorrer los doce módulos que visitó.
    */
-  // Widget de Android / atajo del ícono: abre Jarvis (y el micrófono).
-  const [pedidoJarvis, setPedidoJarvis] = useState<{ n: number; voz: boolean } | null>(null);
-  useEffect(() => {
-    if (!esStaff(currentUser?.role)) return;
-    const atender = (voz: boolean) => {
-      setPedidoJarvis(p => ({ n: (p?.n || 0) + 1, voz }));
-    };
-    const pendiente = tomarPedidoJarvis();
-    if (pendiente) atender(pendiente.voz);
-    const alAvisar = () => { const p = tomarPedidoJarvis(); if (p) atender(p.voz); };
-    window.addEventListener(EVENTO_JARVIS, alAvisar);
-    return () => window.removeEventListener(EVENTO_JARVIS, alAvisar);
-  }, [currentUser?.role]);
-
   const irAModulo = useCallback((tab: string) => {
     if (esSoloSupremo(tab) && !esAdminSupremo(currentUser?.email)) return;
     pestanas.abrir(tab);
     setActiveDropdown(null);
     try { window.history.replaceState(null, '', `/admin/${tab}`); } catch { /* la navegación funciona igual */ }
   }, [pestanas.abrir, currentUser?.email]);
+
+  // Widget de Android / atajo del ícono: abre Jarvis (y el micrófono), o el
+  // módulo al que mandó la ventanita del widget («Ir a…»).
+  const [pedidoJarvis, setPedidoJarvis] = useState<{ n: number; voz: boolean } | null>(null);
+  useEffect(() => {
+    if (!esStaff(currentUser?.role)) return;
+    const atender = (p: PedidoJarvis) => {
+      if (p.modulo) { irAModulo(p.modulo); return; }
+      setPedidoJarvis(prev => ({ n: (prev?.n || 0) + 1, voz: p.voz }));
+    };
+    const pendiente = tomarPedidoJarvis();
+    if (pendiente) atender(pendiente);
+    const alAvisar = () => { const p = tomarPedidoJarvis(); if (p) atender(p); };
+    window.addEventListener(EVENTO_JARVIS, alAvisar);
+    return () => window.removeEventListener(EVENTO_JARVIS, alAvisar);
+  }, [currentUser?.role, irAModulo]);
 
   // Antes era un arrow function inline en el JSX de Inventario: nuevo en
   // cada render, así que `InventarioControl` no podía memoizarse aunque
