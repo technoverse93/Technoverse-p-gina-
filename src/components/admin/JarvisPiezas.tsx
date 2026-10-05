@@ -191,6 +191,12 @@ export function TarjetaAccion({ id }: { id: string }) {
   const textoFinal = estado === 'ejecutada' ? fila.resultado?.detalle : estado === 'deshecha' ? fila.resultado?.deshecho?.detalle || 'Se revirtió.'
     : estado === 'cancelada' ? 'No se hizo nada.' : estado === 'vencida' ? 'Venció sin confirmarse. No se hizo nada; pedímela de nuevo si hace falta.' : estado === 'fallida' ? (fila.resultado?.detalle || 'No se pudo ejecutar.') : null;
   const s = Math.ceil(restante / 1000);
+  // Lo cotidiano (responder un chat, mover una orden, ajustar existencias)
+  // se hace solo con la orden: mientras se hace, NO se muestra el formulario
+  // con «Enviar» (parecía que pedía confirmación). Si falla, sí aparece,
+  // para reintentar o corregir.
+  const recienCreada = tarjetasVivas.has(id) || autoHecho.current || (!!fila.creada_en && Date.now() - new Date(fila.creada_en).getTime() < 30_000);
+  const enviandoSolo = !!t.auto && (estado === 'propuesta' || estado === 'ejecutando') && !error && recienCreada;
 
   return (
     <div className="ai-acc" data-estado={estado === 'ejecutada' ? 'hecha' : estado} data-riesgo={t.riesgo === 'reversible' ? 'bajo' : 'acceso'}>
@@ -199,7 +205,10 @@ export function TarjetaAccion({ id }: { id: string }) {
         <div className="ai-acc-tt"><small>{cejilla}</small><b>{t.titulo}</b></div>
         <span className="ai-acc-chip" data-t={chip[0]}>{chip[1]}</span>
       </div>
-      {(estado === 'propuesta' || estado === 'ejecutando') && (
+      {enviandoSolo && (
+        <p className="ai-acc-solo" role="status"><span className="ai-giro" aria-hidden="true" />{t.accion === 'responder_chat' ? 'Enviando el mensaje…' : 'Haciéndolo…'} No hace falta que confirmes.</p>
+      )}
+      {(estado === 'propuesta' || estado === 'ejecutando') && !enviandoSolo && (
         <>
           <dl className="ai-acc-dl">
             <div><dt>Qué pasa</dt><dd>{t.efecto}</dd></div>
