@@ -79,6 +79,24 @@ class ErrorDeCarga extends React.Component<{ children: React.ReactNode }, { erro
   }
 }
 
+/** Si el puente no cerró la ventanita, se sale igual (nunca queda tapando). */
+function salirSiSigue(): void {
+  setTimeout(() => { void import('@capacitor/app').then(({ App }) => App.exitApp()).catch(() => { /* nada más que hacer */ }); }, 900);
+}
+
+/**
+ * Esta página solo vale dentro de la ventanita del widget. Si se abriera en
+ * la app, se vuelve al panel (una sola vez: nunca en bucle).
+ */
+function volverAlPanel(): void {
+  try {
+    const k = 'tv_ventanita_salida', antes = Number(sessionStorage.getItem(k) || 0);
+    if (Date.now() - antes < 15_000) return;
+    sessionStorage.setItem(k, String(Date.now()));
+  } catch { /* sin almacenamiento: se intenta igual */ }
+  location.replace('/admin');
+}
+
 /** Espera a que termine de leer en voz alta (o un tope). */
 function finDeLectura(topeMs = 120_000): Promise<void> {
   return new Promise(ok => {
@@ -157,8 +175,10 @@ export default function VentanitaJarvis() {
       // que sea se abrió en la app (pasó en un teléfono: se veía «El
       // mini-widget está apagado» en vez del panel, sin poder cerrarlo), se
       // cambia en el acto por la app de siempre.
-      if (!e.enVentanita) { location.replace('/'); return; }
-      if (!e.activo) { setFase('apagado'); return; }
+      if (!e.enVentanita) { volverAlPanel(); return; }
+      // El widget es opcional: apagado, la ventanita no muestra nada y se
+      // cierra en el acto (no se interpone con la app).
+      if (!e.activo) { void widgetNativo.cerrar(); salirSiSigue(); return; }
       void conexionBloqueada().then(b => { if (b && vivo) setFase('bloqueado'); });
       try {
         const { data } = await conTope(supabase.auth.getSession(), 8000);
@@ -196,8 +216,7 @@ export default function VentanitaJarvis() {
   const cerrar = useCallback(() => {
     lector.callar();
     void widgetNativo.cerrar();
-    // Si el puente no la cerró, se sale igual: nunca puede quedar tapando.
-    setTimeout(() => { void import('@capacitor/app').then(({ App }) => App.exitApp()).catch(() => location.replace('/')); }, 900);
+    salirSiSigue();
   }, []);
 
   // Pregunta EN EL WIDGET: la ventanita deja de tapar, el widget dice
