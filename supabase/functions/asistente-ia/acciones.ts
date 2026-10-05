@@ -737,4 +737,82 @@ export const ACCIONES: Accion[] = [
       return { productId: objetivo.id, nombre: objetivo.nombre, modo: objetivo.modo, stock: objetivo.stock, precio: objetivo.precio };
     },
   },
+  // -------------------------------------------------------------------
+  {
+    nombre: 'crear_producto',
+    bitacora: 'Producto creado por Jarvis',
+    descripcion: 'CREA productos nuevos en el inventario (uno o varios de una vez, hasta 10). Usala cuando el dueño pida crear, agregar, registrar o dar de alta productos, también «de prueba». Precios en colones con IVA. `categoria`: Dispositivos, Estuches, Cargadores, Audio o Accesorios. Si el dueño dice que son de prueba o que no se vean, `en_tienda` = false. Si falta el precio o la cantidad, poné lo razonable y decí qué supusiste.',
+    parametros: {
+      type: 'object',
+      properties: {
+        productos: {
+          type: 'array',
+          items: {
+            type: 'object',
+            properties: {
+              nombre: { type: 'string' },
+              precio: { type: 'number', description: 'Precio de venta en colones, IVA incluido.' },
+              costo: { type: 'number', description: 'Costo en colones (opcional).' },
+              stock: { type: 'integer', description: 'Unidades iniciales.' },
+              categoria: { type: 'string', enum: ['Dispositivos', 'Estuches', 'Cargadores', 'Audio', 'Accesorios'] },
+              descripcion: { type: 'string' },
+            },
+            required: ['nombre', 'precio'],
+          },
+        },
+        en_tienda: { type: 'boolean', description: 'false = quedan ocultos de la tienda pública (productos de prueba).' },
+      },
+      required: ['productos'],
+    },
+    async preparar(args, ctx) {
+      const CATS = ['Dispositivos', 'Estuches', 'Cargadores', 'Audio', 'Accesorios'];
+      const entrada = Array.isArray(args.productos) ? args.productos.slice(0, 10) : [];
+      exigir(entrada.length, 'Decime qué productos crear: nombre y precio.');
+      const lista = entrada.map((x: any) => {
+        const nombre = texto(x?.nombre, 80);
+        const precio = Math.round(Number(x?.precio));
+        const costo = x?.costo == null ? 0 : Math.round(Number(x.costo));
+        const stock = x?.stock == null ? 1 : Math.round(Number(x.stock));
+        exigir(nombre.length >= 2, 'A un producto le falta el nombre.');
+        exigir(Number.isFinite(precio) && precio >= 0 && precio <= 50_000_000, `El precio de «${nombre}» no es válido.`);
+        exigir(Number.isFinite(costo) && costo >= 0 && costo <= 50_000_000, `El costo de «${nombre}» no es válido.`);
+        exigir(Number.isFinite(stock) && stock >= 0 && stock <= 100000, `La cantidad de «${nombre}» no es válida.`);
+        return { nombre, precio, costo, stock, categoria: CATS.includes(String(x?.categoria)) ? String(x.categoria) : 'Accesorios', descripcion: texto(x?.descripcion, 300) };
+      });
+      // Que no se dupliquen productos que ya existen con el mismo nombre.
+      const { data: existentes, error } = await ctx.db.from('products').select('name').in('name', lista.map(l => l.nombre)).limit(20);
+      if (error) throw error;
+      const ya = new Set((existentes || []).map((e: any) => String(e.name).toLowerCase()));
+      const nuevos = lista.filter(l => !ya.has(l.nombre.toLowerCase()));
+      exigir(nuevos.length, `Ya existe${lista.length > 1 ? 'n' : ''} en el inventario: ${lista.map(l => l.nombre).join(', ')}.`);
+      const enTienda = args.en_tienda !== false;
+      const colon = (n: number) => '₡' + Math.round(n).toLocaleString('es-CR');
+      const auto = ctx.ajustes.inventario_directo !== false;
+      const titulo = nuevos.length === 1 ? `Nuevo: ${nuevos[0].nombre}` : `${nuevos.length} productos nuevos`;
+      return {
+        tarjeta: {
+          accion: 'crear_producto', modulo: 'Inventario', icono: 'package', titulo, riesgo: 'reversible',
+          chip: 'Inventario', enCliente: 'inventario', auto, deshacerMin: 10,
+          efecto: enTienda ? 'Se crean en el inventario y aparecen en la tienda.' : 'Se crean en el inventario, ocultos de la tienda.',
+          filas: nuevos.map(n => ({ etiqueta: n.nombre, valor: `${colon(n.precio)} · ${n.stock} u. · ${n.categoria}` })),
+          opciones: [],
+          boton: 'Crear', token: 'nunca', deshacible: true,
+          nota: auto ? 'Hecho sin preguntar. Se puede deshacer por 10 minutos.' : 'Se puede deshacer por 10 minutos.',
+        },
+        objetivo: { crear: nuevos, enTienda },
+        paraIA: {
+          ...(auto ? { hecho: true, se_hace_solo: true, instruccion: 'YA SE HIZO. Decilo en pasado y en una frase.' } : { hecho: false, instruccion: 'Pedile que confirme en la tarjeta.' }),
+          creados: nuevos.map(n => `${n.nombre} (${colon(n.precio)}, ${n.stock} u.)`),
+          ...(nuevos.length < lista.length ? { ya_existian: lista.filter(l => ya.has(l.nombre.toLowerCase())).map(l => l.nombre) } : {}),
+          en_tienda: enTienda,
+        },
+      };
+    },
+    ejecutar() { throw new Error('Los crea el panel.'); },
+    async deshacer() { return { texto: 'Productos retirados.', detalle: 'Los productos creados se retiraron del inventario y de la tienda.' }; },
+    paraCliente(objetivo) {
+      exigir(Array.isArray(objetivo.crear) && objetivo.crear.length, 'No hay productos para crear.');
+      return { crear: objetivo.crear, enTienda: objetivo.enTienda !== false };
+    },
+  },
 ];
