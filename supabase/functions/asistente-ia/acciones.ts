@@ -552,18 +552,27 @@ export const ACCIONES: Accion[] = [
       exigir(mensaje.length >= 1, 'Falta el texto del mensaje.');
       const q = patron(args.cliente);
       const ultimo = !q || /^(el |la )?(ú|u)ltim|reciente|ese chat|este chat/i.test(q);
-      let consulta = ctx.db.from('chat_conversations').select('id,customer_name,status,updated_at,unread_count').order('updated_at', { ascending: false }).limit(ultimo ? 3 : 8);
-      if (!ultimo) consulta = consulta.ilike('customer_name', `%${q}%`);
-      const { data: convs, error } = await consulta;
+      // Los nombres se comparan «planos»: sin tildes, sin mayúsculas y sin
+      // letras decoradas (hay clientes que escriben su nombre en 𝐧𝐞𝐠𝐫𝐢𝐭𝐚, y
+      // la búsqueda de la base de datos no los encontraba).
+      const plano = (t: unknown) => String(t || '').normalize('NFKC').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z0-9ñ ]+/g, ' ').replace(/\s+/g, ' ').trim();
+      const { data: convs, error } = await ctx.db.from('chat_conversations').select('id,customer_name,status,updated_at,unread_count')
+        .order('updated_at', { ascending: false }).limit(ultimo ? 3 : 120);
       if (error) throw error;
+      const palabras = plano(q).split(' ').filter(w => w.length >= 2);
+      const coinciden = ultimo ? (convs || []) : (convs || []).filter((c: any) => { const n = plano(c.customer_name); return palabras.length > 0 && palabras.every(w => n.includes(w)); });
       // Las abiertas primero; una resuelta solo si no hay otra.
-      const lista = [...(convs || [])].sort((a: any, b: any) => Number(a.status === 'resuelto') - Number(b.status === 'resuelto')).slice(0, 5);
+      const lista = [...coinciden].sort((a: any, b: any) => Number(a.status === 'resuelto') - Number(b.status === 'resuelto')).slice(0, 5);
       exigir(lista.length, ultimo ? 'No hay chats todavía.' : `No encontré un chat de «${q}».`);
       const ids = lista.map((c: any) => c.id);
       const { data: msgs } = await ctx.db.from('chat_messages').select('conversation_id,sender,text,created_at').in('conversation_id', ids).eq('sender', 'customer').order('created_at', { ascending: false }).limit(40);
       const ultimoDe = (id: string) => (msgs || []).find((m: any) => m.conversation_id === id);
       const abiertas = lista.filter((c: any) => c.status !== 'resuelto');
-      const seguro = ultimo ? true : (abiertas.length === 1 || lista.length === 1);
+      // Es «seguro» enviarlo solo si no hay dudas de a quién: el último chat,
+      // un solo chat abierto que coincide, o varios pero todos de la MISMA
+      // persona (se usa el más reciente).
+      const personas = new Set(lista.map((c: any) => plano(c.customer_name)));
+      const seguro = ultimo ? true : (abiertas.length === 1 || lista.length === 1 || personas.size === 1);
       const auto = seguro && ctx.ajustes.chat_directo !== false;
       const elegido = lista[0];
       const corto = (t: unknown) => { const x = String(t || '').replace(/\s+/g, ' ').trim(); return x.length > 70 ? `${x.slice(0, 67)}…` : x || '(foto, audio o video)'; };

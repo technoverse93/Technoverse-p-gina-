@@ -2478,9 +2478,21 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
    solo se desliza de lado si es más ancha que la pantalla.
    `touch-action` le dice al navegador de antemano qué gestos hace cada caja,
    así responde al primer toque sin esperar a ver si alguien los intercepta. */
-.ai-msgs{touch-action:pan-y;-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+.ai-msgs{-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
+/* FALLO CORREGIDO: aquí había `touch-action: pan-y` y en el WebView de
+   Android eso lo heredan las cajas de adentro: tablas y código no se
+   podían deslizar de lado. Sin restringir, cada caja ancha se desliza. */
 .ai-panel-det .ai-tabla{max-height:none;overflow-y:visible;overflow-x:auto;overscroll-behavior:auto}
-.ai-tabla,.ai-pre{touch-action:pan-x pan-y;overscroll-behavior-x:contain}
+.ai-tabla,.ai-pre{touch-action:auto;overscroll-behavior-x:contain}
+/* En teléfono las respuestas caben en la pantalla: el texto de las tablas
+   baja de línea y el código también (antes se cortaban a la derecha). */
+@container (max-width:760px){
+  .ai-tabla-md td,.ai-tabla-md td:not(:first-child),.ai-tabla-md th{white-space:normal;overflow-wrap:anywhere}
+  .ai-tabla-md th,.ai-tabla-md td{padding:6px 8px}
+  .ai-tabla-md table{font-size:12.5px}
+  .ai-tx .ai-pre{white-space:pre-wrap;overflow-wrap:anywhere}
+  .ai-tabla-fichas.ai-tabla-md td::before{flex-basis:84px}
+}
 .ai-panel-det .ai-tabla th{position:static}
 
 /* Asistente IA · fase 3: adjuntos, editar, detener */
@@ -2859,6 +2871,7 @@ button.jv-arbol-abrir:hover{background:var(--bg-sunken);color:var(--text-primary
 .jv-det-acc .ai-chip[data-peligro]{background:var(--jv-peligro);color:var(--jv-peligro-ink);border-color:transparent}
 .jv-det-acc .ai-chip[data-primario]{background:var(--accent);color:#fff;border-color:transparent}
 .ai-mem[data-cerebro] .ai-chip{flex:none}
+.ai-acc-solo{display:flex;align-items:center;gap:8px;margin:0;padding:8px 14px 12px;font-size:13px;color:var(--text-secondary)}
 @media (max-width:420px){.jv-cerebro{margin:6px 2px}.jv-cerebro-tt > b{font-size:13.5px}
   .jv-arbol-fila em{font-size:0;width:8px;height:8px;padding:0;background:var(--ok)}
   .jv-arbol span.jv-arbol-abrir{width:12px}}

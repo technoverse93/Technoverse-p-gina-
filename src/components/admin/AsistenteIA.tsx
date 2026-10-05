@@ -292,10 +292,12 @@ function Formato({ texto }: { texto: string }) {
           if (!tabla) return;
           const [cab, ...cuerpo] = tabla;
           out.push(
-            <div key={`t${out.length}`} className="ai-tabla">
+            // Con 4 columnas o más, en teléfono se lee como fichas (etiqueta: valor)
+            // en vez de una tabla cortada que obliga a deslizar de lado.
+            <div key={`t${out.length}`} className={cab.length >= 4 ? 'ai-tabla ai-tabla-fichas ai-tabla-md' : 'ai-tabla ai-tabla-md'}>
               <table>
                 <thead><tr>{cab.map((c, k) => <th key={k}><Linea t={c} /></th>)}</tr></thead>
-                <tbody>{cuerpo.map((f, r) => <tr key={r}>{f.map((c, k) => <td key={k}><Linea t={c} /></td>)}</tr>)}</tbody>
+                <tbody>{cuerpo.map((f, r) => <tr key={r}>{f.map((c, k) => <td key={k} data-col={cab[k]?.replace(/[*`]/g, '') || ''}><Linea t={c} /></td>)}</tr>)}</tbody>
               </table>
             </div>,
           );
