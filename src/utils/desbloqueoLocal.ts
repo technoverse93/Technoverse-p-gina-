@@ -235,11 +235,6 @@ export function motivoSecretoInvalido(metodo: MetodoDesbloqueo, secreto: string)
 // API pública
 // ---------------------------------------------------------------------
 
-/** ¿Hay un PIN o patrón configurado en ESTE aparato? */
-export function hayDesbloqueoLocal(): boolean {
-  return leerCredencial() !== null;
-}
-
 /**
  * Qué método está configurado, para que la pantalla sepa si dibujar el
  * teclado numérico o la cuadrícula. Null si no hay ninguno.
@@ -255,11 +250,6 @@ export function metodoDesbloqueoLocal(): MetodoDesbloqueo | null {
 /** Cuántos dígitos tiene el PIN configurado (4 si no se sabe). */
 export function longitudPinLocal(): number {
   return leerCredencial()?.longitudPin || PIN_MIN;
-}
-
-/** El correo al que quedó atado el PIN/patrón de este aparato. */
-export function cuentaDelDesbloqueoLocal(): string | null {
-  return leerCredencial()?.cuenta ?? null;
 }
 
 export interface ResultadoDesbloqueo {

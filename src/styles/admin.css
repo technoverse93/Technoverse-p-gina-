@@ -21,94 +21,11 @@
    coherente con la de la tienda sin una sola línea extra de JavaScript.
    ===================================================================== */
 
-#admin-panel-root {
-  /* Ritmo vertical único de la consola. Todo el panel mide en estos
-     tres valores; sin una escala fija es como se llega a márgenes de
-     13px al lado de otros de 28px, que es lo que hacía ver el panel
-     "desproporcionado". */
-  --tv-gap: 20px;
-  --tv-gap-sm: 12px;
-  --tv-gap-lg: 28px;
-
-  /* Alturas de las barras. Se usan también como padding del contenido,
-     así nada queda nunca debajo de una barra fija.
-
-     La regleta mide 36 px por diseño: es la ÚNICA capa de navegación
-     global del panel, así que puede permitirse ser fina. La barra de
-     56 px de antes convivía con una miga de pan, un título de módulo y
-     una fila de sub-pestañas que decían lo mismo. */
-  --tv-regleta-h: 42px;
-  --tv-dock-h: 62px;
-
-  /* -------------------------------------------------------------------
-     GEOMETRÍA — variación "Mixta" (la elegida de las tres propuestas)
-     -------------------------------------------------------------------
-     La idea de esta forma: los CONTENEDORES llevan una curva generosa y
-     los CONTROLES son casi rectos. Esa diferencia hace, sola, el trabajo
-     que normalmente se le pide al color — se distingue de un vistazo qué
-     es superficie y qué se puede tocar, sin pintar nada.
-     Por eso los dos radios se separan tanto (18 contra 6) en vez de ser
-     dos pasos de una misma escala: si se parecieran, el recurso se
-     pierde y vuelve a ser "todo redondeado, unos más que otros".
-
-     Toda regla nueva que necesite una esquina debe usar estos tokens y
-     no un número suelto; si no, queda fuera del sistema y se nota. */
-  --tv-radius: 18px;
-  --tv-radius-sm: 12px;
-  /* Píldora, reservada a lo que es ETIQUETA y no control: chips de
-     estado, insignias, contadores. Es el contraste que sostiene la
-     variación. */
-  --tv-radius-pill: 999px;
-  /* Peso y traqueo que acompañan a esta geometría. Con la curva amplia
-     de los contenedores, un titular demasiado ligero se deshace; 780 y
-     un traqueo apretado le devuelven el aplomo. */
-  --tv-peso-titulo: 780;
-  --tv-traqueo-titulo: -0.015em;
-
-  /* Superficie de trabajo: un punto más profunda que la tienda para que
-     las tarjetas floten sin necesidad de sombras pesadas. */
-  --tv-canvas: var(--bg-base);
-  --tv-panel: var(--bg-surface);
-  --tv-hairline: var(--border-color);
-
-  /* Un solo color de énfasis en toda la consola. La versión anterior
-     usaba azul, ámbar, esmeralda, rosa y celeste a la vez y ninguno
-     significaba nada; aquí el acento se reserva para "esto está activo"
-     o "esto requiere acción". */
-  --tv-accent: var(--accent);
-  --tv-accent-soft: rgba(var(--accent-rgb), 0.12);
-  --tv-accent-line: rgba(var(--accent-rgb), 0.32);
-
-  --tv-danger: #E5484D;
-  --tv-danger-soft: rgba(229, 72, 77, 0.12);
-  --tv-ok: var(--ok);
-  --tv-ok-soft: var(--ok-soft);
-
-  /* Aviso. Existe como token —y no como `amber-500` suelto— porque el
-     panel medido tenía cuatro colores de énfasis a la vez (ámbar en
-     "Iniciar conteo", azul en los iconos de acción, rosa en los
-     títulos) y ninguno significaba nada. Aquí hay tres estados y solo
-     tres: acento, correcto, aviso, peligro. */
-  --tv-warn: #9A5B14;
-  --tv-warn-soft: rgba(154, 91, 20, 0.12);
-
-  /* Cristal Ligero: el panel comparte el degradado estático de toda la app
-     (definido en index.css), con el color base de respaldo debajo. */
-  background-color: var(--bg-base);
-  background-image: var(--app-bg);
-}
-
 /* Los tres colores de estado, en tema oscuro.
    `--tv-accent` y `--tv-ok` ya cambian solos porque apuntan a variables
    de marca; estos dos estaban fijos a su valor de tema claro, así que
    sobre el carbón del panel oscuro el rojo quedaba apagado y el ámbar
    casi marrón. Se aclaran igual que hace index.css con el acento. */
-.dark #admin-panel-root {
-  --tv-danger: #F1746A;
-  --tv-danger-soft: rgba(241, 116, 106, 0.14);
-  --tv-warn: #E8A85C;
-  --tv-warn-soft: rgba(232, 168, 92, 0.14);
-}
 
 /* ---------------------------------------------------------------------
    ESTRUCTURA
@@ -674,32 +591,7 @@
    objetivos cómodos de verdad. Lo que se rechaza es el mínimo de ANCHO,
    que en una barra de pestañas no significa nada. */
 
-#admin-panel-root .tv-tab-btn,
-#admin-panel-root .tv-tab-x,
-#admin-panel-root .tv-tab-nueva {
-  min-width: 0 !important;
-}
-
-#admin-panel-root .tv-tab-btn { min-height: 0 !important; }
-
-#admin-panel-root .tv-tab-x {
-  min-height: 0 !important;
-  width: 20px !important;
-  height: 20px !important;
-}
-
-#admin-panel-root .tv-tab-nueva {
-  min-height: 0 !important;
-  width: 28px !important;
-  height: 28px !important;
-}
-
 /* En pantalla táctil la pestaña crece para que el dedo acierte. */
-@media (pointer: coarse) {
-  #admin-panel-root .tv-tab { height: 40px; }
-  #admin-panel-root .tv-tab-x { width: 30px !important; height: 30px !important; }
-  #admin-panel-root .tv-tab-nueva { width: 38px !important; height: 38px !important; }
-}
 
 /* ---------------------------------------------------------------------
    PESTAÑAS COMPACTAS EN TELÉFONO
@@ -717,17 +609,6 @@
    La «×» sigue el mismo criterio. Para cerrar otra pestaña primero se
    toca —lo que además evita el cierre por error, que en un dedo sobre
    una × de 30 px pegada a otra pestaña pasa constantemente. */
-@media (max-width: 640px) {
-  #admin-panel-root .tv-tab:not([data-activa]) .tv-tab-label,
-  #admin-panel-root .tv-tab:not([data-activa]) .tv-tab-x {
-    display: none;
-  }
-  #admin-panel-root .tv-tab:not([data-activa]) {
-    padding-left: 8px;
-    padding-right: 8px;
-  }
-  #admin-panel-root .tv-tab[data-activa] { max-width: 60vw; }
-}
 
 /* Misma causa, otro efecto: la regla táctil sube a 40px (44px en
    pantallas táctiles) la altura de todo botón con icono. Un "Guardar"
@@ -807,13 +688,6 @@
    escritorio habría exigido dos marcados distintos.
    --------------------------------------------------------------------- */
 
-.tv-nueva {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-  max-width: 760px;
-}
-
 /* Encabezado estático, deliberadamente discreto.
    ---------------------------------------------------------------------
    POR QUÉ ESTA REGLA VA ANCLADA A `#admin-panel-root` Y CON `!important`
@@ -831,157 +705,14 @@
    gana a (0,0,1).
    La escala de la tienda no se toca: allá esos tamaños son los correctos
    y el panel es lo único que se sale del molde. */
-#admin-panel-root .tv-nueva-titulo {
-  font-family: var(--font-display);
-  font-size: 15px !important;
-  line-height: 1.3;
-  font-weight: 700;
-  letter-spacing: -0.01em;
-  color: var(--text-primary);
-  margin: 0;
-}
-
-.tv-nueva-seccion { display: flex; flex-direction: column; gap: 10px; }
-
-.tv-nueva-lbl {
-  font-family: var(--font-mono);
-  font-size: 12px;
-  font-weight: 700;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-}
-
-.tv-nueva-frec-fila {
-  display: flex;
-  gap: 10px;
-  overflow-x: auto;
-  scrollbar-width: none;
-  padding-bottom: 2px;
-}
-
-.tv-nueva-frec-fila::-webkit-scrollbar { height: 0; }
-
-.tv-nueva-frec {
-  flex-shrink: 0;
-  width: 72px;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 7px;
-  background: none;
-  border: 0;
-  color: var(--text-primary);
-  cursor: pointer;
-}
-
-.tv-nueva-circulo {
-  width: 44px;
-  height: 44px;
-  border-radius: 50%;
-  background: var(--tv-panel);
-  border: 1px solid var(--tv-hairline);
-  color: var(--text-secondary);
-  display: grid;
-  place-items: center;
-  transition: border-color 0.15s ease, color 0.15s ease, transform 0.15s ease;
-}
-
-.tv-nueva-frec:hover .tv-nueva-circulo {
-  border-color: var(--tv-accent-line);
-  color: var(--tv-accent);
-  transform: translateY(-1px);
-}
-
-.tv-nueva-frec-n {
-  font-size: 12px;
-  font-weight: 600;
-  text-align: center;
-  line-height: 1.25;
-}
 
 /* La cuadrícula exterior. En escritorio es una columna de bloques —cada
    zona con su propio ancho completo—; en teléfono se convierte en la
    cuadrícula de verdad (ver el `@media` más abajo). */
-.tv-nueva-grid {
-  display: flex;
-  flex-direction: column;
-  gap: 14px;
-}
-
-.tv-nueva-zona {
-  background: var(--tv-panel);
-  border: 1px solid var(--tv-hairline);
-  border-radius: var(--tv-radius);
-  padding: 14px 16px;
-  display: flex;
-  flex-direction: column;
-  gap: 10px;
-}
-
-.tv-nueva-zona-cab {
-  font-family: var(--font-display);
-  font-size: 12.5px;
-  font-weight: 700;
-  color: var(--text-secondary);
-}
-
-.tv-nueva-zona-lista {
-  display: grid;
-  gap: 8px;
-  /* `auto-fill` y no un número fijo de columnas: una zona con un solo
-     módulo (General, hoy) le da ese único módulo TODO el ancho
-     disponible en vez de encogerlo a 1 de N columnas. */
-  grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-}
-
-.tv-nueva-item {
-  position: relative;
-  display: flex;
-  align-items: center;
-  gap: 9px;
-  min-width: 0;
-  padding: 9px 11px;
-  border-radius: var(--tv-radius-sm);
-  background: var(--tv-canvas);
-  border: 1px solid var(--tv-hairline);
-  color: var(--text-primary);
-  font-size: 12.5px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-  transition: border-color 0.15s ease, background 0.15s ease;
-}
-
-.tv-nueva-item:hover { border-color: var(--tv-accent-line); background: var(--tv-accent-soft); }
-
-.tv-nueva-ic {
-  flex-shrink: 0;
-  display: grid;
-  place-items: center;
-  color: var(--text-secondary);
-}
-
-.tv-nueva-ic svg { width: 16px; height: 16px; }
-
-.tv-nueva-n {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 /* El punto de "ya abierto". No es un contador ni un aviso — es el mismo
    estado que llevaba el selector anterior, para que tocar la fila avise
    de que va a saltar a esa pestaña en vez de duplicarla. */
-.tv-nueva-punto-abierto {
-  flex-shrink: 0;
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
-  background: var(--tv-accent);
-  margin-left: auto;
-}
 
 /* ---------------------------------------------------------------------
    EN TELÉFONO: CUADRÍCULA COMPACTA, NO CAJAS APILADAS
@@ -996,76 +727,23 @@
    columnas, tan compacta como la de escritorio.
    --------------------------------------------------------------------- */
 @media (max-width: 640px) {
-  .tv-nueva-grid {
-    display: grid;
-    grid-template-columns: repeat(3, minmax(0, 1fr));
-    gap: 10px 8px;
-  }
 
   /* Desaparece como caja: sus hijos (la etiqueta y la lista) pasan a ser
      hijos directos de `.tv-nueva-grid` y participan en su cuadrícula. */
-  .tv-nueva-zona { display: contents; }
-
-  .tv-nueva-zona-cab {
-    grid-column: 1 / -1;
-    font-family: var(--font-mono);
-    font-size: 9.5px;
-    font-weight: 700;
-    letter-spacing: 0.09em;
-    text-transform: uppercase;
-    color: var(--text-muted);
-    padding-top: 4px;
-  }
-
-  .tv-nueva-zona:first-child .tv-nueva-zona-cab { padding-top: 0; }
 
   /* La lista también desaparece como caja, por la misma razón: sus
      `.tv-nueva-item` deben caer en la cuadrícula de 3 columnas, no en
      una cuadrícula propia de ancho completo. */
-  .tv-nueva-zona-lista { display: contents; }
 
   /* El ítem cambia de icono-junto-a-texto a icono-encima-de-texto: es el
      mismo cambio que ya hace el resto del panel para pasar de fila a
      celda de cuadrícula. */
-  .tv-nueva-item {
-    flex-direction: column;
-    align-items: center;
-    gap: 5px;
-    width: 100%;
-    padding: 8px 4px;
-    text-align: center;
-  }
-
-  .tv-nueva-ic {
-    width: 34px;
-    height: 34px;
-    border-radius: 9px;
-    background: var(--tv-panel);
-    border: 1px solid var(--tv-hairline);
-  }
-
-  .tv-nueva-item .tv-nueva-ic svg { width: 16px; height: 16px; }
-
-  .tv-nueva-n {
-    font-size: 12px;
-    width: 100%;
-    max-width: 100%;
-    white-space: normal;
-    overflow-wrap: anywhere;
-    text-overflow: clip;
-  }
 
   /* El punto de "abierto" se mueve a la esquina del icono: en la fila
      horizontal iba al final del texto, pero aquí el texto ya no está al
      lado del icono. */
   /* El 23px sigue al ancho del icono: 34/2 = 17, más 6 de separación. Si
      `.tv-nueva-ic` cambia de tamaño, este número cambia con él. */
-  .tv-nueva-punto-abierto {
-    position: absolute;
-    top: 6px;
-    right: calc(50% - 23px);
-    margin-left: 0;
-  }
 }
 
 
@@ -1076,55 +754,6 @@
 
 /* Hoja inferior genérica (sin uso activo hoy; se conserva por si un
    futuro flujo necesita una hoja anclada abajo). */
-.tv-sheet-backdrop {
-  position: fixed;
-  inset: 0;
-  z-index: 90;
-  background: rgba(8, 11, 16, 0.5);
-}
-
-.tv-sheet {
-  position: fixed;
-  left: 10px;
-  right: 10px;
-  bottom: calc(var(--tv-dock-h) + 16px + env(safe-area-inset-bottom, 0px));
-  z-index: 95;
-  max-height: 62dvh;
-  overflow-y: auto;
-  overscroll-behavior: contain;
-  -webkit-overflow-scrolling: touch;
-  padding: 8px;
-  border-radius: 18px;
-  background: var(--bg-elevated);
-  border: 1px solid var(--tv-hairline);
-  box-shadow: var(--float-shadow-lg);
-}
-
-.tv-sheet-title {
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: 0.1em;
-  text-transform: uppercase;
-  color: var(--text-muted);
-  padding: 8px 12px 6px;
-}
-
-.tv-sheet-item {
-  display: flex;
-  align-items: center;
-  gap: 12px;
-  width: 100%;
-  padding: 12px;
-  border-radius: 12px;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 600;
-  text-align: left;
-  cursor: pointer;
-}
-
-.tv-sheet-item[data-active='true'] { background: var(--tv-accent-soft); color: var(--tv-accent); }
-.tv-sheet-item[data-danger='true'] { color: var(--tv-danger); }
 
 /* ---------------------------------------------------------------------
    PIEZAS DE CONTENIDO
@@ -1392,13 +1021,6 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
 .tv-row { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
 
 /* Respeta a quien pidió menos movimiento en el sistema operativo. */
-@media (prefers-reduced-motion: reduce) {
-  #admin-panel-root *,
-  .tv-sheet * {
-    transition-duration: 0.01ms !important;
-    animation-duration: 0.01ms !important;
-  }
-}
 
 /* ==========================================================================
    CONTENCIÓN EN TABLAS Y CHIPS DEL PANEL
@@ -1409,17 +1031,8 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
    Aquí se le pone techo: la palabra se parte antes que la columna crezca.
    ========================================================================== */
 .tv-table td { overflow-wrap: anywhere; }
-.tv-table td.tv-td-nowrap { overflow-wrap: normal; white-space: nowrap; }
 
 /* Celda con texto largo: recorta a dos líneas y conserva el alto de fila. */
-.tv-table td .tv-cell-clamp {
-  display: -webkit-box;
-  -webkit-line-clamp: 2;
-  -webkit-box-orient: vertical;
-  overflow: hidden;
-  overflow-wrap: anywhere;
-  max-width: 42ch;
-}
 
 /* Un chip de estado no se deforma por una etiqueta larga. */
 .tv-chip {
@@ -1432,12 +1045,6 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
 
 /* El nombre del módulo en el riel: una línea, recortada. Con el riel
    abierto a 252 px un nombre largo rompía la alineación de los iconos. */
-.tv-nav-label {
-  min-width: 0;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
 
 /* Opción de menú desplegable: misma regla. */
 .tv-menu-item {
@@ -1467,56 +1074,13 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
    --------------------------------------------------------------------- */
 
 /* AVISO — lo que pide atención pero no es un error. */
-#admin-panel-root .text-amber-400,
-#admin-panel-root .text-amber-500,
-#admin-panel-root .text-amber-600 { color: var(--tv-warn) !important; }
-
-#admin-panel-root .bg-amber-500,
-#admin-panel-root .hover\:bg-amber-600:hover {
-  background-color: var(--tv-warn) !important;
-  color: #FFFFFF !important;
-}
-
-#admin-panel-root .bg-amber-500 * { color: inherit !important; }
-
-#admin-panel-root .bg-amber-500\/10,
-#admin-panel-root .bg-amber-500\/15 { background-color: var(--tv-warn-soft) !important; }
-
-#admin-panel-root .border-amber-500\/30,
-#admin-panel-root .border-amber-500\/50,
-#admin-panel-root .focus\:border-amber-400:focus { border-color: var(--tv-warn) !important; }
-
-#admin-panel-root .bg-amber-500 { border-color: transparent !important; }
 
 /* PELIGRO — lo que destruye o bloquea algo. */
-#admin-panel-root .text-rose-400,
-#admin-panel-root .text-rose-500,
-#admin-panel-root .text-rose-600,
-#admin-panel-root .hover\:text-rose-500:hover { color: var(--tv-danger) !important; }
-
-#admin-panel-root .bg-rose-500,
-#admin-panel-root .hover\:bg-rose-600:hover {
-  background-color: var(--tv-danger) !important;
-  color: #FFFFFF !important;
-}
-
-#admin-panel-root .bg-rose-500 * { color: inherit !important; }
-
-#admin-panel-root .bg-rose-500\/10,
-#admin-panel-root .bg-rose-500\/15,
-#admin-panel-root .bg-rose-500\/20 { background-color: var(--tv-danger-soft) !important; }
-
-#admin-panel-root .border-rose-500\/20,
-#admin-panel-root .border-rose-500\/30 { border-color: var(--tv-danger) !important; }
 
 /* Tinta sobre relleno de acento. Varios botones traen `text-slate-950`
    escrito a mano —negro casi puro— que en tema oscuro, sobre el verde
    menta, es correcto, pero en claro sobre el verde botella es ilegible.
    `--accent-ink` ya resuelve los dos casos. */
-#admin-panel-root .bg-emerald-500.text-slate-950,
-#admin-panel-root .bg-sky-500.text-slate-950,
-#admin-panel-root .bg-amber-500.text-slate-950,
-#admin-panel-root .bg-rose-500.text-white { color: var(--accent-ink) !important; }
 
 /* =====================================================================
    GEOMETRÍA MIXTA — controles rectos dentro de contenedores curvos
@@ -1536,12 +1100,6 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
    ===================================================================== */
 
 /* --- Controles: casi rectos ----------------------------------------- */
-#admin-panel-root button:not(.tv-pestana):not(.tv-menu-item):not(.tv-chip):not(.tv-btn):not(.tv-folder):not(.tv-lanzador):not(.tv-tab-nueva):not(.tv-tab-x):not(.tv-icon-btn):not(.tv-avatar):not(.tv-limpiar):not([class^="ai-"]),
-#admin-panel-root input:not([type="checkbox"]):not([type="radio"]),
-#admin-panel-root select,
-#admin-panel-root textarea {
-  border-radius: var(--tv-radius-sm);
-}
 
 /* Tailwind escribe el radio en el marcado, así que un botón con
    `rounded-2xl` seguiría curvado pese a la regla de arriba. Se corrige
@@ -1552,61 +1110,23 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
    estaba mal: aplanaba también modales, desplegables y tarjetas, que en
    esta variación son justamente lo que DEBE conservar la curva amplia.
    Habría convertido la forma mixta en una forma rígida a medias. */
-#admin-panel-root button.rounded-lg,
-#admin-panel-root button.rounded-xl,
-#admin-panel-root button.rounded-2xl,
-#admin-panel-root input.rounded-lg,
-#admin-panel-root input.rounded-xl,
-#admin-panel-root input.rounded-2xl,
-#admin-panel-root select.rounded-lg,
-#admin-panel-root select.rounded-xl,
-#admin-panel-root select.rounded-2xl,
-#admin-panel-root textarea.rounded-lg,
-#admin-panel-root textarea.rounded-xl,
-#admin-panel-root textarea.rounded-2xl {
-  border-radius: var(--tv-radius-sm);
-}
 
 /* --- Contenedores: curva generosa ------------------------------------ */
 /* Las superficies grandes conservan la curva amplia. Las que ya dibujan
    con `var(--tv-radius)` se reformaron solas al cambiar el token; estas
    llevan su radio por clase propia y hay que nombrarlas. */
-#admin-panel-root .tv-tarjeta,
-#admin-panel-root .tv-panel,
-#admin-panel-root .glass-panel,
-#admin-panel-root .glass-panel-strong,
-#admin-panel-root .glass-card {
-  border-radius: var(--tv-radius);
-}
 
 /* --- Etiquetas: píldora ---------------------------------------------- */
 /* Chips, insignias y contadores son etiquetas, no controles: mantienen
    el óvalo, y ese contraste es justamente el recurso de esta variación. */
-#admin-panel-root .tv-chip,
-#admin-panel-root .rounded-full {
-  border-radius: var(--tv-radius-pill);
-}
 
 /* --- Titulares ------------------------------------------------------- */
-#admin-panel-root .tv-titulo,
-#admin-panel-root .tv-page-title,
-#admin-panel-root h1,
-#admin-panel-root h2,
-#admin-panel-root h3 {
-  font-weight: var(--tv-peso-titulo);
-  letter-spacing: var(--tv-traqueo-titulo);
-}
 
 /* --- Excepciones que NO deben perder su forma ------------------------- */
 /* Avatares, indicadores de estado y botones de icono circulares: si
    cayeran en la regla de controles rectos quedarían como cuadraditos.
    `rounded-full` ya los cubre arriba, pero estos llevan el radio en
    línea o por su propia clase. */
-#admin-panel-root .tv-avatar,
-#admin-panel-root .tv-punto,
-#admin-panel-root [class*="rounded-full"] {
-  border-radius: 999px;
-}
 
 /* ==========================================================================
    MÓDULOS DE PANTALLA COMPLETA (el chat)
@@ -1653,84 +1173,13 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
    ========================================================================== */
 
 /* ---- Regleta: cápsula flotante ---- */
-#admin-panel-root .tv-regleta {
-  margin: calc(8px + env(safe-area-inset-top, 0px)) 10px 0;
-  padding: 4px 5px;
-  gap: 4px;
-  min-height: var(--tv-regleta-h);
-  flex-wrap: nowrap;
-  border-radius: 999px;
-  background: var(--glass-bg);
-  -webkit-backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  backdrop-filter: blur(var(--glass-blur)) saturate(150%);
-  border: 1px solid var(--glass-border);
-  box-shadow: var(--glass-shadow);
-}
-html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; backdrop-filter: none; background: var(--bg-surface); }
 
 /* La regla táctil global fuerza 40-44 px a todo botón con ícono. Dentro de la
    cápsula (más baja) eso desbordaba; con el id del panel se acota. */
-#admin-panel-root .tv-regleta button {
-  min-width: 0 !important;
-  min-height: 0 !important;
-}
-#admin-panel-root .tv-lanzador {
-  width: 32px;
-  height: 32px;
-  border-radius: 999px;
-}
-#admin-panel-root .tv-regleta .tv-icon-btn { width: 32px; height: 32px; }
-@media (pointer: coarse) {
-  #admin-panel-root .tv-lanzador,
-  #admin-panel-root .tv-regleta .tv-icon-btn { width: 38px; height: 38px; }
-}
-#admin-panel-root .tv-lanzador:hover { background: rgba(var(--accent-rgb), 0.10); color: var(--text-primary); }
 
 /* ---- Pestañas: cápsulas; la activa es una gota ---- */
-#admin-panel-root .tv-tabs { gap: 2px; }
-#admin-panel-root .tv-tab {
-  height: 32px;
-  max-width: 190px;
-  padding-left: 12px;
-  padding-right: 6px;
-  border-radius: 999px;
-  border: 1px solid transparent;
-  color: var(--text-secondary);
-}
-#admin-panel-root .tv-tab:hover { background: rgba(var(--accent-rgb), 0.08); color: var(--text-primary); }
-#admin-panel-root .tv-tab[data-activa] {
-  background: var(--gota-bg);
-  border-color: transparent;
-  color: var(--gota-ink);
-  box-shadow: var(--gota-shadow);
-}
-#admin-panel-root .tv-tab-btn {
-  font-family: var(--font-sans);
-  font-size: 12.5px;
-  font-weight: 600;
-  letter-spacing: 0;
-}
-#admin-panel-root .tv-tab-x { border-radius: 50%; }
-@media (pointer: coarse) { #admin-panel-root .tv-tab { height: 38px; } }
-#admin-panel-root .tv-tab-nueva {
-  width: 30px !important;
-  height: 30px !important;
-  border-radius: 50%;
-  border: 0;
-}
-#admin-panel-root .tv-tab-nueva:hover { background: rgba(var(--accent-rgb), 0.10); color: var(--tv-accent); }
-#admin-panel-root .tv-icon-btn:hover { background: rgba(var(--accent-rgb), 0.10); color: var(--text-primary); }
-#admin-panel-root .tv-avatar {
-  width: 30px;
-  height: 30px;
-  background: var(--accent);
-  color: var(--accent-ink);
-  border: 0;
-}
 
 /* ---- Menú de cuenta ---- */
-#admin-panel-root .tv-menu { border-radius: 16px; border-color: var(--card-border); min-width: 208px; padding: 5px; }
-#admin-panel-root .tv-menu-item { padding: 7px 9px; font-size: 12.5px; gap: 8px; border-radius: 10px; min-height: 0 !important; justify-content: flex-start !important; }
 
 /* ---- Cabecera de la pantalla (la dibuja `PageHead` dentro del módulo) ---- */
 .tv-cabecera {
@@ -1905,8 +1354,6 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
   /* "Ver la tienda" ya está en el menú de la cuenta: en teléfono se libera ese
      lugar en la barra para que la pestaña activa muestre su nombre completo.
      (La regla táctil global fuerza `display: inline-flex !important`; el id le gana.) */
-  #admin-panel-root .tv-regleta-fijos .tv-icon-btn[aria-label="Ver la tienda"] { display: none !important; }
-  #admin-panel-root .tv-tab[data-activa] { max-width: max(100px, calc(100vw - 214px)); }
 }
 
 /* Las burbujas del chat flotan abajo a la derecha: se deja aire al final del
@@ -2167,7 +1614,6 @@ html.sin-vidrio .sg-riel, html.sin-vidrio .sg-seg { backdrop-filter: none; backg
    ===================================================================== */
 .tv-lz { max-width: 1040px; margin: 0 auto; width: 100%; display: flex; flex-direction: column; gap: 22px; padding-block: 8px 24px; }
 .tv-lz-cab { display: flex; flex-direction: column; align-items: center; gap: 14px; padding-top: clamp(4px, 3vh, 28px); }
-#admin-panel-root .tv-lz-titulo { margin: 0; font: 700 clamp(22px, 3vw, 28px)/1.15 var(--font-display, inherit); color: var(--text-primary); text-align: center; }
 .tv-lz-busca { width: min(100%, 560px); display: flex; align-items: center; gap: 10px; height: 48px; padding: 0 18px; border-radius: 999px; background: var(--glass-strong, var(--bg-surface)); border: 1px solid var(--glass-border); box-shadow: var(--glass-shadow); backdrop-filter: blur(var(--glass-blur)); -webkit-backdrop-filter: blur(var(--glass-blur)); color: var(--text-muted); }
 .tv-lz-busca:focus-within { box-shadow: 0 0 0 2px var(--accent), var(--glass-shadow); }
 .tv-lz-busca input { flex: 1; min-width: 0; border: 0; outline: 0; background: transparent; font-size: 15px; color: var(--text-primary); }
@@ -2213,7 +1659,6 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
    (z 70): con 60 sus menús («Actualizar», «Cerrar sesión») quedaban
    tapados por esas ventanas. No se pisan: las ventanas empiezan justo
    debajo de la regleta (--tv-borde-cab). */
-#admin-panel-root .tv-regleta { position: relative; z-index: 75; }
 /* Visitantes en teléfono: las acciones bajan a su propia línea para que el
    nombre del aparato no se aplaste ni se monte con los botones. */
 @container (max-width: 640px) {
@@ -2228,208 +1673,35 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
    la píldora de la cabecera (≤760). Se mide el MÓDULO, no la ventana,
    porque la regleta lateral le quita ancho en escritorio.
    ========================================================================= */
-.ai-root{container-type:inline-size;position:relative;height:100%;min-height:440px;display:flex;gap:12px;color:var(--text-primary)}
-.ai-root *{box-sizing:border-box}
 /* Una regla global pone `inline-flex !important` a todo botón con icono
    lucide; se centra el icono para que cuadre con ese display, y lo que
    tiene que ocultarse se oculta también con !important. */
-.ai-root button{align-items:center;justify-content:center}
-.ai-lado,.ai-tele,.ai-panel{background:var(--bg-surface);border:1px solid var(--border-color);border-radius:24px;display:flex;flex-direction:column;overflow:hidden;min-height:0}
-.ai-lado{width:240px;flex:none}
-.ai-tele{width:270px;flex:none;overflow-y:auto}
-.ai-panel{flex:1;min-width:0;position:relative}
-@container (max-width:1100px){.ai-lado{display:none}}
-@container (max-width:760px){.ai-tele{display:none}.ai-root{gap:0}}
 
 /* historial */
-.ai-lh{display:flex;align-items:center;justify-content:space-between;padding:12px 14px 8px;color:var(--text-muted)}
-.ai-lh b{font:700 14px var(--font-display,inherit);color:var(--text-primary)}
-.ai-nuevo{display:flex;align-items:center;justify-content:flex-start!important;gap:8px;margin:0 10px 8px;padding:9px 12px;border-radius:14px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:13px}
-.ai-nuevo:hover{filter:brightness(1.06)}
-.ai-hl{flex:1;min-height:0;overflow-y:auto;padding-bottom:6px}
-.ai-hk{font-size:12px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--text-muted);padding:8px 14px 2px}
-.ai-hi{display:flex;align-items:center;margin:0 6px;border-radius:12px}
-.ai-hi>button:first-child{flex:1;min-width:0;text-align:left;padding:8px 10px;font-weight:600;font-size:13px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;color:var(--text-primary)}
-.ai-hi:hover{background:var(--bg-sunken)}
-.ai-hi[data-on]{background:var(--tv-accent-soft)}
-.ai-borrar{width:28px;height:28px;margin-right:4px;border-radius:9px;display:grid;place-items:center;color:var(--text-muted);opacity:0;flex:none}
-.ai-hi:hover .ai-borrar,.ai-hi[data-on] .ai-borrar,.ai-borrar:focus-visible{opacity:1}
-@media (pointer:coarse){.ai-borrar{opacity:1}}
-.ai-borrar:hover{background:var(--tv-danger-soft);color:var(--tv-danger)}
-.ai-vacio-l{padding:10px 14px;font-size:12.5px;color:var(--text-muted)}
-.ai-priv{margin:auto 10px 10px;padding:9px 11px;border-radius:12px;background:var(--bg-sunken);font-size:12px;color:var(--text-secondary);display:flex;gap:8px;align-items:flex-start}
 
 /* cabecera */
-.ai-ch{display:flex;align-items:center;gap:8px;padding:10px 12px;border-bottom:1px solid var(--border-color);flex:none;min-width:0}
-.ai-sp{flex:1}
-.ai-root .ai-menu{width:36px;height:36px;border-radius:12px;display:none!important;place-items:center;background:var(--tile);color:var(--text-secondary);flex:none}
-@container (max-width:1100px){.ai-root .ai-menu{display:inline-flex!important}}
-.ai-modelo{display:inline-flex;align-items:center;gap:8px;padding:5px 11px 5px 5px;border-radius:999px;background:var(--tile);font-weight:600;font-size:13px;white-space:nowrap}
-.ai-dot{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink)}
-.ai-chip{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px;border-radius:999px;font-weight:600;font-size:12.5px;border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-primary);white-space:nowrap}
-.ai-chip:hover{background:var(--bg-sunken)}
-.ai-root .ai-cupo-pill{display:none!important;align-items:center;gap:6px;padding:6px 10px;border-radius:999px;border:1px solid var(--border-color);font-size:12px;color:var(--text-secondary);white-space:nowrap}
-.ai-cupo-pill b{color:var(--text-primary)}
-@container (max-width:760px){.ai-root .ai-cupo-pill{display:inline-flex!important}.ai-lbl{display:none}.ai-ch .ai-chip{padding:0 10px}}
 
 /* avisos */
-.ai-aviso{display:flex;gap:8px;align-items:flex-start;margin:10px 20px 0;padding:8px 12px;border-radius:12px;font-size:12.5px;flex:none}
-.ai-aviso[data-tipo='respaldo']{background:var(--tv-warn-soft);color:var(--text-primary)}
-.ai-aviso[data-tipo='respaldo'] svg:first-child{color:var(--tv-warn)}
-.ai-aviso[data-tipo='error']{background:var(--tv-danger-soft);color:var(--text-primary)}
-.ai-aviso[data-tipo='error'] svg:first-child{color:var(--tv-danger)}
-.ai-aviso>span{flex:1;min-width:0}
-.ai-aviso>button{color:var(--text-muted);flex:none}
-@container (max-width:760px){.ai-aviso{margin:8px 12px 0}}
 
 /* mensajes */
-.ai-msgs{flex:1;min-height:0;overflow-y:auto;padding:18px 20px 8px;display:flex;flex-direction:column;gap:16px;overscroll-behavior:contain}
-@container (max-width:760px){.ai-msgs{padding:14px 12px 6px}}
-.ai-yo{align-self:flex-end;max-width:min(80%,560px);background:var(--tile);border-radius:20px 20px 6px 20px;padding:10px 14px;white-space:pre-wrap;overflow-wrap:anywhere;font-size:14px}
-.ai-ia{align-self:stretch;display:grid;gap:8px;min-width:0;grid-template-columns:minmax(0,1fr)}
 /* FALLO CORREGIDO: en una grilla, cada pieza mide al menos lo que su texto
    más largo sin cortar. La tarjeta «Internet · «búsqueda larga»» ensanchaba
    TODA la respuesta al doble de la pantalla y había que deslizar de lado.
    Ahora la columna mide lo que mide el chat, y cada pieza se adapta. */
-.ai-ia > *,.ai-herrs > *,.ai-tx > *{min-width:0;max-width:100%}
-.ai-msgs{overflow-x:hidden}
-.ai-tx{font-size:14px;line-height:1.6;display:grid;gap:8px;overflow-wrap:anywhere;min-width:0;grid-template-columns:minmax(0,1fr)}
-.ai-tx p{margin:0}
-.ai-tx .ai-h{font:700 15px/1.3 var(--font-display,inherit)}
-.ai-tx ul,.ai-tx ol{margin:0;padding-left:22px;display:grid;gap:3px}
-.ai-tx ul{list-style:disc}.ai-tx ol{list-style:decimal}
-.ai-tx code{font:500 12.5px var(--font-mono,monospace);background:var(--bg-sunken);border-radius:6px;padding:1px 5px}
-.ai-pre{font:12.5px/1.5 var(--font-mono,monospace);background:var(--bg-sunken);border:1px solid var(--border-color);border-radius:12px;padding:10px 12px;overflow-x:auto;white-space:pre;margin:0}
-.ai-fuentes{display:flex;gap:6px;flex-wrap:wrap}
-.ai-fuentes a{display:inline-flex;align-items:center;gap:6px;padding:4px 10px 4px 4px;border-radius:999px;border:1px solid var(--border-color);font-size:12px;color:var(--text-secondary);max-width:100%;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ai-fuentes a span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ai-fuentes a:hover{border-color:var(--tv-accent-line);color:var(--text-primary)}
-.ai-fuentes b{width:20px;height:20px;border-radius:50%;background:var(--tile);color:var(--accent);display:grid;place-items:center;font:700 12px var(--font-display,inherit);flex:none}
-.ai-pie{display:flex;align-items:center;gap:10px;flex-wrap:wrap;font-size:12px;color:var(--text-muted)}
-.ai-pie button{width:28px;height:28px;border-radius:9px;display:grid;place-items:center;color:var(--text-muted)}
-.ai-pie button:hover{background:var(--bg-sunken);color:var(--text-primary)}
-.ai-tok{display:inline-flex;align-items:center;gap:6px;padding:3px 9px;border-radius:999px;background:var(--bg-sunken);font:500 12px var(--font-mono,monospace);color:var(--text-secondary)}
-.ai-tok i{font-style:normal;color:var(--text-primary)}
-.ai-buscando{display:flex;align-items:center;gap:8px;font-size:12.5px;color:var(--text-secondary)}
-.ai-puntos{display:flex;gap:4px}
-.ai-puntos i{width:6px;height:6px;border-radius:50%;background:var(--accent);animation:ai-pulso 1.1s ease-in-out infinite}
-.ai-puntos i:nth-child(2){animation-delay:.18s}.ai-puntos i:nth-child(3){animation-delay:.36s}
 @keyframes ai-pulso{0%,100%{opacity:.3}50%{opacity:1}}
-@media (prefers-reduced-motion:reduce){.ai-puntos i{animation:none;opacity:.7}}
 
 /* bienvenida y cupo agotado */
-.ai-hola,.ai-agotado{margin:auto;text-align:center;display:grid;gap:12px;justify-items:center;padding:12px}
-.ai-hola{max-width:520px}.ai-agotado{max-width:400px}
-.ai-logo{width:60px;height:60px;border-radius:20px;background:var(--tv-accent-soft);color:var(--accent);display:grid;place-items:center}
-.ai-logo[data-t='ba']{background:var(--tv-danger-soft);color:var(--tv-danger)}
-.ai-hola h3,.ai-agotado h3{font:700 21px/1.2 var(--font-display,inherit);margin:0}
-.ai-hola p,.ai-agotado p{color:var(--text-secondary);margin:0;font-size:13.5px}
-.ai-sug{display:grid;grid-template-columns:1fr 1fr;gap:8px;width:100%}
-@container (max-width:760px){.ai-sug{grid-template-columns:1fr}}
-.ai-sug button{text-align:left;padding:10px 12px;border-radius:14px;border:1px solid var(--border-color);background:var(--bg-surface);font-size:12.5px;color:var(--text-secondary)}
-.ai-sug button:hover{border-color:var(--tv-accent-line);background:var(--tv-accent-soft)}
-.ai-sug b{display:block;color:var(--text-primary);font-weight:600;font-size:13px}
 
 /* redactor */
-.ai-red{padding:8px 12px 12px;flex:none}
-.ai-caja{border:1px solid var(--border-color);border-radius:24px;background:var(--bg-surface);box-shadow:0 6px 20px -12px rgba(20,60,70,.35);padding:10px 10px 8px 16px;display:grid;gap:6px}
-.ai-caja:focus-within{border-color:var(--accent);box-shadow:0 0 0 3px var(--tv-accent-soft)}
-.ai-caja textarea{width:100%;resize:none;border:0;outline:0;background:transparent;color:var(--text-primary);font:inherit;font-size:14px;line-height:1.5;min-height:24px;max-height:180px;padding:0}
-.ai-caja textarea::placeholder{color:var(--text-muted)}
-.ai-bot{display:flex;align-items:center;gap:6px;min-width:0}
-.ai-ib{width:34px;height:34px;border-radius:50%;display:grid;place-items:center;color:var(--text-muted);flex:none}
-.ai-ib:hover{background:var(--bg-sunken)}
-.ai-ib[data-on]{background:var(--tv-accent-soft);color:var(--accent)}
-.ai-cont{display:inline-flex;align-items:center;gap:6px;font:500 12px var(--font-mono,monospace);color:var(--text-secondary);padding:4px 10px;border-radius:999px;background:var(--bg-sunken);white-space:nowrap;min-width:0;overflow:hidden}
-.ai-cont b{color:var(--text-primary);font-weight:500}
-.ai-barra{width:44px;height:5px;border-radius:999px;background:var(--border-color);overflow:hidden;flex:none}
-.ai-barra i{display:block;height:100%;background:var(--accent)}
-.ai-env{width:38px;height:38px;border-radius:50%;display:grid;place-items:center;background:var(--accent);color:var(--accent-ink);flex:none}
-.ai-env:disabled{background:var(--bg-sunken);color:var(--text-muted);cursor:default}
-.ai-nota{font-size:12px;color:var(--text-muted);text-align:center;margin:6px 0 0}
 
 /* cupo (columna y hoja) */
-.ai-th{padding:12px 14px 6px;display:flex;justify-content:space-between;align-items:baseline;gap:8px}
-.ai-th b{font:700 14px var(--font-display,inherit)}.ai-th small{font-size:12px;color:var(--text-muted)}
-.ai-anillo{display:flex;gap:12px;align-items:center;margin:4px 14px 10px;padding:12px;border-radius:16px;background:var(--tile)}
-.ai-anillo svg{width:64px;height:64px;flex:none}
-.ai-v{font:700 22px/1.1 var(--font-display,inherit)}.ai-v span{font-size:13px;font-weight:600;color:var(--text-secondary)}
-.ai-k{font-size:12px;color:var(--text-secondary)}
-.ai-kv{display:flex;justify-content:space-between;gap:10px;padding:7px 14px;font-size:12.5px;border-top:1px solid var(--border-color)}
-.ai-kv span{color:var(--text-secondary)}.ai-kv b{font-weight:600}
-.ai-mini{margin:6px 14px;display:grid;gap:4px;font-size:12px;color:var(--text-secondary)}
-.ai-mini>span{display:flex;justify-content:space-between;gap:8px}
-.ai-mini b{color:var(--text-primary);font-weight:600}
-.ai-bt{height:7px;border-radius:999px;background:var(--bg-sunken);overflow:hidden}
-.ai-bt i{display:block;height:100%;background:var(--accent)}
-.ai-mini[data-alto] .ai-bt i{background:var(--tv-warn)}
-.ai-prov{margin:8px 14px 14px;font-size:12px;color:var(--text-muted);line-height:1.45}
 
 /* cajón y hoja */
-.ai-scrim{position:absolute;inset:0;z-index:30;background:rgba(10,24,28,.42);display:flex}
-.dark .ai-scrim{background:rgba(0,0,0,.6)}
-.ai-cajon{width:min(86%,300px);height:100%;background:var(--bg-surface);border:1px solid var(--border-color);border-radius:24px;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 24px 60px rgba(0,0,0,.3)}
-.ai-scrim:has(.ai-hoja){align-items:flex-end;justify-content:center}
-.ai-hoja{width:100%;max-height:85%;overflow-y:auto;background:var(--bg-surface);border:1px solid var(--border-color);border-radius:22px 22px 0 0;box-shadow:0 -12px 40px rgba(0,0,0,.25);padding-bottom:env(safe-area-inset-bottom,0px)}
-.ai-agarre{width:40px;height:4px;border-radius:2px;background:var(--border-color);margin:8px auto 0}
 
 /* ajustes del superadmin */
-.ai-ajustes{flex:1;min-height:0;overflow-y:auto;padding:16px 20px;display:flex;flex-direction:column;gap:14px}
-.ai-ajustes>*{flex:none}
-@container (max-width:760px){.ai-ajustes{padding:12px}}
-.ai-aj{border:1px solid var(--border-color);border-radius:18px;overflow:hidden}
-.ai-aj h4{font:700 14px var(--font-display,inherit);padding:11px 14px;border-bottom:1px solid var(--border-color);display:flex;justify-content:space-between;gap:8px;margin:0}
-.ai-aj h4 small{font:500 12px var(--font-sans,inherit);color:var(--text-muted)}
-.ai-campo{display:flex;justify-content:space-between;align-items:center;gap:12px;padding:10px 14px;font-size:13px;flex-wrap:wrap}
-.ai-campo+.ai-campo{border-top:1px solid var(--border-color)}
-.ai-campo>span:first-child{color:var(--text-secondary);flex:1;min-width:160px}
-@container (max-width:760px){.ai-campo>span:first-child{min-width:0}}
-.ai-num-g{display:inline-flex;align-items:center;gap:6px;flex:none}
-.ai-num-g input{width:84px;padding:6px 10px;border-radius:12px;border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-primary);font:500 13px var(--font-mono,monospace)}
-.ai-num-g button{height:32px;padding:0 13px;border-radius:999px;background:var(--accent);color:var(--accent-ink);font-weight:600;font-size:12.5px}
-.ai-num-g button:disabled{background:var(--bg-sunken);color:var(--text-muted);cursor:default}
-.ai-sw{width:42px;height:24px;border-radius:999px;background:var(--border-color);position:relative;flex:none;transition:background .15s}
-.ai-sw::after{content:"";position:absolute;left:3px;top:3px;width:18px;height:18px;border-radius:50%;background:#fff;box-shadow:0 1px 3px rgba(0,0,0,.25);transition:left .15s}
-.ai-sw[data-on]{background:var(--accent)}
-.ai-sw[data-on]::after{left:21px}
-.ai-seg{display:inline-flex;gap:3px;padding:3px;border-radius:999px;background:var(--bg-sunken);flex-wrap:wrap}
-.ai-seg button{padding:6px 12px;border-radius:999px;font-weight:600;font-size:12.5px;color:var(--text-secondary);white-space:nowrap}
-.ai-seg button[data-on]{background:var(--bg-surface);color:var(--accent);box-shadow:0 2px 8px rgba(30,70,80,.14)}
-.ai-per{display:grid;grid-template-columns:minmax(0,1fr) 120px 60px;gap:10px;align-items:center;padding:9px 14px;font-size:12.5px}
-.ai-per+.ai-per{border-top:1px solid var(--border-color)}
-.ai-per b{font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ai-per .ai-bt{height:6px}
-.ai-per small{text-align:right;font:500 12px var(--font-mono,monospace);color:var(--text-secondary)}
-@container (max-width:760px){.ai-per{grid-template-columns:minmax(0,1fr) 70px 54px}}
 
 /* Asistente IA · consultas al sistema: la tarjeta de lo que leyó la IA,
    las tablas de sus respuestas y los módulos en Ajustes. */
-.ai-herrs{display:grid;gap:6px;grid-template-columns:minmax(0,1fr)}
-.ai-herr{border:1px solid var(--border-color);border-radius:14px;overflow:hidden;background:var(--bg-surface)}
-.ai-herr summary{display:flex;align-items:center;gap:10px;padding:8px 12px;font-size:12.5px;cursor:pointer;list-style:none;min-width:0}
-.ai-herr summary::-webkit-details-marker{display:none}
-.ai-herr-ic{width:26px;height:26px;border-radius:8px;display:grid;place-items:center;background:var(--tv-accent-soft);color:var(--accent);flex:none}
-.ai-herr[data-no] .ai-herr-ic{background:var(--tv-danger-soft);color:var(--tv-danger)}
-.ai-herr-t{flex:1;min-width:0;color:var(--text-secondary);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ai-herr-t b{color:var(--text-primary);font-weight:600}
-.ai-herr-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;background:var(--ok-soft);color:var(--ok);font-size:12px;font-weight:600;white-space:nowrap;flex:none}
-.ai-herr small{font:12px var(--font-mono,monospace);color:var(--text-muted);white-space:nowrap;flex:none}
-.ai-herr-chev{color:var(--text-muted);flex:none;transition:transform .15s}
-.ai-herr[open] .ai-herr-chev{transform:rotate(90deg)}
-.ai-herr pre{margin:0;border-top:1px solid var(--border-color);padding:8px 12px;font:12px/1.55 var(--font-mono,monospace);color:var(--text-secondary);white-space:pre-wrap;overflow-wrap:anywhere}
-@container (max-width:760px){.ai-herr summary{flex-wrap:wrap;row-gap:4px;column-gap:8px}.ai-herr-t{flex:1 1 calc(100% - 40px);white-space:normal;display:-webkit-box;-webkit-line-clamp:2;-webkit-box-orient:vertical;overflow-wrap:anywhere}.ai-herr-chip{margin-left:34px}.ai-herr-chev{display:none}.ai-herr small{margin-left:auto}.ai-tabla th,.ai-tabla td{padding:7px 10px}}
-.ai-tabla td:not(:first-child){white-space:nowrap}
-.ai-tabla{border:1px solid var(--border-color);border-radius:12px;overflow-x:auto}
-.ai-tabla table{width:100%;border-collapse:collapse;font-size:12.5px}
-.ai-tabla th{background:var(--bg-sunken);color:var(--text-secondary);font-weight:600;font-size:12px;text-align:left;padding:7px 12px;white-space:nowrap}
-.ai-tabla td{padding:7px 12px;border-top:1px solid var(--border-color);font-variant-numeric:tabular-nums}
-.ai-modu{display:grid;grid-template-columns:30px minmax(0,1fr) auto;gap:12px;align-items:center;padding:10px 14px}
-.ai-modu+.ai-modu{border-top:1px solid var(--border-color)}
-.ai-modu-ic{width:30px;height:30px;border-radius:9px;display:grid;place-items:center;background:var(--tile);color:var(--accent)}
-.ai-modu-t{display:grid;min-width:0}
-.ai-modu-t b{font-weight:600;font-size:13px}
-.ai-modu-t b em{font-style:normal;font-size:12px;color:var(--tv-warn)}
-.ai-modu-t>span{font-size:12px;color:var(--text-secondary)}
 
 /* Cabecera del Asistente: los tres controles (menú, cupo, ajustes) a la
    misma altura de 40 px y con el mismo trazo fino, en vez de cuadros de
@@ -2437,49 +1709,12 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
    de mínimo a todo botón con icono; aquí se ancla al id del panel para
    ganarle en especificidad y se compensa con un área de toque de 40 px,
    que sigue siendo cómoda. */
-#admin-panel-root .ai-ch .ai-menu,
-#admin-panel-root .ai-ch .ai-chip,
-#admin-panel-root .ai-ch .ai-cupo-pill{min-width:0!important;min-height:0!important;height:40px;box-sizing:border-box}
-#admin-panel-root .ai-root .ai-ch .ai-menu{width:40px;border-radius:999px;background:transparent;border:1px solid var(--border-color);color:var(--text-secondary)}
-#admin-panel-root .ai-ch .ai-chip{border-radius:999px}
-#admin-panel-root .ai-ch .ai-cupo-pill{padding:0 12px}
-#admin-panel-root .ai-ch .ai-modelo{height:40px;box-sizing:border-box}
-@container (max-width:760px){#admin-panel-root .ai-ch .ai-chip{width:40px;padding:0}}
-#admin-panel-root .ai-ch .ai-menu:hover,#admin-panel-root .ai-ch .ai-chip:hover,#admin-panel-root .ai-ch .ai-cupo-pill:hover{background:var(--bg-sunken)}
 /* Enviar y el globo: círculos de 40 px, no cuadros estirados por la regla táctil. */
-#admin-panel-root .ai-caja .ai-env,#admin-panel-root .ai-caja .ai-ib{min-width:0!important;min-height:0!important;width:40px;height:40px;border-radius:999px}
 /* Mientras llega una conversación que no estaba en caché: tres barras
    suaves en lugar del saludo (que hacía pensar que se había perdido). */
-.ai-esqueleto{display:grid;gap:12px;padding:4px 0}
-.ai-esqueleto i{display:block;height:14px;border-radius:7px;background:var(--bg-sunken);animation:ai-pulso 1.2s ease-in-out infinite}
-.ai-esqueleto i:nth-child(1){width:55%;justify-self:end;height:34px;border-radius:16px}
-.ai-esqueleto i:nth-child(2){width:90%}
-.ai-esqueleto i:nth-child(3){width:70%}
-@media (prefers-reduced-motion:reduce){.ai-esqueleto i{animation:none}}
 /* Respuesta en vivo y detalle del superadmin */
-.ai-cursor{display:inline-block;width:7px;height:1em;margin-left:2px;vertical-align:-2px;border-radius:2px;background:var(--accent);animation:ai-pulso 1s ease-in-out infinite}
-@media (prefers-reduced-motion:reduce){.ai-cursor{animation:none}}
-.ai-herr-chip[data-tipo='privado']{background:var(--tv-accent-soft);color:var(--accent)}
-.ai-panel-det{border-top:1px solid var(--border-color);padding:8px;display:grid;gap:8px}
-.ai-panel-det .ai-tabla{max-height:420px;overflow:auto;overscroll-behavior:contain}
-.ai-panel-det .ai-tabla th{position:sticky;top:0;z-index:1}
-.ai-panel-det td{white-space:nowrap;max-width:240px;overflow:hidden;text-overflow:ellipsis}
-.ai-panel-vacio{margin:0;padding:10px 12px;font-size:12.5px;color:var(--text-muted);border-top:1px solid var(--border-color)}
-#admin-panel-root .ai-mapa-btn{min-width:0!important;min-height:0!important;width:32px;height:32px;border-radius:999px;color:var(--accent);background:var(--tv-accent-soft)}
-.ai-ver-mas{justify-self:start;padding:6px 12px;border-radius:999px;font-size:12.5px;font-weight:600;color:var(--accent);background:var(--tv-accent-soft)}
 /* En teléfono, el detalle del superadmin se lee como fichas (etiqueta:
    valor), no como una tabla ancha que obliga a deslizar de lado. */
-@container (max-width:760px){
-  .ai-tabla-fichas{overflow:visible;border:0;max-height:none!important}
-  .ai-tabla-fichas table,.ai-tabla-fichas tbody,.ai-tabla-fichas tr,.ai-tabla-fichas td{display:block;width:100%}
-  .ai-tabla-fichas thead{display:none}
-  .ai-tabla-fichas tr{position:relative;border:1px solid var(--border-color);border-radius:12px;padding:8px 10px;margin-bottom:6px}
-  .ai-tabla-fichas td{border:0!important;padding:1px 0!important;display:flex;gap:8px;max-width:none;white-space:normal;overflow-wrap:anywhere;font-size:12.5px}
-  .ai-tabla-fichas td::before{content:attr(data-col);flex:0 0 72px;color:var(--text-muted);font-size:12px}
-  .ai-tabla-fichas td.ai-td-mapa{position:absolute;top:6px;right:6px;width:auto}
-  .ai-tabla-fichas td.ai-td-mapa::before{display:none}
-  .ai-tabla-fichas tr:has(.ai-mapa-btn) td:first-child{padding-right:40px!important}
-}
 
 /* DESPLAZAMIENTO TÁCTIL FLUIDO EN EL ASISTENTE
    Un solo contenedor vertical: el chat. La tabla de detalle tenía su propio
@@ -2489,65 +1724,21 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
    solo se desliza de lado si es más ancha que la pantalla.
    `touch-action` le dice al navegador de antemano qué gestos hace cada caja,
    así responde al primer toque sin esperar a ver si alguien los intercepta. */
-.ai-msgs{-webkit-overflow-scrolling:touch;overscroll-behavior-y:contain}
 /* FALLO CORREGIDO: aquí había `touch-action: pan-y` y en el WebView de
    Android eso lo heredan las cajas de adentro: tablas y código no se
    podían deslizar de lado. Sin restringir, cada caja ancha se desliza. */
-.ai-panel-det .ai-tabla{max-height:none;overflow-y:visible;overflow-x:auto;overscroll-behavior:auto}
-.ai-tabla,.ai-pre{touch-action:auto;overscroll-behavior-x:contain}
 /* En teléfono las respuestas caben en la pantalla: el texto de las tablas
    baja de línea y el código también (antes se cortaban a la derecha). */
 @container (max-width:760px){
   /* Baja de línea entre palabras, nunca a media palabra («Agota-do»). */
-  .ai-tabla-md td,.ai-tabla-md td:not(:first-child),.ai-tabla-md th{white-space:normal;overflow-wrap:normal;word-break:normal;hyphens:auto}
-  .ai-tabla-md th,.ai-tabla-md td{padding:6px 8px}
-  .ai-tabla-md table{font-size:12.5px}
-  .ai-tx .ai-pre{white-space:pre-wrap;overflow-wrap:anywhere}
-  .ai-tabla-fichas.ai-tabla-md td::before{flex-basis:84px}
 }
-.ai-panel-det .ai-tabla th{position:static}
 
 /* Asistente IA · fase 3: adjuntos, editar, detener */
-.ai-yo-g{align-self:flex-end;display:grid;justify-items:end;gap:4px;max-width:min(80%,560px);min-width:0}
-.ai-yo-g .ai-yo{max-width:100%;align-self:auto}
-.ai-yo-adj{display:flex;gap:6px;flex-wrap:wrap;justify-content:flex-end}
-.ai-yo-adj img{width:140px;height:104px;object-fit:cover;border-radius:14px;border:1px solid var(--border-color)}
-.ai-yo-adj span{display:inline-flex;align-items:center;gap:6px;padding:6px 10px;border-radius:12px;background:var(--bg-sunken);font-size:12px;color:var(--text-secondary);max-width:220px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#admin-panel-root .ai-editar{min-width:0!important;min-height:0!important;display:inline-flex;align-items:center;gap:4px;padding:2px 6px;font-size:12px;color:var(--text-muted);border-radius:8px}
-#admin-panel-root .ai-editar:hover{color:var(--text-primary);background:var(--bg-sunken)}
-.ai-adj{display:flex;gap:6px;flex-wrap:wrap}
-.ai-adj span{display:inline-flex;align-items:center;gap:6px;padding:4px 4px 4px 4px;border-radius:12px;background:var(--bg-sunken);font-size:12px;color:var(--text-secondary);max-width:100%}
-.ai-adj img{width:34px;height:34px;border-radius:8px;object-fit:cover}
-.ai-adj em{font-style:normal;max-width:140px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#admin-panel-root .ai-adj button{min-width:0!important;min-height:0!important;width:26px;height:26px;border-radius:999px;color:var(--text-muted)}
-#admin-panel-root .ai-adj button:hover{background:var(--tv-danger-soft);color:var(--tv-danger)}
-.ai-editando{display:flex;align-items:center;gap:8px;margin:0 4px 6px;padding:6px 10px;border-radius:12px;background:var(--tv-accent-soft);color:var(--accent);font-size:12.5px;font-weight:600}
-.ai-editando span{flex:1}
-#admin-panel-root .ai-editando button{min-width:0!important;min-height:0!important;padding:2px 8px;border-radius:8px;font-size:12px;color:var(--text-secondary)}
-#admin-panel-root .ai-caja .ai-env[data-detener]{background:var(--text-primary);color:var(--bg-surface)}
-.ai-ib:disabled{opacity:.4;cursor:default}
 
 /* Cabecera del asistente en teléfono: nada se encoge salvo el nombre del
    modelo (que se corta con «…»); los botones de solo ícono son círculos
    exactos de 40 px — la regla global de 44 px los deformaba y recortaba. */
-#admin-panel-root .ai-ch>*{flex:none}
-#admin-panel-root .ai-ch .ai-modelo{flex:0 1 auto;min-width:0;overflow:hidden}
-#admin-panel-root .ai-ch .ai-dot{flex:none}
-.ai-mn{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-#admin-panel-root .ai-ch .ai-sp{flex:1 1 0;min-width:0}
-#admin-panel-root .ai-root .ai-ch .ai-atras{display:inline-flex!important;align-items:center;justify-content:center}
-.ai-titulo{font:700 15px var(--font-display,inherit);color:var(--text-primary);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:0 1 auto!important}
-#admin-panel-root .ai-ch .ai-cupo-pill{gap:6px}
-@container (max-width:760px){
-  #admin-panel-root .ai-ch .ai-cupo-pill{padding:0 12px 0 11px}
-  #admin-panel-root .ai-ch .ai-ajustes-btn{width:40px;padding:0;justify-content:center}
-}
 /* Botones pequeños dentro de filas: medida propia, sin el mínimo global. */
-#admin-panel-root .ai-borrar{min-width:0!important;min-height:0!important;width:34px;height:34px;border-radius:999px}
-#admin-panel-root .ai-aviso>button{min-width:0!important;min-height:0!important;width:28px;height:28px;margin:-4px -6px -4px 0;border-radius:999px;display:inline-flex;align-items:center;justify-content:center}
-#admin-panel-root .ai-aviso>button:hover{background:var(--bg-sunken)}
-#admin-panel-root .ai-pie button{min-width:0!important;min-height:0!important;width:34px;height:34px;border-radius:999px}
-@container (max-width:400px){.ai-barra{width:30px}}
 
 /* =====================================================================
    JARVIS — piezas del Asistente IA del superadmin
@@ -2557,217 +1748,35 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
    tokens de la plataforma; solo se agregan los dos tonos del gráfico y el
    rojo del botón que cambia accesos.
    ===================================================================== */
-#admin-panel-root{--jv-actual:#008A9E;--jv-anterior:#9DB0B4;--jv-peligro:#C2363B;--jv-peligro-ink:#fff}
-.dark #admin-panel-root{--jv-actual:#26A99E;--jv-anterior:#56635F}
 /* ---------- Cabecera: persona (Jarvis operador / Arquitecto) ---------- */
-#admin-panel-root .ai-ch .ai-persona{min-width:0!important;min-height:0!important;height:40px;cursor:pointer;padding:5px 10px 5px 5px;gap:8px}
-#admin-panel-root .ai-ch .ai-persona:hover{background:var(--bg-sunken)}
-.ai-persona .ai-chev{display:inline-flex;color:var(--text-muted);flex:none}
-.ai-persona[data-p="arquitecto"] .ai-dot{background:var(--tv-warn);color:#fff}
 
 /* Menús emergentes (mismo aspecto que el menú de adjuntar del chat). */
-.ai-pop{position:absolute;z-index:40;padding:6px;width:min(330px,calc(100% - 24px));display:grid;gap:2px}
-.ai-pop[hidden]{display:none}
-.ai-pop-t{padding:8px 10px 6px;font-size:12px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary)}
-#admin-panel-root .ai-pop-op{display:grid!important;grid-template-columns:34px 1fr auto;align-items:start!important;gap:10px;width:100%;padding:9px 10px;border-radius:12px;text-align:left;color:var(--text-primary);background:transparent;min-height:0!important;min-width:0!important}
-#admin-panel-root .ai-pop-op:hover{background:var(--bg-sunken)}
-#admin-panel-root .ai-pop-op[aria-checked="true"]{background:var(--tv-accent-soft)}
-.ai-pop-ic{width:34px;height:34px;border-radius:10px;display:grid;place-items:center;background:var(--tile);color:var(--accent)}
-.ai-pop-op[aria-checked="true"] .ai-pop-ic{background:var(--accent);color:var(--accent-ink)}
-.ai-pop-tx{display:grid;gap:2px;min-width:0}
-.ai-pop-tx b{font-size:13.5px;font-weight:700}
-.ai-pop-tx span{font-size:12.5px;color:var(--text-secondary);line-height:1.4}
-.ai-pop-tx em{font-style:normal;font-size:12px;color:var(--text-muted)}
-.ai-pop-der{display:grid;justify-items:end;gap:4px;font:500 12px var(--font-mono,monospace);color:var(--text-secondary);white-space:nowrap;padding-top:2px}
-.ai-pop-der .ai-pop-ok{color:var(--accent);display:inline-flex}
-.ai-pop-op[aria-checked="false"] .ai-pop-ok{visibility:hidden}
-.ai-pop-aviso{display:inline-flex;align-items:center;gap:4px;padding:1px 7px;border-radius:999px;background:var(--tv-warn-soft);color:var(--tv-warn);font:600 12px var(--font-sans,inherit)}
-.ai-pop-pie{padding:8px 10px 6px;border-top:1px solid var(--border-soft);margin-top:4px;font-size:12px;color:var(--text-muted);line-height:1.45}
 
 /* ---------- Barra de escribir: +, voz y velocidad ---------- */
-.ai-red{position:relative}
-#admin-panel-root .ai-caja{grid-template-columns:minmax(0,1fr)}
-#admin-panel-root .ai-vel{display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 9px 0 10px;border-radius:999px;background:var(--bg-sunken);color:var(--text-primary);font-size:12.5px;font-weight:600;white-space:nowrap;min-width:0!important;min-height:0!important;cursor:pointer;flex:none}
-#admin-panel-root .ai-vel:hover{background:var(--tile)}
-.ai-vel .ai-vel-ic{display:inline-flex;color:var(--accent)}
-.ai-vel .ai-chev{display:inline-flex;color:var(--text-muted)}
-.ai-vel-menu{right:12px;bottom:calc(100% - 4px)}
-.ai-mas-menu{left:12px;bottom:calc(100% - 4px);width:min(270px,calc(100% - 24px))}
-#admin-panel-root .ai-mas-op{display:flex!important;align-items:center!important;justify-content:flex-start!important;gap:10px;width:100%;padding:10px;border-radius:12px;font-size:13.5px;color:var(--text-primary);min-height:0!important;text-align:left}
-#admin-panel-root .ai-mas-op:hover{background:var(--bg-sunken)}
-.ai-mas-op .ai-pop-ic{width:30px;height:30px;border-radius:9px}
-.ai-mas-op small{display:block;font-size:12px;color:var(--text-muted)}
-.ai-mas-op[aria-checked="true"] .ai-pop-ic{background:var(--accent);color:var(--accent-ink)}
 
 /* Grabando: el mismo rojo pulsante de las notas de voz del chat. */
-#admin-panel-root .ai-caja .ai-ib[data-grabando]{background:var(--jv-peligro);color:#fff;animation:tv-chat-pulso 1.1s ease-in-out infinite}
-.ai-caja[data-grabando] textarea{display:none}
-.ai-escucha{display:none;align-items:center;gap:10px;min-height:24px;font-size:13.5px;color:var(--text-primary)}
-.ai-caja[data-grabando] .ai-escucha,.ai-caja[data-transcribiendo] .ai-escucha{display:flex}
-.ai-caja[data-transcribiendo] textarea{display:none}
-.ai-rec{width:9px;height:9px;border-radius:50%;background:var(--jv-peligro);flex:none;animation:ai-pulso 1.1s ease-in-out infinite}
-.ai-reloj{font:500 12.5px var(--font-mono,monospace);color:var(--text-secondary)}
-.ai-onda{display:flex;align-items:center;gap:2px;height:20px;flex:1 1 0;min-width:0;overflow:hidden}
-.ai-onda i{width:3px;height:100%;border-radius:2px;background:var(--accent);opacity:.75;transform:scaleY(.25);animation:jv-onda 1s ease-in-out infinite}
 @keyframes jv-onda{0%,100%{transform:scaleY(.2)}50%{transform:scaleY(1)}}
-.ai-yo-voz{display:inline-flex;align-items:center;gap:5px;font-size:12px;color:var(--text-muted);align-self:flex-end}
 
 /* ---------- Tarjeta de acción (proponer → confirmar → ejecutar) ---------- */
-.ai-acc{border:1px solid var(--border-color);border-radius:16px;background:var(--bg-surface);overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr)}
-.ai-acc-cab{display:flex;align-items:flex-start;gap:10px;padding:12px 12px 10px}
-.ai-acc-ic{width:34px;height:34px;border-radius:11px;display:grid;place-items:center;flex:none;background:var(--tv-warn-soft);color:var(--tv-warn)}
-.ai-acc[data-riesgo="bajo"] .ai-acc-ic{background:var(--tv-accent-soft);color:var(--accent)}
-.ai-acc[data-estado="hecha"] .ai-acc-ic{background:var(--ok-soft);color:var(--ok)}
-.ai-acc[data-estado="cancelada"] .ai-acc-ic,.ai-acc[data-estado="vencida"] .ai-acc-ic,.ai-acc[data-estado="deshecha"] .ai-acc-ic{background:var(--bg-sunken);color:var(--text-muted)}
-.ai-acc-tt{flex:1;min-width:0;display:grid;gap:2px}
-.ai-acc-tt small{font-size:12px;font-weight:600;color:var(--text-muted)}
-.ai-acc-tt b{font:700 15px/1.3 var(--font-display,inherit);color:var(--text-primary);text-wrap:balance}
-.ai-acc-chip{display:inline-flex;align-items:center;gap:4px;padding:2px 8px;border-radius:999px;font-size:12px;font-weight:600;white-space:nowrap;flex:none;background:var(--tv-warn-soft);color:var(--tv-warn)}
-.ai-acc-chip[data-t="bajo"]{background:var(--tv-accent-soft);color:var(--accent)}
-.ai-acc-chip[data-t="hecha"]{background:var(--ok-soft);color:var(--ok)}
-.ai-acc-chip[data-t="neutro"]{background:var(--bg-sunken);color:var(--text-secondary)}
-.ai-acc-dl{margin:0;display:grid;border-top:1px solid var(--border-soft)}
-.ai-acc-dl>div{display:grid;grid-template-columns:96px minmax(0,1fr);gap:10px;padding:9px 12px;border-bottom:1px solid var(--border-soft);font-size:13px;align-items:start}
-.ai-acc-dl dt{color:var(--text-secondary);font-size:12.5px;padding-top:1px}
-.ai-acc-dl dd{margin:0;min-width:0;max-width:100%;color:var(--text-primary);overflow-wrap:anywhere;display:grid;gap:6px;line-height:1.45}
-.ai-acc-mono{font:500 12.5px var(--font-mono,monospace)}
-.ai-acc-priv{display:inline-flex;align-items:center;gap:4px;width:max-content;max-width:100%;padding:1px 8px;border-radius:999px;background:var(--bg-sunken);color:var(--text-secondary);font-size:12px;font-weight:600}
-.ai-acc-opc{display:flex;flex-wrap:wrap;gap:6px}
-#admin-panel-root .ai-acc-dur{padding:5px 10px;border-radius:8px;font-size:12px;font-weight:600;border:1px solid var(--border-color);background:var(--bg-sunken);color:var(--text-secondary);cursor:pointer}
-@media (pointer:coarse){#admin-panel-root .ai-acc-dur{padding:8px 12px}}
-#admin-panel-root .ai-acc-dur[aria-pressed="true"]{border-color:var(--accent);background:rgba(var(--accent-rgb),.10);color:var(--accent)}
-.ai-acc-chk{display:flex;align-items:flex-start;gap:8px;font-size:13px;color:var(--text-primary);cursor:pointer}
-.ai-acc-chk input{width:18px;height:18px;margin-top:1px;accent-color:var(--accent);flex:none}
-.ai-acc-token{display:flex;align-items:center;flex-wrap:wrap;gap:8px 10px;padding:10px 12px;background:var(--tv-danger-soft);border-bottom:1px solid var(--border-soft);font-size:12.5px;color:var(--text-primary)}
-.ai-acc-token[hidden]{display:none}
-.ai-acc-token label{display:inline-flex;align-items:center;gap:6px;font-weight:600}
-.ai-acc-token input{width:96px;text-align:center;letter-spacing:.4em;font-family:var(--font-mono,monospace)}
-.ai-acc-pie{display:flex;align-items:center;gap:8px;padding:10px 12px;flex-wrap:wrap}
-.ai-acc-meta{flex:1 1 170px;min-width:0;display:inline-flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted)}
-.ai-acc-meta .lucide{flex:none}
-.ai-acc-meta{flex-wrap:wrap;column-gap:6px;row-gap:2px}
-.jv-vence{white-space:nowrap;font-variant-numeric:tabular-nums}
-#admin-panel-root .ai-acc-ok{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 15px;border-radius:12px;font-weight:700;font-size:13px;background:var(--jv-peligro);color:var(--jv-peligro-ink);min-width:0!important;min-height:0!important;cursor:pointer;white-space:nowrap}
-#admin-panel-root .ai-acc-ok[data-tono="normal"]{background:var(--accent);color:var(--accent-ink)}
-#admin-panel-root .ai-acc-ok:hover{filter:brightness(1.07)}
-#admin-panel-root .ai-acc-ok:disabled{opacity:.5;cursor:default;filter:none}
-#admin-panel-root .ai-acc .ai-chip{height:38px;cursor:pointer}
-.ai-acc-hecho{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--border-soft);font-size:13px;color:var(--text-secondary)}
-.ai-acc-hecho>span{flex:1 1 180px;min-width:0}
-.ai-acc-hecho b{color:var(--text-primary)}
-.ai-acc[data-estado="hecha"] .ai-acc-dl,.ai-acc[data-estado="hecha"] .ai-acc-pie,.ai-acc[data-estado="hecha"] .ai-acc-token,
-.ai-acc[data-estado="cancelada"] .ai-acc-dl,.ai-acc[data-estado="cancelada"] .ai-acc-pie,.ai-acc[data-estado="cancelada"] .ai-acc-token,
-.ai-acc[data-estado="deshecha"] .ai-acc-dl,.ai-acc[data-estado="deshecha"] .ai-acc-pie,.ai-acc[data-estado="deshecha"] .ai-acc-token,
-.ai-acc[data-estado="vencida"] .ai-acc-dl,.ai-acc[data-estado="vencida"] .ai-acc-pie,.ai-acc[data-estado="vencida"] .ai-acc-token{display:none}
-.ai-giro{width:15px;height:15px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;animation:jv-giro .7s linear infinite;flex:none}
 @keyframes jv-giro{to{transform:rotate(360deg)}}
 
 /* ---------- Tarjeta «abrir en el panel» ---------- */
-.ai-ir{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:10px 12px;border:1px solid var(--border-color);border-radius:14px;background:var(--bg-surface)}
-.ai-ir .tv-btn{margin-left:auto}
-.ai-ir-tx{flex:1 1 170px;min-width:0;font-size:13px;color:var(--text-secondary);line-height:1.4}
-.ai-ir-tx b{display:block;color:var(--text-primary);font-weight:600}
 
 /* ---------- Gráfico de métricas dentro del chat ---------- */
-.ai-graf{border:1px solid var(--border-color);border-radius:14px;background:var(--bg-surface);overflow:hidden;position:relative}
-.ai-graf-cab{display:flex;align-items:center;gap:10px;padding:10px 12px 2px}
-.ai-graf-cab .ai-herr-ic{width:30px;height:30px}
-.ai-graf-tt{flex:1;min-width:0;display:grid;gap:1px}
-.ai-graf-tt b{font-size:13.5px;font-weight:700;color:var(--text-primary)}
-.ai-graf-tt span{font-size:12px;color:var(--text-secondary)}
-.ai-graf-ley{display:flex;gap:4px 16px;flex-wrap:wrap;padding:8px 12px 0;font-size:12px;color:var(--text-secondary)}
-.ai-graf-ley span{display:inline-flex;align-items:center;gap:6px}
-.ai-graf-ley i{width:10px;height:10px;border-radius:3px;flex:none}
-.ai-graf-ley b{color:var(--text-primary);font-weight:600;font-variant-numeric:tabular-nums}
-.ai-graf-lienzo{position:relative;padding:4px 6px 0}
-.ai-graf-lienzo svg{display:block;max-width:none}
-.ai-graf-lienzo .g-dia{cursor:pointer;outline:none}
-.ai-graf-lienzo .g-dia:focus-visible .g-hit{stroke:var(--accent);stroke-width:2px}
-.ai-graf-lienzo[data-foco] .g-dia:not([data-on]) .g-barra{opacity:.42}
-.ai-gtip{position:absolute;z-index:5;min-width:170px;padding:8px 10px;border-radius:10px;background:var(--bg-elevated);border:1px solid var(--border-color);box-shadow:var(--float-shadow);font-size:12px;color:var(--text-secondary);pointer-events:none;display:grid;gap:4px}
-.ai-gtip[hidden]{display:none}
-.ai-gtip strong{color:var(--text-primary);font-size:12.5px}
-.ai-gtip div{display:flex;align-items:center;gap:7px}
-.ai-gtip div b{margin-left:auto;color:var(--text-primary);font-variant-numeric:tabular-nums}
-.ai-gtip i{width:12px;height:2px;border-radius:2px;flex:none}
-.ai-graf-pie{display:flex;gap:6px;flex-wrap:wrap;padding:8px 12px 12px}
-.ai-graf-tabla{padding:0 12px 10px}
-.ai-graf-tabla[hidden]{display:none}
-.ai-graf-tabla td,.ai-graf-tabla th{font-variant-numeric:tabular-nums}
 
 /* ---------- Documento del modo Arquitecto ---------- */
-.ai-doc{border:1px solid var(--border-color);border-radius:16px;background:var(--bg-surface);overflow:hidden}
-.ai-doc-cab{display:flex;gap:10px;align-items:flex-start;padding:12px 12px 8px}
-.ai-doc-cab .ai-acc-ic{background:var(--tv-warn-soft);color:var(--tv-warn)}
-.ai-doc-cuerpo{position:relative;padding:2px 14px 14px;display:grid;gap:12px;font-size:13.5px;line-height:1.6;color:var(--text-primary);max-height:340px;overflow:hidden}
-.ai-doc[data-abierto] .ai-doc-cuerpo{max-height:none}
-.ai-doc:not([data-abierto]) .ai-doc-cuerpo::after{content:"";position:absolute;left:0;right:0;bottom:0;height:72px;background:linear-gradient(to bottom,transparent,var(--bg-surface));pointer-events:none}
-.ai-doc-cuerpo h4{margin:6px 0 0;font-size:12px!important;line-height:1.4;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-secondary)}
-.ai-doc-cuerpo p{margin:0}
-.ai-doc-cuerpo ul,.ai-doc-cuerpo ol{margin:0;padding-left:20px;display:grid;gap:4px}
-.ai-doc-cuerpo ul{list-style:disc}.ai-doc-cuerpo ol{list-style:decimal}
-.ai-doc-cuerpo code{font:500 12.5px var(--font-mono,monospace);background:var(--bg-sunken);border-radius:6px;padding:1px 5px}
-.ai-doc-chk{list-style:none!important;padding-left:0!important}
-.ai-doc-chk li{display:flex;gap:8px;align-items:flex-start}
-.ai-doc-chk .lucide{color:var(--ok);flex:none;margin-top:3px}
-.ai-doc-pie{display:flex;gap:8px;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--border-soft)}
 
 /* ---------- Pie de cada respuesta: velocidad usada ---------- */
-.ai-modo-tag{display:inline-flex;align-items:center;gap:5px}
-.ai-modo-tag .lucide{color:var(--accent)}
-.ai-persona-menu{top:58px;left:12px}
-.ai-escucha .ai-giro{color:var(--accent)}
-.ai-acc-error{margin:0;padding:8px 12px;background:var(--tv-danger-soft);color:var(--tv-danger);font-size:12.5px;font-weight:600;line-height:1.45}
-.ai-acc-hecho .ai-acc-error{flex-basis:100%;border-radius:10px}
-#admin-panel-root .ai-mas-op:disabled{opacity:.5;cursor:default}
 /* ---------- Teléfono (al final para ganarle a las reglas de arriba) ---------- */
 @container (max-width:460px){
   /* El chip de riesgo baja bajo el título para que este no quede en columna. */
-  .ai-acc-cab{display:grid;grid-template-columns:34px minmax(0,1fr);column-gap:10px;row-gap:6px}
-  .ai-acc-cab .ai-acc-chip{grid-column:2;justify-self:start}
-  .ai-acc-dl>div{grid-template-columns:minmax(0,1fr);gap:4px}
-  .ai-acc-meta{flex-basis:100%}
-  .ai-acc-pie{justify-content:flex-end}
-  .ai-acc-hecho>span{flex-basis:100%}
 }
 /* Teléfono angosto: la velocidad queda como ícono; el nombre está en el
    menú y en el pie de cada respuesta. */
-@container (max-width:340px){
-  .ai-vel .ai-vel-tx{display:none}
-  #admin-panel-root .ai-vel{padding:0 8px}
-  .ai-persona .ai-chev{display:none}
-  #admin-panel-root .ai-ch{gap:6px}
-  #admin-panel-root .ai-ch .ai-persona{padding-right:10px}
-}
-@media (prefers-reduced-motion:reduce){
-  .ai-onda i,.ai-rec,.ai-giro,#admin-panel-root .ai-caja .ai-ib[data-grabando]{animation:none}
-}
 
 /* ---------- Jarvis fase 2: memoria y valoraciones ---------- */
-.ai-mem{display:flex;align-items:center;flex-wrap:wrap;gap:10px;padding:9px 12px;border:1px dashed var(--border-color);border-radius:14px;background:var(--bg-surface)}
-.ai-mem-tx{flex:1 1 180px;min-width:0;font-size:13px;color:var(--text-secondary);line-height:1.45;overflow-wrap:anywhere}
-.ai-mem-tx b{display:block;color:var(--text-primary);font-weight:600;font-size:12.5px}
-.ai-mem[data-hecho] .ai-herr-ic{opacity:.5}
-.ai-mem-err{font-size:12px;color:var(--tv-danger)}
-#admin-panel-root .ai-pie button[data-on]{color:var(--accent);background:var(--tv-accent-soft)}
-.ai-nota-val{display:flex;flex-wrap:wrap;gap:6px;align-items:center}
-.ai-nota-val input{flex:1 1 200px;min-width:0}
 
 /* ---------- Jarvis flotante (intercomunicador) ---------- */
-#admin-panel-root .jv-fab{position:fixed;left:12px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:44px;height:44px;min-width:0!important;min-height:0!important;border-radius:14px;display:grid!important;place-items:center;background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 24px rgba(0,0,0,.22)}
-#admin-panel-root .jv-fab:hover{filter:brightness(1.08)}
-#admin-panel-root .jv-fab:active{transform:scale(.95)}
-@media (min-width:640px){#admin-panel-root .jv-fab{left:20px;bottom:20px}}
-.jv-hoja{position:fixed;left:8px;right:8px;top:var(--tv-borde-cab,calc(72px + env(safe-area-inset-top,0px)));bottom:calc(8px + env(safe-area-inset-bottom,0px));display:flex;flex-direction:column;border-radius:22px;overflow:hidden;border:1px solid var(--border-color);box-shadow:0 24px 60px rgba(0,0,0,.3);background:var(--bg-surface)}
-.jv-hoja[hidden]{display:none}
-@media (min-width:640px){.jv-hoja{left:20px;right:auto;top:auto;bottom:20px;width:min(440px,calc(100vw - 40px));height:min(720px,calc(100dvh - 108px))}}
-.jv-hoja-cab{display:flex;align-items:center;gap:4px;height:36px;padding:0 6px 0 12px;border-bottom:1px solid var(--border-color);background:var(--bg-sunken);flex:none}
-.jv-hoja-cab span{flex:1;min-width:0;font-size:12px;font-weight:600;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-#admin-panel-root .jv-hoja-btn{width:30px;height:30px;min-width:0!important;min-height:0!important;border-radius:9px;display:grid!important;place-items:center;color:var(--text-secondary)}
-#admin-panel-root .jv-hoja-btn:hover{background:var(--bg-surface);color:var(--text-primary)}
-.jv-hoja-cuerpo{flex:1;min-height:0;display:flex;padding:6px}
-.jv-hoja-cuerpo .ai-root{flex:1;min-height:0;height:auto}
-.jv-hoja-cuerpo .ai-panel{border-radius:16px}
 
 /* =====================================================================
    NADA ENCIMA DE NADA (A12 y cualquier teléfono)
@@ -2780,165 +1789,20 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
      derecha) dejaban el final de cada módulo debajo de ellos: el módulo
      reserva ese espacio al final para poder subir lo último a la vista.
    ===================================================================== */
-#admin-panel-root .tv-menu{width:max-content;max-width:min(300px,calc(100vw - 24px));max-height:calc(100dvh - var(--tv-borde-cab,72px) - 16px);overflow-y:auto;overscroll-behavior:contain}
-#admin-panel-root .tv-menu > div:first-child{white-space:normal;overflow-wrap:anywhere}
-@media (max-width:639px){
-  #admin-panel-root .tv-scroll:not([data-pantalla='completa']) > .tv-container{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))}
-}
 
 /* ---------- Cerebro de Jarvis (3D) ---------- */
 /* Colores de las neuronas: en claro, tonos profundos sobre un laboratorio
    luminoso; en oscuro, tonos encendidos sobre el espacio. */
-.jv-cerebro{--jv-n-centro:#0B6E7A;--jv-n-temas:#0790A6;--jv-n-datos:#1E8A55;--jv-n-internet:#B86A0E;--jv-n-vos:#C2363B;
-  --jv-esc-1:#F4FAFA;--jv-esc-2:#DCEBEC;--jv-esc-texto:#0F2A2E;--jv-esc-halo:rgba(244,250,250,.92);--jv-esc-oscuro:0;--jv-esc-borde:#CFE0E2;
-  --g-centro:var(--jv-n-centro);--g-temas:var(--jv-n-temas);--g-datos:var(--jv-n-datos);--g-internet:var(--jv-n-internet);--g-vos:var(--jv-n-vos);
-  margin:10px;border:1px solid var(--border-color);border-radius:18px;background:var(--bg-surface);overflow:hidden;display:grid;grid-template-columns:minmax(0,1fr);min-width:0}
-.dark .jv-cerebro{--jv-n-centro:#6FF0E6;--jv-n-temas:#3FCFE6;--jv-n-datos:#5BE09A;--jv-n-internet:#FFBE63;--jv-n-vos:#FF7A80;
-  --jv-esc-1:#0F2326;--jv-esc-2:#04090A;--jv-esc-texto:#E6F4F3;--jv-esc-halo:rgba(4,9,10,.85);--jv-esc-oscuro:1;--jv-esc-borde:#173236}
-.jv-cerebro [data-g="centro"]{--g:var(--g-centro)}
-.jv-cerebro [data-g="temas"]{--g:var(--g-temas)}
-.jv-cerebro [data-g="datos"]{--g:var(--g-datos)}
-.jv-cerebro [data-g="internet"]{--g:var(--g-internet)}
-.jv-cerebro [data-g="vos"]{--g:var(--g-vos)}
-.jv-cerebro i[data-g]{flex:none;width:10px;height:10px;border-radius:50%;background:var(--g);box-shadow:0 0 0 3px color-mix(in srgb,var(--g) 18%,transparent)}
-.jv-cerebro-ic{flex:none;display:grid;place-items:center;width:34px;height:34px;border-radius:10px;color:var(--text-secondary);background:transparent;border:0}
-.jv-cerebro-ic:hover{background:var(--bg-sunken);color:var(--text-primary)}
-.jv-cerebro-ic:disabled{opacity:.5}
 /* Resumen: cifras y curva de crecimiento */
-.jv-cb-resumen{display:grid;grid-template-columns:repeat(3,minmax(0,1fr)) auto;align-items:center;gap:6px;padding:12px 10px 10px 14px}
-.jv-cb-cifra{display:grid;gap:0;min-width:0;position:relative}
-.jv-cb-cifra b{font-size:22px;line-height:1.1;font-weight:800;letter-spacing:-.02em;color:var(--text-primary);font-variant-numeric:tabular-nums}
-.jv-cb-cifra span{font-size:11.5px;color:var(--text-muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.jv-cb-crece b{color:var(--jv-n-datos)}
-.jv-cb-curva{display:block;width:100%;max-width:90px;height:16px;margin-top:3px;overflow:visible}
-.jv-cb-curva polygon{fill:color-mix(in srgb,var(--jv-n-datos) 16%,transparent)}
-.jv-cb-curva polyline{fill:none;stroke:var(--jv-n-datos);stroke-width:1.6;vector-effect:non-scaling-stroke;stroke-linejoin:round}
-.jv-cerebro-ensenar{display:flex;align-items:center;gap:8px;margin:0 10px 8px;padding:4px 4px 4px 10px;border-radius:12px;background:var(--bg-sunken);color:var(--text-secondary);min-width:0}
-.jv-cerebro-ensenar input{flex:1;min-width:0;background:transparent;border:0;outline:0;font-size:13.5px;line-height:1.4;padding:6px 0;color:var(--text-primary)}
-.jv-cerebro-ensenar input::placeholder{color:var(--text-muted)}
-.jv-cerebro-ensenar:focus-within{box-shadow:0 0 0 2px var(--accent)}
-.jv-cerebro-ensenar .ai-chip{flex:none}
-.jv-cerebro-barra{display:flex;align-items:center;gap:8px;padding:0 10px;min-width:0}
-.jv-cerebro-buscar{flex:1;min-width:0;display:flex;align-items:center;gap:6px;height:38px;padding:0 4px 0 10px;border-radius:12px;border:1px solid var(--border-color);color:var(--text-muted)}
-.jv-cerebro-buscar:focus-within{border-color:var(--accent);box-shadow:0 0 0 1px var(--accent)}
-.jv-cerebro-buscar input{flex:1;min-width:0;height:100%;background:transparent;border:0;outline:0;font-size:13.5px;line-height:1.4;color:var(--text-primary)}
-.jv-cerebro-buscar .jv-cerebro-ic{width:30px;height:30px}
-.jv-cerebro-vistas{flex:none;display:flex;padding:3px;gap:2px;border-radius:12px;background:var(--bg-sunken)}
-.jv-cerebro-vistas button{display:grid;place-items:center;width:34px;height:32px;border-radius:9px;border:0;background:transparent;color:var(--text-secondary)}
-.jv-cerebro-vistas button[aria-pressed="true"]{background:var(--bg-surface);color:var(--text-primary);box-shadow:0 1px 2px rgba(0,0,0,.12)}
-.jv-cerebro-resultados{list-style:none;margin:6px 10px 0;padding:4px;border-radius:12px;border:1px solid var(--border-color);display:grid;gap:2px}
-.jv-cerebro-resultados button{width:100%;display:flex;align-items:center;gap:8px;padding:7px 8px;border-radius:8px;background:transparent;border:0;text-align:left;color:var(--text-primary);font-size:13px;min-width:0}
-.jv-cerebro-resultados button:hover,.jv-cerebro-resultados button:focus-visible{background:var(--bg-sunken)}
-.jv-cerebro-resultados span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jv-cerebro-resultados small{flex:none;font-size:11.5px;color:var(--text-muted)}
-.jv-cerebro-sinres{display:flex;flex-wrap:wrap;align-items:center;gap:6px 10px;margin:6px 10px 0;font-size:12.5px;color:var(--text-secondary);line-height:1.4}
-.jv-cerebro-filtros{display:flex;gap:6px;padding:8px 10px;overflow-x:auto;scrollbar-width:none;-webkit-overflow-scrolling:touch}
-.jv-cerebro-filtros::-webkit-scrollbar{display:none}
-.jv-cerebro-filtros button{flex:none;display:inline-flex;align-items:center;gap:6px;height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-surface);font-size:12px;font-weight:600;color:var(--text-primary);white-space:nowrap}
-.jv-cerebro-filtros button i{width:9px;height:9px;border-radius:50%;background:var(--g)}
-.jv-cerebro-filtros button[aria-pressed="false"]{color:var(--text-muted);background:transparent;border-style:dashed}
-.jv-cerebro-filtros button[aria-pressed="false"] i{background:transparent;box-shadow:inset 0 0 0 1.5px var(--g)}
 /* Escena 3D */
-.jv-cb-escena{position:relative;width:100%;height:clamp(300px,56vh,520px);overflow:hidden;
-  background:radial-gradient(ellipse at 50% 45%,var(--jv-esc-1) 0%,var(--jv-esc-2) 78%);border-top:1px solid var(--jv-esc-borde);border-bottom:1px solid var(--jv-esc-borde)}
-.jv-cb-escena canvas{display:block;touch-action:none;cursor:grab;outline:none}
-.jv-cb-escena canvas:active{cursor:grabbing}
-.jv-cb-escena canvas:focus-visible{box-shadow:inset 0 0 0 2px var(--accent)}
-.jv-cb-ayuda{position:absolute;left:50%;top:10px;transform:translateX(-50%);margin:0;padding:5px 12px;border-radius:999px;font-size:11.5px;font-weight:600;white-space:nowrap;max-width:calc(100% - 20px);overflow:hidden;text-overflow:ellipsis;pointer-events:none;
-  color:var(--jv-esc-texto);background:color-mix(in srgb,var(--jv-esc-1) 70%,transparent);border:1px solid var(--jv-esc-borde);backdrop-filter:blur(6px)}
-.jv-cb-controles{position:absolute;right:8px;bottom:8px;display:grid;gap:2px;padding:4px;border-radius:14px;
-  background:color-mix(in srgb,var(--jv-esc-1) 78%,transparent);border:1px solid var(--jv-esc-borde);backdrop-filter:blur(8px)}
-.jv-cb-controles button{display:grid;place-items:center;width:34px;height:34px;border-radius:10px;border:0;background:transparent;color:var(--jv-esc-texto)}
-.jv-cb-controles button:hover{background:color-mix(in srgb,var(--jv-esc-texto) 10%,transparent)}
-.jv-cerebro-vacio{position:absolute;inset:0;display:grid;place-items:center;margin:0;padding:16px;text-align:center;font-size:13px;color:var(--jv-esc-texto);opacity:.7}
-.jv-cerebro-vacio-caja{display:grid;justify-items:center;gap:8px;padding:28px 18px;text-align:center;color:var(--text-secondary)}
-.jv-cerebro-vacio-caja b{font-size:14px;color:var(--text-primary)}
-.jv-cerebro-vacio-caja p{margin:0;max-width:42ch;font-size:12.5px;line-height:1.5}
-.jv-cb-logo{display:grid;place-items:center;width:48px;height:48px;border-radius:16px;color:var(--jv-n-temas);background:color-mix(in srgb,var(--jv-n-temas) 14%,transparent)}
 /* Lo último que aprendió */
-.jv-cb-ultimos{padding:12px 12px 14px;display:grid;gap:8px}
-.jv-cb-ultimos h4{display:flex;align-items:center;gap:6px;margin:0;font-size:11.5px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;color:var(--text-muted)}
-.jv-cb-ultimos ul{list-style:none;margin:0;padding:0;display:grid;gap:2px}
-.jv-cb-ultimos button{width:100%;display:flex;align-items:center;gap:10px;min-height:36px;padding:6px 8px;border-radius:10px;border:0;background:transparent;text-align:left;color:var(--text-primary);font-size:13px;min-width:0}
-.jv-cb-ultimos button:hover,.jv-cb-ultimos button:focus-visible{background:var(--bg-sunken)}
-.jv-cb-ultimos span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jv-cb-ultimos small{flex:none;font-size:11.5px;color:var(--text-muted);font-variant-numeric:tabular-nums}
 /* Lista */
-.jv-arbol{max-height:clamp(260px,58vh,460px);overflow:auto;border-top:1px solid var(--border-soft);border-bottom:1px solid var(--border-soft);padding:6px 6px 6px 2px}
-.jv-arbol ul{list-style:none;margin:0;padding:0}
-.jv-arbol ul ul{padding-left:4px;margin-left:13px;border-left:1px solid var(--border-soft)}
-.jv-arbol-linea{display:flex;align-items:center;gap:2px;min-width:0}
-.jv-arbol-abrir{flex:none;display:grid;place-items:center;width:28px;height:32px;border:0;border-radius:7px;background:transparent;color:var(--text-muted)}
-button.jv-arbol-abrir:hover{background:var(--bg-sunken);color:var(--text-primary)}
-.jv-arbol-chev{transition:transform .15s}
-.jv-arbol-abrir[aria-expanded="true"] .jv-arbol-chev{transform:rotate(90deg)}
-.jv-arbol-fila{flex:1;min-width:0;display:flex;align-items:center;gap:8px;min-height:34px;padding:4px 8px;border-radius:8px;border:0;background:transparent;text-align:left;font-size:13px;color:var(--text-primary);min-width:0}
-.jv-arbol-fila:hover,.jv-arbol-fila:focus-visible{background:var(--bg-sunken)}
-.jv-arbol-fila[aria-current]{background:color-mix(in srgb,var(--accent) 14%,transparent);font-weight:700}
-.jv-arbol-fila span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jv-arbol-fila small{flex:none;font-size:11px;color:var(--text-muted);font-variant-numeric:tabular-nums}
-.jv-arbol-fila em{flex:none;font-style:normal;font-size:10.5px;font-weight:700;padding:1px 6px;border-radius:999px;background:color-mix(in srgb,var(--ok) 18%,transparent);color:var(--ok)}
-@media (prefers-reduced-motion: reduce){.jv-arbol-chev{transition:none}}
 /* Detalle */
-.jv-cerebro-detalle{display:grid;gap:8px;padding:10px 12px 12px;min-width:0}
-.jv-det-cab{display:flex;align-items:center;gap:10px;min-width:0}
-.jv-det-cab > i[data-g]{width:12px;height:12px}
-.jv-det-tt{flex:1;min-width:0;display:grid;gap:1px}
-.jv-det-tt b{font-size:14.5px;color:var(--text-primary);overflow-wrap:anywhere;line-height:1.3}
-.jv-det-tt span{font-size:12px;color:var(--text-secondary)}
-.jv-det-res{margin:0;font-size:13px;line-height:1.55;color:var(--text-primary);overflow-wrap:anywhere;white-space:pre-line;max-height:12.5em;overflow:auto}
-.jv-det-edit{width:100%;font:inherit;font-size:13px;line-height:1.5;padding:8px 10px;border-radius:10px;border:1px solid var(--border-color);background:var(--bg-sunken);color:var(--text-primary);resize:vertical}
-.jv-det-edit:focus{outline:2px solid var(--accent);outline-offset:0}
-.jv-det-url{display:inline-flex;align-items:center;gap:6px;justify-self:start;max-width:100%;font-size:12.5px;font-weight:600;color:var(--accent);text-decoration:none}
-.jv-det-url span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jv-det-url:hover span{text-decoration:underline}
-.jv-det-con{display:grid;gap:6px}
-.jv-det-con > span{font-size:11.5px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)}
-.jv-det-con > div{display:flex;flex-wrap:wrap;gap:6px}
-.jv-det-con button{display:inline-flex;align-items:center;gap:6px;max-width:100%;height:30px;padding:0 10px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-surface);font-size:12px;color:var(--text-primary)}
-.jv-det-con button span{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.jv-det-con button i{width:8px;height:8px}
-.jv-det-con small{align-self:center;font-size:12px;color:var(--text-muted)}
-.jv-det-meta{margin:0;font-size:11.5px;color:var(--text-muted);font-variant-numeric:tabular-nums}
-.jv-det-aviso{margin:0;font-size:12.5px;color:var(--text-secondary)}
-.jv-det-acc{display:flex;flex-wrap:wrap;align-items:center;gap:6px}
-.jv-det-preg{flex-basis:100%;font-size:12.5px;font-weight:600;color:var(--text-primary)}
-.jv-det-acc .ai-chip[data-peligro]{background:var(--jv-peligro);color:var(--jv-peligro-ink);border-color:transparent}
-.jv-det-acc .ai-chip[data-primario]{background:var(--accent);color:#fff;border-color:transparent}
-.ai-mem[data-cerebro] .ai-chip{flex:none}
 /* Ajustes → estado de las IAs de respaldo */
-.ai-respaldo-estado{display:flex;align-items:flex-start;gap:6px;margin:0;padding:0 14px 10px;font-size:12.5px;line-height:1.45;color:var(--jv-peligro)}
-.ai-respaldo-estado[data-ok]{color:var(--ok)}
-.ai-respaldo-estado svg{flex:none;margin-top:2px}
 /* Ajustes → Mini-widget del teléfono */
-.ai-mw-acc{display:flex;flex-wrap:wrap;gap:8px;padding:2px 14px 12px}
-.ai-mw-acc .ai-chip[data-primario]{background:var(--accent);color:#fff;border-color:transparent}
-.ai-mw-nota{margin:0;padding:0 14px 12px;font-size:12.5px;line-height:1.45;color:var(--text-secondary)}
-.ai-mw-aviso{margin:0 14px 12px;padding:8px 10px;border-radius:10px;font-size:12.5px;line-height:1.45;background:var(--bg-sunken);color:var(--text-primary)}
-.ai-mw-aviso[data-tipo="error"]{background:color-mix(in srgb,var(--jv-peligro) 12%,transparent)}
 /* Respuesta hablada (src/utils/lectorVoz.ts) */
-.ai-lector{display:flex;align-items:center;gap:6px;flex-wrap:nowrap;margin:0 0 6px;padding:5px 6px 5px 12px;border-radius:14px;border:1px solid var(--border-color);background:color-mix(in srgb,var(--accent) 8%,var(--bg-surface));min-width:0}
-.ai-lector-tx{flex:1 1 0;min-width:0;font-size:12.5px;font-weight:600;color:var(--text-primary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.ai-lector .ai-chip{flex:none;height:32px;padding:0 10px}
-.ai-lector-ondas{display:inline-flex;align-items:center;gap:2px;height:14px;flex:none}
-.ai-lector-ondas i{width:3px;height:12px;border-radius:2px;background:var(--accent);transform-origin:center;animation:ai-onda .9s ease-in-out infinite}
-.ai-lector-ondas i:nth-child(2){animation-delay:.15s}
-.ai-lector-ondas i:nth-child(3){animation-delay:.3s}
-.ai-lector-ondas[data-pausa] i{animation:none;transform:scaleY(.5);opacity:.6}
-@container (max-width:380px){.ai-lector-lbl{display:none}.ai-lector .ai-chip{width:34px;padding:0;justify-content:center}}
 @keyframes ai-onda{0%,100%{transform:scaleY(.4)}50%{transform:scaleY(1)}}
-@media (prefers-reduced-motion:reduce){.ai-lector-ondas i{animation:none}}
-.ai-seg-voz{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:4px 14px 10px;border-radius:14px}
-.ai-seg-voz button{white-space:normal;line-height:1.25;text-align:center;padding:7px 6px;border-radius:11px}
-.ai-seg-voz button:disabled{opacity:.5}
-.ai-voz-prueba{margin:0 14px 12px}
-.ai-acc-solo{display:flex;align-items:center;gap:8px;margin:0;padding:8px 14px 12px;font-size:13px;color:var(--text-secondary)}
-@media (max-width:420px){.jv-cerebro{margin:6px 2px}.jv-cb-cifra b{font-size:19px}
-  .jv-arbol-fila em{font-size:0;width:8px;height:8px;padding:0;background:var(--ok)}
-  .jv-arbol span.jv-arbol-abrir{width:12px}}
 /* Dentro de la ventana flotante la red se ve entera sin desplazar. */
-.jv-hoja .jv-cb-escena{height:clamp(260px,46vh,440px)}
-.jv-hoja .jv-arbol{height:auto;max-height:clamp(240px,44vh,420px)}
 
 /* =====================================================================
    DENSIDAD EN TELÉFONO (estándar: Galaxy A12, incluso con el «zoom de
@@ -2952,14 +1816,6 @@ button.jv-arbol-abrir:hover{background:var(--bg-sunken);color:var(--text-primary
    · Las columnas del Taller caben enteras en la pantalla; las demás se
      ven deslizando, como siempre.
    ===================================================================== */
-@media (max-width: 420px) {
-  :root:has(#admin-panel-root) { font-size: 15px; }
-  #admin-panel-root button:has(> svg.lucide),
-  #admin-panel-root .icon-button,
-  #admin-panel-root [role="button"]:has(> svg.lucide) { min-width: 36px !important; min-height: 36px !important; }
-  #admin-panel-root .tv-btn { height: 38px; }
-  #admin-panel-root .tv-kanban-col { width: min(18rem, calc(100vw - 76px)); }
-}
 
 /* =====================================================================
    CAJAS DE TEXTO SIN RECORTES («P», «Ñ», «Á» con la parte de arriba
@@ -2969,20 +1825,8 @@ button.jv-arbol-abrir:hover{background:var(--bg-sunken);color:var(--text-primary
    ===================================================================== */
 html input:not([type="checkbox"]):not([type="radio"]):not([type="range"]):not([type="color"]) { line-height: normal; }
 html textarea { line-height: 1.45; }
-#admin-panel-root .ai-caja textarea { padding: 3px 0 2px; min-height: 28px; line-height: 1.45; }
 
 /* ---------- Asistente flotante: esqueleto, tamaño grande y cabecera ---------- */
-.jv-esqueleto{flex:1;display:grid;align-content:center;justify-items:center;gap:10px;padding:24px;text-align:center;font-size:13px;color:var(--text-secondary)}
-.jv-esqueleto i{display:block;width:min(260px,80%);height:12px;border-radius:999px;background:var(--bg-sunken);animation:ai-pulso 1.2s ease-in-out infinite}
-.jv-esqueleto i:nth-child(2){width:min(200px,60%)}.jv-esqueleto i:nth-child(3){width:min(230px,70%)}
-.jv-esqueleto p{margin:0}
-.jv-hoja-cab span{display:inline-flex;align-items:center;gap:6px}
-.jv-hoja-cab span .lucide{color:var(--accent);flex:none}
-@media (max-width:639px){ #admin-panel-root .jv-solo-pc{display:none!important} }
-@media (min-width:640px){
-  .jv-hoja[data-grande]{width:min(980px,calc(100vw - 40px));height:calc(100dvh - var(--tv-borde-cab,72px) - 20px)}
-}
-@media (prefers-reduced-motion:reduce){ .jv-esqueleto i{animation:none} }
 
 /* =====================================================================
    TÍTULOS QUE DEBEN IR EN UNA LÍNEA
@@ -3009,22 +1853,6 @@ html textarea { line-height: 1.45; }
 }
 
 /* ---------- Cabecera del asistente en la ventana flotante ---------- */
-@container (max-width: 420px) {
-  #admin-panel-root .ai-ch { gap: 6px; padding: 8px 10px; }
-  #admin-panel-root .ai-root .ai-ch .ai-menu,
-  #admin-panel-root .ai-ch .ai-ajustes-btn { width: 36px; height: 36px; min-width: 0 !important; min-height: 0 !important; padding: 0; }
-  #admin-panel-root .ai-ch .ai-persona { height: 36px; padding: 4px 8px 4px 4px; flex: none; }
-  #admin-panel-root .ai-ch .ai-persona .ai-mn { overflow: visible; text-overflow: clip; max-width: none; }
-  #admin-panel-root .ai-ch .ai-persona .ai-chev { display: none; }
-  #admin-panel-root .ai-root .ai-cupo-pill { height: 36px; padding: 0 8px; }
-}
 
 /* Acción que Jarvis hizo sola: una línea discreta, como un asistente. */
-.ai-acc-linea{display:inline-flex;align-items:center;gap:7px;align-self:flex-start;max-width:100%;padding:5px 6px 5px 10px;border-radius:999px;background:var(--tv-accent-soft);color:var(--accent);font-size:12.5px;font-weight:600;animation:ai-linea-in .18s ease-out both}
-.ai-acc-linea>span{min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
-.ai-acc-linea[data-estado="deshecha"]{background:var(--bg-sunken);color:var(--text-secondary)}
-#admin-panel-root .ai-acc-linea button{all:unset;cursor:pointer;padding:2px 8px;border-radius:999px;color:var(--text-secondary);font-weight:600}
-#admin-panel-root .ai-acc-linea button:hover{color:var(--text-primary);background:var(--bg-surface)}
-#admin-panel-root .ai-acc-linea button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 @keyframes ai-linea-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
-@media (prefers-reduced-motion:reduce){.ai-acc-linea{animation:none}}

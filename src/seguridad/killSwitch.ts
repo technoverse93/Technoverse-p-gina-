@@ -235,12 +235,3 @@ export async function avisarCierreDeSesion(): Promise<void> {
 export function aparatoActual(): { modelo: string | null; huella: string | null } {
   return { modelo: modeloAparato, huella: huellaAparato };
 }
-
-/** Corta la vigilancia. Solo para pruebas o al desmontar del todo. */
-export function detenerKillSwitch(): void {
-  if (reloj) { clearInterval(reloj); reloj = null; }
-  if (canal) { try { supabase.removeChannel(canal); } catch { /* nada */ } canal = null; }
-  document.removeEventListener('visibilitychange', alVolverAlFrente);
-  quitarPantalla();
-  bloqueado = false;
-}

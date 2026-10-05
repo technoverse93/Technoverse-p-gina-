@@ -69,7 +69,7 @@ export const APRENDER = {
   },
 };
 
-import { limpiarExtracto, nombreHumano } from './nombres.ts';
+import { limpiarBusqueda, limpiarExtracto, nombreHumano, sitioHumano } from './nombres.ts';
 
 export function crearCerebro(admin: Db, uid: string) {
   const cache = new Map<string, string>();
@@ -149,6 +149,87 @@ export function crearCerebro(admin: Db, uid: string) {
       const resumen = limpio(d?.answer || (d?.results || []).slice(0, 2).map((x: any) => x.content).join(' '), 1200);
       return resumen ? { resumen, url: String(primero?.url || ''), titulo: limpio(primero?.title, 120) } : null;
     } catch { return null; } finally { clearTimeout(t); }
+  }
+
+  // ------------------ Internet centralizado por tema ------------------
+  /** «Cargador tipo C · Planet Group» → tema «Cargador tipo C», sitio «Planet Group». */
+  function partirWeb(humano: string, url?: string | null) {
+    const [a, b] = humano.replace(/^Internet · /, '').split(' · ');
+    const t = limpiarBusqueda(a).tema || a;
+    return { tema: limpio(t, 60) || 'Búsqueda', sitio: limpio(b || (url ? sitioHumano(url) : ''), 40) };
+  }
+  // Palabras que dicen DE QUÉ se trata (sin relleno, en singular).
+  const RELLENO_WEB = new Set('para como con sin del los las una uno que por precio precios comprar venta vende donde mejor mejores nuevo nueva oficial sitio pagina web tienda costa rica hoy 2024 2025 2026 2027'.split(' '));
+  const claves = (t: string) => new Set(normalizar(t).split(/[^a-z0-9ñ]+/).filter(w => w.length >= 3 && !RELLENO_WEB.has(w)).map(w => (w.length > 5 ? w.replace(/(es|s)$/, '') : w.replace(/s$/, ''))));
+  let temasWeb: { id: string; clave: string; etiqueta: string; palabras: Set<string> }[] | null = null;
+  async function cargarTemasWeb() {
+    if (temasWeb) return temasWeb;
+    const { data } = await admin.from('jarvis_nodos').select('id,clave,etiqueta').eq('user_id', uid).like('clave', 'web:tema:%').limit(500);
+    temasWeb = (data || []).map((n: any) => ({ ...n, palabras: claves(n.etiqueta) }));
+    return temasWeb;
+  }
+  /** El tema donde cae una búsqueda: uno que ya trate de lo mismo o uno nuevo. */
+  async function temaWeb(tema: string, resumen?: string, url?: string) {
+    const ps = claves(tema);
+    const lista = await cargarTemasWeb();
+    let mejor: (typeof lista)[number] | null = null, puntaje = 0;
+    for (const t of lista) {
+      const comun = [...ps].filter(w => t.palabras.has(w)).length;
+      const menor = Math.min(ps.size, t.palabras.size) || 1;
+      const p = comun / menor;
+      // Lo mismo dicho distinto («cargador tipo c» ≈ «cargadores usb tipo c»).
+      if (comun >= 1 && p >= 0.75 && p > puntaje) { mejor = t; puntaje = p; }
+    }
+    if (mejor) {
+      // Si lo nuevo es más general («Cargadores» frente a «Cargador USB tipo C
+      // Planet»), el tema toma el nombre más general: así se centraliza.
+      if (ps.size && ps.size < mejor.palabras.size && [...ps].every(w => mejor!.palabras.has(w))) {
+        await admin.from('jarvis_nodos').update({ etiqueta: tema, actualizado_en: new Date().toISOString() }).eq('id', mejor.id);
+        mejor.etiqueta = tema; mejor.palabras = ps;
+      }
+      return { id: mejor.id, clave: mejor.clave };
+    }
+    const inter = await dominio('internet', 'Internet');
+    const clave = `web:tema:${normalizar(tema).slice(0, 80)}`;
+    const n = await asegurarNodo(clave, tema, 'fuente', { resumen: resumen ? limpiarExtracto(resumen.split(' · ')[0].replace(/^[^.:]{1,40}:\s+/, ''), 400) : undefined, fuente: 'internet', url });
+    if (!n) return null;
+    await enlazar(inter?.id, n.id, 'buscó');
+    lista.push({ id: n.id, clave, etiqueta: tema, palabras: ps });
+    return { id: n.id, clave };
+  }
+  /** El punto de un sitio dentro de su tema (se actualiza, no se repite). */
+  async function puntoWeb(padre: { id: string }, tema: string, sitio: string, extra: { resumen?: string; url?: string; usar?: boolean }) {
+    const clave = `web:p:${padre.id.slice(0, 8)}:${normalizar(sitio || 'web')}`;
+    const etiqueta = sitio ? `${tema} · ${sitio}` : `${tema} (internet)`;
+    const n = await asegurarNodo(clave, etiqueta, 'fuente', { ...extra, fuente: 'internet' });
+    if (!n) return null;
+    await enlazar(padre.id, n.id, 'en');
+    return { ...n, clave, etiqueta };
+  }
+  /** Pasa de a poco las búsquedas sueltas viejas a su tema; las repetidas
+   *  (mismo tema y mismo sitio) se funden en una sola sumando sus usos. */
+  async function consolidar(max: number) {
+    if (!vivo) return;
+    const { data } = await admin.from('jarvis_nodos').select('id,clave,etiqueta,resumen,url,usos,ultimo_uso')
+      .eq('user_id', uid).eq('tipo', 'fuente').like('clave', 'web:%').not('clave', 'like', 'web:tema:%').not('clave', 'like', 'web:p:%')
+      .order('actualizado_en', { ascending: true }).limit(max);
+    for (const v of (data || []) as any[]) {
+      // «Internet · X» cuelga de un tema aprendido a propósito: se queda donde está.
+      if (/^Internet · /.test(v.etiqueta)) { await admin.from('jarvis_nodos').update({ clave: `web:p:apr:${v.id.slice(0, 8)}` }).eq('id', v.id); continue; }
+      const { tema, sitio } = partirWeb(nombreHumano(v.etiqueta, 'fuente', v.url), v.url);
+      const padre = await temaWeb(tema, v.resumen || undefined, v.url || undefined);
+      if (!padre) continue;
+      const clave = `web:p:${padre.id.slice(0, 8)}:${normalizar(sitio || 'web')}`;
+      const { data: ya } = await admin.from('jarvis_nodos').select('id,usos,resumen,url').eq('user_id', uid).eq('clave', clave).maybeSingle();
+      if (ya && ya.id !== v.id) {
+        await admin.from('jarvis_nodos').update({ usos: (ya.usos || 0) + (v.usos || 0), url: ya.url || v.url, resumen: ya.resumen || v.resumen }).eq('id', ya.id);
+        await admin.from('jarvis_nodos').delete().eq('id', v.id);
+      } else {
+        await admin.from('jarvis_nodos').update({ clave, etiqueta: sitio ? `${tema} · ${sitio}` : `${tema} (internet)` }).eq('id', v.id);
+        await admin.from('jarvis_enlaces').delete().eq('user_id', uid).eq('destino', v.id).eq('relacion', 'buscó');
+        await enlazar(padre.id, v.id, 'en');
+      }
+    }
   }
 
   return {
@@ -248,20 +329,23 @@ export function crearCerebro(admin: Db, uid: string) {
     async registrarWeb(consulta: string, resultados: { titulo: string; url: string; extracto: string }[]): Promise<Aprendido | null> {
       const c = limpio(consulta, 120);
       if (c.length < 3 || !resultados?.length || PRIVADO.test(c)) return null;
-      // Se guarda con NOMBRE HUMANO («Cargador USB tipo C · Planet Group»),
-      // nunca la búsqueda cruda con site:, comillas u OR; y búsquedas que
-      // dicen lo mismo caen en la misma idea en vez de repetirse.
-      const humano = nombreHumano(c, 'fuente', resultados[0]?.url) || c;
-      const clave = `web:${normalizar(humano)}`;
+      // CENTRALIZADO: lo que se busca sobre lo mismo cae en UN tema
+      // («Cargador USB tipo C») y cada sitio es un punto debajo («… · Planet
+      // Group»). Buscar otra vez actualiza ese punto en vez de crear otra
+      // estrella: antes salían 70 ideas casi iguales de la misma búsqueda.
+      const { tema, sitio } = partirWeb(nombreHumano(c, 'fuente', resultados[0]?.url) || c, resultados[0]?.url);
       try {
-        const inter = await dominio('internet', 'Internet');
         const resumen = limpio(resultados.slice(0, 3).map(r => { const e = limpiarExtracto(r.extracto, 400); return e ? `${r.titulo}: ${e}` : r.titulo; }).join(' · '), 1400);
-        const n = await asegurarNodo(clave, humano, 'fuente', { resumen, fuente: 'internet', url: resultados[0]?.url, usar: true });
-        if (!n) return null;
-        await enlazar(inter?.id, n.id, 'buscó');
-        return { etiqueta: humano, clave, nuevo: n.nuevo };
+        const padre = await temaWeb(tema, resumen, resultados[0]?.url);
+        if (!padre) return null;
+        const n = await puntoWeb(padre, tema, sitio, { resumen, url: resultados[0]?.url, usar: true });
+        enFondo(consolidar(10));
+        return n ? { etiqueta: n.etiqueta, clave: n.clave, nuevo: n.nuevo } : null;
       } catch (e) { console.log(`cerebro: ${e instanceof Error ? e.message : e}`); return null; }
     },
+
+    /** Ordena de a poco lo viejo de internet (búsquedas sueltas repetidas). */
+    consolidar: (max = 10) => consolidar(max),
 
     /** Un «recordá…» queda bajo «Sobre vos». */
     registrarRecuerdo(texto: string, tipo: string) {
@@ -272,11 +356,57 @@ export function crearCerebro(admin: Db, uid: string) {
       })());
     },
 
+    /** Cambios que el dueño hace a mano desde el cerebro 3D (la app no puede
+     *  insertar en estas tablas: lo hace la función, validando que todo sea suyo).
+     *  · punto: agrega un dato que cuelga de una idea.
+     *  · tema:  agrega una idea a una rama.
+     *  · mover: pasa una idea de una rama (o idea madre) a otra rama. */
+    async editar(op: string, d: Record<string, unknown>): Promise<{ ok: true; nodo?: unknown; enlace?: unknown } | { ok: false; error: string }> {
+      const id = (v: unknown) => (typeof v === 'string' && /^[0-9a-f-]{36}$/i.test(v) ? v : null);
+      const mios = async (ids: (string | null)[]) => {
+        const xs = ids.filter(Boolean) as string[];
+        if (xs.length !== ids.length) return false;
+        const { data } = await admin.from('jarvis_nodos').select('id').eq('user_id', uid).in('id', xs);
+        return (data || []).length === new Set(xs).size;
+      };
+      const COLS = 'id,clave,etiqueta,tipo,resumen,fuente,url,usos,ultimo_uso,creado_en,actualizado_en';
+      const nuevoEnlace = async (origen: string, destino: string, relacion: string) => {
+        const { data: ya } = await admin.from('jarvis_enlaces').select('id,origen,destino,relacion,peso').eq('origen', origen).eq('destino', destino).maybeSingle();
+        if (ya) return ya;
+        const { data } = await admin.from('jarvis_enlaces').insert({ user_id: uid, origen, destino, relacion }).select('id,origen,destino,relacion,peso').single();
+        return data;
+      };
+      if (op === 'punto' || op === 'tema') {
+        const madre = id(op === 'punto' ? d.tema : d.rama);
+        const texto = limpio(d.texto, op === 'punto' ? 300 : 80);
+        if (!madre || texto.length < 2) return { ok: false, error: 'Falta el texto.' };
+        if (PRIVADO.test(texto)) return { ok: false, error: 'Eso parece un dato personal: no lo guardo en el cerebro.' };
+        if (!(await mios([madre]))) return { ok: false, error: 'No encontré dónde agregarlo.' };
+        const clave = op === 'punto' ? `nota:${madre.slice(0, 8)}:${normalizar(texto).slice(0, 60)}` : normalizar(texto);
+        const resumen = limpio(d.resumen, 1500) || (op === 'punto' ? texto : '');
+        const n = await asegurarNodo(clave, texto, op === 'punto' ? 'dato' : 'tema', { resumen: resumen || undefined, fuente: 'vos' });
+        if (!n) return { ok: false, error: 'No se pudo guardar.' };
+        const enlace = await nuevoEnlace(madre, n.id, op === 'punto' ? 'detalle' : 'incluye');
+        const { data: nodo } = await admin.from('jarvis_nodos').select(COLS).eq('id', n.id).single();
+        return { ok: true, nodo, enlace };
+      }
+      if (op === 'mover') {
+        const nodo = id(d.nodo), desde = id(d.desde), hacia = id(d.hacia);
+        if (!nodo || !hacia || nodo === hacia || !(await mios([nodo, hacia, ...(desde ? [desde] : [])]))) return { ok: false, error: 'No se pudo mover.' };
+        if (desde) await admin.from('jarvis_enlaces').delete().eq('user_id', uid).or(`and(origen.eq.${desde},destino.eq.${nodo}),and(origen.eq.${nodo},destino.eq.${desde})`);
+        const enlace = await nuevoEnlace(hacia, nodo, 'incluye');
+        return { ok: true, enlace };
+      }
+      return { ok: false, error: 'Cambio desconocido.' };
+    },
+
     /** Un módulo consultado o en el que se actuó se refuerza. */
     reforzarModulo(id: string) { if (MODULOS[id]) enFondo(modulo(id, true)); },
 
     /** Lo que ya sabe y viene al caso en este mensaje. */
     async recordarPara(texto: string, esOrden: boolean): Promise<{ bloque: string; usados: string[]; notas: Nota[] }> {
+      // Cada mensaje ordena un poco lo viejo (no frena la respuesta).
+      enFondo(consolidar(8));
       const { data: nodos, error } = await admin.from('jarvis_nodos').select('id,clave,etiqueta,tipo,resumen,fuente,url,usos')
         .eq('user_id', uid).in('tipo', ['tema', 'dato', 'fuente', 'recuerdo']).order('usos', { ascending: false }).limit(600);
       if (error) { vivo = false; return { bloque: '', usados: [], notas: [] }; }

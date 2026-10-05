@@ -80,10 +80,6 @@ function setOtaStatus(patch: Partial<OtaStatus>) {
   listeners.forEach(fn => fn(otaStatus));
 }
 
-export function getOtaStatus(): OtaStatus {
-  return otaStatus;
-}
-
 /** Hook de React: se usa donde haga falta mostrar la versión actual. */
 export function useOtaStatus(): OtaStatus {
   const [status, setStatus] = useState(otaStatus);

@@ -113,7 +113,6 @@ html.tv-ventanita #root { height: 100%; }
 .vj-aviso .ai-chip[data-primario] { background: var(--accent); color: #fff; border-color: transparent; }
 
 /* La escena del cerebro y su árbol, a la medida de la hoja (como en el panel). */
-.vj-hoja .jv-cb-escena { height: clamp(240px, 42vh, 420px); }
 
 @media (prefers-reduced-motion: reduce) {
   .jv-hoja.vj-hoja { animation: none; }

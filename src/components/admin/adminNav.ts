@@ -338,13 +338,6 @@ export function resolverCarpeta(tab: string): AdminCarpeta | undefined {
   return modulo.carpetas.find(c => c.tab === tab) || modulo.carpetas[0];
 }
 
-/** Grupo al que pertenece un módulo. Alimenta el selector de módulos. */
-export function grupoDe(tab: string): string {
-  const modulo = resolverModulo(tab);
-  const grupo = NAV_GROUPS.find(g => g.items.some(i => i.id === modulo.id));
-  return grupo?.titulo || 'General';
-}
-
 // El buscador por texto que vivía aquí (`buscarModulos`, con su
 // `normalizar` de acentos) se retiró junto con el campo de texto del
 // selector de módulos: un input que se enfoca solo levanta el teclado en

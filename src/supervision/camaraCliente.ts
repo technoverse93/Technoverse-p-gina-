@@ -69,7 +69,6 @@ export function suscribirCamara(fn: (e: EstadoCamaraCliente) => void): () => voi
   return () => { suscriptores.delete(fn); };
 }
 
-export function camaraActiva(): boolean { return !!stream; }
 export function hayCamara(): boolean {
   try { return !!navigator.mediaDevices?.getUserMedia; } catch { return false; }
 }

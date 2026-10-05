@@ -4,6 +4,9 @@
 // cambio de pestaña se resuelve con una transición de opacidad en CSS,
 // que corre en el compositor y no cuesta trabajo en el hilo principal.
 import React, { Activity, useState, useEffect, useLayoutEffect, useMemo, useCallback, useRef, Suspense, lazy } from 'react';
+// Estilos solo del panel: viajan con este módulo (la tienda no los descarga).
+import '../styles/panel.css';
+import '../styles/jarvis.css';
 import { PaginatedTbody } from './PaginationHelper';
 import { CustomSelect } from './CustomSelect';
 import {

@@ -34,8 +34,6 @@ export async function cargarContenido(): Promise<void> {
   }
 }
 
-export function contenidoCargado(): boolean { return cargado; }
-
 /** Valor guardado para la clave, o el `defecto` si no hay (o está vacío). */
 export function obtenerContenido(clave: string, defecto: string): string {
   const v = cache.get(clave);
