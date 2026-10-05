@@ -305,3 +305,9 @@ span.jv-tit:hover { background: transparent; }
 .jv-cb-panel { max-height: min(26vh, 210px); }
 #admin-panel-root .ai-root[data-jarvis] .ai-hi > button:first-child { justify-content: stretch !important; justify-items: stretch; align-items: start !important; text-align: left; width: 100%; min-height: 0 !important; }
 .jv-hi-m { width: 100%; }
+
+/* Jarvis es un solo hilo: el día se marca con un separador discreto. */
+.jv-dia { display: flex; align-items: center; gap: 10px; margin: 4px 0; color: var(--jv-tenue); font: 600 10.5px var(--jv-f-astro); letter-spacing: .18em; }
+.jv-dia::before, .jv-dia::after { content: ""; flex: 1; height: 1px; background: var(--jv-linea); }
+/* Sin lista de conversaciones, la cabecera arranca con el orbe. */
+.ai-root[data-jarvis] .ai-ch { padding-left: 10px; }
