@@ -78,7 +78,7 @@ import { esAdminSupremo } from '../../utils/securityPin';
  * saberlo es el contenedor: el alto se reparte desde arriba, y el módulo
  * de adentro no puede medir lo que le dejaron sin adivinar.
  */
-const MODULOS_PANTALLA_COMPLETA = new Set(['chat', 'asistente']);
+const MODULOS_PANTALLA_COMPLETA = new Set(['chat']);
 
 interface AdminShellProps {
   activeTab: string;

@@ -951,7 +951,7 @@ function TallerKanban({ activeUserEmail = 'tecnico@technoverse.com', onRepairUpd
                    y el tablero ocupaba una pantalla entera para mostrar
                    dos tarjetas. `max-h` conserva el scroll interno de las
                    columnas llenas. */
-                className={`flex-shrink-0 w-72 bg-[var(--bg-surface)] /60 rounded-xl border border-[var(--border-color)]/50 p-3 flex flex-col transition-colors duration-200 ${
+                className={`tv-kanban-col flex-shrink-0 w-72 bg-[var(--bg-surface)] /60 rounded-xl border border-[var(--border-color)]/50 p-3 flex flex-col transition-colors duration-200 ${
                   colRepairs.length === 0 ? '' : 'max-h-[420px]'
                 }`}
               >

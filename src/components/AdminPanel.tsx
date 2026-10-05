@@ -17,7 +17,7 @@ import { CATEGORIAS_TIENDA, normalizarCategoria, esRepuesto } from '../utils/cat
 
 import { User, Product, Order, RepairOrder, ClientProfile, LogisticsDelivery, MarketingCampaign, AuditLog } from '../types';
 import { useToast, useConfirm } from './ui/Overlays';
-import { esGestion, esSuperadmin } from '../utils/roles';
+import { esGestion, esSuperadmin, esStaff } from '../utils/roles';
 import { EVENTO_JARVIS, tomarPedidoJarvis } from '../mobile/jarvisAtajo';
 
 // ---------------------------------------------------------------------
@@ -44,7 +44,6 @@ import { esSoloSupremo } from './admin/adminNav';
 const TallerKanban = lazy(() => import('./TallerKanban'));
 const InventarioControl = lazy(() => import('./InventarioControl'));
 const ChatCRM = lazy(() => import('./chat/ChatCRM'));
-const AsistenteIA = lazy(() => import('./admin/AsistenteIA'));
 const BurbujaChat = lazy(() => import('./chat/BurbujaChat'));
 const JarvisFlotante = lazy(() => import('./admin/JarvisFlotante'));
 const CyberSecurityPanel = lazy(() => import('./CyberSecurityPanel'));
@@ -1066,15 +1065,10 @@ export default function AdminPanel({
    * espera salir del panel, no recorrer los doce módulos que visitó.
    */
   // Widget de Android / atajo del ícono: abre Jarvis (y el micrófono).
-  const tabActivoRef = useRef(activeTab);
-  tabActivoRef.current = activeTab;
-  const irAModuloRef = useRef<(t: string) => void>(() => {});
   const [pedidoJarvis, setPedidoJarvis] = useState<{ n: number; voz: boolean } | null>(null);
   useEffect(() => {
-    if (!esSuperadmin(currentUser?.role)) return;
+    if (!esStaff(currentUser?.role)) return;
     const atender = (voz: boolean) => {
-      // En Chat y Supervisión no hay botón flotante: se abre la pestaña de Jarvis.
-      if (['chat', 'supervision'].includes(tabActivoRef.current)) irAModuloRef.current('asistente');
       setPedidoJarvis(p => ({ n: (p?.n || 0) + 1, voz }));
     };
     const pendiente = tomarPedidoJarvis();
@@ -1090,7 +1084,6 @@ export default function AdminPanel({
     setActiveDropdown(null);
     try { window.history.replaceState(null, '', `/admin/${tab}`); } catch { /* la navegación funciona igual */ }
   }, [pestanas.abrir, currentUser?.email]);
-  irAModuloRef.current = irAModulo;
 
   // Antes era un arrow function inline en el JSX de Inventario: nuevo en
   // cada render, así que `InventarioControl` no podía memoizarse aunque
@@ -1175,12 +1168,6 @@ export default function AdminPanel({
         {tab === 'chat' && (
           <Suspense fallback={<TabLoadingFallback />}>
             <ChatCRM currentUser={currentUser} onDataChanged={loadAllAdminData} />
-          </Suspense>
-        )}
-
-        {tab === 'asistente' && (
-          <Suspense fallback={<TabLoadingFallback />}>
-            <AsistenteIA currentUser={currentUser} onAbrirModulo={irAModulo} pedirVoz={pedidoJarvis?.voz ? pedidoJarvis.n : 0} />
           </Suspense>
         )}
 
@@ -1832,17 +1819,18 @@ export default function AdminPanel({
           currentUser={currentUser}
           onDataChanged={loadAllAdminData}
           oculto={activeTab === 'chat'}
-          elevada={activeTab === 'asistente'}
+          elevada={false}
           pestana={activeTab}
         />
       </Suspense>
-      {/* Jarvis a mano en cualquier módulo (solo el superadmin). */}
-      {esSuperadmin(currentUser?.role) && (
+      {/* El asistente vive SOLO aquí, en el botón flotante: Jarvis para el
+          superadmin, «Asistencia de IA» para el resto del personal. */}
+      {esStaff(currentUser?.role) && (
         <Suspense fallback={null}>
           {/* Fuera de los módulos de pantalla completa: en Chat el botón caía
               encima del «+» de adjuntar del redactor. */}
           <JarvisFlotante currentUser={currentUser} onAbrirModulo={irAModulo} pedido={pedidoJarvis} pestana={activeTab}
-            oculto={activeTab === 'asistente' || activeTab === 'chat' || activeTab === 'supervision'} />
+            sinBoton={activeTab === 'chat' || activeTab === 'supervision'} />
         </Suspense>
       )}
     </AdminShell>
