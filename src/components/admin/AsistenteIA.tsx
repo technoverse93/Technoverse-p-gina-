@@ -674,6 +674,15 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   // nueva informa las velocidades en el cupo); antes, todo queda como siempre.
   const jarvis = soySuper && !!cupo?.perfiles;
   const conVoz = jarvis && puedeGrabarVoz();
+  // El cerebro (código y datos) se baja mientras el teléfono está libre, para
+  // que abra al instante en vez de quedarse un momento en blanco.
+  useEffect(() => {
+    if (!jarvis) return;
+    const w = window as any;
+    const ir = () => { void import('./CerebroJarvis').then(m => m.precargarCerebro()).catch(() => { /* se baja al abrirlo */ }); };
+    const id = w.requestIdleCallback ? w.requestIdleCallback(ir, { timeout: 3000 }) : setTimeout(ir, 1500);
+    return () => { if (w.cancelIdleCallback) w.cancelIdleCallback(id); else clearTimeout(id); };
+  }, [jarvis]);
   const privadosRef = useRef<Record<string, string>>({});
   useEffect(() => { privadosRef.current = {}; }, [activa]);
   // La voz se calla si la app pasa a segundo plano o se cierra el asistente.
@@ -1078,7 +1087,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
           )}
         </header>
 
-        {vista === 'cerebro' && jarvis ? <div className="ai-ajustes"><React.Suspense fallback={null}><CerebroJarvis onPreguntar={t => { setVista('chat'); void enviar(t); }} /></React.Suspense></div> : vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} /> : (
+        {vista === 'cerebro' && jarvis ? <div className="ai-ajustes"><React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando el cerebro"><i /><i /><i /></div>}><CerebroJarvis onPreguntar={t => { setVista('chat'); void enviar(t); }} /></React.Suspense></div> : vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} /> : (
           <>
             {aviso && (
               <div className="ai-aviso" data-tipo={aviso.tipo}>

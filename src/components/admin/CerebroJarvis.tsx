@@ -65,9 +65,32 @@ function haceCuanto(f: string): string {
 /** Número estable por texto (cada neurona cae siempre en el mismo lugar). */
 function hash(t: string): number { let h = 2166136261; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619); return (h >>> 0) / 4294967296; }
 
+// Lo último que se bajó del cerebro, en memoria: al abrirlo se ve AL
+// INSTANTE y se refresca por detrás (antes quedaba en blanco mientras
+// bajaban hasta 800 ideas y 2500 conexiones). Jarvis lo precarga al abrirse.
+let enMemoria: { filas: Fila[]; enlaces: Enlace[] } | null = null;
+let bajando: Promise<{ filas: Fila[]; enlaces: Enlace[] } | { error: 'sin_tablas' | 'red' }> | null = null;
+function bajarCerebro() {
+  if (bajando) return bajando;
+  bajando = (async () => {
+    const [n, e] = await Promise.all([
+      supabase.from('jarvis_nodos').select('id,clave,etiqueta,tipo,resumen,fuente,url,usos,ultimo_uso,creado_en,actualizado_en').order('actualizado_en', { ascending: false }).limit(800),
+      supabase.from('jarvis_enlaces').select('id,origen,destino,relacion,peso').limit(2500),
+    ]);
+    if (n.error) return { error: /does not exist|relation|schema cache|could not find/i.test(n.error.message) ? 'sin_tablas' as const : 'red' as const };
+    enMemoria = { filas: (n.data || []) as Fila[], enlaces: (e.data || []) as Enlace[] };
+    return enMemoria;
+  })().finally(() => { bajando = null; });
+  return bajando;
+}
+/** Jarvis lo llama al abrirse: código y datos listos antes de tocar el cerebro. */
+export function precargarCerebro(): void {
+  if (!enMemoria) void bajarCerebro();
+}
+
 export default function CerebroJarvis({ onPreguntar }: { onPreguntar?: (texto: string) => void }) {
-  const [filas, setFilas] = useState<Fila[] | null>(null);
-  const [enlaces, setEnlaces] = useState<Enlace[]>([]);
+  const [filas, setFilas] = useState<Fila[] | null>(() => enMemoria?.filas || null);
+  const [enlaces, setEnlaces] = useState<Enlace[]>(() => enMemoria?.enlaces || []);
   const [error, setError] = useState<'sin_tablas' | 'red' | null>(null);
   const [cargando, setCargando] = useState(false);
   const [vista, setVista] = useState<'3d' | 'lista'>(() => { try { return localStorage.getItem('tv_cerebro_vista') === 'lista' ? 'lista' : '3d'; } catch { return '3d'; } });
@@ -80,15 +103,13 @@ export default function CerebroJarvis({ onPreguntar }: { onPreguntar?: (texto: s
 
   const cargar = useCallback(async () => {
     setCargando(true);
-    const [n, e] = await Promise.all([
-      supabase.from('jarvis_nodos').select('id,clave,etiqueta,tipo,resumen,fuente,url,usos,ultimo_uso,creado_en,actualizado_en').order('actualizado_en', { ascending: false }).limit(800),
-      supabase.from('jarvis_enlaces').select('id,origen,destino,relacion,peso').limit(2500),
-    ]);
+    const r = await bajarCerebro();
     setCargando(false);
-    if (n.error) { setError(/does not exist|relation|schema cache|could not find/i.test(n.error.message) ? 'sin_tablas' : 'red'); return; }
+    if ('error' in r) { if (!enMemoria) setError(r.error); return; }
     setError(null);
-    setFilas((n.data || []) as Fila[]);
-    setEnlaces((e.data || []) as Enlace[]);
+    // Si no cambió nada, no se rearma la escena (sin parpadeo).
+    setFilas(prev => (prev && prev.length === r.filas.length && prev[0]?.actualizado_en === r.filas[0]?.actualizado_en ? prev : r.filas));
+    setEnlaces(prev => (prev.length === r.enlaces.length ? prev : r.enlaces));
   }, []);
   useEffect(() => { void cargar(); }, [cargar]);
   useEffect(() => { try { localStorage.setItem('tv_cerebro_vista', vista); } catch { /* nada */ } }, [vista]);
