@@ -686,6 +686,17 @@ async function modelosCompatibles(p: Compatible): Promise<string[]> {
   const orden = [...lista].sort((a, b) => rangoAbierto(a) - rangoAbierto(b)).filter(n => rangoAbierto(n) < 999);
   return [...new Set([...(lista.includes(pedido) ? [pedido] : []), ...orden])].slice(0, 3);
 }
+/** Modelos especialistas en programar de un proveedor (Qwen3-Coder, etc.),
+ *  del más grande al más chico. Salen del mismo catálogo /models. */
+async function modelosCodigo(p: Compatible): Promise<string[]> {
+  if (p.id === 'groq' && p.clave) await modelosGroq(p.clave); else await modelosCompatibles(p).catch(() => []);
+  const lista = catalogos.get(p.id)?.lista || [];
+  const tam = (n: string) => Number((/(\d+)b/i.exec(n) || [])[1] || 0);
+  return lista.filter(n => /coder|codestral|devstral/i.test(n) && (p.id !== 'openrouter' || /:free$/.test(n))).sort((a, b) => tam(b) - tam(a)).slice(0, 2);
+}
+/** ¿El mensaje es de programación? */
+const ES_CODIGO = /```|\b(c[oó]digo|program(a|ar|aci[oó]n)|script|funci[oó]n|javascript|typescript|python|html|css|sql|react|node(js)?|api\b|endpoint|bug|depur|regex|json|java\b|kotlin|php|c\+\+|c#|bash|terminal|compil|algoritmo|base de datos|supabase|git\b|deploy|frontend|backend|componente)\b/i;
+
 /** La CADENA DE RESPALDO, en orden (solo las IAs que tienen clave). Todas
  *  hablan el formato de OpenAI, así que comparten preguntarCompatible. */
 function proveedoresRespaldo(): Compatible[] {
@@ -780,7 +791,7 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
   for (let ronda = 0; ronda <= sis.rondas; ronda++) {
     const usarHerr = conHerramientas && achique < 2 && ronda < sis.rondas;
     const piensa = PIENSA.test(prov.modelo);
-    const cuerpo: Record<string, unknown> = { model: prov.modelo, messages: mensajes, temperature: piensa ? 0.6 : 0.4, stream: true, max_tokens: prov.id === 'groq' ? 2500 : piensa ? 12000 : 4096 };
+    const cuerpo: Record<string, unknown> = { model: prov.modelo, messages: mensajes, temperature: piensa ? 0.6 : 0.4, stream: true, max_tokens: prov.id === 'groq' ? 2500 : piensa ? 12000 : /coder|codestral|devstral/i.test(prov.modelo) ? 8000 : 4096 };
     // gpt-oss razona por defecto «medio» y en Groq se comía todo el espacio
     // sin escribir la respuesta («no devolvió texto»): razonamiento corto.
     if (/gpt-oss/i.test(prov.modelo) && esfuerzo) cuerpo.reasoning_effort = 'low';
@@ -1511,6 +1522,9 @@ export async function atender(req: Request): Promise<Response> {
     let utiles: Set<string> | null = null;
     let esOrdenMsg = false;
     let complejo = perfil === 'profundo';
+    // MODO PROGRAMADOR: lo responde un modelo especialista en código.
+    const esCodigo = ES_CODIGO.test(texto);
+    if (esCodigo) extra += `\n\nMODO PROGRAMADOR: este mensaje es de programación. Respondé como un ingeniero de software senior: entendé bien qué se necesita, dá el código COMPLETO y funcional (nada de «…resto igual»), en bloques \`\`\`lenguaje, con una explicación corta de qué hace y cómo usarlo, y avisá de errores o riesgos (seguridad, rendimiento). Si falta un dato clave, asumí lo razonable y decilo. Si te piden revisar código, señalá los errores con la línea y la corrección.`;
     const conMemoria = /record|acord|olvid|anot|prefer|siempre|nunca|de ahora en adelante|guard[aá]|no (me )?(digas|hables|uses)|llamame|forma de/i.test(texto);
     if (modo !== 'normal') {
       const [{ data: recuerdos }, { data: buenas }, { data: malas }, { data: agenda }] = await Promise.all([
@@ -1706,6 +1720,33 @@ export async function atender(req: Request): Promise<Response> {
       // 0a) VELOZ: lo que no es complejo lo responde de una la IA más rápida
       //     (Cerebras ~1-2 s, después Groq), con el texto en vivo. Si ninguna
       //     arranca en 6 s, sigue Gemini y la cadena (Kimi incluida).
+      // 0) PROGRAMADOR: un especialista en código (Qwen3-Coder en Cerebras,
+      //    NVIDIA u OpenRouter), con espacio para escribir código completo.
+      if (esCodigo && !adjuntos.length && ajustes?.respaldo !== false) {
+        const ORDEN_COD = ['cerebras', 'nvidia', 'openrouter', 'groq', 'mistral'];
+        const lista = proveedoresRespaldo().filter(p => ORDEN_COD.includes(p.id)).sort((a, b) => ORDEN_COD.indexOf(a.id) - ORDEN_COD.indexOf(b.id));
+        for (const p of lista) {
+          if (Date.now() > limiteT - 8000) break;
+          const m = (await modelosCodigo(p).catch(() => [] as string[])).find(x => disponibleModelo(claveProv({ ...p, modelo: x })));
+          if (!m) continue;
+          const pr = { ...p, modelo: m };
+          probados.add(claveProv(pr));
+          const sis = nuevo(true);
+          sis.arranque = 10000;
+          emitir('estado', { texto: `Programando con ${nombreIA(pr)}…` });
+          try {
+            const t0 = Date.now();
+            const res = await preguntarCompatible(historial, sis, pr);
+            console.log(`programador ${p.id} ${m}: ${Date.now() - t0} ms`);
+            return listo(res, t0, false, sis);
+          } catch (e) {
+            const msj = anotar(nombreIA(pr), e);
+            console.log(`programador ${p.id} ${m} falló: ${msj}`);
+            if (/sin conexión|tiempo agotado|pago|clave/.test(msj)) caidos.add(p.id);
+            emitir('reinicio', {});
+          }
+        }
+      }
       const veloz = !complejo && !adjuntos.length && ajustes?.respaldo !== false && Deno.env.get('IA_VELOZ') !== '0';
       if (veloz) {
         const ORDEN_VELOZ = ['cerebras', 'groq'];

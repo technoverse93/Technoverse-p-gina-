@@ -132,6 +132,55 @@ export function crearCerebro(admin: Db, uid: string) {
     return m;
   }
 
+  // ------------------------------------------------------------------
+  // MEMORIA SEMÁNTICA: cada idea tiene un vector de significado
+  // (embedding, Gemini gratis), y se recuerda por IDEA, no solo por
+  // palabras: «cargador rápido» encuentra «adaptador 20W PD». También evita
+  // aprender dos veces lo mismo dicho distinto. Si la columna `embedding`
+  // todavía no existe (falta el SQL), todo sigue por palabras como antes.
+  // ------------------------------------------------------------------
+  let conVectores: boolean | null = null;
+  async function hayVectores(): Promise<boolean> {
+    if (conVectores !== null) return conVectores;
+    const { error } = await admin.from('jarvis_nodos').select('id').not('embedding', 'is', null).limit(1);
+    conVectores = !error;
+    return conVectores;
+  }
+  async function vectores(textos: string[]): Promise<number[][] | null> {
+    const clave = (globalThis as any).Deno?.env?.get('GEMINI_API_KEY');
+    if (!clave || !textos.length) return null;
+    const modelo = (globalThis as any).Deno?.env?.get('GEMINI_EMBED_MODEL') || 'gemini-embedding-001';
+    const corte = new AbortController(); const t = setTimeout(() => corte.abort(), 6000);
+    try {
+      const r = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:batchEmbedContents`, {
+        method: 'POST', signal: corte.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
+        body: JSON.stringify({ requests: textos.map(tx => ({ model: `models/${modelo}`, content: { parts: [{ text: tx.slice(0, 2000) }] }, outputDimensionality: 768 })) }),
+      });
+      if (!r.ok) { console.log(`vectores ${r.status}: ${(await r.text().catch(() => '')).slice(0, 160)}`); return null; }
+      const d = await r.json();
+      const vs = (d?.embeddings || []).map((e: any) => e?.values as number[]);
+      return vs.length === textos.length && vs.every((v: number[]) => Array.isArray(v) && v.length === 768) ? vs : null;
+    } catch { return null; } finally { clearTimeout(t); }
+  }
+  const textoDe = (n: { etiqueta: string; resumen?: string | null }) => `${n.etiqueta}. ${n.resumen || ''}`.slice(0, 1500);
+  /** Les pone vector a las ideas que todavía no tienen (de a poco). */
+  async function vectorizarPendientes(max: number) {
+    if (!(await hayVectores())) return 0;
+    const { data } = await admin.from('jarvis_nodos').select('id,etiqueta,resumen').eq('user_id', uid).is('embedding', null)
+      .in('tipo', ['tema', 'dato', 'fuente', 'recuerdo']).order('usos', { ascending: false }).limit(max);
+    if (!data?.length) return 0;
+    const vs = await vectores(data.map(textoDe));
+    if (!vs) return 0;
+    await Promise.all(data.map((n: any, i: number) => admin.from('jarvis_nodos').update({ embedding: JSON.stringify(vs[i]) }).eq('id', n.id)));
+    return data.length;
+  }
+  /** Las ideas más parecidas por significado. */
+  async function semejantes(vec: number[], k: number): Promise<(Nodo & { similitud: number })[]> {
+    const { data, error } = await admin.rpc('jarvis_semejantes', { p_user: uid, p_vec: JSON.stringify(vec), p_k: k });
+    if (error) { console.log(`semejantes: ${error.message}`); return []; }
+    return (data || []) as (Nodo & { similitud: number })[];
+  }
+
   /** Corre en segundo plano; el guardado de la respuesta lo espera. */
   const enFondo = (p: Promise<unknown>) => { pendientes.push(p.catch(e => console.log(`cerebro: ${e instanceof Error ? e.message : e}`))); };
 
@@ -392,8 +441,19 @@ export function crearCerebro(admin: Db, uid: string) {
           const temaN = await asegurarNodo(normalizar(tema), tema, 'tema', { fuente: 'conversación', usar: true });
           if (!temaN) continue;
           await enlazar(ramaN.id, temaN.id, 'incluye');
+          // ¿Ya sabe esto mismo dicho de otra forma? Se refuerza en vez de duplicar.
+          if (await hayVectores()) {
+            const v = await vectores([dato]);
+            const igual = v ? (await semejantes(v[0], 3)).find(x => x.tipo === 'dato' && x.similitud >= 0.92) : null;
+            if (igual) {
+              await admin.from('jarvis_nodos').update({ usos: (igual.usos || 0) + 1, ultimo_uso: new Date().toISOString() }).eq('id', igual.id);
+              await enlazar(temaN.id, igual.id, 'detalle');
+              continue;
+            }
+          }
           const clave = `nota:${temaN.id.slice(0, 8)}:${normalizar(dato).slice(0, 60)}`;
           const n = await asegurarNodo(clave, dato, 'dato', { resumen: dato, fuente: 'conversación', usar: true });
+          if (n?.nuevo) enFondo(vectorizarPendientes(4));
           await enlazar(temaN.id, n?.id, 'detalle');
           if (n) aprendidos.push({ etiqueta: dato, clave, nuevo: n.nuevo });
         } catch (e) { console.log(`cerebro: ${e instanceof Error ? e.message : e}`); }
@@ -465,8 +525,15 @@ export function crearCerebro(admin: Db, uid: string) {
 
     /** Lo que ya sabe y viene al caso en este mensaje. */
     async recordarPara(texto: string, esOrden: boolean): Promise<{ bloque: string; usados: string[]; notas: Nota[] }> {
-      // Cada mensaje ordena un poco lo viejo (no frena la respuesta).
+      // Cada mensaje ordena un poco lo viejo y vectoriza un poco más (no frena la respuesta).
       enFondo(consolidar(8));
+      enFondo(vectorizarPendientes(24));
+      // En paralelo: las ideas por palabras y las parecidas por significado.
+      const porSignificado = (async () => {
+        if (!(await hayVectores())) return [] as (Nodo & { similitud: number })[];
+        const v = await vectores([texto]);
+        return v ? await semejantes(v[0], 10) : [];
+      })().catch(() => [] as (Nodo & { similitud: number })[]);
       const { data: nodos, error } = await admin.from('jarvis_nodos').select('id,clave,etiqueta,tipo,resumen,fuente,url,usos')
         .eq('user_id', uid).in('tipo', ['tema', 'dato', 'fuente', 'recuerdo']).order('usos', { ascending: false }).limit(1000);
       if (error) { vivo = false; return { bloque: '', usados: [], notas: [] }; }
@@ -498,6 +565,12 @@ export function crearCerebro(admin: Db, uid: string) {
           .filter(x => x.p >= 3 || (x.p >= 2 && palabras.length <= 3))
           .sort((x, y) => y.p - x.p || y.n.usos - x.n.usos).slice(0, Math.max(0, 8 - directos.length));
         directos.push(...puntuados.map(x => x.n));
+      }
+      // Lo que se parece por SIGNIFICADO aunque no comparta palabras.
+      {
+        const ya = new Set(directos.map(n => n.id));
+        const sem = (await porSignificado).filter(x => x.similitud >= 0.62 && !ya.has(x.id) && x.tipo !== 'recuerdo' && x.resumen && !(esOrden && x.fuente === 'internet'));
+        directos.push(...sem.slice(0, Math.max(0, 10 - directos.length)));
       }
       if (!directos.length) return { bloque: '', usados: [], notas: [] };
       // Qué tan relacionada está cada idea con el mensaje (para responder sin IA).
