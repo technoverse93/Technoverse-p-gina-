@@ -1351,7 +1351,9 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                   )}
                   <span className="ai-sp" />
                   {jarvis ? (
-                    <span className="jv-tokens" title="Tokens usados en esta conversación">{tokensConv.toLocaleString('es-CR')} tokens</span>
+                    <span className="jv-tokens" title={`Lo que vas escribiendo: ≈ ${estimarTokens(texto).toLocaleString('es-CR')} tokens · gastados en esta conversación: ${tokensConv.toLocaleString('es-CR')}`}>
+                      {texto.trim() ? <>≈ <b>{estimarTokens(texto).toLocaleString('es-CR')}</b> tokens</> : <>{k(tokensConv)} usados</>}
+                    </span>
                   ) : (
                     <span className="ai-cont" title="Tokens estimados de tu texto · contexto usado de la conversación">
                       ≈ <b>{estimarTokens(texto)}</b><span className="ai-lbl"> tokens</span>

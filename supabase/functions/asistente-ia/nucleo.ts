@@ -1576,8 +1576,10 @@ export async function atender(req: Request): Promise<Response> {
       //    de cupo cortaba todo sin probar el respaldo).
       // Los de la velocidad elegida primero y, si están saturados, otros
       // modelos de Google (cada uno con su propio cupo), hasta 4 en total.
-      const extra = (await modelosGemini().catch(() => [] as string[])).filter(m => !conf.modelos.includes(m));
-      const escalera = [...conf.modelos, ...extra].filter(disponibleModelo).slice(0, 4);
+      // OJO: no llamarlo «extra»: tapaba las instrucciones del mensaje (memoria,
+      // tono, cerebro, contexto de hoy) y la IA recibía esta lista en su lugar.
+      const masGemini = (await modelosGemini().catch(() => [] as string[])).filter(m => !conf.modelos.includes(m));
+      const escalera = [...conf.modelos, ...masGemini].filter(disponibleModelo).slice(0, 4);
       const modelos = escalera.length ? escalera : [GEMINI_RESPALDO];
       for (const modelo of modelos) {
         if (Date.now() > limiteT - 4000) break;
