@@ -561,9 +561,9 @@ async function preguntarGemini(historial: Turno[], modelo: string, sis: Sistema)
 //   LLM_LOCAL_CLAVE   opcional (si el servidor pide token)
 //   LLM_LOCAL_PRIMERO "1" = el local responde primero y Gemini queda de
 //                     respaldo; si no, el local entra cuando Gemini falla.
-type IdProv = 'groq' | 'cerebras' | 'openrouter' | 'local';
+type IdProv = 'groq' | 'cerebras' | 'openrouter' | 'sambanova' | 'nvidia' | 'mistral' | 'cloudflare' | 'huggingface' | 'local';
 type Compatible = { id: IdProv; url: string; clave: string | null; modelo: string };
-const NOMBRE_PROV: Record<IdProv, string> = { groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', local: 'el servidor propio' };
+const NOMBRE_PROV: Record<IdProv, string> = { groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', sambanova: 'SambaNova', nvidia: 'NVIDIA', mistral: 'Mistral', cloudflare: 'Cloudflare', huggingface: 'Hugging Face', local: 'el servidor propio' };
 /**
  * La clave de Groq. Primero el nombre de siempre; si no está, cualquier
  * secreto cuyo NOMBRE diga «groq» y cuyo valor parezca una clave de Groq
@@ -593,21 +593,50 @@ function proveedorLocal(): Compatible | null {
   const url = Deno.env.get('LLM_LOCAL_URL'), modelo = Deno.env.get('LLM_LOCAL_MODELO');
   return url && modelo ? { id: 'local', url: url.replace(/\/+$/, ''), clave: Deno.env.get('LLM_LOCAL_CLAVE') || null, modelo } : null;
 }
+function compatible(id: IdProv, url: string, varClave: string, varModelo: string, porDefecto: string): Compatible | null {
+  const clave = (Deno.env.get(varClave) || '').trim();
+  return clave ? { id, url, clave, modelo: Deno.env.get(varModelo) || porDefecto } : null;
+}
+/** Los mejores modelos abiertos, en orden (se busca por coincidencia en el
+ *  nombre que da cada proveedor). Los nuevos que aparezcan van al final. */
+const PREFERIDOS_ABIERTOS = ['gpt-oss-120b', 'deepseek-v3.2', 'deepseek-v3.1', 'deepseek-chat', 'deepseek-v3', 'qwen3-235b', 'kimi-k2', 'glm-4.6', 'glm-4.5', 'deepseek-r1', 'qwen3-next', 'llama-4-maverick', 'mistral-medium', 'llama-3.3-70b', 'qwen3-32b', 'mistral-small', 'gpt-oss-20b'];
+const NO_CHAT = /(embed|whisper|tts|audio|image|vision-only|guard|rerank|moderation|ocr|transcri|speech|flux|stable-diffusion|bge|clip)/i;
+/** Modelos vigentes de un proveedor compatible: se leen de su /models (una
+ *  hora en memoria) y se ordenan por calidad. En OpenRouter, solo los gratis. */
+async function modelosCompatibles(p: Compatible): Promise<string[]> {
+  if (p.id === 'local') return [p.modelo];
+  const lista = await catalogo(p.id, async () => {
+    const r = await conTope(`${p.url}/models`, { headers: p.clave ? { Authorization: `Bearer ${p.clave}` } : {} }, 6000);
+    if (!r.ok) throw new Error(`lista ${r.status}`);
+    const d = await r.json();
+    const ids: string[] = (d?.data || d?.result || d?.models || []).map((m: any) => String(m?.id || m?.name || '')).filter(Boolean);
+    return ids.filter(n => !NO_CHAT.test(n) && (p.id !== 'openrouter' || /:free$/.test(n)));
+  });
+  const pedido = p.modelo;
+  if (!lista.length) return [pedido];
+  const puntos = (n: string) => { const i = PREFERIDOS_ABIERTOS.findIndex(x => n.toLowerCase().includes(x)); return i < 0 ? 999 : i; };
+  const orden = [...lista].sort((a, b) => puntos(a) - puntos(b)).filter(n => puntos(n) < 999);
+  return [...new Set([...(lista.includes(pedido) ? [pedido] : []), ...orden])].slice(0, 3);
+}
 /** La CADENA DE RESPALDO, en orden (solo las IAs que tienen clave). Todas
  *  hablan el formato de OpenAI, así que comparten preguntarCompatible. */
 function proveedoresRespaldo(): Compatible[] {
   const todos: Record<string, () => Compatible | null> = {
     groq: proveedorGroq,
-    cerebras: () => {
-      const clave = Deno.env.get('CEREBRAS_API_KEY');
-      return clave ? { id: 'cerebras', url: 'https://api.cerebras.ai/v1', clave, modelo: Deno.env.get('CEREBRAS_MODEL') || 'llama-3.3-70b' } : null;
+    cerebras: () => compatible('cerebras', 'https://api.cerebras.ai/v1', 'CEREBRAS_API_KEY', 'CEREBRAS_MODEL', 'gpt-oss-120b'),
+    openrouter: () => compatible('openrouter', 'https://openrouter.ai/api/v1', 'OPENROUTER_API_KEY', 'OPENROUTER_MODEL', 'deepseek/deepseek-chat-v3.1:free'),
+    // Más IAs open source GRATIS (todas con formato de OpenAI). Cada una
+    // entra sola en cuanto su clave está en los secretos de Supabase.
+    sambanova: () => compatible('sambanova', 'https://api.sambanova.ai/v1', 'SAMBANOVA_API_KEY', 'SAMBANOVA_MODEL', 'DeepSeek-V3.1'),
+    nvidia: () => compatible('nvidia', 'https://integrate.api.nvidia.com/v1', 'NVIDIA_API_KEY', 'NVIDIA_MODEL', 'deepseek-ai/deepseek-v3.1'),
+    mistral: () => compatible('mistral', 'https://api.mistral.ai/v1', 'MISTRAL_API_KEY', 'MISTRAL_MODEL', 'mistral-medium-latest'),
+    cloudflare: () => {
+      const cuenta = Deno.env.get('CLOUDFLARE_ACCOUNT_ID'), clave = Deno.env.get('CLOUDFLARE_AI_TOKEN');
+      return cuenta && clave ? { id: 'cloudflare', url: `https://api.cloudflare.com/client/v4/accounts/${cuenta}/ai/v1`, clave, modelo: Deno.env.get('CLOUDFLARE_MODEL') || '@cf/openai/gpt-oss-120b' } : null;
     },
-    openrouter: () => {
-      const clave = Deno.env.get('OPENROUTER_API_KEY');
-      return clave ? { id: 'openrouter', url: 'https://openrouter.ai/api/v1', clave, modelo: Deno.env.get('OPENROUTER_MODEL') || 'meta-llama/llama-3.3-70b-instruct:free' } : null;
-    },
+    huggingface: () => compatible('huggingface', 'https://router.huggingface.co/v1', 'HF_TOKEN', 'HF_MODEL', 'openai/gpt-oss-120b'),
   };
-  const orden: string[] = String(Deno.env.get('IA_RESPALDOS') || 'groq,cerebras,openrouter').split(',').map((t: string) => t.trim().toLowerCase());
+  const orden: string[] = String(Deno.env.get('IA_RESPALDOS') || 'groq,cerebras,sambanova,openrouter,nvidia,mistral,cloudflare,huggingface').split(',').map((t: string) => t.trim().toLowerCase());
   return [...new Set(orden)].map(id => todos[id]?.() || null).filter((p): p is Compatible => !!p);
 }
 /** Clave del cortacircuito de cada IA de respaldo. */
@@ -656,7 +685,8 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       }
       continue;
     }
-    const texto = String(msg.content || '').trim();
+    // Los modelos que «piensan en voz alta» (DeepSeek R1, Qwen) traen <think>…</think>: fuera.
+    const texto = String(msg.content || '').replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '').trim();
     if (!texto) throw new Error(`${prov.id} no devolvió respuesta.`);
     sis.emitir('modelo', { modelo: d?.model || prov.modelo });
     sis.emitir('texto', { delta: texto });
@@ -736,6 +766,61 @@ Respondé SOLO un JSON: {"rama": categoría madre corta (p. ej. "Dispositivos el
  * consultas al sistema: va solo texto, con las instrucciones, el contexto de
  * hoy y lo que sabe el cerebro dentro del mensaje.
  */
+// ---------------------------------------------------------------------
+// REVISOR: otra IA revisa la respuesta antes de darla por buena
+// ---------------------------------------------------------------------
+// El dueño pidió que, cuando ya hay una respuesta, se analice lo que salió
+// para ver si está bien y, si no, se corrija hasta tener un texto
+// concreto. La revisa una IA DISTINTA de la que respondió (dos cabezas ven
+// más que una): contra la pregunta y contra los datos que se consultaron.
+// Hasta 2 vueltas; si ninguna IA está libre, se queda la respuesta original.
+const PROMPT_REVISOR = `Sos el revisor de calidad de Jarvis, el asistente de un negocio de tecnología en Costa Rica.
+Te paso la PREGUNTA del dueño, los DATOS que se consultaron (sistema, internet, memoria) y la RESPUESTA propuesta.
+Revisá con rigor:
+1. ¿Responde exactamente lo que se pidió, completo y sin rodeos?
+2. ¿Cada cifra, nombre, fecha o enlace coincide con los DATOS? ¿Inventa algo que los datos no dicen?
+3. ¿Hay errores de cálculo, de lógica o contradicciones?
+4. ¿Es clara y concreta (voseo costarricense, sin relleno)?
+Si está bien, devolvé {"veredicto":"ok"}.
+Si hay que mejorarla, devolvé {"veredicto":"corregir","problemas":["…"],"respuesta":"la respuesta COMPLETA corregida, en markdown, mismo tono"}.
+No cambies lo que ya está bien ni agregues datos que no estén en los DATOS. Devolvé SOLO el JSON.`;
+
+/** Una llamada corta de texto a la primera IA libre (evitando la que respondió). */
+async function llamarRevisor(usuario: string, evitar: string, hasta: number): Promise<{ veredicto: string; problemas?: string[]; respuesta?: string; quien: string } | null> {
+  const candidatos: { quien: string; correr: () => Promise<string> }[] = [];
+  for (const p of proveedoresRespaldo()) {
+    if (p.id === evitar) continue;
+    const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
+    const m = ms.find(x => disponibleModelo(claveProv({ ...p, modelo: x })));
+    if (!m) continue;
+    candidatos.push({ quien: `${NOMBRE_PROV[p.id]} · ${m}`, correr: async () => {
+      const r = await conTope(`${p.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(p.clave ? { Authorization: `Bearer ${p.clave}` } : {}) },
+        body: JSON.stringify({ model: m, temperature: 0.1, messages: [{ role: 'system', content: PROMPT_REVISOR }, { role: 'user', content: usuario }] }) }, Math.min(15000, hasta - Date.now()));
+      if (!r.ok) { if (r.status === 429 || r.status >= 500) pausar(claveProv({ ...p, modelo: m }), r.status); throw new Error(`${p.id} ${r.status}`); }
+      const d = await r.json(); return String(d?.choices?.[0]?.message?.content || '');
+    } });
+    if (candidatos.length >= 2) break;
+  }
+  const clave = Deno.env.get('GEMINI_API_KEY');
+  if (clave && evitar !== 'gemini') for (const m of [GEMINI_RESPALDO, GEMINI_MODEL].filter(disponibleModelo).slice(0, 1)) {
+    candidatos.push({ quien: `Gemini · ${m}`, correr: async () => {
+      const r = await conTope(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
+        body: JSON.stringify({ system_instruction: { parts: [{ text: PROMPT_REVISOR }] }, contents: [{ role: 'user', parts: [{ text: usuario }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }) }, Math.min(15000, hasta - Date.now()));
+      if (!r.ok) { if (r.status === 429 || r.status >= 500) pausar(m, r.status); throw new Error(`gemini ${r.status}`); }
+      const d = await r.json(); return (d?.candidates?.[0]?.content?.parts || []).map((x: any) => x.text || '').join('');
+    } });
+  }
+  for (const c of candidatos) {
+    if (Date.now() > hasta - 2500) break;
+    try {
+      const crudo = (await c.correr()).replace(/<think>[\s\S]*?<\/think>/gi, '');
+      const j = JSON.parse((/\{[\s\S]*\}/.exec(crudo) || ['{}'])[0]);
+      if (j && (j.veredicto === 'ok' || j.veredicto === 'corregir')) return { ...j, quien: c.quien };
+    } catch (e) { console.log(`revisor ${c.quien}: ${e instanceof Error ? e.message : e}`); }
+  }
+  return null;
+}
+
 async function preguntarGemma(historial: Turno[], sis: Sistema): Promise<Resultado> {
   const clave = Deno.env.get('GEMINI_API_KEY');
   if (!clave) throw new CupoAgotado('sin clave');
@@ -1227,7 +1312,7 @@ export async function atender(req: Request): Promise<Response> {
     // Conversación con la IA. `emitir` manda eventos en vivo si el panel
     // los pidió; si no, no hace nada y al final se responde con JSON.
     // ---------------------------------------------------------------
-    const correr = async (emitir: Emisor) => {
+    const correrBase = async (emitir: Emisor) => {
       const hechas = new Map<string, { datos: unknown; consulta: Consulta }>();
       const base = perfilUsado ? PERFILES[perfilUsado] : { modelos: [GEMINI_MODEL, GEMINI_RESPALDO], pensar: 'low', intento: TOPE_INTENTO_MS, total: TOPE_TOTAL_MS };
       // El Arquitecto siempre piensa a fondo, aunque se haya elegido Rápido.
@@ -1316,15 +1401,16 @@ export async function atender(req: Request): Promise<Response> {
         if (r) return r;
         emitir('reinicio', {});
       }
-      // 3) La cadena de respaldo, en orden: Groq → Cerebras → OpenRouter (las
+      // 3) La cadena de respaldo, en orden: Groq → Cerebras → SambaNova →
+      //    OpenRouter → NVIDIA → Mistral → Cloudflare → Hugging Face (las
       //    que tengan clave; una en pausa por fallar hace poco se salta). No
       //    ven fotos ni PDF: con adjuntos no tiene sentido.
       if (ajustes?.respaldo !== false && !adjuntos.length) {
         // Groq se abre en sus modelos vigentes (el configurado ya no existía).
         const cadena: Compatible[] = [];
         for (const p of proveedoresRespaldo()) {
-          if (p.id === 'groq' && p.clave) for (const m of await modelosGroq(p.clave)) cadena.push({ ...p, modelo: m });
-          else cadena.push(p);
+          const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
+          for (const m of ms) cadena.push({ ...p, modelo: m });
         }
         for (const prov of cadena) {
           if (!disponibleModelo(claveProv(prov))) continue;
@@ -1362,6 +1448,41 @@ export async function atender(req: Request): Promise<Response> {
         return { res: { texto: resp, fuentes: [], tokensIn: 0, tokensOut: 0, proveedor: 'cerebro' as any, modelo: 'cerebro', busco: false, consultas: sis.consultas, ms: 0 }, respaldo: true, sis };
       }
       return null;
+    };
+
+    // Responder y después REVISAR: otra IA compara la respuesta con la
+    // pregunta y los datos consultados; si encuentra errores, la corrige
+    // (hasta 2 vueltas) y en pantalla queda la versión corregida.
+    const correr = async (emitir: Emisor) => {
+      const salida = await correrBase(emitir);
+      if (!salida) return salida;
+      const r = salida.res;
+      const apagado = Deno.env.get('IA_REVISAR') === '0' || (ajustes?.modulos as any)?.revisar === false;
+      const esAccion = r.consultas.some(c => c.tipo === 'accion' || c.tipo === 'navegar' || c.tipo === 'memoria');
+      if (apagado || esAccion || (r.proveedor as string) === 'cerebro' || r.texto.length < 120) return salida;
+      const hasta = Date.now() + 25000;
+      const datos = [
+        ...r.consultas.filter(c => !c.tipo || c.tipo === 'cerebro').map(c => `- ${c.modulo} · ${c.desc} (${c.filas})${c.detalle ? `:\n${String(c.detalle).slice(0, 900)}` : ''}`),
+        ...(r.fuentes || []).slice(0, 6).map(f => `- Fuente web: ${f.titulo} ${f.url}`),
+        ...(bloqueCerebro ? [`- Lo que ya sabía (cerebro):\n${bloqueCerebro.slice(0, 1500)}`] : []),
+      ].join('\n').slice(0, 6000) || '(no se consultaron datos: es conversación o conocimiento general)';
+      let actual = r.texto, cambios: string[] = [], quien = '';
+      emitir('estado', { texto: 'Revisando la respuesta…' });
+      for (let vuelta = 0; vuelta < 2 && Date.now() < hasta - 3000; vuelta++) {
+        const v = await llamarRevisor(`PREGUNTA:\n${texto}\n\nDATOS:\n${datos}\n\nRESPUESTA:\n${actual}`, String(r.proveedor), hasta).catch(() => null);
+        if (!v || v.veredicto === 'ok') { if (v) quien = v.quien; break; }
+        const nueva = String(v.respuesta || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+        if (nueva.length < 40 || nueva === actual) break;
+        actual = nueva; quien = v.quien; cambios.push(...(v.problemas || []).map(String).slice(0, 3));
+      }
+      if (actual !== r.texto) {
+        emitir('reinicio', {});
+        emitir('texto', { delta: actual });
+        const marca: Consulta = { modulo: 'Revisión', desc: cambios.length ? cambios.join(' · ').slice(0, 300) : 'Respuesta corregida', filas: 'corregida', detalle: `Revisó: ${quien}` };
+        salida.res = { ...r, texto: actual, consultas: [...r.consultas, marca] };
+        salida.sis.consultas.push(marca);
+      }
+      return salida;
     };
 
     // Guardar (se hace DESPUÉS de responder).

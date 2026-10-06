@@ -161,7 +161,7 @@ async function prepararArchivo(f: File): Promise<Adjunto | null> {
 }
 
 /** «gemini-3.8-flash» → «Gemini 3.8 Flash». */
-const NOMBRE_PROVEEDOR: Record<string, string> = { groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', local: 'servidor propio', gemma: 'Gemma', cerebro: 'su cerebro' };
+const NOMBRE_PROVEEDOR: Record<string, string> = { groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', sambanova: 'SambaNova', nvidia: 'NVIDIA', mistral: 'Mistral', cloudflare: 'Cloudflare', huggingface: 'Hugging Face', local: 'servidor propio', gemma: 'Gemma', cerebro: 'su cerebro' };
 /** Quién respondió: el modelo de Gemini o la IA de respaldo que contestó. */
 function nombreModelo(m?: string | null, proveedor?: string | null): string {
   if (proveedor && proveedor !== 'gemini') return `${NOMBRE_PROVEEDOR[proveedor] || proveedor} (respaldo)`;
