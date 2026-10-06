@@ -599,7 +599,7 @@ function compatible(id: IdProv, url: string, varClave: string, varModelo: string
 }
 /** Los mejores modelos abiertos, en orden (se busca por coincidencia en el
  *  nombre que da cada proveedor). Los nuevos que aparezcan van al final. */
-const PREFERIDOS_ABIERTOS = ['gpt-oss-120b', 'deepseek-v3.2', 'deepseek-v3.1', 'deepseek-chat', 'deepseek-v3', 'qwen3-235b', 'kimi-k2', 'glm-4.6', 'glm-4.5', 'deepseek-r1', 'qwen3-next', 'llama-4-maverick', 'mistral-medium', 'llama-3.3-70b', 'qwen3-32b', 'mistral-small', 'gpt-oss-20b'];
+const PREFERIDOS_ABIERTOS = ['kimi-k3', 'deepseek-v4', 'qwen3.5', 'glm-5', 'gpt-oss-120b', 'deepseek-v3.2', 'deepseek-v3.1', 'deepseek-chat', 'deepseek-v3', 'qwen3-235b', 'kimi-k2', 'glm-4.6', 'glm-4.5', 'deepseek-r1', 'qwen3-next', 'llama-4-maverick', 'mistral-medium', 'llama-3.3-70b', 'qwen3-32b', 'mistral-small', 'gpt-oss-20b'];
 const NO_CHAT = /(embed|whisper|tts|audio|image|vision-only|guard|rerank|moderation|ocr|transcri|speech|flux|stable-diffusion|bge|clip)/i;
 /** Modelos vigentes de un proveedor compatible: se leen de su /models (una
  *  hora en memoria) y se ordenan por calidad. En OpenRouter, solo los gratis. */
@@ -628,7 +628,7 @@ function proveedoresRespaldo(): Compatible[] {
     // Más IAs open source GRATIS (todas con formato de OpenAI). Cada una
     // entra sola en cuanto su clave está en los secretos de Supabase.
     sambanova: () => compatible('sambanova', 'https://api.sambanova.ai/v1', 'SAMBANOVA_API_KEY', 'SAMBANOVA_MODEL', 'DeepSeek-V3.1'),
-    nvidia: () => compatible('nvidia', 'https://integrate.api.nvidia.com/v1', 'NVIDIA_API_KEY', 'NVIDIA_MODEL', 'deepseek-ai/deepseek-v3.1'),
+    nvidia: () => compatible('nvidia', 'https://integrate.api.nvidia.com/v1', 'NVIDIA_API_KEY', 'NVIDIA_MODEL', 'moonshotai/kimi-k3'),
     mistral: () => compatible('mistral', 'https://api.mistral.ai/v1', 'MISTRAL_API_KEY', 'MISTRAL_MODEL', 'mistral-medium-latest'),
     cloudflare: () => {
       const cuenta = Deno.env.get('CLOUDFLARE_ACCOUNT_ID'), clave = Deno.env.get('CLOUDFLARE_AI_TOKEN');
