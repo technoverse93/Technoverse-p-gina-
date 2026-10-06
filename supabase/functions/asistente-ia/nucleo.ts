@@ -177,6 +177,9 @@ type Sistema = {
   utiles?: Set<string> | null;
   /** Memoria (recordar/olvidar) solo si el mensaje habla de eso. */
   conMemoria?: boolean;
+  /** Perdió la carrera (Kimi contra Gemini): sigue de fondo pero no puede
+   *  hacer nada (ni acciones, ni memoria, ni aprender). */
+  cancelado?: boolean;
 };
 
 /** Herramientas de memoria: Jarvis aprende del dueño, nunca de lo que lee afuera. */
@@ -407,6 +410,7 @@ async function correrAprender(args: Record<string, unknown>, sis: Sistema): Prom
 }
 
 async function correrHerramienta(nombre: string, args: Record<string, unknown>, sis: Sistema): Promise<unknown> {
+  if (sis.cancelado && !sis.herramientas.some(h => h.nombre === nombre)) return { error: 'Cancelado: otra IA ya respondió.' };
   if (nombre === APRENDER.nombre) return await correrAprender(args, sis);
   if (MEMORIA.some(m => m.nombre === nombre)) return await correrMemoria(nombre, args, sis);
   if (nombre === NAVEGAR.nombre || ACCIONES.some(a => a.nombre === nombre)) return await correrAccion(nombre, args, sis);
@@ -772,8 +776,10 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
     const restante = sis.limite - Date.now();
     if (restante < 2500) throw new CupoAgotado('sin tiempo');
     const corte = new AbortController();
-    // Hasta que empiece a contestar: 30 s (los que piensan tardan en arrancar).
-    let vigia = setTimeout(() => corte.abort(), Math.min(30000, restante));
+    // Hasta que empiece a contestar: 30 s; los que piensan (Kimi), 60 s: en
+    // NVIDIA gratis a veces hay fila antes de arrancar.
+    const t0 = Date.now();
+    let vigia = setTimeout(() => corte.abort(), Math.min(piensa ? 60000 : 30000, restante));
     const fin = setTimeout(() => corte.abort(), restante);
     const parar = () => { clearTimeout(vigia); clearTimeout(fin); };
     let r: Response;
@@ -781,7 +787,9 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       r = await fetch(`${prov.url}/chat/completions`, { method: 'POST', signal: corte.signal,
         headers: { 'Content-Type': 'application/json', ...(prov.clave ? { Authorization: `Bearer ${prov.clave}` } : {}) }, body: JSON.stringify(cuerpo) });
     } catch (e) {
-      parar(); pausar(claveProv(prov), 503);
+      // Una fila lenta de Kimi no la saca de servicio: el próximo mensaje la vuelve a intentar.
+      parar(); if (!(piensa && corte.signal.aborted)) pausar(claveProv(prov), 503);
+      console.log(`tiempos ${prov.id} ${prov.modelo} ronda=${ronda}: sin cabeceras a los ${Date.now() - t0} ms`);
       throw new CupoAgotado(`${prov.id} sin conexión: ${corte.signal.aborted ? 'tiempo agotado' : e instanceof Error ? e.message : e}`);
     }
     if (!r.ok) {
@@ -799,11 +807,13 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       throw new Error(`${prov.id} respondió ${r.status}: ${det.slice(0, 200)}`);
     }
     // Se lee en vivo. Mientras lleguen trozos se espera (25 s entre trozos).
+    const tCab = Date.now() - t0; let tPrimero = 0;
     let texto = '', pensando = false, uso: any = null, final = '';
     const llamadas: { id: string; name: string; args: string }[] = [];
     try {
       for await (const trozo of leerSSE(r.body!)) {
         clearTimeout(vigia); vigia = setTimeout(() => corte.abort(), 25000);
+        if (!tPrimero) tPrimero = Date.now() - t0;
         if (trozo?.model) modeloReal = String(trozo.model);
         const u = trozo?.usage || trozo?.x_groq?.usage;
         if (u) uso = u;
@@ -830,10 +840,12 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       }
     } catch (e) {
       parar();
-      if (corte.signal.aborted) { pausar(claveProv(prov), 503); throw new CupoAgotado(`${prov.id} tiempo agotado`); }
+      if (corte.signal.aborted) { if (!piensa) pausar(claveProv(prov), 503); throw new CupoAgotado(`${prov.id} tiempo agotado`); }
       throw e;
     }
     parar();
+    // Tiempos reales de cada vuelta (para medir a cada IA con mensajes de verdad).
+    console.log(`tiempos ${prov.id} ${prov.modelo} ronda=${ronda}: cabeceras ${tCab} ms · primer trozo ${tPrimero} ms · total ${Date.now() - t0} ms · ${uso ? `${uso.prompt_tokens}+${uso.completion_tokens} tokens` : 'sin uso'}${final ? ` · ${final}` : ''}`);
     const tin = Number(uso?.prompt_tokens || 0), tout = Number(uso?.completion_tokens || 0);
     if (uso) { tokensIn += tin; tokensOut += tout; sis.gasto.in += tin; sis.gasto.out += tout; }
     else {
@@ -1437,6 +1449,7 @@ export async function atender(req: Request): Promise<Response> {
     let bloqueCerebro = '';
     let notasCerebro: Nota[] = [];
     let utiles: Set<string> | null = null;
+    let esOrdenMsg = false;
     const conMemoria = /record|acord|olvid|anot|prefer|siempre|nunca|de ahora en adelante|guard[aá]|no (me )?(digas|hables|uses)|llamame|forma de/i.test(texto);
     if (modo !== 'normal') {
       const [{ data: recuerdos }, { data: buenas }, { data: malas }, { data: agenda }] = await Promise.all([
@@ -1471,6 +1484,7 @@ export async function atender(req: Request): Promise<Response> {
         const intencion = esOrden ? 'orden' : esConsulta ? 'consulta' : 'conversacion';
         const anteriorJ = [...historial].reverse().find(h => h.rol === 'assistant')?.texto || '';
         utiles = accionesUtiles(texto, anteriorJ.slice(-600), esOrden);
+        esOrdenMsg = esOrden;
         // La conversación nunca va sin razonar: es donde más se nota.
         if (intencion === 'conversacion' && perfilUsado === 'rapido') perfilUsado = 'equilibrado';
         // Contexto del día (solo cifras, sin datos de clientes) para poder ser proactivo.
@@ -1569,10 +1583,10 @@ export async function atender(req: Request): Promise<Response> {
       };
       // `tiempoPropio`: la IA de respaldo tiene su propio margen, aunque
       // Gemini se haya comido el tiempo esperando (si no, llegaba sin tiempo).
-      const nuevo = (tiempoPropio = false): Sistema => {
+      const nuevo = (tiempoPropio = false, emitirA: Emisor = emitir): Sistema => {
         const fuentes: { titulo: string; url: string }[] = [];
         const sis: Sistema = {
-          ctx: { db: comoUsuario, esSuper, hoy: dia, fuentes }, herramientas, consultas: [], usados: {}, hechas, emitir, esSuper,
+          ctx: { db: comoUsuario, esSuper, hoy: dia, fuentes }, herramientas, consultas: [], usados: {}, hechas, emitir: emitirA, esSuper,
           limite: tiempoPropio ? Math.max(limiteT, Date.now() + TOPE_RESPALDO_MS) : limiteT,
           caps, forzarWeb: cuerpo?.buscar === true, adjuntos: adjuntos.map(a => ({ mimeType: a.mimeType, data: a.data })), fuentes,
           modo, pensar: conf.pensar, intento: conf.intento,
@@ -1603,29 +1617,75 @@ export async function atender(req: Request): Promise<Response> {
         if (r) return r;
         emitir('reinicio', {});
       }
-      // 0) La IA PRINCIPAL: el modelo abierto más potente que tenga clave
-      //    (Kimi K3, DeepSeek V4…). Solo texto: fotos y PDF los lee Gemini.
-      //    Tiene hasta el 60 % del tiempo; si no, sigue Gemini.
+      // Escalera de Gemini (se arma antes: también corre en paralelo con Kimi).
+      // OJO: no llamarlo «extra»: tapaba las instrucciones del mensaje (memoria,
+      // tono, cerebro, contexto de hoy) y la IA recibía esta lista en su lugar.
+      const masGemini = (await modelosGemini().catch(() => [] as string[])).filter(m => !conf.modelos.includes(m));
+      const escalera = [...conf.modelos, ...masGemini].filter(disponibleModelo).slice(0, 4);
+      let modelos = escalera.length ? escalera : [GEMINI_RESPALDO];
+
+      // 0) La IA PRINCIPAL: Kimi K3. En NVIDIA gratis a veces hay fila y tarda
+      //    en arrancar, así que se espera hasta 60 s, pero si a los 15 s no
+      //    terminó, Gemini prepara una respuesta EN PARALELO y en silencio:
+      //    gana la primera que termine (si Gemini no tiene cupo, se espera a
+      //    Kimi). En órdenes no se corre en paralelo: nada se hace dos veces.
+      //    Lo de cada una se guarda aparte y solo se muestra lo del ganador.
       const probados = new Set<string>();
+      const compuerta = () => {
+        let abierta = false; const cola: [string, unknown][] = [];
+        return {
+          // «Consultando…» se ve en vivo; el texto y las tarjetas, solo del ganador.
+          emitir: ((ev, d) => { if (abierta || ev === 'estado') emitir(ev, d); else cola.push([ev, d]); }) as Emisor,
+          abrir() { abierta = true; for (const [ev, d] of cola) emitir(ev, d); cola.length = 0; },
+        };
+      };
       if (!adjuntos.length && ajustes?.respaldo !== false) {
         for (const prov of await proveedoresPrincipales().catch(() => [] as Compatible[])) {
           if (Date.now() > limiteT - 8000) break;
           probados.add(claveProv(prov));
-          const sis = nuevo();
-          // Kimi piensa a fondo: tiene casi todo el tiempo del mensaje (12 s de
-          // reserva para Gemini) y nunca menos de 35 s.
-          sis.limite = Math.max(Date.now() + 35000, limiteT - 12000);
+          const gK = compuerta();
+          const sisK = nuevo(false, gK.emitir);
+          sisK.limite = Math.max(Date.now() + 60000, limiteT - 8000);
           emitir('estado', { texto: `Pensando con ${nombreIA(prov)}…` });
-          try {
-            const t0 = Date.now();
-            const res = await preguntarCompatible(historial, sis, prov);
-            return listo(res, t0, false, sis);
-          } catch (e) {
-            const m = anotar(nombreIA(prov), e);
-            console.log(`principal ${prov.id} ${prov.modelo} falló: ${m}`);
-            if (/sin conexión|tiempo agotado|pago|clave/.test(m)) caidos.add(prov.id);
-            emitir('reinicio', {});
+          const t0 = Date.now();
+          type Fin = { ok: true; res: Resultado; sis: Sistema; g: ReturnType<typeof compuerta>; quien: string } | { ok: false; e: unknown; quien: string };
+          const pK: Promise<Fin> = preguntarCompatible(historial, sisK, prov).then(res => ({ ok: true as const, res, sis: sisK, g: gK, quien: 'kimi' }), e => ({ ok: false as const, e, quien: 'kimi' }));
+          const espera = <T,>(ms: number, v: T) => new Promise<T>(r => setTimeout(() => r(v), ms));
+          let fin = await Promise.race([pK, espera(15000, null)]);
+          let pG: Promise<Fin> | null = null;
+          if (!fin && !esOrdenMsg && modelos.length) {
+            // Kimi sigue pensando: Gemini arranca en paralelo (solo consultas, sin acciones).
+            const gG = compuerta();
+            const sisG = nuevo(false, gG.emitir);
+            sisG.acciones = false;
+            const mG = modelos[0];
+            emitir('estado', { texto: `${nombreIA(prov)} sigue pensando…` });
+            pG = preguntarGemini(historial, mG, sisG).then(res => ({ ok: true as const, res, sis: sisG, g: gG, quien: 'gemini' }), e => ({ ok: false as const, e, quien: `Gemini ${mG.replace(/^gemini-/, '')}` }));
+            fin = await Promise.race([pK, pG]);
+            if (!fin.ok) {
+              // La que terminó primero falló: queda la otra.
+              if (fin.quien !== 'kimi') { anotar(fin.quien, fin.e); modelos = modelos.slice(1); }
+              fin = await (fin.quien === 'kimi' ? pG : pK);
+            }
+          } else if (!fin) fin = await pK;
+          if (fin && fin.ok) {
+            // La que perdió (si sigue de fondo) ya no puede actuar.
+            sisK.cancelado = fin.sis !== sisK;
+            fin.g.abrir();
+            console.log(`ganó ${fin.quien} en ${Date.now() - t0} ms`);
+            return listo(fin.res, t0, false, fin.sis);
           }
+          if (fin && !fin.ok) {
+            const m = anotar(fin.quien === 'kimi' ? nombreIA(prov) : fin.quien, fin.e);
+            console.log(`principal ${fin.quien === 'kimi' ? `${prov.id} ${prov.modelo}` : fin.quien} falló: ${m}`);
+            if (fin.quien === 'kimi' && /sin conexión|tiempo agotado|pago|clave/.test(m)) caidos.add(prov.id);
+            if (pG && fin.quien !== 'kimi') modelos = modelos.slice(1);
+          }
+          if (pG) {
+            // Las dos fallaron: anotar la de Kimi si no se anotó.
+            const k2 = await pK; if (!k2.ok && fin && fin.quien !== 'kimi') { const m = anotar(nombreIA(prov), k2.e); if (/sin conexión|tiempo agotado|pago|clave/.test(m)) caidos.add(prov.id); }
+          }
+          emitir('reinicio', {});
         }
       }
       // 1) Gemini. CUALQUIER fallo —sin cupo, saturado, tiempo agotado o un
@@ -1633,11 +1693,6 @@ export async function atender(req: Request): Promise<Response> {
       //    de cupo cortaba todo sin probar el respaldo).
       // Los de la velocidad elegida primero y, si están saturados, otros
       // modelos de Google (cada uno con su propio cupo), hasta 4 en total.
-      // OJO: no llamarlo «extra»: tapaba las instrucciones del mensaje (memoria,
-      // tono, cerebro, contexto de hoy) y la IA recibía esta lista en su lugar.
-      const masGemini = (await modelosGemini().catch(() => [] as string[])).filter(m => !conf.modelos.includes(m));
-      const escalera = [...conf.modelos, ...masGemini].filter(disponibleModelo).slice(0, 4);
-      const modelos = escalera.length ? escalera : [GEMINI_RESPALDO];
       for (const modelo of modelos) {
         if (Date.now() > limiteT - 4000) break;
         const sis = nuevo();
