@@ -172,6 +172,11 @@ type Sistema = {
   /** Tokens gastados en ESTE mensaje por todas las IAs (también los
    *  intentos que fallaron a medias y la revisión): lo que se cobra. */
   gasto: { in: number; out: number };
+  /** Acciones que vienen al caso en este mensaje (null = todas). Mandar las
+   *  14 siempre costaba ~3 mil tokens por vuelta. */
+  utiles?: Set<string> | null;
+  /** Memoria (recordar/olvidar) solo si el mensaje habla de eso. */
+  conMemoria?: boolean;
 };
 
 /** Herramientas de memoria: Jarvis aprende del dueño, nunca de lo que lee afuera. */
@@ -270,11 +275,36 @@ async function modelosGroq(clave: string): Promise<string[]> {
   return [...new Set([...disponibles, ...otros])].slice(0, 4);
 }
 
+/**
+ * Qué acciones vienen al caso: por las palabras del mensaje y de la última
+ * respuesta de Jarvis (así «sí, hacelo» encuentra lo que él ofreció). Si es
+ * una orden y no se reconoce cuál, o es un «sí»/«dale», van todas.
+ */
+const PISTAS_ACCION: Record<string, RegExp> = {
+  bloquear_acceso: /bloque|bane|vet[aá]|imped|no (le )?dej|sospech|ataque|intrus/,
+  levantar_bloqueo: /desbloque|levant|quit[aá]\w* (el )?bloqueo|bloque/,
+  cerrar_sesiones: /sesi[oó]n|deslogue|expuls|sac[aá]\w* de la cuenta|cerr[aá]\w* (la |las |su )?(sesi|cuenta)/,
+  preparar_cobro: /cobr|factur|vend[ií]|venta|recib[ií]|pag[oóa]|comprobante|sinpe|tarjeta|efectivo/,
+  responder_chat: /respond|contest|escrib|dec[ií]le|mand[aá]|avis[aá]le|chat|mensaje|whats|cliente/,
+  cambiar_estado_orden: /orden|taller|ticket|tkt|list[oa]\b|estado|entreg|repar|equipo|repuesto/,
+  editar_producto: /precio|stock|existenc|producto|invent|sub[ií]|baj[aá]|ajust|descuento|unidades/,
+  crear_producto: /cre[aá]|agreg[aá]|nuevo|registr[aá]|ingres[aá]|producto/,
+  agendar: /agend|record[aá]me|avis[aá]me|acord[aá]me|ma[ñn]ana|a las \d|pendiente|cita|tarea|llam/,
+  cerrar_pendiente: /pendiente|ya (lo )?(hice|llam|termin|pagu|mand|envi)|tach|complet|hecho/,
+  crear_orden_taller: /orden|taller|repar|ingres|recib|equipo|pantalla|bater/,
+};
+function accionesUtiles(texto: string, anterior: string, esOrden: boolean): Set<string> | null {
+  const t = texto.toLowerCase(), a = anterior.toLowerCase();
+  if (/^\s*(s[ií]|dale|hacelo|hac[eé]lo|de una|ok|okay|listo|claro|va|confirm|adelante|mandalo|envialo)(?![a-zñáéíóú])/.test(t) && t.length < 60) return null;
+  const si = new Set(Object.entries(PISTAS_ACCION).filter(([, re]) => re.test(t) || re.test(a)).map(([n]) => n));
+  if (!si.size) return esOrden ? null : si;
+  return si;
+}
 /** Declaraciones que ve la IA: consultas y, si se permite, acciones. */
 function declaraciones(sis: Sistema) {
   const lista: { nombre: string; descripcion: string; parametros: Record<string, unknown> }[] = [...sis.herramientas];
-  if (sis.acciones && !sis.leyoAfuera) lista.push(...ACCIONES, NAVEGAR);
-  if (sis.memoria && !sis.leyoAfuera) lista.push(...MEMORIA);
+  if (sis.acciones && !sis.leyoAfuera) lista.push(...ACCIONES.filter(a => !sis.utiles || sis.utiles.has(a.nombre)), NAVEGAR);
+  if (sis.memoria && !sis.leyoAfuera && sis.conMemoria !== false) lista.push(...MEMORIA);
   if (sis.cerebro) lista.push(APRENDER);
   return lista;
 }
@@ -669,22 +699,35 @@ const claveProv = (p: Compatible) => `${p.id}:${p.modelo}`;
 const nombreIA = (p: Compatible) => `${NOMBRE_PROV[p.id]} · ${p.modelo.split('/').pop()}`;
 
 /**
- * La IA PRINCIPAL: el modelo abierto más potente que esté libre (de punta,
- * ver PUNTA), uno por proveedor y el mejor primero. Si no hay ninguno con
- * clave, responde Gemini como siempre. IA_PRINCIPAL=gemini lo apaga.
+ * La IA PRINCIPAL: Kimi K3 (decisión del dueño, 2026-10-06), en el
+ * proveedor que lo tenga (NVIDIA primero; OpenRouter si lo ofrece gratis).
+ * Si Kimi no está, la de punta que haya (ver PUNTA). Después siguen Gemini
+ * y la cadena de respaldo en su orden de siempre.
+ *   IA_PRINCIPAL=kimi-k3 (por defecto) · otro nombre de modelo · «auto» (la
+ *   mejor de punta) · «gemini» (apaga la principal).
  */
 async function proveedoresPrincipales(): Promise<Compatible[]> {
-  if ((Deno.env.get('IA_PRINCIPAL') || 'auto').toLowerCase() === 'gemini') return [];
+  const pedido = (Deno.env.get('IA_PRINCIPAL') || 'kimi-k3').toLowerCase();
+  if (pedido === 'gemini') return [];
   const lista: Compatible[] = [];
   for (const p of proveedoresRespaldo()) {
     if (p.id === 'local') continue;
     const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
-    const m = ms.filter(x => rangoAbierto(x) < PUNTA && disponibleModelo(claveProv({ ...p, modelo: x })))
-      .sort((a, b) => rangoAbierto(a) - rangoAbierto(b))[0];
+    const libres = ms.filter(x => disponibleModelo(claveProv({ ...p, modelo: x })));
+    const m = pedido !== 'auto' ? libres.find(x => x.toLowerCase().includes(pedido)) : undefined;
+    if (m) lista.push({ ...p, modelo: m });
+  }
+  if (lista.length || pedido !== 'auto') return lista.slice(0, 2);
+  for (const p of proveedoresRespaldo()) {
+    if (p.id === 'local') continue;
+    const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
+    const m = ms.filter(x => rangoAbierto(x) < PUNTA && disponibleModelo(claveProv({ ...p, modelo: x }))).sort((a, b) => rangoAbierto(a) - rangoAbierto(b))[0];
     if (m) lista.push({ ...p, modelo: m });
   }
   return lista.sort((a, b) => rangoAbierto(a.modelo) - rangoAbierto(b.modelo)).slice(0, 2);
 }
+/** Los que piensan a fondo (Kimi K3 y similares): más tokens de salida y su temperatura recomendada. */
+const PIENSA = /kimi-k3|kimi-k2-thinking|deepseek-r|glm-5|qwen3\.5|thinking/i;
 
 /** Tokens que caben por pedido en los planes gratis de cada proveedor
  *  (Groq gratis: 6-8 mil por MINUTO, y el pedido entero cuenta). */
@@ -705,19 +748,25 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
   let conHerramientas = sis.herramientas.length > 0;
   let achique = 0; // 0 completo · 1 corto · 2 corto y sin herramientas
   const armar = () => {
-    const turnos = achique ? historial.slice(-(achique > 1 ? 2 : 4)).map(t => ({ ...t, texto: recortarTexto(t.texto, achique > 1 ? 700 : 1500) })) : historial;
+    // Siempre eficiente: lo viejo de la conversación va resumido (los últimos
+    // 6 turnos completos); al achicar, todavía menos.
+    const turnos = achique ? historial.slice(-(achique > 1 ? 2 : 4)).map(t => ({ ...t, texto: recortarTexto(t.texto, achique > 1 ? 700 : 1500) }))
+      : historial.slice(-16).map((t, i, a) => (i < a.length - 6 ? { ...t, texto: recortarTexto(t.texto, 500) } : { ...t, texto: recortarTexto(t.texto, 6000) }));
     const extra = achique ? recortarTexto(sis.extra, achique > 1 ? 600 : 1800) : sis.extra;
-    return [{ role: 'system', content: sistema(sis.ctx.hoy, conHerramientas && achique < 2, sis.esSuper, web, sis.forzarWeb, sis.modo) + extra }, ...turnos.map(t => ({ role: t.rol, content: t.texto }))] as any[];
+    const unaVuelta = conHerramientas && achique < 2 ? '\n\nEFICIENCIA: si necesitás varias consultas, pedilas TODAS JUNTAS en la misma vuelta (llamadas en paralelo), no una por vuelta. No repitas una consulta que ya hiciste. Con los datos en mano, respondé de una.' : '';
+    return [{ role: 'system', content: sistema(sis.ctx.hoy, conHerramientas && achique < 2, sis.esSuper, web, sis.forzarWeb, sis.modo) + extra + unaVuelta }, ...turnos.map(t => ({ role: t.rol, content: t.texto }))] as any[];
   };
   const herramientasDe = () => declaraciones(sis).map(h => ({ type: 'function', function: { name: h.nombre, description: h.descripcion, parameters: h.parametros } }));
   let mensajes = armar();
   // Si de entrada no cabe en el plan gratis, se achica antes de gastar el intento.
   const cabe = CABE[prov.id];
   while (cabe && achique < 2 && estimar(mensajes) + (conHerramientas && achique < 2 ? estimar(herramientasDe()) : 0) > cabe) { achique++; mensajes = armar(); }
-  let tokensIn = 0, tokensOut = 0, conUso = true, empezo = false, modeloReal = prov.modelo;
+  let tokensIn = 0, tokensOut = 0, conUso = true, paralelo = true, empezo = false, modeloReal = prov.modelo;
   for (let ronda = 0; ronda <= sis.rondas; ronda++) {
     const usarHerr = conHerramientas && achique < 2 && ronda < sis.rondas;
-    const cuerpo: Record<string, unknown> = { model: prov.modelo, messages: mensajes, temperature: 0.4, stream: true, max_tokens: prov.id === 'groq' ? 1200 : 4096 };
+    const piensa = PIENSA.test(prov.modelo);
+    const cuerpo: Record<string, unknown> = { model: prov.modelo, messages: mensajes, temperature: piensa ? 0.6 : 0.4, stream: true, max_tokens: prov.id === 'groq' ? 1200 : piensa ? 12000 : 4096 };
+    if (usarHerr && paralelo) cuerpo.parallel_tool_calls = true;
     if (conUso) cuerpo.stream_options = { include_usage: true };
     if (usarHerr) cuerpo.tools = herramientasDe();
     const restante = sis.limite - Date.now();
@@ -740,6 +789,7 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       const det = await r.text().catch(() => '');
       console.log(`${prov.id} ${prov.modelo} ronda=${ronda} -> ${r.status}: ${det.slice(0, 300)}`);
       if (conUso && (r.status === 400 || r.status === 422) && /stream_options|include_usage/i.test(det)) { conUso = false; ronda--; continue; }
+      if (cuerpo.parallel_tool_calls && (r.status === 400 || r.status === 422) && /parallel/i.test(det)) { paralelo = false; ronda--; continue; }
       if (cuerpo.tools && (r.status === 400 || r.status === 404 || r.status === 422) && /tool|function/i.test(det)) { conHerramientas = false; mensajes = armar(); ronda--; continue; }
       // Muy grande para el plan gratis: se achica y se repite.
       if ((r.status === 413 || r.status === 400 || r.status === 429) && /too large|context_length|reduce the length|maximum context|tokens per minute|TPM|ITPM/i.test(det) && achique < 2) { achique++; mensajes = armar(); ronda--; continue; }
@@ -799,7 +849,8 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
         let args: Record<string, unknown> = {};
         try { args = JSON.parse(l.args || '{}'); } catch { /* argumentos inválidos: sin filtros */ }
         const datos = await correrHerramienta(l.name, args, sis);
-        mensajes.push({ role: 'tool', tool_call_id: ids[i], content: JSON.stringify(datos) });
+        // Tope por resultado: una consulta enorme se reenvía en cada vuelta.
+        mensajes.push({ role: 'tool', tool_call_id: ids[i], content: recortarTexto(JSON.stringify(datos), 9000) });
       }
       continue;
     }
@@ -1385,6 +1436,8 @@ export async function atender(req: Request): Promise<Response> {
     let usadosCerebro: string[] = [];
     let bloqueCerebro = '';
     let notasCerebro: Nota[] = [];
+    let utiles: Set<string> | null = null;
+    const conMemoria = /record|acord|olvid|anot|prefer|siempre|nunca|de ahora en adelante|guard[aá]|no (me )?(digas|hables|uses)|llamame|forma de/i.test(texto);
     if (modo !== 'normal') {
       const [{ data: recuerdos }, { data: buenas }, { data: malas }, { data: agenda }] = await Promise.all([
         admin.from('jarvis_memoria').select('texto,tipo').eq('user_id', uid).order('creada_en', { ascending: true }).limit(60),
@@ -1416,6 +1469,8 @@ export async function atender(req: Request): Promise<Response> {
         const charla = /^(hola|buenas|buenos|buen d[ií]a|qu[eé] tal|diay|upe|hey|jarvis[,!]? ?(hola|qu[eé])|gracias)|c[oó]mo (est[aá]s|ves|te va)|qu[eé] (opin[aá]s|pens[aá]s|me recomend[aá]s|har[ií]as)|ideas?\b|consejo|ayudame a pensar/.test(t);
         const esConsulta = !esOrden && !charla && (/\?\s*$/.test(t) || /^(cu[aá]nt|qu[eé] |qui[eé]n|c[oó]mo va|c[oó]mo est[aá] (el|la|las|los) |revis|fijate|cheque|dec[ií]me|mostrame|hay )/.test(t)) && !/^(c[oó]mo est[aá]s|qu[eé] tal|qu[eé] opin|qu[eé] me recomend|qu[eé] har[ií]as)/.test(t);
         const intencion = esOrden ? 'orden' : esConsulta ? 'consulta' : 'conversacion';
+        const anteriorJ = [...historial].reverse().find(h => h.rol === 'assistant')?.texto || '';
+        utiles = accionesUtiles(texto, anteriorJ.slice(-600), esOrden);
         // La conversación nunca va sin razonar: es donde más se nota.
         if (intencion === 'conversacion' && perfilUsado === 'rapido') perfilUsado = 'equilibrado';
         // Contexto del día (solo cifras, sin datos de clientes) para poder ser proactivo.
@@ -1523,7 +1578,7 @@ export async function atender(req: Request): Promise<Response> {
           modo, pensar: conf.pensar, intento: conf.intento,
           acciones: modo === 'jarvis' && mods.acciones !== false && !adjuntos.length,
           leyoAfuera: adjuntos.length > 0, ctxAcc: modo === 'jarvis' ? ctxAcc : null, guardarPropuesta, propuestas,
-          extra, rondas, memoria: memoriaFns, cerebro, gasto,
+          extra, rondas, memoria: memoriaFns, cerebro, gasto, utiles, conMemoria,
         };
         marcarCerebro(sis, 'usado', usadosCerebro);
         return sis;
@@ -1557,7 +1612,9 @@ export async function atender(req: Request): Promise<Response> {
           if (Date.now() > limiteT - 8000) break;
           probados.add(claveProv(prov));
           const sis = nuevo();
-          sis.limite = Math.min(sis.limite, Date.now() + Math.round(conf.total * 0.7));
+          // Kimi piensa a fondo: tiene casi todo el tiempo del mensaje (12 s de
+          // reserva para Gemini) y nunca menos de 35 s.
+          sis.limite = Math.max(Date.now() + 35000, limiteT - 12000);
           emitir('estado', { texto: `Pensando con ${nombreIA(prov)}…` });
           try {
             const t0 = Date.now();
