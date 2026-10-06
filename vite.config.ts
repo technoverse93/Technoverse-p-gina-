@@ -6,6 +6,8 @@ import {defineConfig} from 'vite';
 export default defineConfig(() => {
   return {
     plugins: [react(), tailwindcss()],
+    // La voz propia de Jarvis corre en un hilo aparte (worker) que divide su código.
+    worker: { format: 'es' as const },
     // Identifica la compilación que corre en cada aparato (ver el
     // diagnóstico de la consola de supervisión).
     // __COMMIT__: el commit con que se compiló (en GitHub Actions). La APK

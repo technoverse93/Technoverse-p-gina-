@@ -9,8 +9,9 @@
 // =====================================================================
 
 import { useState, useSyncExternalStore } from 'react';
-import { Volume2, Pause, Play, Square, VolumeX } from 'lucide-react';
+import { Volume2, Pause, Play, Square, VolumeX, Download, Check } from 'lucide-react';
 import { lector, modoLectura, fijarModoLectura, puedeHablar, type ModoLectura } from '../../utils/lectorVoz';
+import * as propia from '../../utils/vozPropia';
 
 export function useLector() {
   return useSyncExternalStore(lector.suscribir, lector.obtener, lector.obtener);
@@ -66,7 +67,52 @@ export function AjusteVoz() {
           <button key={o.id} type="button" role="radio" aria-checked={modo === o.id} data-on={modo === o.id || undefined} disabled={!disponible} onClick={() => cambiar(o.id)}>{o.nombre}</button>
         ))}
       </div>
-      {disponible && <button type="button" className="ai-chip ai-voz-prueba" onClick={() => void lector.hablar('Pura vida. Así suena Jarvis cuando te responde hablando.', 'prueba')}><Volume2 className="w-4 h-4" />Probar la voz</button>}
+      <VozPropia />
+      {disponible && <button type="button" className="ai-chip ai-voz-prueba" onClick={() => void lector.hablar('Pura vida. Soy Jarvis, y así suena mi voz cuando te respondo hablando.', 'prueba')}><Volume2 className="w-4 h-4" />Probar la voz</button>}
     </div>
+  );
+}
+
+/** La voz propia de Jarvis: elegirla, bajarla una vez y usarla. */
+function VozPropia() {
+  const [voz, setVoz] = useState(() => propia.vozElegida());
+  const [motor, setMotor] = useState(() => propia.motorElegido());
+  const [bajando, setBajando] = useState<number | null>(null);
+  const [error, setError] = useState('');
+  const [, refrescar] = useState(0);
+  if (!propia.soportada()) return null;
+  const lista = propia.vozBajada(voz);
+  const bajar = async () => {
+    setError(''); setBajando(0);
+    try { await propia.bajarVoz(voz, p => setBajando(p)); propia.fijarMotor('propia'); setMotor('propia'); }
+    catch (e) { setError(`No se pudo bajar la voz (${e instanceof Error ? e.message : e}). Revisá la conexión y probá de nuevo.`); }
+    finally { setBajando(null); refrescar(x => x + 1); }
+  };
+  return (
+    <>
+      <div className="ai-modu">
+        <span className="ai-modu-ic"><Volume2 className="w-4 h-4" /></span>
+        <span className="ai-modu-t"><b>Voz de Jarvis</b><span>{motor === 'propia' && lista ? 'Su voz propia: la misma en todos tus aparatos, sin Google.' : 'La voz del teléfono. Bajá la voz propia de Jarvis (una sola vez).'}</span></span>
+      </div>
+      <div className="ai-seg ai-seg-voz ai-seg-dos" role="radiogroup" aria-label="Qué voz usa Jarvis">
+        <button type="button" role="radio" aria-checked={motor === 'propia'} data-on={motor === 'propia' || undefined} onClick={() => { propia.fijarMotor('propia'); setMotor('propia'); }}>Propia</button>
+        <button type="button" role="radio" aria-checked={motor === 'telefono'} data-on={motor === 'telefono' || undefined} onClick={() => { propia.fijarMotor('telefono'); setMotor('telefono'); }}>Del teléfono</button>
+      </div>
+      {motor === 'propia' && (
+        <div className="ai-voces">
+          {propia.VOCES_PROPIAS.map(v => (
+            <button key={v.id} type="button" className="ai-voz-op" data-on={voz === v.id || undefined} onClick={() => { propia.elegirVoz(v.id); setVoz(v.id); }}>
+              <b>{v.nombre}</b><span>{v.detalle}</span>{propia.vozBajada(v.id) && <Check className="w-3.5 h-3.5" aria-label="Bajada" />}
+            </button>
+          ))}
+          {!lista && (
+            <button type="button" className="ai-chip" disabled={bajando !== null} onClick={() => void bajar()}>
+              <Download className="w-4 h-4" />{bajando !== null ? `Bajando… ${bajando}%` : 'Bajar la voz (una vez, mejor con wifi)'}
+            </button>
+          )}
+          {error && <p className="ai-voz-error" role="alert">{error}</p>}
+        </div>
+      )}
+    </>
   );
 }

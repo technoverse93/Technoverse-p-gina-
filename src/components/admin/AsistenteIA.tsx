@@ -16,6 +16,7 @@ import {
   Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight, ShieldAlert, Wallet, MapPin,
   Paperclip, Square, RotateCcw, Pencil, Link2, Code2, FileText,
   Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot, ThumbsUp, ThumbsDown, MessageCircleQuestion, SlidersHorizontal, Search,
+  Download,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
@@ -165,6 +166,44 @@ async function prepararArchivo(f: File): Promise<Adjunto | null> {
 /** «gemini-3.8-flash» → «Gemini 3.8 Flash». */
 const NOMBRE_PROVEEDOR: Record<string, string> = { groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', sambanova: 'SambaNova', nvidia: 'NVIDIA', mistral: 'Mistral', cloudflare: 'Cloudflare', huggingface: 'Hugging Face', local: 'servidor propio', gemma: 'Gemma', cerebro: 'su cerebro' };
 const PROV_DE: Record<string, string> = Object.fromEntries(Object.entries({ groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', sambanova: 'SambaNova', nvidia: 'NVIDIA', mistral: 'Mistral', cloudflare: 'Cloudflare', huggingface: 'Hugging Face' }).map(([k, v]) => [v, k]));
+/**
+ * JARVIS PROPIO: baja sus conversaciones (respuestas finales, ya revisadas,
+ * sin las que no te gustaron y con los datos personales tapados) en el
+ * formato que se usa para entrenar un modelo abierto: con eso se ajusta
+ * «Jarvis-1», un modelo que es tuyo y corre donde quieras.
+ */
+function EntrenarJarvis() {
+  const [estado, setEstado] = useState<'' | 'armando' | 'listo' | 'error'>('');
+  const [info, setInfo] = useState('');
+  const bajar = async () => {
+    setEstado('armando'); setInfo('');
+    const { data, error } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'entrenamiento' } });
+    if (error || !data?.ok) { setEstado('error'); setInfo('No se pudo armar el archivo. Probá de nuevo.'); return; }
+    const nombre = `jarvis-entrenamiento-${new Date().toISOString().slice(0, 10)}.jsonl`;
+    const archivo = new File([String(data.jsonl || '')], nombre, { type: 'application/jsonl' });
+    try {
+      // En el teléfono se comparte (Drive, correo…); en la compu se descarga.
+      if ((navigator as any).canShare?.({ files: [archivo] })) await (navigator as any).share({ files: [archivo], title: nombre });
+      else { const url = URL.createObjectURL(archivo); const a = document.createElement('a'); a.href = url; a.download = nombre; a.click(); setTimeout(() => URL.revokeObjectURL(url), 4000); }
+    } catch { /* cancelado */ }
+    setEstado('listo');
+    setInfo(`${data.ejemplos} ejemplos (${data.aprobadas} con 👍). Mientras más conversás y valorás respuestas, mejor sale Jarvis-1.`);
+  };
+  return (
+    <div className="ai-aj">
+      <h4>Entrenar a Jarvis <small>su modelo propio</small></h4>
+      <div className="ai-modu">
+        <span className="ai-modu-ic"><Brain className="w-4 h-4" /></span>
+        <span className="ai-modu-t"><b>Datos de entrenamiento</b><span>Tus conversaciones con Jarvis (ya revisadas, sin datos personales) listas para ajustar un modelo abierto y que Jarvis-1 sea tuyo.</span></span>
+      </div>
+      <button type="button" className="ai-chip ai-voz-prueba" disabled={estado === 'armando'} onClick={() => void bajar()}>
+        <Download className="w-4 h-4" />{estado === 'armando' ? 'Armando…' : 'Bajar datos (JSONL)'}
+      </button>
+      {info && <p className="ai-voz-error" style={estado === 'error' ? undefined : { color: 'inherit', opacity: .8, margin: '0 14px 12px' }} role="status">{info}</p>}
+    </div>
+  );
+}
+
 /** «moonshotai/kimi-k3» → «Kimi K3», «deepseek-v4.1-flash» → «DeepSeek V4.1 Flash». */
 const SIGLAS: Record<string, string> = { gpt: 'GPT', oss: 'OSS', glm: 'GLM', deepseek: 'DeepSeek', qwen: 'Qwen', llama: 'Llama', it: '' };
 function bonito(m: string): string {
@@ -1508,6 +1547,7 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
         <AjusteVoz />
       </div>
       {cupo?.perfiles && <div data-orden="8"><React.Suspense fallback={null}><MiniWidgetAjustes /></React.Suspense></div>}
+      {cupo?.perfiles && <div data-orden="9"><EntrenarJarvis /></div>}
       {cupo?.perfiles && <div className="ai-aj" data-orden="1">
         <H area="neg">Lo que hace solo <small>solo superadmin</small></H>
         <div className="ai-modu">

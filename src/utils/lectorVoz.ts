@@ -17,6 +17,7 @@
 // =====================================================================
 
 import { Capacitor } from '@capacitor/core';
+import * as propia from './vozPropia';
 
 export type ModoLectura = 'nunca' | 'voz' | 'siempre';
 export type EstadoLector = { estado: 'callado' | 'hablando' | 'pausado'; id: string | null };
@@ -81,7 +82,26 @@ function enOraciones(t: string): string[] {
 }
 
 // ------------------------- motores -------------------------
-type Motor = { decir: (texto: string) => Promise<void>; callar: () => void };
+type Motor = { decir: (texto: string) => Promise<void>; callar: () => void; preparar?: (texto: string) => void };
+
+/** La voz propia de Jarvis (neuronal, en el aparato). Si falla una vez en
+ *  esta sesión, se vuelve a la voz del teléfono sin cortar la lectura. */
+let propiaFallo = false;
+function motorPropio(): Motor | null {
+  if (propiaFallo || !propia.usarVozPropia()) return null;
+  return {
+    decir: async (texto: string) => {
+      try { await propia.decir(texto); }
+      catch (e) {
+        propiaFallo = true;
+        const otro = (await nativo()) || navegador();
+        if (otro) await otro.decir(texto); else throw e;
+      }
+    },
+    callar: () => propia.callar(),
+    preparar: (texto: string) => { void propia.preparar(texto).catch(() => {}); },
+  };
+}
 
 let motorNativo: Promise<Motor | null> | null = null;
 function nativo(): Promise<Motor | null> {
@@ -143,12 +163,12 @@ function navegador(): Motor | null {
 }
 
 async function motor(): Promise<Motor | null> {
-  return (await nativo()) || navegador();
+  return motorPropio() || (await nativo()) || navegador();
 }
 
 /** ¿Este aparato puede hablar? (para mostrar o no los controles) */
 export function puedeHablar(): boolean {
-  return (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('TextToSpeech')) || (typeof window !== 'undefined' && 'speechSynthesis' in window);
+  return propia.usarVozPropia() || (Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('TextToSpeech')) || (typeof window !== 'undefined' && 'speechSynthesis' in window);
 }
 
 // ------------------------- el lector -------------------------
@@ -179,6 +199,8 @@ async function leerDesde(desde: number, gen: number, id: string) {
     if (gen !== generacion) return;
     indice = i;
     const cortada = new Promise<void>(ok => { cortes.push(ok); });
+    // La siguiente oración se va generando mientras suena esta.
+    if (m.preparar && frases[i + 1]) m.preparar(frases[i + 1]);
     const dicha = m.decir(frases[i]).then(() => true, () => false);
     const ok = await Promise.race([dicha, cortada.then(() => true)]);
     if (gen !== generacion) return;

@@ -779,6 +779,12 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 .ai-seg-voz button{white-space:normal;line-height:1.25;text-align:center;padding:7px 6px;border-radius:11px}
 .ai-seg-voz button:disabled{opacity:.5}
 .ai-voz-prueba{margin:0 14px 12px}
+.ai-seg-dos{grid-template-columns:repeat(2,minmax(0,1fr))}
+.ai-voces{display:flex;flex-direction:column;gap:6px;margin:0 14px 10px}
+.ai-voz-op{display:flex;align-items:center;gap:8px;min-width:0;padding:8px 10px;border-radius:12px;border:1px solid var(--border-color,rgba(127,127,127,.25));background:transparent;text-align:left;color:inherit}
+.ai-voz-op span{flex:1;min-width:0;font-size:12px;opacity:.75}
+.ai-voz-op[data-on]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
+.ai-voz-error{margin:0;font-size:12px;color:#c0392b}
 .ai-acc-solo{display:flex;align-items:center;gap:8px;margin:0;padding:8px 14px 12px;font-size:13px;color:var(--text-secondary)}
 @media (max-width: 420px) {
 /* Teléfono: todo un punto más chico y más junto (el dueño lo veía grande). */
