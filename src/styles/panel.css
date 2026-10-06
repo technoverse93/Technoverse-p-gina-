@@ -782,7 +782,7 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 .ai-acc-solo{display:flex;align-items:center;gap:8px;margin:0;padding:8px 14px 12px;font-size:13px;color:var(--text-secondary)}
 @media (max-width: 420px) {
 /* Teléfono: todo un punto más chico y más junto (el dueño lo veía grande). */
-:root:has(#admin-panel-root) { font-size: 14px; }
+:root:has(#admin-panel-root) { font-size: 15px; }
 #admin-panel-root { --tv-gap: 14px; --tv-gap-sm: 8px; --tv-gap-lg: 18px; }
 #admin-panel-root button:has(> svg.lucide),
   #admin-panel-root [role="button"]:has(> svg.lucide) { min-width: 34px !important; min-height: 34px !important; }
@@ -823,4 +823,21 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 #admin-panel-root .ai-acc-linea button:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 @media (prefers-reduced-motion:reduce) {
 .ai-acc-linea{animation:none}
+}
+
+/* =====================================================================
+   ESCALA DEL PANEL EN TELÉFONO Y TABLET
+   El dueño lo veía «sofocado, todo grande e invasivo». En vez de achicar
+   pieza por pieza (se notaba poco), se escala TODO el contenido de una vez
+   con `zoom`: módulos, barra de pestañas, menús, ventanas emergentes y el
+   interior de Jarvis y del chat. El marco (alto de pantalla, ventanas
+   flotantes) no se escala: su alto sale de la pantalla y quedaría corto.
+   ===================================================================== */
+@media (max-width: 640px) {
+  #admin-panel-root :is(.tv-regleta, .tv-carpetas-bar, .tv-tab-panel, .jv-hoja-cab, .jv-hoja-cuerpo, .tv-flotante-zoom),
+  [data-tv-overlay] [data-overlay-panel] { zoom: .86; }
+}
+@media (min-width: 641px) and (max-width: 1024px) {
+  #admin-panel-root :is(.tv-regleta, .tv-carpetas-bar, .tv-tab-panel, .jv-hoja-cab, .jv-hoja-cuerpo, .tv-flotante-zoom),
+  [data-tv-overlay] [data-overlay-panel] { zoom: .93; }
 }
