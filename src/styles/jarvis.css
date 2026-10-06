@@ -137,6 +137,13 @@ span.jv-tit:hover { background: transparent; }
 .jv-pensando circle { fill: var(--jv-acento); }
 @keyframes jv-senal2 { to { stroke-dashoffset: -64; } }
 /* Debajo de cada respuesta: velocidad, tokens y tiempo, en letra chica. */
+/* Quién respondió y quién revisó, debajo de cada respuesta de Jarvis. */
+.jv-quien { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
+.jv-quien > span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--jv-linea); background: var(--jv-hundido); font: 400 11px var(--jv-f-ui); color: var(--jv-tinta2); }
+.jv-quien b { font-weight: 600; color: var(--jv-tinta); overflow-wrap: anywhere; }
+.jv-quien i { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--jv-acento); }
+.jv-quien i.jv-quien-r { background: var(--jv-a-dis); }
+.jv-quien i.jv-quien-r[data-corrigio] { background: var(--jv-oro); }
 .jv-meta { display: flex; flex-wrap: wrap; gap: 8px; font: 400 10.5px var(--jv-f-dato); color: var(--jv-tenue); font-variant-numeric: tabular-nums; }
 .ai-root[data-jarvis] .ai-pie .ai-tok, .ai-root[data-jarvis] .ai-pie > span:not(.ai-escuchar) { display: none; }
 .ai-root[data-jarvis] .ai-pie { gap: 2px; margin-top: -2px; }

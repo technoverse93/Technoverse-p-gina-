@@ -48,7 +48,7 @@ interface Panel { columnas: string[]; filas: (string | number | null)[][]; punto
 interface Consulta {
   modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean; panel?: Panel;
   /** Jarvis: «accion» es una propuesta (tarjeta con confirmar); «navegar», un botón para abrir un módulo. */
-  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro'; id?: string; destino?: string; grafico?: Grafico;
+  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision'; id?: string; destino?: string; grafico?: Grafico;
 }
 type Perfil = 'rapido' | 'equilibrado' | 'profundo';
 type Persona = 'jarvis' | 'arquitecto';
@@ -164,12 +164,21 @@ async function prepararArchivo(f: File): Promise<Adjunto | null> {
 
 /** «gemini-3.8-flash» → «Gemini 3.8 Flash». */
 const NOMBRE_PROVEEDOR: Record<string, string> = { groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', sambanova: 'SambaNova', nvidia: 'NVIDIA', mistral: 'Mistral', cloudflare: 'Cloudflare', huggingface: 'Hugging Face', local: 'servidor propio', gemma: 'Gemma', cerebro: 'su cerebro' };
-/** Quién respondió: el modelo de Gemini o la IA de respaldo que contestó. */
+const PROV_DE: Record<string, string> = Object.fromEntries(Object.entries({ groq: 'Groq', cerebras: 'Cerebras', openrouter: 'OpenRouter', sambanova: 'SambaNova', nvidia: 'NVIDIA', mistral: 'Mistral', cloudflare: 'Cloudflare', huggingface: 'Hugging Face' }).map(([k, v]) => [v, k]));
+/** «moonshotai/kimi-k3» → «Kimi K3», «deepseek-v4.1-flash» → «DeepSeek V4.1 Flash». */
+const SIGLAS: Record<string, string> = { gpt: 'GPT', oss: 'OSS', glm: 'GLM', deepseek: 'DeepSeek', qwen: 'Qwen', llama: 'Llama', it: '' };
+function bonito(m: string): string {
+  return m.split('/').pop()!.replace(/-latest$/, '').replace(/:free$/, '').split(/[-_]/).filter(Boolean)
+    .map(w => (SIGLAS[w.toLowerCase()] ?? (/^\d+b$/i.test(w) ? w.toUpperCase() : /^[a-z]\d/i.test(w) ? w.toUpperCase() : w.charAt(0).toUpperCase() + w.slice(1)))).filter(Boolean).join(' ');
+}
+/** Quién respondió: el modelo y dónde corre («Kimi K3 · NVIDIA», «Gemini 3.8 Flash»). */
 function nombreModelo(m?: string | null, proveedor?: string | null): string {
-  if (proveedor && proveedor !== 'gemini') return `${NOMBRE_PROVEEDOR[proveedor] || proveedor} (respaldo)`;
-  if (!m) return 'Gemini Flash';
-  if (/llama|groq/i.test(m)) return 'Groq (respaldo)';
-  return m.replace(/-latest$/, '').split('-').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ');
+  if (proveedor === 'cerebro') return 'Su cerebro (sin IA)';
+  if (proveedor && proveedor !== 'gemini') {
+    const donde = NOMBRE_PROVEEDOR[proveedor] || proveedor;
+    return m && proveedor !== 'gemma' ? `${bonito(m)} · ${donde}` : m ? bonito(m) : donde;
+  }
+  return m ? bonito(m) : 'Gemini Flash';
 }
 
 // ---------------------------------------------------------------------
@@ -446,6 +455,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
   const lecturas = (m.consultas || []).filter(c => !c.tipo);
   const memorias = (m.consultas || []).filter(c => c.tipo === 'memoria');
   const cerebros = (m.consultas || []).filter(c => c.tipo === 'cerebro');
+  const revision = (m.consultas || []).find(c => c.tipo === 'revision');
   const valorable = !!onValorar && !!m.persona && /^[0-9a-f-]{36}$/i.test(m.id);
   const graficos = lecturas.filter(c => c.grafico);
   const irs = (m.consultas || []).filter(c => c.tipo === 'navegar' && c.destino);
@@ -481,7 +491,12 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
           {perfil && <span>{m.persona === 'arquitecto' ? 'Arquitecto · ' : ''}{perfil.nombre}{m.escalado ? ' (subió solo)' : ''}</span>}
           <span>{((m.tokens_in || 0) + (m.tokens_out || 0)).toLocaleString('es-CR')} tokens</span>
           {!!m.ms && <span>{segundos(m.ms)}</span>}
-          {m.proveedor && m.proveedor !== 'gemini' && <span>{nombreModelo(m.modelo, m.proveedor)}</span>}
+        </div>
+      )}
+      {!enVivo && jv && (m.modelo || m.proveedor) && (
+        <div className="jv-quien">
+          <span title="La IA que escribió esta respuesta"><i className="jv-quien-p" />Respondió <b>{nombreModelo(m.modelo, m.proveedor)}</b></span>
+          {revision && <span title={revision.detalle}><i className="jv-quien-r" data-corrigio={revision.filas === 'corregida' || undefined} />{revision.filas === 'corregida' ? 'Corrigió' : 'Revisó'} <b>{nombreModelo(revision.desc.split(' · ').pop(), revision.desc.split(' · ')[0] === 'Gemini' ? 'gemini' : PROV_DE[revision.desc.split(' · ')[0]] || null)}</b></span>}
         </div>
       )}
       {!enVivo && <div className="ai-pie">
@@ -961,7 +976,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
         // Con los datos reales en vez de las marcas del carril privado: es la pantalla del dueño.
         onRespuesta(restaurarPrivados(opciones.audio ? (res.pregunta || '') : crudo, privadosRef.current), restaurarPrivados(res.mensaje.texto, privadosRef.current));
       }
-      if (res.respaldo) setAviso({ tipo: 'respaldo', texto: `Google no respondió a tiempo; contestó ${NOMBRE_PROVEEDOR[res.mensaje?.proveedor] || 'la IA de respaldo'}.` });
+      if (res.respaldo) setAviso({ tipo: 'respaldo', texto: `Contestó ${nombreModelo(res.mensaje?.modelo, res.mensaje?.proveedor)}: las primeras IAs no respondieron a tiempo.` });
       setBuscar(false);
       if (!activa || res.nueva) { recienCreada.current = res.conversacionId; setActiva(res.conversacionId); }
       void cargarConvs();

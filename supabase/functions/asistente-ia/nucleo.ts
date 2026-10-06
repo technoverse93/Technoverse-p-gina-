@@ -105,9 +105,9 @@ type Modo = 'normal' | 'jarvis' | 'arquitecto';
 const PERFILES: Record<Perfil, { modelos: string[]; pensar: string; intento: number; total: number }> = {
   // Si Flash-Lite está saturado (503 «high demand», visto en producción), se
   // sigue con Flash en vez de quedarse sin respuesta.
-  rapido: { modelos: [GEMINI_RESPALDO, GEMINI_MODEL], pensar: 'minimal', intento: 20000, total: 40000 },
-  equilibrado: { modelos: [GEMINI_RESPALDO, GEMINI_MODEL], pensar: 'medium', intento: 25000, total: 45000 },
-  profundo: { modelos: [GEMINI_MODEL, GEMINI_RESPALDO], pensar: 'high', intento: 35000, total: 60000 },
+  rapido: { modelos: [GEMINI_RESPALDO, GEMINI_MODEL], pensar: 'minimal', intento: 20000, total: 50000 },
+  equilibrado: { modelos: [GEMINI_RESPALDO, GEMINI_MODEL], pensar: 'medium', intento: 25000, total: 60000 },
+  profundo: { modelos: [GEMINI_MODEL, GEMINI_RESPALDO], pensar: 'high', intento: 35000, total: 80000 },
 };
 const ESTADO_ACCION: Record<string, string> = {
   propuesta: 'propuesta, sin confirmar', ejecutando: 'ejecutándose', ejecutada: 'ejecutada', fallida: 'falló',
@@ -197,7 +197,8 @@ const pausado = new Map<string, number>();
 const disponibleModelo = (m: string) => (pausado.get(m) || 0) < Date.now();
 function pausar(m: string, status: number) {
   // 404 = el modelo ya no existe (pasó con Groq): no se vuelve a probar en un día.
-  pausado.set(m, Date.now() + (status === 404 ? 1440 : status === 429 ? 60 : 5) * 60_000);
+  // 402 = pide método de pago (SambaNova dejó de ser gratis): medio día.
+  pausado.set(m, Date.now() + (status === 404 ? 1440 : status === 402 ? 720 : status === 429 ? 60 : 5) * 60_000);
 }
 
 // ---------------------------------------------------------------------
@@ -238,6 +239,20 @@ async function modelosGemini(): Promise<string[]> {
     return [...new Set(nombres)].sort((a, b) => puntos(b) - puntos(a));
   });
 }
+/** Modelos Gemma vigentes (versión más nueva y más grande primero). */
+async function modelosGemma(clave: string): Promise<string[]> {
+  return await catalogo('gemma', async () => {
+    const r = await conTope('https://generativelanguage.googleapis.com/v1beta/models?pageSize=200', { headers: { 'x-goog-api-key': clave } }, 6000);
+    if (!r.ok) throw new Error(`lista ${r.status}`);
+    const d = await r.json();
+    const nombres: string[] = (d?.models || [])
+      .filter((m: any) => (m?.supportedGenerationMethods || []).includes('generateContent'))
+      .map((m: any) => String(m.name || '').replace(/^models\//, ''))
+      .filter((n: string) => /^gemma-/.test(n) && !/(embed|e2b|e4b|1b)/.test(n));
+    const puntos = (n: string) => Number((/gemma-(\d+(?:\.\d+)?)/.exec(n) || [])[1] || 0) * 1000 + Number((/(\d+)b/.exec(n) || [])[1] || 0);
+    return [...new Set(nombres)].sort((a, b) => puntos(b) - puntos(a)).slice(0, 3);
+  });
+}
 /** Modelos de Groq vigentes, en orden de preferencia (si GROQ_MODEL está, va primero). */
 const PREFERIDOS_GROQ = ['openai/gpt-oss-120b', 'moonshotai/kimi-k2-instruct-0905', 'moonshotai/kimi-k2-instruct', 'qwen/qwen3-32b', 'llama-3.3-70b-versatile', 'meta-llama/llama-4-maverick-17b-128e-instruct', 'meta-llama/llama-4-scout-17b-16e-instruct', 'openai/gpt-oss-20b', 'llama-3.1-8b-instant'];
 async function modelosGroq(clave: string): Promise<string[]> {
@@ -246,7 +261,7 @@ async function modelosGroq(clave: string): Promise<string[]> {
     if (!r.ok) throw new Error(`lista ${r.status}`);
     const d = await r.json();
     return (d?.data || []).filter((m: any) => m?.active !== false).map((m: any) => String(m.id))
-      .filter((n: string) => !/(whisper|guard|tts|orpheus|playai|compound|distil|prompt-guard|safeguard)/i.test(n));
+      .filter((n: string) => !/(whisper|guard|tts|orpheus|playai|compound|distil|prompt-guard|safeguard|allam)/i.test(n));
   });
   const pedido = Deno.env.get('GROQ_MODEL');
   const orden = [...(pedido ? [pedido] : []), ...PREFERIDOS_GROQ];
@@ -645,7 +660,8 @@ function proveedoresRespaldo(): Compatible[] {
     huggingface: () => compatible('huggingface', 'https://router.huggingface.co/v1', 'HF_TOKEN', 'HF_MODEL', 'openai/gpt-oss-120b'),
   };
   const orden: string[] = String(Deno.env.get('IA_RESPALDOS') || 'nvidia,sambanova,openrouter,cerebras,groq,mistral,cloudflare,huggingface').split(',').map((t: string) => t.trim().toLowerCase());
-  return [...new Set(orden)].map(id => todos[id]?.() || null).filter((p): p is Compatible => !!p);
+  // Un proveedor que pidió pago o rechazó la clave se salta (ver pausar 402).
+  return [...new Set(orden)].map(id => todos[id]?.() || null).filter((p): p is Compatible => !!p && disponibleModelo(`prov:${p.id}`));
 }
 /** Clave del cortacircuito de cada IA de respaldo. */
 const claveProv = (p: Compatible) => `${p.id}:${p.modelo}`;
@@ -670,59 +686,132 @@ async function proveedoresPrincipales(): Promise<Compatible[]> {
   return lista.sort((a, b) => rangoAbierto(a.modelo) - rangoAbierto(b.modelo)).slice(0, 2);
 }
 
+/** Tokens que caben por pedido en los planes gratis de cada proveedor
+ *  (Groq gratis: 6-8 mil por MINUTO, y el pedido entero cuenta). */
+const CABE: Partial<Record<IdProv, number>> = { groq: 5500, cloudflare: 7000, huggingface: 12000 };
+const estimar = (x: unknown) => Math.ceil(JSON.stringify(x).length / 3.6);
+
+/**
+ * Pregunta a una IA con formato de OpenAI, EN VIVO (stream). Antes se
+ * esperaba la respuesta entera y los modelos que piensan (Kimi K3, DeepSeek,
+ * GLM) pasaban los 20 s sin mandar nada y se cortaban; ahora mientras
+ * lleguen trozos (aunque sea su razonamiento) se sigue esperando, y el
+ * texto aparece mientras se escribe. Si el pedido no cabe en el plan
+ * gratis (Groq), se achica: menos historial, menos contexto y, al final,
+ * sin herramientas.
+ */
 async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compatible): Promise<Resultado> {
-  // Algunos modelos gratis no aceptan herramientas: si lo dicen, se repite
-  // la ronda sin ellas (responde con lo que sabe) en vez de rendirse.
-  let conHerramientas = sis.herramientas.length > 0;
   const web = sis.herramientas.some(h => h.modulo === 'internet');
-  const mensajes: any[] = [{ role: 'system', content: sistema(sis.ctx.hoy, conHerramientas, sis.esSuper, web, sis.forzarWeb, sis.modo) + sis.extra }, ...historial.map(t => ({ role: t.rol, content: t.texto }))];
-  let tokensIn = 0, tokensOut = 0;
+  let conHerramientas = sis.herramientas.length > 0;
+  let achique = 0; // 0 completo · 1 corto · 2 corto y sin herramientas
+  const armar = () => {
+    const turnos = achique ? historial.slice(-(achique > 1 ? 2 : 4)).map(t => ({ ...t, texto: recortarTexto(t.texto, achique > 1 ? 700 : 1500) })) : historial;
+    const extra = achique ? recortarTexto(sis.extra, achique > 1 ? 600 : 1800) : sis.extra;
+    return [{ role: 'system', content: sistema(sis.ctx.hoy, conHerramientas && achique < 2, sis.esSuper, web, sis.forzarWeb, sis.modo) + extra }, ...turnos.map(t => ({ role: t.rol, content: t.texto }))] as any[];
+  };
+  const herramientasDe = () => declaraciones(sis).map(h => ({ type: 'function', function: { name: h.nombre, description: h.descripcion, parameters: h.parametros } }));
+  let mensajes = armar();
+  // Si de entrada no cabe en el plan gratis, se achica antes de gastar el intento.
+  const cabe = CABE[prov.id];
+  while (cabe && achique < 2 && estimar(mensajes) + (conHerramientas && achique < 2 ? estimar(herramientasDe()) : 0) > cabe) { achique++; mensajes = armar(); }
+  let tokensIn = 0, tokensOut = 0, conUso = true, empezo = false, modeloReal = prov.modelo;
   for (let ronda = 0; ronda <= sis.rondas; ronda++) {
-    const cuerpo: Record<string, unknown> = { model: prov.modelo, messages: mensajes, temperature: 0.4 };
-    if (conHerramientas && ronda < sis.rondas) {
-      cuerpo.tools = declaraciones(sis).map(h => ({ type: 'function', function: { name: h.nombre, description: h.descripcion, parameters: h.parametros } }));
-    }
+    const usarHerr = conHerramientas && achique < 2 && ronda < sis.rondas;
+    const cuerpo: Record<string, unknown> = { model: prov.modelo, messages: mensajes, temperature: 0.4, stream: true, max_tokens: prov.id === 'groq' ? 1200 : 4096 };
+    if (conUso) cuerpo.stream_options = { include_usage: true };
+    if (usarHerr) cuerpo.tools = herramientasDe();
     const restante = sis.limite - Date.now();
-    if (restante < 2000) throw new CupoAgotado('sin tiempo');
-    const r = await conTope(`${prov.url}/chat/completions`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(prov.clave ? { Authorization: `Bearer ${prov.clave}` } : {}) },
-      body: JSON.stringify(cuerpo),
-    }, Math.min(TOPE_INTENTO_MS, restante)).catch(e => { pausar(claveProv(prov), 503); throw new CupoAgotado(`${prov.id} sin conexión: ${e instanceof Error ? e.message : e}`); });
+    if (restante < 2500) throw new CupoAgotado('sin tiempo');
+    const corte = new AbortController();
+    // Hasta que empiece a contestar: 30 s (los que piensan tardan en arrancar).
+    let vigia = setTimeout(() => corte.abort(), Math.min(30000, restante));
+    const fin = setTimeout(() => corte.abort(), restante);
+    const parar = () => { clearTimeout(vigia); clearTimeout(fin); };
+    let r: Response;
+    try {
+      r = await fetch(`${prov.url}/chat/completions`, { method: 'POST', signal: corte.signal,
+        headers: { 'Content-Type': 'application/json', ...(prov.clave ? { Authorization: `Bearer ${prov.clave}` } : {}) }, body: JSON.stringify(cuerpo) });
+    } catch (e) {
+      parar(); pausar(claveProv(prov), 503);
+      throw new CupoAgotado(`${prov.id} sin conexión: ${corte.signal.aborted ? 'tiempo agotado' : e instanceof Error ? e.message : e}`);
+    }
     if (!r.ok) {
+      parar();
       const det = await r.text().catch(() => '');
       console.log(`${prov.id} ${prov.modelo} ronda=${ronda} -> ${r.status}: ${det.slice(0, 300)}`);
-      if (cuerpo.tools && (r.status === 400 || r.status === 404 || r.status === 422) && /tool|function/i.test(det)) {
-        conHerramientas = false; ronda--; continue;
-      }
-      if (r.status === 429 || r.status >= 500) { pausar(claveProv(prov), r.status); throw new CupoAgotado(`${prov.id} sin cupo`); }
+      if (conUso && (r.status === 400 || r.status === 422) && /stream_options|include_usage/i.test(det)) { conUso = false; ronda--; continue; }
+      if (cuerpo.tools && (r.status === 400 || r.status === 404 || r.status === 422) && /tool|function/i.test(det)) { conHerramientas = false; mensajes = armar(); ronda--; continue; }
+      // Muy grande para el plan gratis: se achica y se repite.
+      if ((r.status === 413 || r.status === 400 || r.status === 429) && /too large|context_length|reduce the length|maximum context|tokens per minute|TPM|ITPM/i.test(det) && achique < 2) { achique++; mensajes = armar(); ronda--; continue; }
+      if (r.status === 402 || r.status === 401 || r.status === 403) { pausar(claveProv(prov), 402); pausar(`prov:${prov.id}`, 402); throw new CupoAgotado(`${prov.id} ${r.status === 402 ? 'pide método de pago' : 'clave rechazada'}`); }
+      if (r.status === 429 || r.status >= 500) { pausar(claveProv(prov), r.status); throw new CupoAgotado(`${prov.id} sin cupo (${r.status})`); }
       if (r.status === 404 || /model_not_found|decommissioned|does not exist/i.test(det)) pausar(claveProv(prov), 404);
       throw new Error(`${prov.id} respondió ${r.status}: ${det.slice(0, 200)}`);
     }
-    const d = await r.json();
-    const cIn = Number(d?.usage?.prompt_tokens || 0), cOut = Number(d?.usage?.completion_tokens || 0);
-    tokensIn += cIn; tokensOut += cOut; sis.gasto.in += cIn; sis.gasto.out += cOut;
-    const msg = d?.choices?.[0]?.message || {};
-    const llamadas: any[] = msg.tool_calls || [];
-    if (llamadas.length && ronda < sis.rondas) {
-      mensajes.push({ role: 'assistant', content: msg.content || null, tool_calls: llamadas });
-      for (const c of llamadas) {
+    // Se lee en vivo. Mientras lleguen trozos se espera (25 s entre trozos).
+    let texto = '', pensando = false, uso: any = null, final = '';
+    const llamadas: { id: string; name: string; args: string }[] = [];
+    try {
+      for await (const trozo of leerSSE(r.body!)) {
+        clearTimeout(vigia); vigia = setTimeout(() => corte.abort(), 25000);
+        if (trozo?.model) modeloReal = String(trozo.model);
+        const u = trozo?.usage || trozo?.x_groq?.usage;
+        if (u) uso = u;
+        const c = trozo?.choices?.[0];
+        if (!c) continue;
+        if (c.finish_reason) final = String(c.finish_reason);
+        const d = c.delta || c.message || {};
+        if ((d.reasoning_content || d.reasoning) && !pensando && !texto) { pensando = true; sis.emitir('estado', { texto: `${nombreIA({ ...prov, modelo: modeloReal })} está pensando…` }); }
+        for (const tc of d.tool_calls || []) {
+          const k = Number(tc.index ?? llamadas.length);
+          llamadas[k] ||= { id: '', name: '', args: '' };
+          if (tc.id) llamadas[k].id = tc.id;
+          if (tc.function?.name) llamadas[k].name += tc.function.name;
+          if (tc.function?.arguments) llamadas[k].args += typeof tc.function.arguments === 'string' ? tc.function.arguments : JSON.stringify(tc.function.arguments);
+        }
+        if (typeof d.content === 'string' && d.content) {
+          texto += d.content;
+          // Los que piensan en voz alta (<think>…</think>) no se muestran hasta cerrar.
+          const visible = texto.replace(/<think>[\s\S]*?(<\/think>|$)/gi, '');
+          if (visible.trim() && !/<think>(?![\s\S]*<\/think>)/i.test(texto)) {
+            if (!empezo) { empezo = true; sis.emitir('modelo', { modelo: modeloReal }); }
+          }
+        }
+      }
+    } catch (e) {
+      parar();
+      if (corte.signal.aborted) { pausar(claveProv(prov), 503); throw new CupoAgotado(`${prov.id} tiempo agotado`); }
+      throw e;
+    }
+    parar();
+    const tin = Number(uso?.prompt_tokens || 0), tout = Number(uso?.completion_tokens || 0);
+    if (uso) { tokensIn += tin; tokensOut += tout; sis.gasto.in += tin; sis.gasto.out += tout; }
+    else {
+      // Sin reporte de uso: se estima por largo (para no contar cero).
+      const ei = estimar(mensajes), eo = Math.ceil(texto.length / 3.6);
+      tokensIn += ei; tokensOut += eo; sis.gasto.in += ei; sis.gasto.out += eo;
+    }
+    const validas = llamadas.filter(l => l && l.name);
+    if (validas.length && ronda < sis.rondas) {
+      const ids = validas.map((l, i) => l.id || `llamada_${ronda}_${i}`);
+      mensajes.push({ role: 'assistant', content: texto || null, tool_calls: validas.map((l, i) => ({ id: ids[i], type: 'function', function: { name: l.name, arguments: l.args || '{}' } })) });
+      for (const [i, l] of validas.entries()) {
         let args: Record<string, unknown> = {};
-        try { args = typeof c?.function?.arguments === 'string' ? JSON.parse(c.function.arguments || '{}') : (c?.function?.arguments || {}); } catch { /* argumentos inválidos: sin filtros */ }
-        const datos = await correrHerramienta(c?.function?.name, args, sis);
-        mensajes.push({ role: 'tool', tool_call_id: c.id, content: JSON.stringify(datos) });
+        try { args = JSON.parse(l.args || '{}'); } catch { /* argumentos inválidos: sin filtros */ }
+        const datos = await correrHerramienta(l.name, args, sis);
+        mensajes.push({ role: 'tool', tool_call_id: ids[i], content: JSON.stringify(datos) });
       }
       continue;
     }
-    // Los modelos que «piensan en voz alta» (DeepSeek R1, Qwen) traen <think>…</think>: fuera.
-    const texto = String(msg.content || '').replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '').trim();
-    if (!texto) throw new Error(`${prov.id} no devolvió respuesta.`);
-    sis.emitir('modelo', { modelo: d?.model || prov.modelo });
-    sis.emitir('texto', { delta: texto });
-    return { texto, fuentes: sis.fuentes.slice(0, 8), tokensIn, tokensOut, proveedor: prov.id, modelo: String(d?.model || prov.modelo), busco: sis.usados.internet > 0, consultas: sis.consultas };
+    const limpio = texto.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '').trim();
+    if (!limpio) throw new CupoAgotado(`${prov.id} no devolvió texto${final === 'length' ? ' (se quedó pensando)' : ''}`);
+    if (!empezo) sis.emitir('modelo', { modelo: modeloReal });
+    sis.emitir('texto', { delta: limpio });
+    return { texto: limpio, fuentes: sis.fuentes.slice(0, 8), tokensIn, tokensOut, proveedor: prov.id, modelo: modeloReal, busco: sis.usados.internet > 0, consultas: sis.consultas };
   }
   throw new Error('La IA no terminó de responder.');
 }
+const recortarTexto = (t: string, n: number) => (t.length > n ? `${t.slice(0, n)}…` : t);
 
 /** Voz de Jarvis: audio → texto. Prueba el modelo de transcripción y, si
  *  no responde, Flash-Lite con el audio. El audio no se guarda. */
@@ -838,16 +927,21 @@ async function pedirJSON(prompt: string, usuario: string, op: { evitar?: string;
     : [];
   const abiertos: typeof candidatos = [];
   const lista = proveedoresRespaldo().filter(p => p.id !== op.evitar);
-  // Para lo de fondo, las más rápidas primero (Groq y Cerebras responden en 1-2 s).
-  if (op.rapido) lista.sort((a, b) => Number(!['groq', 'cerebras'].includes(a.id)) - Number(!['groq', 'cerebras'].includes(b.id)));
+  // Las más rápidas primero (Groq y Cerebras responden en 1-2 s): las que
+  // piensan (Kimi K3) tardan más que el tope de una revisión.
+  lista.sort((a, b) => Number(!['groq', 'cerebras'].includes(a.id)) - Number(!['groq', 'cerebras'].includes(b.id)));
   for (const p of lista) {
     const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
     const m = ms.find(x => disponibleModelo(claveProv({ ...p, modelo: x })));
     if (!m) continue;
     abiertos.push({ quien: nombreIA({ ...p, modelo: m }), correr: async () => {
       const r = await conTope(`${p.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(p.clave ? { Authorization: `Bearer ${p.clave}` } : {}) },
-        body: JSON.stringify({ model: m, temperature: 0.1, messages: [{ role: 'system', content: prompt }, { role: 'user', content: usuario }] }) }, tope());
-      if (!r.ok) { if (r.status === 429 || r.status >= 500) pausar(claveProv({ ...p, modelo: m }), r.status); throw new Error(`${p.id} ${r.status}`); }
+        body: JSON.stringify({ model: m, temperature: 0.1, max_tokens: 2000, messages: [{ role: 'system', content: prompt }, { role: 'user', content: usuario.slice(0, p.id === 'groq' ? 12000 : 24000) }] }) }, tope());
+      if (!r.ok) {
+        if (r.status === 402 || r.status === 401 || r.status === 403) pausar(`prov:${p.id}`, 402);
+        else if (r.status === 429 || r.status >= 500) pausar(claveProv({ ...p, modelo: m }), r.status);
+        throw new Error(`${p.id} ${r.status}`);
+      }
       const d = await r.json();
       contar(d?.usage?.prompt_tokens, d?.usage?.completion_tokens);
       return String(d?.choices?.[0]?.message?.content || '');
@@ -884,8 +978,10 @@ Devolvé SOLO JSON: {"hechos":[{"rama":"categoría madre corta","tema":"tema cor
 async function preguntarGemma(historial: Turno[], sis: Sistema): Promise<Resultado> {
   const clave = Deno.env.get('GEMINI_API_KEY');
   if (!clave) throw new CupoAgotado('sin clave');
-  const modelo = Deno.env.get('GEMMA_MODEL') || 'gemma-3-27b-it';
-  if (!disponibleModelo(modelo)) throw new CupoAgotado('gemma en pausa');
+  // El nombre fijo «gemma-3-27b-it» dejó de existir (404 en producción): se
+  // usa el Gemma más grande que hoy ofrezca la API.
+  const modelo = Deno.env.get('GEMMA_MODEL') || (await modelosGemma(clave)).find(disponibleModelo);
+  if (!modelo || !disponibleModelo(modelo)) throw new CupoAgotado('gemma en pausa');
   const instrucciones = sistema(sis.ctx.hoy, false, sis.esSuper, false, false, sis.modo) + sis.extra
     + '\n\nAHORA NO TENÉS CONSULTAS AL SISTEMA NI INTERNET: respondé con lo que sabés, el contexto de hoy y tu cerebro. Si para responder hace falta un dato que no tenés, decilo en una frase y no inventes cifras. No digas que hiciste acciones.';
   const turnos = historial.slice(-8);
@@ -1374,6 +1470,7 @@ export async function atender(req: Request): Promise<Response> {
     // Conversación con la IA. `emitir` manda eventos en vivo si el panel
     // los pidió; si no, no hace nada y al final se responde con JSON.
     // ---------------------------------------------------------------
+    const fallos: string[] = [];
     const correrBase = async (emitir: Emisor) => {
       const hechas = new Map<string, { datos: unknown; consulta: Consulta }>();
       const base = perfilUsado ? PERFILES[perfilUsado] : { modelos: [GEMINI_MODEL, GEMINI_RESPALDO], pensar: 'low', intento: TOPE_INTENTO_MS, total: TOPE_TOTAL_MS };
@@ -1397,6 +1494,16 @@ export async function atender(req: Request): Promise<Response> {
       const limiteT = Date.now() + conf.total;
       // Todo lo que gastan las IAs en este mensaje (cada intento, aunque falle).
       const gasto = { in: 0, out: 0 };
+      // Qué falló y por qué (para decirlo claro si ninguna responde) y qué
+      // proveedores se cayeron en ESTE mensaje (no se prueban sus otros modelos).
+      fallos.length = 0;
+      const caidos = new Set<string>();
+      const duro = Date.now() + 110_000;
+      const anotar = (quien: string, e: unknown) => {
+        const m = e instanceof Error ? e.message : String(e);
+        fallos.push(`${quien}: ${m.replace(/^\w+ /, '').slice(0, 90)}`);
+        return m;
+      };
       const listo = (res: Resultado, t0: number, respaldo: boolean, sis: Sistema) =>
         ({ res: { ...res, tokensIn: gasto.in, tokensOut: gasto.out, ms: Date.now() - t0 }, respaldo, sis });
       const propuestas = new Map<string, { r: unknown; marca: Consulta; evento: unknown }>();
@@ -1450,14 +1557,16 @@ export async function atender(req: Request): Promise<Response> {
           if (Date.now() > limiteT - 8000) break;
           probados.add(claveProv(prov));
           const sis = nuevo();
-          sis.limite = Math.min(sis.limite, Date.now() + Math.round(conf.total * 0.6));
+          sis.limite = Math.min(sis.limite, Date.now() + Math.round(conf.total * 0.7));
           emitir('estado', { texto: `Pensando con ${nombreIA(prov)}…` });
           try {
             const t0 = Date.now();
             const res = await preguntarCompatible(historial, sis, prov);
             return listo(res, t0, false, sis);
           } catch (e) {
-            console.log(`principal ${prov.id} ${prov.modelo} falló: ${e instanceof Error ? e.message : e}`);
+            const m = anotar(nombreIA(prov), e);
+            console.log(`principal ${prov.id} ${prov.modelo} falló: ${m}`);
+            if (/sin conexión|tiempo agotado|pago|clave/.test(m)) caidos.add(prov.id);
             emitir('reinicio', {});
           }
         }
@@ -1478,6 +1587,7 @@ export async function atender(req: Request): Promise<Response> {
           const res = await preguntarGemini(historial, modelo, sis);
           return listo(res, t0, false, sis);
         } catch (e) {
+          anotar(`Gemini ${modelo.replace(/^gemini-/, '')}`, e);
           if (!(e instanceof CupoAgotado)) console.log(`gemini ${modelo} falló: ${e instanceof Error ? e.message : e}`);
           emitir('reinicio', {}); // el panel borra el texto parcial, si lo hubo
         }
@@ -1500,7 +1610,8 @@ export async function atender(req: Request): Promise<Response> {
           for (const m of ms) cadena.push({ ...p, modelo: m });
         }
         for (const prov of cadena) {
-          if (probados.has(claveProv(prov)) || !disponibleModelo(claveProv(prov))) continue;
+          if (probados.has(claveProv(prov)) || caidos.has(prov.id) || !disponibleModelo(claveProv(prov))) continue;
+          if (Date.now() > duro) break; // la función tiene un tope de vida: no se agota esperando
           const sis = nuevo(true);
           emitir('estado', { texto: `Contestando con ${nombreIA(prov)}…` });
           try {
@@ -1508,7 +1619,9 @@ export async function atender(req: Request): Promise<Response> {
             const res = await preguntarCompatible(historial, sis, prov);
             return listo(res, t0, true, sis);
           } catch (e) {
-            console.log(`respaldo ${prov.id} ${prov.modelo} falló: ${e instanceof Error ? e.message : e}`);
+            const m = anotar(nombreIA(prov), e);
+            console.log(`respaldo ${prov.id} ${prov.modelo} falló: ${m}`);
+            if (/sin conexión|tiempo agotado|pago|clave/.test(m)) caidos.add(prov.id);
             emitir('reinicio', {});
           }
         }
@@ -1522,6 +1635,7 @@ export async function atender(req: Request): Promise<Response> {
           const res = await preguntarGemma(historial, sis);
           return listo(res, t0, true, sis);
         } catch (e) {
+          anotar('Gemma', e);
           console.log(`gemma falló: ${e instanceof Error ? e.message : e}`);
           emitir('reinicio', {});
         }
@@ -1565,10 +1679,12 @@ export async function atender(req: Request): Promise<Response> {
       }
       // Lo que gastó la revisión también cuenta (esté bien o no la respuesta).
       salida.res = { ...salida.res, tokensIn: salida.res.tokensIn + gastoRev.in, tokensOut: salida.res.tokensOut + gastoRev.out };
-      if (actual !== r.texto) {
-        emitir('reinicio', {});
-        emitir('texto', { delta: actual });
-        const marca: Consulta = { modulo: 'Revisión', desc: cambios.length ? cambios.join(' · ').slice(0, 300) : 'Respuesta corregida', filas: 'corregida', detalle: `Revisó: ${quien} · ${(gastoRev.in + gastoRev.out).toLocaleString('es-CR')} tokens` };
+      // Quién revisó queda siempre a la vista (aprobada o corregida).
+      if (quien) {
+        const corregida = actual !== r.texto;
+        const marca: Consulta = { tipo: 'revision', modulo: 'Revisión', desc: quien, filas: corregida ? 'corregida' : 'aprobada', detalle: `${cambios.length ? cambios.join(' · ').slice(0, 300) : corregida ? 'Respuesta corregida' : 'Sin cambios'} · ${(gastoRev.in + gastoRev.out).toLocaleString('es-CR')} tokens` };
+        if (corregida) { emitir('reinicio', {}); emitir('texto', { delta: actual }); }
+        emitir('consulta', marca);
         salida.res = { ...salida.res, texto: actual, consultas: [...r.consultas, marca] };
         salida.sis.consultas.push(marca);
       }
@@ -1658,7 +1774,9 @@ export async function atender(req: Request): Promise<Response> {
       ? 'Google llegó a su límite por ahora. Intenta en unos minutos.'
       : adjuntos.length ? 'Google está saturado y las IAs de respaldo no pueden ver fotos ni PDF. Intenta en unos minutos.'
       : !proveedoresRespaldo().length ? (esSuper ? 'Google no respondió y no hay IA de respaldo configurada (falta GROQ_API_KEY en los secretos de Supabase).' : 'Google no respondió. Intenta en unos minutos.')
-      : 'Google y las IAs de respaldo están saturados en este momento. Intenta en unos minutos.';
+      : esSuper && fallos.length
+        ? `Ninguna IA pudo responder. Lo que pasó:\n${[...new Set(fallos)].slice(0, 8).map(f => `• ${f}`).join('\n')}`
+        : 'Google y las IAs de respaldo están saturados en este momento. Intenta en unos minutos.';
     const final = (r: { res: Resultado; respaldo: boolean }) => ({
       ok: true, conversacionId: convId, nueva, respaldo: r.respaldo, sinBusqueda: false, ...(transcrito ? { pregunta, privados } : {}),
       mensaje: { id: idRespuesta, idPregunta, escalado: perfilUsado !== perfil, rol: 'assistant', texto: r.res.texto, fuentes: r.res.fuentes, tokens_in: r.res.tokensIn, tokens_out: r.res.tokensOut, proveedor: r.res.proveedor, modelo: r.res.modelo, busco: r.res.busco, consultas: r.res.consultas, perfil: perfilUsado, persona: modo === 'normal' ? null : modo, ms: r.res.ms ?? null },
