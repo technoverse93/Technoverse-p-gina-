@@ -234,7 +234,7 @@ export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial, pestana 
           role="dialog"
           aria-label={conversacionAbierta ? `Chat con ${nombreLegible(conversacionAbierta.customerName)}` : 'Conversaciones'}
         >
-          <div className="flex items-center justify-between gap-2 pl-3 pr-1.5 h-9 border-b border-[var(--border-color)] bg-[var(--bg-sunken)] shrink-0">
+          <div className="tv-flotante-zoom flex items-center justify-between gap-2 pl-3 pr-1.5 h-9 border-b border-[var(--border-color)] bg-[var(--bg-sunken)] shrink-0">
             <span className="text-[11.5px] font-semibold text-[var(--text-secondary)] truncate">
               {conversacionAbierta ? 'Chat' : `Conversaciones · ${activas.length}`}
             </span>
@@ -248,7 +248,7 @@ export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial, pestana 
             </button>
           </div>
 
-          <div className="flex-1 min-h-0 flex flex-col">
+          <div className="tv-flotante-zoom flex-1 min-h-0 flex flex-col">
             {conversacionAbierta ? (
               <ChatThread
                 conversation={conversacionAbierta}

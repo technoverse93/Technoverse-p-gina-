@@ -209,7 +209,9 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
     const cv = lienzoRef.current; if (!cv) return;
     const m = new Motor(cv, t => tocarRef.current(t));
     motorRef.current = m;
-    const medir = () => { const ab = hojaRef.current?.offsetHeight || 300; setAbajo(ab); m.medir((hudRef.current?.offsetHeight || 60) + 18, ab); };
+    // Medidas en px de pantalla (getBoundingClientRect): dentro del panel escalado con
+    // `zoom`, offsetHeight daría px sin escalar y la escena quedaría corrida.
+    const medir = () => { const ab = hojaRef.current?.getBoundingClientRect().height || 300; setAbajo(hojaRef.current?.offsetHeight || 300); m.medir((hudRef.current?.getBoundingClientRect().height || 60) + 18, ab); };
     const ro = new ResizeObserver(medir);
     ro.observe(cv); if (hojaRef.current) ro.observe(hojaRef.current); if (hudRef.current) ro.observe(hudRef.current);
     medir();
@@ -360,19 +362,21 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
   const arrastrar = (e: PunteroEv<HTMLButtonElement>) => {
     const hoja = hojaRef.current, caja = hoja?.parentElement; if (!hoja || !caja) return;
     e.currentTarget.setPointerCapture(e.pointerId);
+    // El dedo se mueve en px de pantalla; la hoja mide en los suyos (con `zoom` difieren).
+    const k = hoja.offsetHeight / (hoja.getBoundingClientRect().height || hoja.offsetHeight) || 1;
     const y0 = e.clientY, h0 = hoja.offsetHeight, H = caja.clientHeight;
     let ultY = y0, ultT = performance.now(), vel = 0, movio = false;
     const mover = (ev: PointerEvent) => {
       if (Math.abs(ev.clientY - y0) > 6) movio = true; if (!movio) return;
       const now = performance.now(); vel = (ev.clientY - ultY) / Math.max(8, now - ultT); ultY = ev.clientY; ultT = now;
-      setArrastre(Math.max(64, Math.min(H * 0.9, h0 - (ev.clientY - y0))));
+      setArrastre(Math.max(64, Math.min(H * 0.9, h0 - (ev.clientY - y0) * k)));
     };
     const soltar = (ev: PointerEvent) => {
       window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar); window.removeEventListener('pointercancel', soltar);
       setArrastre(null);
       const orden: Nivel[] = ['min', 'medio', 'alto'];
       if (!movio) { setNivel(n => orden[(orden.indexOf(n) + 1) % 3]); return; }
-      const h = Math.max(64, Math.min(H * 0.9, h0 - (ev.clientY - y0)));
+      const h = Math.max(64, Math.min(H * 0.9, h0 - (ev.clientY - y0) * k));
       let i = orden.reduce((m, n, k) => (Math.abs(ALTO_NIVEL[n](H) - h) < Math.abs(ALTO_NIVEL[orden[m]](H) - h) ? k : m), 0);
       if (Math.abs(vel) > 0.5) { const cerca = orden.indexOf(nivel); i = Math.max(0, Math.min(2, vel < 0 ? Math.max(i, cerca + 1) : Math.min(i, cerca - 1))); }
       setNivel(orden[i]);
