@@ -87,7 +87,7 @@ interface Cupo {
   /** Solo superadmin: qué velocidades tienen cupo y si Jarvis puede preparar acciones. */
   perfiles?: Record<Perfil, boolean>; acciones?: boolean;
 }
-type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas' | 'internet' | 'enlaces' | 'archivos' | 'codigo' | 'acciones' | 'chat_directo' | 'taller_directo' | 'inventario_directo', boolean>;
+type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas' | 'internet' | 'enlaces' | 'archivos' | 'codigo' | 'acciones' | 'revisar' | 'aprender' | 'chat_directo' | 'taller_directo' | 'inventario_directo', boolean>;
 type Tono = 'formal' | 'tico_moderado' | 'tico_suelto';
 interface Ajustes { limite_diario: number; busqueda: boolean; respaldo: boolean; acceso: 'personal' | 'gestion' | 'super'; modulos?: Modulos; tono?: Tono }
 
@@ -105,6 +105,8 @@ const CAPACIDADES: { id: keyof Modulos; nombre: string; desc: string; icono: Luc
   { id: 'enlaces', nombre: 'Leer enlaces', desc: 'Abre las páginas que se peguen', icono: Link2 },
   { id: 'archivos', nombre: 'Fotos y PDF', desc: 'Hasta 3 por mensaje', icono: Paperclip },
   { id: 'codigo', nombre: 'Cálculos con código', desc: 'Resultados exactos', icono: Code2 },
+  { id: 'revisar', nombre: 'Revisión por otra IA', desc: 'Otra IA revisa cada respuesta y la corrige si hace falta', icono: ShieldCheck },
+  { id: 'aprender', nombre: 'Aprender solo', desc: 'Jarvis guarda en su cerebro lo útil de cada conversación', icono: Brain },
 ];
 /** Velocidades de Jarvis (tiempos medidos con la clave gratis). */
 const PERFILES: { id: Perfil; nombre: string; desc: string; modelo: string; t: string; icono: LucideIcon }[] = [
@@ -243,8 +245,13 @@ const guardarActiva = (id: string | null) => {
   try { const k = `${CLAVE_ACTIVA}:${dueñoCache}`; if (id) { sessionStorage.setItem(k, id); localStorage.setItem(k, id); } else { sessionStorage.removeItem(k); localStorage.removeItem(k); } } catch { /* sin almacenamiento */ }
 };
 
-/** Contexto de Gemini Flash: un millón de tokens. */
-const CONTEXTO = 1_000_000;
+/** Ventana de contexto del modelo que respondió último: Gemini lee un
+ *  millón de tokens; los abiertos (Kimi, DeepSeek, Qwen…), 128 mil. */
+const ventana = (modelo?: string | null) => (!modelo || /gemini|gemma/i.test(modelo) ? 1_000_000 : 128_000);
+/** Lo que ocupa la conversación en el contexto: el texto de los mensajes
+ *  más las instrucciones (~4k). No es lo mismo que los tokens gastados:
+ *  esos suman cada vuelta, cada intento y la revisión. */
+const ocupado = (ms: { texto?: string }[]) => ms.reduce((a, m) => a + estimarTokens(m.texto || ''), ms.length ? 4000 : 0);
 const estimarTokens = (t: string) => (t.trim() ? Math.ceil(t.trim().length / 4) : 0);
 const k = (n: number) => (n >= 1000 ? `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k` : String(n));
 const SUGERENCIAS = [
@@ -594,7 +601,7 @@ function AnilloCupo({ cupo }: { cupo: Cupo | null }) {
   );
 }
 
-function PanelCupo({ cupo, tokensConv }: { cupo: Cupo | null; tokensConv: number }) {
+function PanelCupo({ cupo, tokensConv, ctxPct }: { cupo: Cupo | null; tokensConv: number; ctxPct: number }) {
   const eq = cupo?.equipo;
   const pctG = eq ? Math.min(100, Math.round((eq.gemini / eq.cupoGemini) * 100)) : 0;
   const pctR = eq ? Math.min(100, Math.round((eq.groq / eq.cupoGroq) * 100)) : 0;
@@ -613,12 +620,12 @@ function PanelCupo({ cupo, tokensConv }: { cupo: Cupo | null; tokensConv: number
       )}
       {cupo?.respaldo && cupo.groqConfigurado && (
         <div className="ai-mini">
-          <span><span>Respaldo ({cupo.respaldos?.join(', ') || 'Groq'})</span><b className="tabular-nums">{eq?.groq ?? 0} / {eq?.cupoGroq ?? '—'}</b></span>
+          <span><span>IAs abiertas ({cupo.respaldos?.join(', ') || 'Groq'})</span><b className="tabular-nums">{eq?.groq ?? 0} / {eq?.cupoGroq ?? '—'}</b></span>
           <div className="ai-bt"><i style={{ width: `${pctR}%` }} /></div>
         </div>
       )}
       <div className="ai-kv"><span>Tokens de esta conversación</span><b className="tabular-nums">{tokensConv.toLocaleString('es-CR')}</b></div>
-      <div className="ai-kv"><span>Contexto usado</span><b className="tabular-nums">{(tokensConv / CONTEXTO * 100).toFixed(tokensConv ? 1 : 0)} %</b></div>
+      <div className="ai-kv"><span>Contexto usado</span><b className="tabular-nums">{ctxPct.toFixed(ctxPct ? 1 : 0)} %</b></div>
       <div className="ai-kv"><span>Tus tokens hoy</span><b className="tabular-nums">{(cupo?.tokensHoy ?? 0).toLocaleString('es-CR')}</b></div>
       {cupo?.modulos && (
         <>
@@ -812,6 +819,10 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   }, [texto]);
 
   const tokensConv = useMemo(() => mensajes.reduce((a, m) => a + (m.tokens_in || 0) + (m.tokens_out || 0), 0), [mensajes]);
+  const ctxPct = useMemo(() => {
+    const ultimo = [...mensajes].reverse().find(m => m.rol === 'assistant' && m.modelo)?.modelo;
+    return Math.min(100, ocupado(mensajes) / ventana(ultimo) * 100);
+  }, [mensajes]);
   const agotado = !!cupo && cupo.disponibles === 0;
   // Con consultas al sistema, la búsqueda en Google no se usa (no se
   // combinan, y el plan gratis no la incluye).
@@ -1329,8 +1340,8 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                   ) : (
                     <span className="ai-cont" title="Tokens estimados de tu texto · contexto usado de la conversación">
                       ≈ <b>{estimarTokens(texto)}</b><span className="ai-lbl"> tokens</span>
-                      <span className="ai-barra"><i style={{ width: `${Math.min(100, Math.max(tokensConv ? 2 : 0, tokensConv / CONTEXTO * 100))}%` }} /></span>
-                      {(tokensConv / CONTEXTO * 100).toFixed(tokensConv ? 1 : 0)}%
+                      <span className="ai-barra"><i style={{ width: `${Math.max(ctxPct ? 2 : 0, ctxPct)}%` }} /></span>
+                      {ctxPct.toFixed(ctxPct ? 1 : 0)}%
                     </span>
                   )}
                   {voz === 'grabando' ? (
@@ -1393,7 +1404,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
 
       <aside className="ai-tele">
         <div className="ai-th"><b>Disponible hoy</b><small>se renueva a las 00:00</small></div>
-        <PanelCupo cupo={cupo} tokensConv={tokensConv} />
+        <PanelCupo cupo={cupo} tokensConv={tokensConv} ctxPct={ctxPct} />
       </aside>
 
       {cajon && (
@@ -1404,7 +1415,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             <div className="ai-hoja" onClick={e => e.stopPropagation()}>
               <div className="ai-agarre" />
               <div className="ai-th"><b>Disponible hoy</b><small>se renueva a las 00:00</small></div>
-              <PanelCupo cupo={cupo} tokensConv={tokensConv} />
+              <PanelCupo cupo={cupo} tokensConv={tokensConv} ctxPct={ctxPct} />
             </div>
           )}
         </div>
@@ -1443,7 +1454,7 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
 
   if (!aj) return <div className="ai-ajustes"><p className="ai-prov">Cargando ajustes…</p></div>;
   const tope = aj.limite_diario;
-  const modulos: Modulos = { inventario: true, facturacion: true, taller: true, errores: true, seguridad: true, finanzas: true, internet: true, enlaces: true, archivos: true, codigo: true, acciones: true, chat_directo: true, taller_directo: true, inventario_directo: true, ...(aj.modulos || {}) };
+  const modulos: Modulos = { inventario: true, facturacion: true, taller: true, errores: true, seguridad: true, finanzas: true, internet: true, enlaces: true, archivos: true, codigo: true, acciones: true, revisar: true, aprender: true, chat_directo: true, taller_directo: true, inventario_directo: true, ...(aj.modulos || {}) };
   const maxConsultas = Math.max(1, ...consultasHoy.map(c => c.consultas));
   // Jarvis: los grupos van como constelaciones (punto de color y versalitas)
   // y en el orden del diseño: lo que hace solo, voz y tono, memoria, uso.

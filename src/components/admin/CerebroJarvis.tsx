@@ -72,12 +72,24 @@ const conNombre = (f: Omit<Fila, 'nombre'>): Fila => ({ ...f, nombre: nombreHuma
 let enMemoria: { filas: Fila[]; enlaces: Enlace[] } | null = null;
 let ordenado = false;
 let bajando: Promise<{ filas: Fila[]; enlaces: Enlace[] } | { error: 'sin_tablas' | 'red' }> | null = null;
+async function enPaginas(pedir: (desde: number) => PromiseLike<{ data: unknown[] | null; error: { message: string } | null }>, tope: number) {
+  const data: unknown[] = [];
+  for (let desde = 0; desde < tope; desde += 1000) {
+    const r = await pedir(desde);
+    if (r.error) return { data: desde ? data : null, error: desde ? null : r.error };
+    data.push(...(r.data || []));
+    if ((r.data || []).length < 1000) break;
+  }
+  return { data, error: null };
+}
 function bajarCerebro() {
   if (bajando) return bajando;
   bajando = (async () => {
+    // Por páginas de 1000 (el tope de filas por pedido de Supabase): antes
+    // un «limit(2500)» traía solo 1000 enlaces y el cerebro grande salía cortado.
     const [n, e] = await Promise.all([
-      supabase.from('jarvis_nodos').select(COLS).order('actualizado_en', { ascending: false }).limit(800),
-      supabase.from('jarvis_enlaces').select('id,origen,destino,relacion,peso').limit(2500),
+      enPaginas(d => supabase.from('jarvis_nodos').select(COLS).order('actualizado_en', { ascending: false }).range(d, d + 999), 2000),
+      enPaginas(d => supabase.from('jarvis_enlaces').select('id,origen,destino,relacion,peso').order('id').range(d, d + 999), 6000),
     ]);
     if (n.error) return { error: /does not exist|relation|schema cache|could not find/i.test(n.error.message) ? 'sin_tablas' as const : 'red' as const };
     enMemoria = { filas: ((n.data || []) as Omit<Fila, 'nombre'>[]).map(conNombre), enlaces: (e.data || []) as Enlace[] };
