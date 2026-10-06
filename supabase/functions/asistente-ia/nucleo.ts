@@ -811,7 +811,7 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
     }
     // Se lee en vivo. Mientras lleguen trozos se espera (25 s entre trozos).
     const tCab = Date.now() - t0; let tPrimero = 0;
-    let texto = '', pensando = false, uso: any = null, final = '';
+    let texto = '', pensando = false, uso: any = null, final = '', emitido = 0;
     const llamadas: { id: string; name: string; args: string }[] = [];
     try {
       for await (const trozo of leerSSE(r.body!)) {
@@ -835,9 +835,12 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
         if (typeof d.content === 'string' && d.content) {
           texto += d.content;
           // Los que piensan en voz alta (<think>…</think>) no se muestran hasta cerrar.
-          const visible = texto.replace(/<think>[\s\S]*?(<\/think>|$)/gi, '');
-          if (visible.trim() && !/<think>(?![\s\S]*<\/think>)/i.test(texto)) {
+          // El texto sale EN VIVO (se ve mientras se escribe). Si después la
+          // vuelta resulta ser de consultas, se borra con «reinicio».
+          const visible = texto.replace(/<think>[\s\S]*?(<\/think>|$)/gi, '').replace(/^[\s\S]*<\/think>/i, '').trimStart();
+          if (visible && !llamadas.length && !/<think>(?![\s\S]*<\/think>)/i.test(texto)) {
             if (!empezo) { empezo = true; sis.emitir('modelo', { modelo: modeloReal }); }
+            if (visible.length > emitido) { sis.emitir('texto', { delta: visible.slice(emitido) }); emitido = visible.length; }
           }
         }
       }
@@ -858,6 +861,7 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
     }
     const validas = llamadas.filter(l => l && l.name);
     if (validas.length && ronda < sis.rondas) {
+      if (emitido) sis.emitir('reinicio', {});
       const ids = validas.map((l, i) => l.id || `llamada_${ronda}_${i}`);
       mensajes.push({ role: 'assistant', content: texto || null, tool_calls: validas.map((l, i) => ({ id: ids[i], type: 'function', function: { name: l.name, arguments: l.args || '{}' } })) });
       for (const [i, l] of validas.entries()) {
@@ -872,7 +876,9 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
     const limpio = texto.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '').trim();
     if (!limpio) throw new CupoAgotado(`${prov.id} no devolvió texto${final === 'length' ? ' (se quedó pensando)' : ''}`);
     if (!empezo) sis.emitir('modelo', { modelo: modeloReal });
-    sis.emitir('texto', { delta: limpio });
+    // Lo que faltó mostrar (o todo, si se mostró algo distinto por el <think>).
+    if (!emitido) sis.emitir('texto', { delta: limpio });
+    else { const vis = texto.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '').trimStart(); if (vis.length > emitido) sis.emitir('texto', { delta: vis.slice(emitido) }); }
     return { texto: limpio, fuentes: sis.fuentes.slice(0, 8), tokensIn, tokensOut, proveedor: prov.id, modelo: modeloReal, busco: sis.usados.internet > 0, consultas: sis.consultas };
   }
   throw new Error('La IA no terminó de responder.');
@@ -1015,7 +1021,8 @@ async function pedirJSON(prompt: string, usuario: string, op: { evitar?: string;
     } });
     if (abiertos.length >= 3) break;
   }
-  candidatos.push(...(op.rapido ? [...abiertos, ...gemini] : [...gemini, ...abiertos]));
+  // Primero las veloces (Cerebras, Groq: 1-2 s); Gemini después.
+  candidatos.push(...abiertos, ...gemini);
   for (const c of candidatos) {
     if (Date.now() > op.hasta - 2500) break;
     try {
@@ -1454,6 +1461,7 @@ export async function atender(req: Request): Promise<Response> {
     let notasCerebro: Nota[] = [];
     let utiles: Set<string> | null = null;
     let esOrdenMsg = false;
+    let complejo = perfil === 'profundo';
     const conMemoria = /record|acord|olvid|anot|prefer|siempre|nunca|de ahora en adelante|guard[aá]|no (me )?(digas|hables|uses)|llamame|forma de/i.test(texto);
     if (modo !== 'normal') {
       const [{ data: recuerdos }, { data: buenas }, { data: malas }, { data: agenda }] = await Promise.all([
@@ -1478,6 +1486,8 @@ export async function atender(req: Request): Promise<Response> {
       const analitico = /compar|por qu[eé]|analiz|conviene|estrategi|proyecc|tendenc|promedio|margen|porcentaje|%|cu[aá]nto (gan|perd)|explic|recomend|plan\b|evalu|audit/i;
       const partes = (texto.match(/\?/g) || []).length + (texto.match(/\b(y luego|y despu[eé]s|adem[aá]s|tambi[eé]n)\b/gi) || []).length;
       if (perfil === 'rapido' && (analitico.test(texto) || partes >= 2 || texto.length > 260)) perfilUsado = 'equilibrado';
+      // Lo complejo va a Kimi K3 (piensa a fondo); lo demás, a la más veloz.
+      complejo = perfilUsado === 'profundo' || modo === 'arquitecto' || analitico.test(texto) || partes >= 2 || texto.length > 260;
 
       // ---- PERSONALIDAD (solo Jarvis): cómo responder según lo que se pide ----
       if (modo === 'jarvis') {
@@ -1644,7 +1654,37 @@ export async function atender(req: Request): Promise<Response> {
           abrir() { abierta = true; for (const [ev, d] of cola) emitir(ev, d); cola.length = 0; },
         };
       };
-      if (!adjuntos.length && ajustes?.respaldo !== false) {
+      // 0a) VELOZ: lo que no es complejo lo responde de una la IA más rápida
+      //     (Cerebras ~1-2 s, después Groq), con el texto en vivo. Si ninguna
+      //     arranca en 6 s, sigue Gemini y la cadena (Kimi incluida).
+      const veloz = !complejo && !adjuntos.length && ajustes?.respaldo !== false && Deno.env.get('IA_VELOZ') !== '0';
+      if (veloz) {
+        const ORDEN_VELOZ = ['cerebras', 'groq'];
+        const lista = proveedoresRespaldo().filter(p => ORDEN_VELOZ.includes(p.id)).sort((a, b) => ORDEN_VELOZ.indexOf(a.id) - ORDEN_VELOZ.indexOf(b.id));
+        for (const p of lista) {
+          if (Date.now() > limiteT - 6000) break;
+          const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
+          const m = ms.find(x => !PIENSA.test(x) && disponibleModelo(claveProv({ ...p, modelo: x })));
+          if (!m) continue;
+          const pr = { ...p, modelo: m };
+          probados.add(claveProv(pr));
+          const sis = nuevo(true);
+          sis.arranque = 6000;
+          emitir('estado', { texto: `Respondiendo con ${nombreIA(pr)}…` });
+          try {
+            const t0 = Date.now();
+            const res = await preguntarCompatible(historial, sis, pr);
+            console.log(`veloz ${p.id} ${m}: ${Date.now() - t0} ms`);
+            return listo(res, t0, false, sis);
+          } catch (e) {
+            const msj = anotar(nombreIA(pr), e);
+            console.log(`veloz ${p.id} ${m} falló: ${msj}`);
+            if (/sin conexión|tiempo agotado|pago|clave/.test(msj)) caidos.add(p.id);
+            emitir('reinicio', {});
+          }
+        }
+      }
+      if (!veloz && !adjuntos.length && ajustes?.respaldo !== false) {
         for (const prov of await proveedoresPrincipales().catch(() => [] as Compatible[])) {
           if (Date.now() > limiteT - 8000) break;
           probados.add(claveProv(prov));
