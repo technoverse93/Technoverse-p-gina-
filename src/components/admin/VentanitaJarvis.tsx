@@ -47,6 +47,12 @@ if (widgetNativo.enApp()) {
   void widgetNativo.alPedir(p => { ultimoPedido = p; alPedir.forEach(f => f(p)); }).catch(() => { /* sin pedidos: se abre sin micrófono */ });
 }
 
+// Acciones por confirmar que dejó el widget (ids), para mostrarlas en el
+// recuadro aunque se haya preguntado por voz y se abra después.
+const CLAVE_PENDIENTES = 'jv-widget-pendientes';
+function leerPendientes(): string[] { try { const v = JSON.parse(localStorage.getItem(CLAVE_PENDIENTES) || '[]'); return Array.isArray(v) ? v.filter(x => typeof x === 'string').slice(0, 4) : []; } catch { return []; } }
+function guardarPendientes(ids: string[]) { try { if (ids.length) localStorage.setItem(CLAVE_PENDIENTES, JSON.stringify(ids.slice(0, 4))); else localStorage.removeItem(CLAVE_PENDIENTES); } catch { /* sin almacenamiento */ } }
+
 type Fase = 'cargando' | 'listo' | 'fuera' | 'sin_puente' | 'apagado' | 'sin_sesion' | 'no_super' | 'bloqueado' | 'sin_red';
 type Boton = 'app' | 'panel' | 'reintentar';
 
@@ -133,8 +139,10 @@ function BarraEscribir({ onEnviar, onHoja, onCerrar }: { onEnviar: (t: string) =
  * la conversación del widget, la caja con el cursor y el botón de enviar.
  * Si el teclado tapa el widget, el recuadro sube lo justo para quedar encima.
  */
-function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, onEnviar, onCerrar }: {
+function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, extra, onEnviar, onCerrar }: {
   marco: MarcoWidget; noche: boolean; historial: VueltaWidget[]; listo: boolean; estado: string;
+  /** Lo que hay que confirmar (tarjetas de acción): se confirma AQUÍ, en el recuadro. */
+  extra?: React.ReactNode;
   /** Si algo impide contestar (sin sesión, sin red…), se dice AQUÍ: nunca se abre otra ventana. */
   aviso?: { titulo: string; texto: string } | null;
   onEnviar: (t: string) => void; onCerrar: () => void;
@@ -150,7 +158,7 @@ function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, onEnvia
     return () => { vv?.removeEventListener('resize', medir); window.removeEventListener('resize', medir); };
   }, []);
   useEffect(() => { if (listo && !estado) { const t = setTimeout(() => caja.current?.focus(), 60); return () => clearTimeout(t); } }, [listo, estado]);
-  useEffect(() => { const l = lista.current; if (l) l.scrollTop = l.scrollHeight; }, [historial.length, estado]);
+  useEffect(() => { const l = lista.current; if (l) l.scrollTop = l.scrollHeight; }, [historial.length, estado, !!extra]);
   const top = Math.max(8, Math.min(marco.y, alto - marco.alto - 8));
   const enviar = () => { const t = texto.trim(); if (!t || !listo || estado) return; setTexto(''); caja.current?.blur(); onEnviar(t); };
   return (
@@ -171,6 +179,7 @@ function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, onEnvia
           </React.Fragment>
         ))}
         {aviso && <div className="vj-rc-ia vj-rc-aviso" role="status"><b>{aviso.titulo}.</b> {aviso.texto}</div>}
+        {extra}
       </div>
       <form className="vj-rc-caja" onSubmit={e => { e.preventDefault(); enviar(); }}>
         <input ref={caja} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribile a Jarvis…" aria-label="Pregunta para Jarvis"
@@ -193,6 +202,9 @@ export default function VentanitaJarvis() {
   // Las acciones que trajo la respuesta del widget: se montan ocultas para
   // que las cotidianas se ejecuten solas, con el mismo código de la app.
   const [accionesOcultas, setAccionesOcultas] = useState<string[]>([]);
+  // Acciones que esperan tu «sí»: se muestran en el recuadro (también si se
+  // propusieron por voz y abrís el widget después).
+  const [porConfirmar, setPorConfirmar] = useState<string[]>(() => leerPendientes());
   const [pendiente, setPendiente] = useState<string | null>(null);
   // Sobre el recuadro del widget (APK v4): dónde está, su tema y su conversación.
   const [marco, setMarco] = useState<MarcoWidget | null>(null);
@@ -303,6 +315,14 @@ export default function VentanitaJarvis() {
         if (a.hechas.length) final = `${final}\n${a.hechas.join('\n')}`;
       }
       await widgetNativo.ultimaRespuesta(texto, final, { conversacion: r.conversacion, accion: pendientes > 0 });
+      guardarPendientes(pendientes > 0 ? r.acciones : []);
+      if (enRecuadro && pendientes > 0) {
+        // Algo para confirmar: se confirma en el mismo recuadro (no se abre
+        // otra ventana) y el recuadro se queda hasta que lo cierres.
+        setHistorial(h => [...h.slice(0, -1), { p: texto, r: final.replace(/\*\*/g, '') }]);
+        setEstadoRecuadro(''); setPorConfirmar(r.acciones); setTrabajando(false);
+        return;
+      }
       if (enRecuadro) {
         // La respuesta se ve ahí mismo; después el recuadro se va y queda el
         // widget, que ya muestra lo mismo.
@@ -363,6 +383,7 @@ export default function VentanitaJarvis() {
             <>
               {!trabajando && <button type="button" className="vj-velo" aria-label="Cerrar" tabIndex={-1} onClick={cerrar} />}
               <RecuadroWidget marco={marco} noche={noche} historial={historial} listo={fase === 'listo'} estado={estadoRecuadro}
+                extra={porConfirmar.length > 0 && fase === 'listo' ? <div className="vj-rc-acciones"><Suspense fallback={null}>{porConfirmar.map(id => <TarjetaAccion key={id} id={id} />)}</Suspense></div> : null}
                 aviso={aviso ? { titulo: aviso.titulo, texto: aviso.texto } : null}
                 onEnviar={t => void responderEnWidget(t, false, true)} onCerrar={cerrar} />
             </>

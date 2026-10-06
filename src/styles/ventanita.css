@@ -205,3 +205,6 @@ html.tv-ventanita #root { height: 100%; }
 #admin-panel-root .vj-rc-caja button:disabled { opacity: .5; }
 @media (prefers-reduced-motion: reduce) { .vj-recuadro, .vj-rc-ia { animation: none; transition: none; } }
 .vj-rc-aviso { color: var(--w-txt2); }
+/* Lo que hay que confirmar, dentro del propio recuadro (sin otra ventana). */
+.vj-rc-acciones { align-self: stretch; display: grid; gap: 8px; font-size: 12.5px; }
+.vj-rc-acciones > * { min-width: 0; }

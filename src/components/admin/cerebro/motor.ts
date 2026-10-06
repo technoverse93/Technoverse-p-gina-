@@ -387,7 +387,12 @@ export class Motor {
   private rotular(sel: Estrella | null, foco: RamaG | null, cerca: Set<Estrella> | null) {
     const { ctx, W, H } = this;
     const puestos: number[][] = [];
-    const choca = (c: number[]) => puestos.some(p => c[0] < p[2] && c[2] > p[0] && c[1] < p[3] && c[3] > p[1]);
+    // Las estrellas visibles también son obstáculos: un nombre no se pone
+    // encima de otra estrella (salvo la suya).
+    const obst = this.estrellas.filter(e => e.vis && e.niebla > 0.3 && e.x > -20 && e.x < W + 20).map(e => ({ e, c: [e.x - e.r - 3, e.y - e.r - 3, e.x + e.r + 3, e.y + e.r + 3] }));
+    const sobre = (c: number[], p: number[]) => c[0] < p[2] && c[2] > p[0] && c[1] < p[3] && c[3] > p[1];
+    let propia: Estrella | null = null;
+    const choca = (c: number[]) => puestos.some(p => sobre(c, p)) || obst.some(o => o.e !== propia && sobre(c, o.c));
     const cabe = (c: number[]) => c[0] > 4 && c[2] < W - 4 && c[1] > this.arriba - 6 && c[3] < H - this.abajo - 4;
     const espacio = (px: string) => { if ('letterSpacing' in ctx) (ctx as CanvasRenderingContext2D & { letterSpacing: string }).letterSpacing = px; };
     ctx.shadowColor = 'rgba(2,4,10,.95)'; ctx.shadowBlur = 6; ctx.textAlign = 'left';
@@ -397,7 +402,8 @@ export class Motor {
       const frente = dot(r.n, norm(sub(this.C, r.estrella.p))); if (frente < 0.05) continue;
       const q = this.proy(this.enRama(r, r.rotulo)); if (!q.ok) continue;
       const txt = r.nombre.toUpperCase(), w = ctx.measureText(txt).width, x = q.x - w / 2, caja = [x, q.y - 12, x + w, q.y + 3];
-      if (!cabe(caja) || choca(caja)) continue;
+      // El nombre de la constelación manda: solo evita otros nombres.
+      if (!cabe(caja) || puestos.some(p => sobre(caja, p))) continue;
       puestos.push(caja); ctx.fillStyle = hexA(r.color, lim(frente * 1.8, 0, 1) * (foco && r !== foco ? 0.35 : 0.95)); ctx.fillText(txt, x, q.y);
     }
     const n = this.nucleo;
@@ -412,12 +418,14 @@ export class Motor {
     const temas = this.estrellas.filter(s => s.tipo === 'tema' && s.vis && (s === sel || s.id === this.est.nuevo || (cerca && cerca.has(s)) || (foco ? s.rama === foco : this.cam.dist < 2.3 && s.niebla > 0.75)));
     temas.sort((a, b) => Number(b === sel) - Number(a === sel) || b.usos - a.usos);
     for (const s of temas) {
+      propia = s;
       const txt = s.nombre.length > 26 ? s.nombre.slice(0, 25) + '…' : s.nombre, w = ctx.measureText(txt).width, y = s.y + 4;
       const op = [[s.x + s.r + 9, y - 11, s.x + s.r + 9 + w, y + 3], [s.x - s.r - 9 - w, y - 11, s.x - s.r - 9, y + 3], [s.x - w / 2, s.y + s.r + 7, s.x + w / 2, s.y + s.r + 21], [s.x - w / 2, s.y - s.r - 22, s.x + w / 2, s.y - s.r - 8]];
       const caja = op.find(c => cabe(c) && !choca(c)) || (s === sel ? op.find(cabe) : null); if (!caja) continue;
       puestos.push(caja); ctx.fillStyle = s === sel ? ORO : `rgba(221,229,243,${foco && s.rama !== foco ? 0.46 : 0.92})`; ctx.fillText(txt, caja[0], caja[3] - 3);
     }
     // Texto de los puntos del tema elegido.
+    propia = sel;
     if (sel && sel.ext > 0.85) {
       ctx.font = `400 10.5px ${this.fuentes.ui}`;
       for (const pu of sel.puntos) {

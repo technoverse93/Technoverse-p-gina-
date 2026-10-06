@@ -14,7 +14,7 @@
    resuelve sin trabarse; «reducir movimiento» lo apaga.
    ===================================================================== */
 
-.ai-root[data-jarvis], .jv-hoja[data-jarvis], .jv-fab[data-jarvis] {
+.ai-root[data-jarvis], .jv-hoja[data-jarvis], .jv-fab[data-jarvis], .jv-cb-portal[data-jarvis] {
   --jv-fondo: #EDF3F3; --jv-sup: #FFFFFF; --jv-hundido: #E5EEEF; --jv-tile: #DFEFF0;
   --jv-tinta: #12262B; --jv-tinta2: #4C666C; --jv-tenue: #7B9096; --jv-linea: #D3E1E2;
   --jv-acento-rgb: 12, 108, 120; --jv-acento: #0C6C78; --jv-tinta-ac: #FFFFFF;
@@ -26,7 +26,7 @@
   --jv-f-dato: "JetBrains Mono", ui-monospace, Menlo, monospace;
   --jv-sombra: 0 6px 20px -14px rgba(18, 38, 43, .45);
 }
-.dark .ai-root[data-jarvis], .dark .jv-hoja[data-jarvis], .dark .jv-fab[data-jarvis] {
+.dark .ai-root[data-jarvis], .dark .jv-hoja[data-jarvis], .dark .jv-fab[data-jarvis], .dark .jv-cb-portal[data-jarvis] {
   --jv-fondo: #070B14; --jv-sup: #0E1422; --jv-hundido: #141C2E; --jv-tile: #1A2740;
   --jv-tinta: #E8EDF7; --jv-tinta2: #A6B1C7; --jv-tenue: #7C88A2; --jv-linea: #22304A;
   --jv-acento-rgb: 127, 216, 207; --jv-acento: #7FD8CF; --jv-tinta-ac: #05201C;
@@ -269,14 +269,18 @@ span.jv-tit:hover { background: transparent; }
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-tit b { display: block; font: 600 15px/1.25 var(--jv-f-ui); }
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-ruta { font: 400 11px/1.4 var(--jv-f-dato); color: #A6B1C7; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-ruta button { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; color: #7FD8CF; }
-:is(#admin-panel-root, body) .jv-cerebro .jv-cb-ib { width: 36px; height: 36px; border-radius: 12px; display: grid; place-items: center; flex: none; color: var(--jv-tinta); cursor: pointer; padding: 0; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-ib { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; flex: none; color: var(--jv-tinta); cursor: pointer; padding: 0; }
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-ib:disabled { opacity: .6; }
-:is(#admin-panel-root, body) .jv-cerebro .jv-cb-zoom { position: absolute; right: 10px; top: 62px; z-index: 4; display: grid; gap: 6px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-zoom { position: absolute; right: 10px; top: 56px; z-index: 4; display: grid; gap: 6px; }
 
 /* Hoja de información */
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-hoja { position: absolute; left: 0; right: 0; bottom: 0; z-index: 6; height: 44%; display: flex; flex-direction: column; border-radius: 22px 22px 0 0; border-bottom: 0; background: color-mix(in srgb, var(--jv-sup) 92%, transparent); box-shadow: 0 -12px 30px -18px rgba(0, 0, 0, .5); transition: height .28s cubic-bezier(.2, .7, .2, 1); }
-:is(#admin-panel-root, body) .jv-cerebro .jv-cb-hoja[data-alto] { height: 74%; }
-:is(#admin-panel-root, body) .jv-cerebro .jv-cb-asa { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; flex: none; height: 22px; display: grid; place-items: center; cursor: pointer; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-hoja[data-nivel="min"] { height: 60px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-hoja[data-nivel="medio"] { height: 46%; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-hoja[data-nivel="alto"] { height: 82%; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-hoja[data-arrastrando] { transition: none; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-hoja[data-nivel="min"] .jv-cb-panel { overflow: hidden; -webkit-mask-image: linear-gradient(#000 45%, transparent 95%); mask-image: linear-gradient(#000 45%, transparent 95%); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-asa { touch-action: none; width: 100%; appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; flex: none; height: 26px; display: grid; place-items: center; cursor: pointer; }
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-asa i { width: 36px; height: 4px; border-radius: 9px; background: var(--jv-linea); }
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-panel { flex: 1; min-height: 0; overflow: auto; overscroll-behavior: contain; padding: 0 14px calc(16px + env(safe-area-inset-bottom, 0px)); display: flex; flex-direction: column; gap: 12px; scrollbar-width: thin; }
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-panel > * { flex: none; }
@@ -331,3 +335,9 @@ span.jv-tit:hover { background: transparent; }
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-aviso { position: absolute; left: 12px; right: 12px; z-index: 8; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 9px 12px; border-radius: 12px; font-size: 12.5px; background: var(--jv-tile); color: var(--jv-tinta); border: 1px solid var(--jv-linea); box-shadow: var(--jv-sombra); }
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-aviso button { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; cursor: pointer; font-weight: 700; color: var(--jv-oro); }
 @media (prefers-reduced-motion: reduce) { :is(#admin-panel-root, body) .jv-cerebro .jv-cb-hoja { transition: none; } }
+
+/* Pantalla completa: el cerebro va directo al body y ocupa todo el teléfono. */
+.jv-cb-portal { position: fixed; inset: 0; z-index: 2147482000; background: #02040A; }
+.jv-cb-portal .jv-cerebro { height: 100%; min-height: 0; }
+.jv-cb-portal .jv-cerebro .jv-cb-hud { top: calc(8px + env(safe-area-inset-top, 0px)); }
+.jv-cb-portal .jv-cerebro .jv-cb-zoom { top: calc(56px + env(safe-area-inset-top, 0px)); }

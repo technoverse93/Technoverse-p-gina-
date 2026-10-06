@@ -615,8 +615,8 @@
    con icono quedaba 4px más alto que un "Cancelar" sin él, en la misma
    fila. Se igualan todos a la altura que impone la regla táctil en vez
    de pelearse con ella. */
-.tv-btn { height: 40px; }
-@media (pointer: coarse) { .tv-btn { height: 44px; } }
+.tv-btn { height: 34px; }
+@media (pointer: coarse) { .tv-btn { height: 36px; } }
 
 .tv-avatar {
   display: inline-flex;
@@ -947,7 +947,7 @@
 .tv-btn[data-variant='danger']:hover { background: var(--tv-danger-soft); }
 
 .tv-btn { gap: 6px; }
-@media (pointer: coarse) { .tv-btn { height: 40px; } }
+@media (pointer: coarse) { .tv-btn { height: 36px; } }
 .tv-btn[data-variant='ghost'] { background: transparent; border-color: transparent; color: var(--text-secondary); }
 .tv-btn[data-variant='ghost']:hover { background: var(--bg-sunken); color: var(--text-primary); }
 

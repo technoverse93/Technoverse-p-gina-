@@ -153,14 +153,24 @@ export function crearCerebro(admin: Db, uid: string) {
 
   // ------------------ Internet centralizado por tema ------------------
   /** «Cargador tipo C · Planet Group» → tema «Cargador tipo C», sitio «Planet Group». */
-  function partirWeb(humano: string, url?: string | null) {
-    const [a, b] = humano.replace(/^Internet · /, '').split(' · ');
-    const t = limpiarBusqueda(a).tema || a;
-    return { tema: limpio(t, 60) || 'Búsqueda', sitio: limpio(b || (url ? sitioHumano(url) : ''), 40) };
+  function partirWeb(crudo: string, url?: string | null) {
+    // Desde lo CRUDO (no el nombre humano, que borra la tienda del tema y
+    // dejaba «License price pro» en vez de «ChimeraTool license price pro»).
+    const [a, b] = crudo.replace(/^Internet · /, '').split(' · ');
+    const lb = limpiarBusqueda(a);
+    const t = (lb.tema || a).replace(/[\s·…]+$/, '');
+    return { tema: limpio(t, 60) || 'Búsqueda', sitio: limpio(b || lb.sitio || (url ? sitioHumano(url) : ''), 40) };
   }
   // Palabras que dicen DE QUÉ se trata (sin relleno, en singular).
-  const RELLENO_WEB = new Set('para como con sin del los las una uno que por precio precios comprar venta vende donde mejor mejores nuevo nueva oficial sitio pagina web tienda costa rica hoy 2024 2025 2026 2027'.split(' '));
+  // Las tiendas (Planet, Group, CR…) son el SITIO, no el tema: no cuentan para agrupar.
+  const RELLENO_WEB = new Set('para como con sin del los las una uno que por precio precios comprar venta vende donde mejor mejores nuevo nueva oficial sitio pagina web tienda costa rica hoy 2024 2025 2026 2027 planet planetgroupcr planetcellcr group grupo plana planas mayorista mayoreo producto productos encontralo amazon'.split(' '));
   const claves = (t: string) => new Set(normalizar(t).split(/[^a-z0-9ñ]+/).filter(w => w.length >= 3 && !RELLENO_WEB.has(w)).map(w => (w.length > 5 ? w.replace(/(es|s)$/, '') : w.replace(/s$/, ''))));
+  /** Nombre del tema: solo las palabras que dicen de QUÉ trata (sin tiendas ni relleno). */
+  const nombreTema = (t: string) => {
+    const ws = t.split(/\s+/).filter(w => { const n = normalizar(w).replace(/[^a-z0-9ñ]/g, ''); return n && !RELLENO_WEB.has(n) && !RELLENO_WEB.has(n.replace(/(es|s)$/, '')); });
+    const r = ws.join(' ').replace(/^[,\s]+|[,\s]+$/g, '');
+    return r ? r.charAt(0).toUpperCase() + r.slice(1) : t;
+  };
   let temasWeb: { id: string; clave: string; etiqueta: string; palabras: Set<string> }[] | null = null;
   async function cargarTemasWeb() {
     if (temasWeb) return temasWeb;
@@ -184,18 +194,23 @@ export function crearCerebro(admin: Db, uid: string) {
       // Si lo nuevo es más general («Cargadores» frente a «Cargador USB tipo C
       // Planet»), el tema toma el nombre más general: así se centraliza.
       if (ps.size && ps.size < mejor.palabras.size && [...ps].every(w => mejor!.palabras.has(w))) {
-        await admin.from('jarvis_nodos').update({ etiqueta: tema, actualizado_en: new Date().toISOString() }).eq('id', mejor.id);
-        mejor.etiqueta = tema; mejor.palabras = ps;
+        const nuevo = nombreTema(tema);
+        await admin.from('jarvis_nodos').update({ etiqueta: nuevo, actualizado_en: new Date().toISOString() }).eq('id', mejor.id);
+        // Sus puntos («tema · sitio») toman el nombre nuevo.
+        const { data: hijos } = await admin.from('jarvis_nodos').select('id,etiqueta').eq('user_id', uid).like('clave', `web:p:${mejor.id.slice(0, 8)}:%`);
+        for (const h of (hijos || []) as any[]) { const sitio = String(h.etiqueta).split(' · ')[1]; await admin.from('jarvis_nodos').update({ etiqueta: sitio ? `${nuevo} · ${sitio}` : `${nuevo} (internet)` }).eq('id', h.id); }
+        mejor.etiqueta = nuevo; mejor.palabras = ps;
       }
-      return { id: mejor.id, clave: mejor.clave };
+      return { id: mejor.id, clave: mejor.clave, etiqueta: mejor.etiqueta };
     }
     const inter = await dominio('internet', 'Internet');
     const clave = `web:tema:${normalizar(tema).slice(0, 80)}`;
-    const n = await asegurarNodo(clave, tema, 'fuente', { resumen: resumen ? limpiarExtracto(resumen.split(' · ')[0].replace(/^[^.:]{1,40}:\s+/, ''), 400) : undefined, fuente: 'internet', url });
+    const nombre = nombreTema(tema);
+    const n = await asegurarNodo(clave, nombre, 'fuente', { resumen: resumen ? limpiarExtracto(resumen.split(' · ')[0].replace(/^[^.:]{1,40}:\s+/, ''), 400) : undefined, fuente: 'internet', url });
     if (!n) return null;
     await enlazar(inter?.id, n.id, 'buscó');
-    lista.push({ id: n.id, clave, etiqueta: tema, palabras: ps });
-    return { id: n.id, clave };
+    lista.push({ id: n.id, clave, etiqueta: nombre, palabras: ps });
+    return { id: n.id, clave, etiqueta: nombre };
   }
   /** El punto de un sitio dentro de su tema (se actualiza, no se repite). */
   async function puntoWeb(padre: { id: string }, tema: string, sitio: string, extra: { resumen?: string; url?: string; usar?: boolean }) {
@@ -208,15 +223,16 @@ export function crearCerebro(admin: Db, uid: string) {
   }
   /** Pasa de a poco las búsquedas sueltas viejas a su tema; las repetidas
    *  (mismo tema y mismo sitio) se funden en una sola sumando sus usos. */
-  async function consolidar(max: number) {
-    if (!vivo) return;
+  async function consolidar(max: number): Promise<number> {
+    if (!vivo) return 0;
     const { data } = await admin.from('jarvis_nodos').select('id,clave,etiqueta,resumen,url,usos,ultimo_uso')
       .eq('user_id', uid).eq('tipo', 'fuente').like('clave', 'web:%').not('clave', 'like', 'web:tema:%').not('clave', 'like', 'web:p:%')
       .order('actualizado_en', { ascending: true }).limit(max);
-    for (const v of (data || []) as any[]) {
+    const filas = (data || []) as any[];
+    for (const v of filas) {
       // «Internet · X» cuelga de un tema aprendido a propósito: se queda donde está.
       if (/^Internet · /.test(v.etiqueta)) { await admin.from('jarvis_nodos').update({ clave: `web:p:apr:${v.id.slice(0, 8)}` }).eq('id', v.id); continue; }
-      const { tema, sitio } = partirWeb(nombreHumano(v.etiqueta, 'fuente', v.url), v.url);
+      const { tema, sitio } = partirWeb(v.etiqueta, v.url);
       const padre = await temaWeb(tema, v.resumen || undefined, v.url || undefined);
       if (!padre) continue;
       const clave = `web:p:${padre.id.slice(0, 8)}:${normalizar(sitio || 'web')}`;
@@ -225,11 +241,12 @@ export function crearCerebro(admin: Db, uid: string) {
         await admin.from('jarvis_nodos').update({ usos: (ya.usos || 0) + (v.usos || 0), url: ya.url || v.url, resumen: ya.resumen || v.resumen }).eq('id', ya.id);
         await admin.from('jarvis_nodos').delete().eq('id', v.id);
       } else {
-        await admin.from('jarvis_nodos').update({ clave, etiqueta: sitio ? `${tema} · ${sitio}` : `${tema} (internet)` }).eq('id', v.id);
+        await admin.from('jarvis_nodos').update({ clave, etiqueta: sitio ? `${padre.etiqueta} · ${sitio}` : `${padre.etiqueta} (internet)` }).eq('id', v.id);
         await admin.from('jarvis_enlaces').delete().eq('user_id', uid).eq('destino', v.id).eq('relacion', 'buscó');
         await enlazar(padre.id, v.id, 'en');
       }
     }
+    return filas.length;
   }
 
   return {
@@ -333,12 +350,12 @@ export function crearCerebro(admin: Db, uid: string) {
       // («Cargador USB tipo C») y cada sitio es un punto debajo («… · Planet
       // Group»). Buscar otra vez actualiza ese punto en vez de crear otra
       // estrella: antes salían 70 ideas casi iguales de la misma búsqueda.
-      const { tema, sitio } = partirWeb(nombreHumano(c, 'fuente', resultados[0]?.url) || c, resultados[0]?.url);
+      const { tema, sitio } = partirWeb(c, resultados[0]?.url);
       try {
         const resumen = limpio(resultados.slice(0, 3).map(r => { const e = limpiarExtracto(r.extracto, 400); return e ? `${r.titulo}: ${e}` : r.titulo; }).join(' · '), 1400);
         const padre = await temaWeb(tema, resumen, resultados[0]?.url);
         if (!padre) return null;
-        const n = await puntoWeb(padre, tema, sitio, { resumen, url: resultados[0]?.url, usar: true });
+        const n = await puntoWeb(padre, padre.etiqueta, sitio, { resumen, url: resultados[0]?.url, usar: true });
         enFondo(consolidar(10));
         return n ? { etiqueta: n.etiqueta, clave: n.clave, nuevo: n.nuevo } : null;
       } catch (e) { console.log(`cerebro: ${e instanceof Error ? e.message : e}`); return null; }
@@ -396,6 +413,12 @@ export function crearCerebro(admin: Db, uid: string) {
         if (desde) await admin.from('jarvis_enlaces').delete().eq('user_id', uid).or(`and(origen.eq.${desde},destino.eq.${nodo}),and(origen.eq.${nodo},destino.eq.${desde})`);
         const enlace = await nuevoEnlace(hacia, nodo, 'incluye');
         return { ok: true, enlace };
+      }
+      if (op === 'ordenar') {
+        // Ordena TODO lo viejo de internet de una vez (al abrir el cerebro).
+        let total = 0;
+        for (let i = 0; i < 15; i++) { const n = await consolidar(25); total += n; if (n < 25) break; }
+        return { ok: true, nodo: { ordenadas: total } };
       }
       return { ok: false, error: 'Cambio desconocido.' };
     },

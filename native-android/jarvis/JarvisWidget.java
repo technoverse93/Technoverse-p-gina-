@@ -27,9 +27,10 @@ import org.json.JSONObject;
  *    aquí. (Android no deja escribir dentro de un widget.)
  *  · Botón de tamaño: chico (la última respuesta) o grande (la
  *    conversación, que se desliza).
- *  · «Abrir conversación» (en grande, o tocando la respuesta en chico):
- *    Jarvis completo en una hoja, para confirmar acciones o ver tablas.
- *  · La marca «Jarvis»: la app (con su huella de siempre).
+ *  · Tocar la respuesta o «Abrir conversación»: lo mismo que «Escribile…»,
+ *    en el propio recuadro. Lo que haya que confirmar se confirma ahí
+ *    mismo. NINGÚN toque abre otra ventana encima.
+ *  · La marca «Jarvis»: la app (con su huella de siempre), a propósito.
  *
  * Todo eso lo hace JarvisRapido (un puente de Capacitor con la página
  * jarvis-rapido.html). Sin activar (Jarvis → Ajustes → Mini-widget), la
@@ -144,7 +145,7 @@ public class JarvisWidget extends AppWidgetProvider {
     private static void pintar(Context ctx, AppWidgetManager manager, int[] ids) {
         SharedPreferences p = prefs(ctx);
         boolean activo = activo(ctx), grande = p.getBoolean(GRANDE, false), accion = p.getBoolean(ACCION, false);
-        String estado = !activo ? "Sin activar" : accion ? "Acción por confirmar · tocá abrir" : p.getString(ESTADO, "");
+        String estado = !activo ? "Sin activar" : accion ? "Acción por confirmar · tocá aquí" : p.getString(ESTADO, "");
         String ultima = p.getString("ultima_respuesta", null);
         String abajo = !activo
             ? "Sin activar: tocá para abrir la app y activalo en Jarvis → Ajustes → Mini-widget."
@@ -165,11 +166,13 @@ public class JarvisWidget extends AppWidgetProvider {
                 servicio.setData(Uri.parse(servicio.toUri(Intent.URI_INTENT_SCHEME)));
                 vista.setRemoteAdapter(R.id.jarvis_lista, servicio);
                 vista.setEmptyView(R.id.jarvis_lista, R.id.jarvis_vacio);
-                vista.setOnClickPendingIntent(R.id.jarvis_abrir, activo ? ventanita(ctx, "hoja", 13) : app(ctx, 23));
-                vista.setOnClickPendingIntent(R.id.jarvis_vacio, activo ? ventanita(ctx, "escribir", 16) : app(ctx, 24));
+                // Todo toque al recuadro se queda EN el recuadro (nunca una
+                // hoja ni la app): el chat se dibuja encima del propio widget.
+                vista.setOnClickPendingIntent(R.id.jarvis_abrir, activo ? ventanita(ctx, "escribir", 13, id) : app(ctx, 23));
+                vista.setOnClickPendingIntent(R.id.jarvis_vacio, activo ? ventanita(ctx, "escribir", 16, id) : app(ctx, 24));
             } else {
                 vista.setTextViewText(R.id.jarvis_ultima, abajo);
-                vista.setOnClickPendingIntent(R.id.jarvis_ultima, activo ? ventanita(ctx, "hoja", 13) : app(ctx, 23));
+                vista.setOnClickPendingIntent(R.id.jarvis_ultima, activo ? ventanita(ctx, "escribir", 13, id) : app(ctx, 23));
             }
             manager.updateAppWidget(id, vista);
         }

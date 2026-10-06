@@ -473,19 +473,22 @@ svg.lucide:not([class*="w-"]):not([class*="h-"]) { width: 20px; height: 20px; }
 
 button:has(> svg.lucide),
 [role="button"]:has(> svg.lucide) {
-  min-width: 40px !important;
-  min-height: 40px !important;
+  min-width: 32px !important;
+  min-height: 32px !important;
   display: inline-flex !important;
   align-items: center !important;
   justify-content: center;
 }
 
-/* En pantallas táctiles el objetivo mínimo sube a 44 px (guía de Apple). */
+/* En pantallas táctiles el mínimo sube a 36 px. Antes era 44 px y, como
+   va con !important, agrandaba TODOS los botones con icono por encima del
+   tamaño de su diseño: el dueño veía la app «con botones demasiado
+   grandes» que tapaban el contenido. 36 px se sigue tocando cómodo. */
 @media (pointer: coarse) {
   button:has(> svg.lucide),
   [role="button"]:has(> svg.lucide) {
-    min-width: 44px !important;
-    min-height: 44px !important;
+    min-width: 36px !important;
+    min-height: 36px !important;
   }
 }
 

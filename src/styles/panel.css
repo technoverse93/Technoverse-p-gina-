@@ -782,8 +782,8 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 @media (max-width: 420px) {
 :root:has(#admin-panel-root) { font-size: 15px; }
 #admin-panel-root button:has(> svg.lucide),
-  #admin-panel-root [role="button"]:has(> svg.lucide) { min-width: 36px !important; min-height: 36px !important; }
-#admin-panel-root .tv-btn { height: 38px; }
+  #admin-panel-root [role="button"]:has(> svg.lucide) { min-width: 34px !important; min-height: 34px !important; }
+#admin-panel-root .tv-btn { height: 36px; }
 #admin-panel-root .tv-kanban-col { width: min(18rem, calc(100vw - 76px)); }
 }
 #admin-panel-root .ai-caja textarea { padding: 3px 0 2px; min-height: 28px; line-height: 1.45; }

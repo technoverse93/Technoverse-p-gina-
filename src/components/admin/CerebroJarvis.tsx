@@ -15,8 +15,9 @@
 // función (accion 'cerebro'), que valida que todo sea del dueño.
 // =====================================================================
 
-import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as TeclaEv, type ReactNode } from 'react';
-import { ArrowLeft, Brain, LocateFixed, Minus, Pencil, Plus, RefreshCw, Search, X, ExternalLink, MessageCircleQuestion } from 'lucide-react';
+import { createPortal } from 'react-dom';
+import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent as TeclaEv, type PointerEvent as PunteroEv, type ReactNode } from 'react';
+import { ArrowLeft, Brain, LocateFixed, Maximize2, Minimize2, Minus, Pencil, Plus, RefreshCw, Search, X, ExternalLink, MessageCircleQuestion } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { limpiarExtracto, nombreHumano, sitioHumano } from '../../utils/nombresCerebro';
 import { Motor, type ModeloM, type Toque } from './cerebro/motor';
@@ -36,6 +37,8 @@ type Arbol = {
   vecinos: Map<string, string[]>; modelo: ModeloM;
 };
 type Aviso = { texto: string; deshacer?: () => void } | null;
+type Nivel = 'min' | 'medio' | 'alto';
+const ALTO_NIVEL: Record<Nivel, (h: number) => number> = { min: () => 60, medio: h => Math.round(h * 0.46), alto: h => Math.round(h * 0.82) };
 
 const COLS = 'id,clave,etiqueta,tipo,resumen,fuente,url,usos,ultimo_uso,creado_en,actualizado_en';
 const COLOR_FIJO: Record<string, string> = { 'dom:negocio': '#7FD8CF', 'dom:internet': '#C3A3FF', 'dom:dueno': '#F49BB6' };
@@ -67,6 +70,7 @@ const conNombre = (f: Omit<Fila, 'nombre'>): Fila => ({ ...f, nombre: nombreHuma
 // Lo último que se bajó, en memoria: al abrir se ve AL INSTANTE y se
 // refresca por detrás. Jarvis lo precarga al abrirse.
 let enMemoria: { filas: Fila[]; enlaces: Enlace[] } | null = null;
+let ordenado = false;
 let bajando: Promise<{ filas: Fila[]; enlaces: Enlace[] } | { error: 'sin_tablas' | 'red' }> | null = null;
 function bajarCerebro() {
   if (bajando) return bajando;
@@ -156,7 +160,12 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
   const [sel, setSel] = useState<string | null>(null);
   const [marcado, setMarcado] = useState<string | null>(null);
   const [nuevo, setNuevo] = useState<string | null>(null);
-  const [alto, setAlto] = useState(false);
+  // La hoja se sube o se baja con el dedo: chica (casi todo el cerebro a
+  // la vista), media o alta (para leer y corregir con calma).
+  const [nivel, setNivel] = useState<Nivel>('min');
+  const [arrastre, setArrastre] = useState<number | null>(null);
+  // Pantalla completa: el cerebro ocupa todo el teléfono.
+  const [completo, setCompleto] = useState(false);
   const [aviso, setAviso] = useState<Aviso>(null);
   const [abajo, setAbajo] = useState(300);
   // Lo que se está por olvidar: se oculta ya y se borra si no se deshace.
@@ -180,6 +189,14 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
     return r;
   }, []);
   useEffect(() => { void cargar(); }, [cargar]);
+  // Al abrir, Jarvis ordena de UNA vez lo viejo de internet (las búsquedas
+  // repetidas caen en un solo tema con un punto por tienda) y se recarga.
+  useEffect(() => {
+    if (ordenado) return; ordenado = true;
+    void supabase.functions.invoke('asistente-ia', { body: { accion: 'cerebro', op: 'ordenar', datos: {} } })
+      .then(({ data }) => { if (data?.ok && data?.nodo?.ordenadas > 0) { enMemoria = null; void cargar(); } })
+      .catch(() => { ordenado = false; });
+  }, [cargar]);
 
   const visibles = useMemo(() => (filas || []).filter(f => !ocultos.has(f.id)), [filas, ocultos]);
   const arbol = useMemo(() => armar(visibles, enlaces), [visibles, enlaces]);
@@ -197,23 +214,23 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
     ro.observe(cv); if (hojaRef.current) ro.observe(hojaRef.current); if (hudRef.current) ro.observe(hudRef.current);
     medir();
     return () => { ro.disconnect(); m.destruir(); motorRef.current = null; };
-  }, [hayLienzo]);
-  useEffect(() => { motorRef.current?.datos(arbol.modelo); }, [arbol, hayLienzo]);
+  }, [hayLienzo, completo]);
+  useEffect(() => { motorRef.current?.datos(arbol.modelo); }, [arbol, hayLienzo, completo]);
   // El motor marca el TEMA (nivel 2) y, si se eligió algo más hondo, su punto.
   const temaDe = useCallback((id: string | null) => { let x = id; while (x && (arbol.prof.get(x) ?? 9) > 2) x = arbol.padre.get(x) || null; return x; }, [arbol]);
   const puntoDe = useCallback((id: string | null) => { let x = id; while (x && (arbol.prof.get(x) ?? 9) > 3) x = arbol.padre.get(x) || null; return x && arbol.prof.get(x) === 3 ? x : null; }, [arbol]);
   useEffect(() => {
     motorRef.current?.estado({ foco, sel: temaDe(sel), marcado: marcado || puntoDe(sel), nuevo });
-  }, [foco, sel, marcado, nuevo, temaDe, puntoDe, hayLienzo]);
+  }, [foco, sel, marcado, nuevo, temaDe, puntoDe, hayLienzo, completo]);
 
   // --------------------------- navegación ---------------------------
-  const centrar = () => { setSel(null); setFoco(null); setMarcado(null); setAlto(false); };
-  const verRama = (id: string) => { setSel(null); setMarcado(null); setFoco(id); setAlto(false); };
+  const centrar = () => { setSel(null); setFoco(null); setMarcado(null); setNivel('min'); };
+  const verRama = (id: string) => { setSel(null); setMarcado(null); setFoco(id); setNivel(n => (n === 'min' ? 'medio' : n)); };
   const elegir = (id: string) => {
     const f = arbol.porId.get(id); if (!f) return;
     if (f.tipo === 'raiz') { centrar(); return; }
     if (arbol.prof.get(id) === 1) { verRama(id); return; }
-    setFoco(arbol.ramaDe.get(id) || null); setSel(id); setMarcado(null);
+    setFoco(arbol.ramaDe.get(id) || null); setSel(id); setMarcado(null); setNivel(n => (n === 'min' ? 'medio' : n));
   };
   tocarRef.current = t => {
     if (!t || t.tipo === 'nucleo') { centrar(); return; }
@@ -337,8 +354,34 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
   const rama = foco ? arbol.ramas.find(r => r.id === foco) || null : null;
   const nodoSel = sel ? arbol.porId.get(sel) || null : null;
 
-  return (
-    <div className="jv-cerebro">
+  // Arrastrar la manija: sigue al dedo y al soltar se acomoda en el nivel
+  // más cercano (o en el siguiente, si se soltó con impulso). Un toque
+  // sin arrastrar pasa al siguiente nivel.
+  const arrastrar = (e: PunteroEv<HTMLButtonElement>) => {
+    const hoja = hojaRef.current, caja = hoja?.parentElement; if (!hoja || !caja) return;
+    e.currentTarget.setPointerCapture(e.pointerId);
+    const y0 = e.clientY, h0 = hoja.offsetHeight, H = caja.clientHeight;
+    let ultY = y0, ultT = performance.now(), vel = 0, movio = false;
+    const mover = (ev: PointerEvent) => {
+      if (Math.abs(ev.clientY - y0) > 6) movio = true; if (!movio) return;
+      const now = performance.now(); vel = (ev.clientY - ultY) / Math.max(8, now - ultT); ultY = ev.clientY; ultT = now;
+      setArrastre(Math.max(64, Math.min(H * 0.9, h0 - (ev.clientY - y0))));
+    };
+    const soltar = (ev: PointerEvent) => {
+      window.removeEventListener('pointermove', mover); window.removeEventListener('pointerup', soltar); window.removeEventListener('pointercancel', soltar);
+      setArrastre(null);
+      const orden: Nivel[] = ['min', 'medio', 'alto'];
+      if (!movio) { setNivel(n => orden[(orden.indexOf(n) + 1) % 3]); return; }
+      const h = Math.max(64, Math.min(H * 0.9, h0 - (ev.clientY - y0)));
+      let i = orden.reduce((m, n, k) => (Math.abs(ALTO_NIVEL[n](H) - h) < Math.abs(ALTO_NIVEL[orden[m]](H) - h) ? k : m), 0);
+      if (Math.abs(vel) > 0.5) { const cerca = orden.indexOf(nivel); i = Math.max(0, Math.min(2, vel < 0 ? Math.max(i, cerca + 1) : Math.min(i, cerca - 1))); }
+      setNivel(orden[i]);
+    };
+    window.addEventListener('pointermove', mover); window.addEventListener('pointerup', soltar); window.addEventListener('pointercancel', soltar);
+  };
+
+  const escena = (
+    <div className="jv-cerebro" data-completo={completo || undefined}>
       <canvas ref={lienzoRef} className="jv-cb-lienzo" tabIndex={0} role="img" hidden={filas === null}
         aria-label={`Cerebro en 3D: ${arbol.ramas.length} ramas y ${nTemas} temas. Arrastrá para girar, dos dedos para acercar; con el teclado, flechas y + / −. Abajo está la lista.`} />
       {filas === null && <p className="jv-cb-espera">{error === 'red' ? 'No se pudo leer el cerebro. Revisá la conexión.' : 'Despertando el cerebro…'}</p>}
@@ -355,15 +398,17 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
           </div>
         </div>
         <button type="button" className="jv-vidrio jv-cb-ib" aria-label="Actualizar" title="Actualizar" onClick={() => void cargar()} disabled={cargando}><RefreshCw className={`w-4 h-4 ${cargando ? 'animate-spin' : ''}`} /></button>
-        <button type="button" className="jv-vidrio jv-cb-ib" aria-label="Ver todo" title="Ver todo" onClick={centrar}><LocateFixed className="w-[18px] h-[18px]" /></button>
+        <button type="button" className="jv-vidrio jv-cb-ib" aria-label="Ver todo" title="Ver todo" onClick={centrar}><LocateFixed className="w-4 h-4" /></button>
+        <button type="button" className="jv-vidrio jv-cb-ib" aria-label={completo ? 'Salir de pantalla completa' : 'Pantalla completa'} title={completo ? 'Salir de pantalla completa' : 'Pantalla completa'} onClick={() => setCompleto(c => !c)}>{completo ? <Minimize2 className="w-4 h-4" /> : <Maximize2 className="w-4 h-4" />}</button>
       </div>
       <div className="jv-cb-zoom">
         <button type="button" className="jv-vidrio jv-cb-ib" aria-label="Acercar" title="Acercar" onClick={() => motorRef.current?.zoom(1.35)}><Plus className="w-[18px] h-[18px]" /></button>
         <button type="button" className="jv-vidrio jv-cb-ib" aria-label="Alejar" title="Alejar" onClick={() => motorRef.current?.zoom(1 / 1.35)}><Minus className="w-[18px] h-[18px]" /></button>
       </div>
 
-      <div className="jv-cb-hoja jv-vidrio" ref={hojaRef} data-alto={alto || undefined}>
-        <button type="button" className="jv-cb-asa" aria-label={alto ? 'Achicar el panel' : 'Agrandar el panel'} onClick={() => setAlto(a => !a)}><i /></button>
+      <div className="jv-cb-hoja jv-vidrio" ref={hojaRef} data-nivel={nivel} data-arrastrando={arrastre !== null || undefined} style={arrastre !== null ? { height: arrastre } : undefined}>
+        <button type="button" className="jv-cb-asa" aria-label={nivel === 'alto' ? 'Achicar el panel' : 'Agrandar el panel'} title="Deslizá para subir o bajar" onPointerDown={arrastrar}
+          onKeyDown={e => { if (e.key === 'ArrowUp') setNivel(n => (n === 'min' ? 'medio' : 'alto')); if (e.key === 'ArrowDown') setNivel(n => (n === 'alto' ? 'medio' : 'min')); }}><i /></button>
         <div className="jv-cb-panel">
           {nodoSel ? (
             <VistaTema n={nodoSel} arbol={arbol} marcado={marcado} onElegir={elegir} onMarcar={setMarcado}
@@ -388,6 +433,8 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
       )}
     </div>
   );
+  // En pantalla completa va directo al body (ningún contenedor lo recorta).
+  return completo ? createPortal(<div className="jv-cb-portal" data-jarvis="" data-tema={document.documentElement.classList.contains('dark') ? 'oscuro' : 'claro'}>{escena}</div>, document.body) : escena;
 }
 
 // ---------------------------------------------------------------------
