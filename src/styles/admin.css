@@ -1636,12 +1636,23 @@ html.sin-vidrio .sg-riel, html.sin-vidrio .sg-seg { backdrop-filter: none; backg
 .tv-lz-card[data-abierto] { border-color: color-mix(in srgb, var(--accent) 40%, var(--border-color)); }
 .tv-lz-vacio { text-align: center; color: var(--text-secondary); font-size: 14px; padding: 24px 0; margin: 0; }
 @media (max-width: 640px) {
-  .tv-lz { gap: 16px; }
-  .tv-lz-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 8px; }
-  .tv-lz-card { grid-template-columns: minmax(0, 1fr); gap: 8px; padding: 12px; }
+  /* Teléfono: compacto (el dueño lo veía «todo muy grande»): 3 columnas,
+     iconos de 30 px y tarjetas bajas para que quepa casi todo sin bajar. */
+  .tv-lz { gap: 12px; }
+  .tv-lz-grid, .tv-lz-frec { grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 6px; }
+  .tv-lz-card { grid-template-columns: minmax(0, 1fr); justify-items: center; text-align: center; gap: 4px; padding: 8px 4px; border-radius: 14px; }
+  .tv-lz-card .tv-lz-tx { align-items: center; }
+  .tv-lz-tile { width: 30px; height: 30px; border-radius: 10px; }
+  .tv-lz-tile svg { width: 16px !important; height: 16px !important; }
+  .tv-lz-n { font-size: 12px; line-height: 1.2; font-weight: 600; justify-content: center; }
   .tv-lz-d { display: none; }
-  .tv-lz-frec { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-  .tv-lz-busca { height: 44px; }
+  .tv-lz-frec-b { padding: 6px 8px; gap: 6px; border-radius: 12px; }
+  .tv-lz-frec-b .tv-lz-tile { width: 26px; height: 26px; border-radius: 8px; }
+  .tv-lz-frec-b .tv-lz-n { font-size: 12px; }
+  .tv-lz-abierto { top: 4px; right: 4px; font-size: 9.5px; padding: 1px 5px; }
+  .tv-lz-lbl { font-size: 11px; }
+  .tv-lz-busca { height: 40px; }
+  .tv-lz-busca input { font-size: 14px; }
 }
 @media (prefers-reduced-motion: reduce) { .tv-lz-card, .tv-lz-frec-b { transition: none; } .tv-lz-card:hover, .tv-lz-frec-b:hover { transform: none; } }
 html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: none; -webkit-backdrop-filter: none; background: var(--bg-surface); }
@@ -1856,3 +1867,7 @@ html textarea { line-height: 1.45; }
 
 /* Acción que Jarvis hizo sola: una línea discreta, como un asistente. */
 @keyframes ai-linea-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
+@media (max-width: 640px) {
+  .tv-lz-frec-b { min-width: 0; overflow: hidden; }
+  .tv-lz-frec-b .tv-lz-n { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; display: block; }
+}

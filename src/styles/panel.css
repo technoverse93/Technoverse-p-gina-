@@ -270,7 +270,7 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 #admin-panel-root .tv-regleta-fijos .tv-icon-btn[aria-label="Ver la tienda"] { display: none !important; }
 #admin-panel-root .tv-tab[data-activa] { max-width: max(100px, calc(100vw - 214px)); }
 }
-#admin-panel-root .tv-lz-titulo { margin: 0; font: 700 clamp(22px, 3vw, 28px)/1.15 var(--font-display, inherit); color: var(--text-primary); text-align: center; }
+#admin-panel-root .tv-lz-titulo { margin: 0; font: 700 clamp(18px, 3vw, 28px)/1.15 var(--font-display, inherit); color: var(--text-primary); text-align: center; }
 #admin-panel-root .tv-regleta { position: relative; z-index: 75; }
 .ai-root{container-type:inline-size;position:relative;height:100%;min-height:440px;display:flex;gap:12px;color:var(--text-primary)}
 .ai-root *{box-sizing:border-box}
@@ -730,6 +730,7 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 #admin-panel-root .jv-fab{position:fixed;left:12px;bottom:calc(16px + env(safe-area-inset-bottom,0px));width:44px;height:44px;min-width:0!important;min-height:0!important;border-radius:14px;display:grid!important;place-items:center;background:var(--accent);color:var(--accent-ink);box-shadow:0 10px 24px rgba(0,0,0,.22)}
 #admin-panel-root .jv-fab:hover{filter:brightness(1.08)}
 #admin-panel-root .jv-fab:active{transform:scale(.95)}
+#admin-panel-root .jv-fab[data-arriba]{bottom:calc(92px + env(safe-area-inset-bottom,0px))}
 @media (min-width:640px) {
 #admin-panel-root .jv-fab{left:20px;bottom:20px}
 }
@@ -780,7 +781,9 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 .ai-voz-prueba{margin:0 14px 12px}
 .ai-acc-solo{display:flex;align-items:center;gap:8px;margin:0;padding:8px 14px 12px;font-size:13px;color:var(--text-secondary)}
 @media (max-width: 420px) {
-:root:has(#admin-panel-root) { font-size: 15px; }
+/* Teléfono: todo un punto más chico y más junto (el dueño lo veía grande). */
+:root:has(#admin-panel-root) { font-size: 14px; }
+#admin-panel-root { --tv-gap: 14px; --tv-gap-sm: 8px; --tv-gap-lg: 18px; }
 #admin-panel-root button:has(> svg.lucide),
   #admin-panel-root [role="button"]:has(> svg.lucide) { min-width: 34px !important; min-height: 34px !important; }
 #admin-panel-root .tv-btn { height: 36px; }

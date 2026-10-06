@@ -107,7 +107,9 @@ export class Motor {
   /** Tamaño del lienzo y huecos de la cabecera (arriba) y la hoja (abajo). */
   medir(arriba: number, abajo: number) {
     const r = this.cv.getBoundingClientRect();
-    this.dpr = Math.min(this.liviano ? 1.25 : 2, devicePixelRatio || 1);
+    // En teléfono basta 1,5× (la mitad de píxeles que 2×, sin diferencia a la vista).
+    const tactil = matchMedia('(pointer: coarse)').matches;
+    this.dpr = Math.min(this.liviano ? 1.25 : tactil ? 1.5 : 2, devicePixelRatio || 1);
     if (Math.round(r.width) !== this.W || Math.round(r.height) !== this.H) {
       this.W = Math.round(r.width); this.H = Math.round(r.height);
       this.cv.width = this.W * this.dpr; this.cv.height = this.H * this.dpr; this.fondo = null;

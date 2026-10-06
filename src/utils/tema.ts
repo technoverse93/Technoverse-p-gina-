@@ -91,8 +91,14 @@ export function iniciarVidrio(): void {
     if (guardado === '1') sinVidrio = true;
     if (guardado === '0') sinVidrio = false;
     else {
+      // En TELÉFONOS el vidrio (backdrop-filter) se apaga por defecto: la GPU
+      // lo recalcula en cada cuadro al desplazar y era lo que trababa el
+      // panel. Antes dependía de deviceMemory, que muchos WebView de Android
+      // no informan, así que nunca se activaba. Queda el mismo aspecto con
+      // color sólido; quien quiera el vidrio lo enciende en Ajustes.
       const mem = (navigator as any).deviceMemory;
-      if (typeof mem === 'number' && mem > 0 && mem <= 2) sinVidrio = true;
+      const telefono = matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820;
+      if (telefono || (typeof mem === 'number' && mem > 0 && mem <= 2)) sinVidrio = true;
     }
   } catch { /* sin señal: se queda con el vidrio */ }
   document.documentElement.classList.toggle('sin-vidrio', sinVidrio);
