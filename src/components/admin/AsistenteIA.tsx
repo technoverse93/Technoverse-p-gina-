@@ -103,7 +103,7 @@ const MODULOS: { id: keyof Modulos; nombre: string; desc: string; icono: LucideI
 /** Capacidades de asistente (como ChatGPT o Claude), para todo el personal. */
 const CAPACIDADES: { id: keyof Modulos; nombre: string; desc: string; icono: LucideIcon }[] = [
   { id: 'internet', nombre: 'Búsqueda en internet', desc: 'En tiempo real, con fuentes (Tavily)', icono: Globe },
-  { id: 'enlaces', nombre: 'Leer enlaces', desc: 'Abre las páginas que se peguen', icono: Link2 },
+  { id: 'enlaces', nombre: 'Entrar a páginas web', desc: 'Abre y lee cualquier página en tiempo real (y sus enlaces)', icono: Link2 },
   { id: 'archivos', nombre: 'Fotos y PDF', desc: 'Hasta 3 por mensaje', icono: Paperclip },
   { id: 'codigo', nombre: 'Cálculos con código', desc: 'Resultados exactos', icono: Code2 },
   { id: 'revisar', nombre: 'Revisión por otra IA', desc: 'Otra IA revisa cada respuesta y la corrige si hace falta', icono: ShieldCheck },
