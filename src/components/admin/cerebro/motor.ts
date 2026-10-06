@@ -42,7 +42,7 @@ const hexA = (h: string, a: number) => { const n = parseInt(h.slice(1), 16); ret
 const hash = (t: string) => { let h = 2166136261; for (let i = 0; i < t.length; i++) h = Math.imul(h ^ t.charCodeAt(i), 16777619); return (h >>> 0) / 4294967296; };
 
 const ORO = '#E8C27A', ORO_CLARO = '#FFE3A8', FIBRA = '143,163,217';
-const MAX_TEMAS = 60, MAX_PUNTOS = 10, MAX_RELACIONES = 80;
+const MAX_TEMAS = 100, MAX_PUNTOS = 14, MAX_RELACIONES = 120;
 const DMIN = 0.45, DMAX = 6, PMAX = 1.3;
 
 type Estrella = {
@@ -344,6 +344,9 @@ export class Motor {
     const orden = this.estrellas.filter(s => s.vis).sort((a, b) => b.z - a.z);
     for (const s of orden) {
       const al = brillo(s); if (al < 0.03) continue;
+      // Fuera de la pantalla no se dibuja (con un cerebro grande, la mitad
+      // de las estrellas quedan afuera al acercarse).
+      if (s !== sel && (s.x < -60 || s.y < -60 || s.x > W + 60 || s.y > H + 60)) continue;
       const esSel = s === sel, col = esSel ? ORO : s.tipo === 'nucleo' ? '#FFFFFF' : s.rama!.color, r = s.r;
       const fl = s.flash && t - s.flash < 450 ? 1 - (t - s.flash) / 450 : 0;
       if (s.tipo === 'tema' && al > 0.2) {
@@ -352,7 +355,10 @@ export class Motor {
         const lejos = this.liviano && !esSel && foco !== s.rama;
         if (!lejos) {
           ctx.strokeStyle = hexA(col, 0.5 * al); ctx.lineWidth = esSel ? 1 : 0.8; ctx.beginPath();
-          for (const pu of s.puntos) {
+          // Lejos del foco, solo unas ramitas (el resto se ve al acercarse):
+          // con 100 temas de 14 puntos eran 1400 curvas por cuadro.
+          const ramitas = esSel || foco === s.rama ? s.puntos : s.puntos.slice(0, 5);
+          for (const pu of ramitas) {
             const c = this.proy(lerp(s.p, pu.c, s.ext)), cx = c.x, cy = c.y, e = this.proy(lerp(s.p, pu.p, s.ext));
             ctx.moveTo(s.x, s.y); ctx.quadraticCurveTo(cx, cy, e.x, e.y); pu.x = e.x; pu.y = e.y;
           }

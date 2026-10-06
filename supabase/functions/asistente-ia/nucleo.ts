@@ -169,6 +169,9 @@ type Sistema = {
   memoria: { guardar: (texto: string, tipo: string) => Promise<string>; olvidar: (buscar: string) => Promise<{ id: string; texto: string; tipo: string }[]> } | null;
   /** Cerebro de Jarvis (grafo de lo que aprende). */
   cerebro: Cerebro | null;
+  /** Tokens gastados en ESTE mensaje por todas las IAs (también los
+   *  intentos que fallaron a medias y la revisión): lo que se cobra. */
+  gasto: { in: number; out: number };
 };
 
 /** Herramientas de memoria: Jarvis aprende del dueño, nunca de lo que lee afuera. */
@@ -514,8 +517,9 @@ async function preguntarGemini(historial: Turno[], modelo: string, sis: Sistema)
         }
       }
     }
-    tokensIn += Number(uso?.promptTokenCount || 0);
-    tokensOut += Number(uso?.candidatesTokenCount || 0) + Number(uso?.thoughtsTokenCount || 0);
+    const gIn = Number(uso?.promptTokenCount || 0) + Number(uso?.toolUsePromptTokenCount || 0);
+    const gOut = Number(uso?.candidatesTokenCount || 0) + Number(uso?.thoughtsTokenCount || 0);
+    tokensIn += gIn; tokensOut += gOut; sis.gasto.in += gIn; sis.gasto.out += gOut;
     // Tarjetas de lo que hizo Google por su cuenta: código y enlaces leídos.
     if (codigo) {
       const c: Consulta = { modulo: 'Código', desc: 'cálculo exacto', filas: salidaCodigo ? 'resultado' : 'ejecutado', detalle: `${codigo.trim().slice(0, 1500)}${salidaCodigo ? `\n→ ${salidaCodigo.trim().slice(0, 400)}` : ''}` };
@@ -600,6 +604,11 @@ function compatible(id: IdProv, url: string, varClave: string, varModelo: string
 /** Los mejores modelos abiertos, en orden (se busca por coincidencia en el
  *  nombre que da cada proveedor). Los nuevos que aparezcan van al final. */
 const PREFERIDOS_ABIERTOS = ['kimi-k3', 'deepseek-v4', 'qwen3.5', 'glm-5', 'gpt-oss-120b', 'deepseek-v3.2', 'deepseek-v3.1', 'deepseek-chat', 'deepseek-v3', 'qwen3-235b', 'kimi-k2', 'glm-4.6', 'glm-4.5', 'deepseek-r1', 'qwen3-next', 'llama-4-maverick', 'mistral-medium', 'llama-3.3-70b', 'qwen3-32b', 'mistral-small', 'gpt-oss-20b'];
+/** Puesto de un modelo en PREFERIDOS_ABIERTOS (999 = no está). */
+const rangoAbierto = (n: string) => { const i = PREFERIDOS_ABIERTOS.findIndex(x => n.toLowerCase().includes(x)); return i < 0 ? 999 : i; };
+/** Los de punta (Kimi K3, DeepSeek V4, Qwen 3.5, GLM-5): rinden como los
+ *  mejores modelos cerrados y van ANTES que Gemini cuando hay clave. */
+const PUNTA = 4;
 const NO_CHAT = /(embed|whisper|tts|audio|image|vision-only|guard|rerank|moderation|ocr|transcri|speech|flux|stable-diffusion|bge|clip)/i;
 /** Modelos vigentes de un proveedor compatible: se leen de su /models (una
  *  hora en memoria) y se ordenan por calidad. En OpenRouter, solo los gratis. */
@@ -614,8 +623,7 @@ async function modelosCompatibles(p: Compatible): Promise<string[]> {
   });
   const pedido = p.modelo;
   if (!lista.length) return [pedido];
-  const puntos = (n: string) => { const i = PREFERIDOS_ABIERTOS.findIndex(x => n.toLowerCase().includes(x)); return i < 0 ? 999 : i; };
-  const orden = [...lista].sort((a, b) => puntos(a) - puntos(b)).filter(n => puntos(n) < 999);
+  const orden = [...lista].sort((a, b) => rangoAbierto(a) - rangoAbierto(b)).filter(n => rangoAbierto(n) < 999);
   return [...new Set([...(lista.includes(pedido) ? [pedido] : []), ...orden])].slice(0, 3);
 }
 /** La CADENA DE RESPALDO, en orden (solo las IAs que tienen clave). Todas
@@ -636,11 +644,31 @@ function proveedoresRespaldo(): Compatible[] {
     },
     huggingface: () => compatible('huggingface', 'https://router.huggingface.co/v1', 'HF_TOKEN', 'HF_MODEL', 'openai/gpt-oss-120b'),
   };
-  const orden: string[] = String(Deno.env.get('IA_RESPALDOS') || 'groq,cerebras,sambanova,openrouter,nvidia,mistral,cloudflare,huggingface').split(',').map((t: string) => t.trim().toLowerCase());
+  const orden: string[] = String(Deno.env.get('IA_RESPALDOS') || 'nvidia,sambanova,openrouter,cerebras,groq,mistral,cloudflare,huggingface').split(',').map((t: string) => t.trim().toLowerCase());
   return [...new Set(orden)].map(id => todos[id]?.() || null).filter((p): p is Compatible => !!p);
 }
 /** Clave del cortacircuito de cada IA de respaldo. */
 const claveProv = (p: Compatible) => `${p.id}:${p.modelo}`;
+/** Nombre corto para mostrar: «NVIDIA · kimi-k3». */
+const nombreIA = (p: Compatible) => `${NOMBRE_PROV[p.id]} · ${p.modelo.split('/').pop()}`;
+
+/**
+ * La IA PRINCIPAL: el modelo abierto más potente que esté libre (de punta,
+ * ver PUNTA), uno por proveedor y el mejor primero. Si no hay ninguno con
+ * clave, responde Gemini como siempre. IA_PRINCIPAL=gemini lo apaga.
+ */
+async function proveedoresPrincipales(): Promise<Compatible[]> {
+  if ((Deno.env.get('IA_PRINCIPAL') || 'auto').toLowerCase() === 'gemini') return [];
+  const lista: Compatible[] = [];
+  for (const p of proveedoresRespaldo()) {
+    if (p.id === 'local') continue;
+    const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
+    const m = ms.filter(x => rangoAbierto(x) < PUNTA && disponibleModelo(claveProv({ ...p, modelo: x })))
+      .sort((a, b) => rangoAbierto(a) - rangoAbierto(b))[0];
+    if (m) lista.push({ ...p, modelo: m });
+  }
+  return lista.sort((a, b) => rangoAbierto(a.modelo) - rangoAbierto(b.modelo)).slice(0, 2);
+}
 
 async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compatible): Promise<Resultado> {
   // Algunos modelos gratis no aceptan herramientas: si lo dicen, se repite
@@ -672,7 +700,8 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       throw new Error(`${prov.id} respondió ${r.status}: ${det.slice(0, 200)}`);
     }
     const d = await r.json();
-    tokensIn += Number(d?.usage?.prompt_tokens || 0); tokensOut += Number(d?.usage?.completion_tokens || 0);
+    const cIn = Number(d?.usage?.prompt_tokens || 0), cOut = Number(d?.usage?.completion_tokens || 0);
+    tokensIn += cIn; tokensOut += cOut; sis.gasto.in += cIn; sis.gasto.out += cOut;
     const msg = d?.choices?.[0]?.message || {};
     const llamadas: any[] = msg.tool_calls || [];
     if (llamadas.length && ronda < sis.rondas) {
@@ -785,41 +814,72 @@ Si está bien, devolvé {"veredicto":"ok"}.
 Si hay que mejorarla, devolvé {"veredicto":"corregir","problemas":["…"],"respuesta":"la respuesta COMPLETA corregida, en markdown, mismo tono"}.
 No cambies lo que ya está bien ni agregues datos que no estén en los DATOS. Devolvé SOLO el JSON.`;
 
-/** Una llamada corta de texto a la primera IA libre (evitando la que respondió). */
-async function llamarRevisor(usuario: string, evitar: string, hasta: number): Promise<{ veredicto: string; problemas?: string[]; respuesta?: string; quien: string } | null> {
+/**
+ * Una llamada corta que devuelve JSON, a la primera IA libre. `evitar`:
+ * el proveedor que respondió (no se revisa a sí mismo). `rapido`: para
+ * tareas de fondo (sacar hechos) van primero las veloces y Flash-Lite;
+ * para revisar, primero Gemini (si respondió un abierto) y los mejores
+ * abiertos. Todos los tokens se suman a `gasto`.
+ */
+async function pedirJSON(prompt: string, usuario: string, op: { evitar?: string; hasta: number; gasto: { in: number; out: number }; rapido?: boolean; valido: (j: any) => boolean; etiqueta: string }): Promise<{ j: any; quien: string } | null> {
   const candidatos: { quien: string; correr: () => Promise<string> }[] = [];
-  for (const p of proveedoresRespaldo()) {
-    if (p.id === evitar) continue;
+  const contar = (i: unknown, o: unknown) => { op.gasto.in += Number(i || 0); op.gasto.out += Number(o || 0); };
+  const tope = () => Math.max(1000, Math.min(op.rapido ? 12000 : 15000, op.hasta - Date.now()));
+  const clave = Deno.env.get('GEMINI_API_KEY');
+  const gemini = clave && op.evitar !== 'gemini'
+    ? (op.rapido ? [GEMINI_RESPALDO, GEMINI_MODEL] : [GEMINI_MODEL, GEMINI_RESPALDO]).filter(disponibleModelo).slice(0, 1).map(m => ({ quien: `Gemini · ${m}`, correr: async () => {
+      const r = await conTope(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
+        body: JSON.stringify({ system_instruction: { parts: [{ text: prompt }] }, contents: [{ role: 'user', parts: [{ text: usuario }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }) }, tope());
+      if (!r.ok) { if (r.status === 429 || r.status >= 500) pausar(m, r.status); throw new Error(`gemini ${r.status}`); }
+      const d = await r.json();
+      contar(d?.usageMetadata?.promptTokenCount, Number(d?.usageMetadata?.candidatesTokenCount || 0) + Number(d?.usageMetadata?.thoughtsTokenCount || 0));
+      return (d?.candidates?.[0]?.content?.parts || []).filter((x: any) => !x?.thought).map((x: any) => x.text || '').join('');
+    } }))
+    : [];
+  const abiertos: typeof candidatos = [];
+  const lista = proveedoresRespaldo().filter(p => p.id !== op.evitar);
+  // Para lo de fondo, las más rápidas primero (Groq y Cerebras responden en 1-2 s).
+  if (op.rapido) lista.sort((a, b) => Number(!['groq', 'cerebras'].includes(a.id)) - Number(!['groq', 'cerebras'].includes(b.id)));
+  for (const p of lista) {
     const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
     const m = ms.find(x => disponibleModelo(claveProv({ ...p, modelo: x })));
     if (!m) continue;
-    candidatos.push({ quien: `${NOMBRE_PROV[p.id]} · ${m}`, correr: async () => {
+    abiertos.push({ quien: nombreIA({ ...p, modelo: m }), correr: async () => {
       const r = await conTope(`${p.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(p.clave ? { Authorization: `Bearer ${p.clave}` } : {}) },
-        body: JSON.stringify({ model: m, temperature: 0.1, messages: [{ role: 'system', content: PROMPT_REVISOR }, { role: 'user', content: usuario }] }) }, Math.min(15000, hasta - Date.now()));
+        body: JSON.stringify({ model: m, temperature: 0.1, messages: [{ role: 'system', content: prompt }, { role: 'user', content: usuario }] }) }, tope());
       if (!r.ok) { if (r.status === 429 || r.status >= 500) pausar(claveProv({ ...p, modelo: m }), r.status); throw new Error(`${p.id} ${r.status}`); }
-      const d = await r.json(); return String(d?.choices?.[0]?.message?.content || '');
+      const d = await r.json();
+      contar(d?.usage?.prompt_tokens, d?.usage?.completion_tokens);
+      return String(d?.choices?.[0]?.message?.content || '');
     } });
-    if (candidatos.length >= 2) break;
+    if (abiertos.length >= 3) break;
   }
-  const clave = Deno.env.get('GEMINI_API_KEY');
-  if (clave && evitar !== 'gemini') for (const m of [GEMINI_RESPALDO, GEMINI_MODEL].filter(disponibleModelo).slice(0, 1)) {
-    candidatos.push({ quien: `Gemini · ${m}`, correr: async () => {
-      const r = await conTope(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
-        body: JSON.stringify({ system_instruction: { parts: [{ text: PROMPT_REVISOR }] }, contents: [{ role: 'user', parts: [{ text: usuario }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }) }, Math.min(15000, hasta - Date.now()));
-      if (!r.ok) { if (r.status === 429 || r.status >= 500) pausar(m, r.status); throw new Error(`gemini ${r.status}`); }
-      const d = await r.json(); return (d?.candidates?.[0]?.content?.parts || []).map((x: any) => x.text || '').join('');
-    } });
-  }
+  candidatos.push(...(op.rapido ? [...abiertos, ...gemini] : [...gemini, ...abiertos]));
   for (const c of candidatos) {
-    if (Date.now() > hasta - 2500) break;
+    if (Date.now() > op.hasta - 2500) break;
     try {
       const crudo = (await c.correr()).replace(/<think>[\s\S]*?<\/think>/gi, '');
       const j = JSON.parse((/\{[\s\S]*\}/.exec(crudo) || ['{}'])[0]);
-      if (j && (j.veredicto === 'ok' || j.veredicto === 'corregir')) return { ...j, quien: c.quien };
-    } catch (e) { console.log(`revisor ${c.quien}: ${e instanceof Error ? e.message : e}`); }
+      if (j && op.valido(j)) return { j, quien: c.quien };
+    } catch (e) { console.log(`${op.etiqueta} ${c.quien}: ${e instanceof Error ? e.message : e}`); }
   }
   return null;
 }
+
+/** El revisor: devuelve el veredicto de otra IA sobre la respuesta. */
+async function llamarRevisor(usuario: string, evitar: string, hasta: number, gasto: { in: number; out: number }): Promise<{ veredicto: string; problemas?: string[]; respuesta?: string; quien: string } | null> {
+  const r = await pedirJSON(PROMPT_REVISOR, usuario, { evitar, hasta, gasto, etiqueta: 'revisor', valido: j => j.veredicto === 'ok' || j.veredicto === 'corregir' });
+  return r ? { ...r.j, quien: r.quien } : null;
+}
+
+// ---------------------------------------------------------------------
+// APRENDER SOLO: de cada conversación, los hechos que valen la pena
+// ---------------------------------------------------------------------
+const PROMPT_HECHOS = `Sos el cerebro de Jarvis, el asistente de Technoverse Costa Rica (tienda y taller de celulares y accesorios).
+Leé el intercambio y sacá SOLO hechos DURADEROS que valga la pena recordar para el negocio: precios o costos de proveedores, políticas y forma de trabajar del negocio, preferencias del dueño, datos técnicos de productos o reparaciones, decisiones tomadas.
+NO saques: datos personales de clientes (nombres, teléfonos, correos, cédulas), cifras del momento que cambian (ventas de hoy, stock de ahora, tickets abiertos), saludos ni cosas obvias.
+Si la rama o el tema ya existen en la lista que te paso, usá EXACTAMENTE ese nombre (así no se duplica).
+Devolvé SOLO JSON: {"hechos":[{"rama":"categoría madre corta","tema":"tema corto, 1 a 4 palabras","dato":"el hecho en una frase concreta y completa"}]}. Máximo 3. Si no hay nada que valga la pena: {"hechos":[]}.`;
 
 async function preguntarGemma(historial: Turno[], sis: Sistema): Promise<Resultado> {
   const clave = Deno.env.get('GEMINI_API_KEY');
@@ -844,9 +904,11 @@ async function preguntarGemma(historial: Turno[], sis: Sistema): Promise<Resulta
   }
   const d = await r.json();
   const texto = (d?.candidates?.[0]?.content?.parts || []).map((x: any) => x?.text || '').join('').trim();
+  const gIn = Number(d?.usageMetadata?.promptTokenCount || 0), gOut = Number(d?.usageMetadata?.candidatesTokenCount || 0) + Number(d?.usageMetadata?.thoughtsTokenCount || 0);
+  sis.gasto.in += gIn; sis.gasto.out += gOut;
   if (!texto) throw new CupoAgotado('gemma sin texto');
   sis.emitir('texto', { delta: texto });
-  return { texto, fuentes: [], tokensIn: Number(d?.usageMetadata?.promptTokenCount || 0), tokensOut: Number(d?.usageMetadata?.candidatesTokenCount || 0), proveedor: 'gemma' as any, modelo, busco: false, consultas: sis.consultas };
+  return { texto, fuentes: [], tokensIn: gIn, tokensOut: gOut, proveedor: 'gemma' as any, modelo, busco: false, consultas: sis.consultas };
 }
 
 /** Respaldo de la voz: Whisper en Groq (gratis, muy rápido). */
@@ -1333,6 +1395,10 @@ export async function atender(req: Request): Promise<Response> {
         },
       } : null;
       const limiteT = Date.now() + conf.total;
+      // Todo lo que gastan las IAs en este mensaje (cada intento, aunque falle).
+      const gasto = { in: 0, out: 0 };
+      const listo = (res: Resultado, t0: number, respaldo: boolean, sis: Sistema) =>
+        ({ res: { ...res, tokensIn: gasto.in, tokensOut: gasto.out, ms: Date.now() - t0 }, respaldo, sis });
       const propuestas = new Map<string, { r: unknown; marca: Consulta; evento: unknown }>();
       const guardarPropuesta = async (nombreAcc: string, args: Record<string, unknown>, objetivo: Record<string, unknown>, tarjeta: Tarjeta) => {
         const { data, error } = await admin.from('ia_acciones').insert({ user_id: uid, conversacion_id: convId, accion: nombreAcc, args, objetivo, tarjeta }).select('id,vence_en').single();
@@ -1350,7 +1416,7 @@ export async function atender(req: Request): Promise<Response> {
           modo, pensar: conf.pensar, intento: conf.intento,
           acciones: modo === 'jarvis' && mods.acciones !== false && !adjuntos.length,
           leyoAfuera: adjuntos.length > 0, ctxAcc: modo === 'jarvis' ? ctxAcc : null, guardarPropuesta, propuestas,
-          extra, rondas, memoria: memoriaFns, cerebro,
+          extra, rondas, memoria: memoriaFns, cerebro, gasto,
         };
         marcarCerebro(sis, 'usado', usadosCerebro);
         return sis;
@@ -1364,7 +1430,7 @@ export async function atender(req: Request): Promise<Response> {
         const t0 = Date.now();
         try {
           const res = await preguntarCompatible(historial, sis, local);
-          return { res: { ...res, ms: Date.now() - t0 }, respaldo: false, sis };
+          return listo(res, t0, false, sis);
         } catch (e) {
           console.log(`local: ${e instanceof Error ? e.message : e}`);
           return null;
@@ -1374,6 +1440,27 @@ export async function atender(req: Request): Promise<Response> {
         const r = await probarLocal();
         if (r) return r;
         emitir('reinicio', {});
+      }
+      // 0) La IA PRINCIPAL: el modelo abierto más potente que tenga clave
+      //    (Kimi K3, DeepSeek V4…). Solo texto: fotos y PDF los lee Gemini.
+      //    Tiene hasta el 60 % del tiempo; si no, sigue Gemini.
+      const probados = new Set<string>();
+      if (!adjuntos.length && ajustes?.respaldo !== false) {
+        for (const prov of await proveedoresPrincipales().catch(() => [] as Compatible[])) {
+          if (Date.now() > limiteT - 8000) break;
+          probados.add(claveProv(prov));
+          const sis = nuevo();
+          sis.limite = Math.min(sis.limite, Date.now() + Math.round(conf.total * 0.6));
+          emitir('estado', { texto: `Pensando con ${nombreIA(prov)}…` });
+          try {
+            const t0 = Date.now();
+            const res = await preguntarCompatible(historial, sis, prov);
+            return listo(res, t0, false, sis);
+          } catch (e) {
+            console.log(`principal ${prov.id} ${prov.modelo} falló: ${e instanceof Error ? e.message : e}`);
+            emitir('reinicio', {});
+          }
+        }
       }
       // 1) Gemini. CUALQUIER fallo —sin cupo, saturado, tiempo agotado o un
       //    error raro— pasa al siguiente modelo (antes, un error que no fuera
@@ -1389,7 +1476,7 @@ export async function atender(req: Request): Promise<Response> {
         try {
           const t0 = Date.now();
           const res = await preguntarGemini(historial, modelo, sis);
-          return { res: { ...res, ms: Date.now() - t0 }, respaldo: false, sis };
+          return listo(res, t0, false, sis);
         } catch (e) {
           if (!(e instanceof CupoAgotado)) console.log(`gemini ${modelo} falló: ${e instanceof Error ? e.message : e}`);
           emitir('reinicio', {}); // el panel borra el texto parcial, si lo hubo
@@ -1413,13 +1500,13 @@ export async function atender(req: Request): Promise<Response> {
           for (const m of ms) cadena.push({ ...p, modelo: m });
         }
         for (const prov of cadena) {
-          if (!disponibleModelo(claveProv(prov))) continue;
+          if (probados.has(claveProv(prov)) || !disponibleModelo(claveProv(prov))) continue;
           const sis = nuevo(true);
-          emitir('estado', { texto: `Google no responde; contestando con ${NOMBRE_PROV[prov.id]}…` });
+          emitir('estado', { texto: `Contestando con ${nombreIA(prov)}…` });
           try {
             const t0 = Date.now();
             const res = await preguntarCompatible(historial, sis, prov);
-            return { res: { ...res, ms: Date.now() - t0 }, respaldo: true, sis };
+            return listo(res, t0, true, sis);
           } catch (e) {
             console.log(`respaldo ${prov.id} ${prov.modelo} falló: ${e instanceof Error ? e.message : e}`);
             emitir('reinicio', {});
@@ -1433,7 +1520,7 @@ export async function atender(req: Request): Promise<Response> {
         try {
           const t0 = Date.now();
           const res = await preguntarGemma(historial, sis);
-          return { res: { ...res, ms: Date.now() - t0 }, respaldo: true, sis };
+          return listo(res, t0, true, sis);
         } catch (e) {
           console.log(`gemma falló: ${e instanceof Error ? e.message : e}`);
           emitir('reinicio', {});
@@ -1445,7 +1532,7 @@ export async function atender(req: Request): Promise<Response> {
         const sis = nuevo(true);
         const resp = respuestaSinIA(texto, notasCerebro);
         emitir('texto', { delta: resp });
-        return { res: { texto: resp, fuentes: [], tokensIn: 0, tokensOut: 0, proveedor: 'cerebro' as any, modelo: 'cerebro', busco: false, consultas: sis.consultas, ms: 0 }, respaldo: true, sis };
+        return { res: { texto: resp, fuentes: [], tokensIn: gasto.in, tokensOut: gasto.out, proveedor: 'cerebro' as any, modelo: 'cerebro', busco: false, consultas: sis.consultas, ms: 0 }, respaldo: true, sis };
       }
       return null;
     };
@@ -1467,19 +1554,22 @@ export async function atender(req: Request): Promise<Response> {
         ...(bloqueCerebro ? [`- Lo que ya sabía (cerebro):\n${bloqueCerebro.slice(0, 1500)}`] : []),
       ].join('\n').slice(0, 6000) || '(no se consultaron datos: es conversación o conocimiento general)';
       let actual = r.texto, cambios: string[] = [], quien = '';
+      const gastoRev = { in: 0, out: 0 };
       emitir('estado', { texto: 'Revisando la respuesta…' });
       for (let vuelta = 0; vuelta < 2 && Date.now() < hasta - 3000; vuelta++) {
-        const v = await llamarRevisor(`PREGUNTA:\n${texto}\n\nDATOS:\n${datos}\n\nRESPUESTA:\n${actual}`, String(r.proveedor), hasta).catch(() => null);
+        const v = await llamarRevisor(`PREGUNTA:\n${texto}\n\nDATOS:\n${datos}\n\nRESPUESTA:\n${actual}`, String(r.proveedor), hasta, gastoRev).catch(() => null);
         if (!v || v.veredicto === 'ok') { if (v) quien = v.quien; break; }
         const nueva = String(v.respuesta || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
         if (nueva.length < 40 || nueva === actual) break;
         actual = nueva; quien = v.quien; cambios.push(...(v.problemas || []).map(String).slice(0, 3));
       }
+      // Lo que gastó la revisión también cuenta (esté bien o no la respuesta).
+      salida.res = { ...salida.res, tokensIn: salida.res.tokensIn + gastoRev.in, tokensOut: salida.res.tokensOut + gastoRev.out };
       if (actual !== r.texto) {
         emitir('reinicio', {});
         emitir('texto', { delta: actual });
-        const marca: Consulta = { modulo: 'Revisión', desc: cambios.length ? cambios.join(' · ').slice(0, 300) : 'Respuesta corregida', filas: 'corregida', detalle: `Revisó: ${quien}` };
-        salida.res = { ...r, texto: actual, consultas: [...r.consultas, marca] };
+        const marca: Consulta = { modulo: 'Revisión', desc: cambios.length ? cambios.join(' · ').slice(0, 300) : 'Respuesta corregida', filas: 'corregida', detalle: `Revisó: ${quien} · ${(gastoRev.in + gastoRev.out).toLocaleString('es-CR')} tokens` };
+        salida.res = { ...salida.res, texto: actual, consultas: [...r.consultas, marca] };
         salida.sis.consultas.push(marca);
       }
       return salida;
@@ -1520,6 +1610,30 @@ export async function atender(req: Request): Promise<Response> {
         }),
       ]);
       if (uso.error) console.log(`no se guardó el uso: ${uso.error.message}`);
+      // APRENDER SOLO (Jarvis del superadmin): una IA rápida y gratis saca los
+      // hechos duraderos del intercambio y caen en la rama y el tema que ya
+      // existan. Si se leyó internet, un enlace o un archivo, solo se aprende
+      // de lo que dijo el dueño: lo de afuera nunca se cuela como «hecho».
+      // Lo que gasta también se cobra: se suma a la respuesta y al día.
+      if (cerebro && esSuper && modo === 'jarvis' && mods.aprender !== false && Deno.env.get('IA_APRENDER') !== '0'
+        && (res.proveedor as string) !== 'cerebro' && texto.trim().length >= 12) {
+        const g = { in: 0, out: 0 };
+        const afuera = sis.leyoAfuera || res.busco;
+        const mapa = await cerebro.mapa().catch(() => ({ ramas: [] as string[], temas: [] as string[] }));
+        const pedido = `RAMAS QUE YA EXISTEN: ${mapa.ramas.join(', ') || '(ninguna)'}\nTEMAS QUE YA EXISTEN: ${mapa.temas.join(', ') || '(ninguno)'}\n\nEL DUEÑO DIJO:\n${texto.slice(0, 1500)}`
+          + (afuera ? '' : `\n\nJARVIS RESPONDIÓ:\n${res.texto.slice(0, 2500)}`);
+        const r = await pedirJSON(PROMPT_HECHOS, pedido, { hasta: Date.now() + 20000, gasto: g, rapido: true, etiqueta: 'hechos', valido: j => Array.isArray(j.hechos) }).catch(() => null);
+        if (r?.j.hechos.length) {
+          const nuevos = await cerebro.aprenderHechos(r.j.hechos).catch(() => []);
+          if (nuevos.length) console.log(`aprendió solo: ${nuevos.map(n => n.etiqueta).join(' | ')}`);
+        }
+        if (g.in + g.out) {
+          await Promise.all([
+            admin.from('ia_mensajes').update({ tokens_in: res.tokensIn + g.in, tokens_out: res.tokensOut + g.out }).eq('id', idRespuesta),
+            admin.from('ia_uso_diario').update({ tokens: (mio?.tokens || 0) + res.tokensIn + res.tokensOut + g.in + g.out }).eq('user_id', uid).eq('dia', dia),
+          ]);
+        }
+      }
       const modulosUsados = Object.keys(sis.usados);
       if (modulosUsados.length) {
         await admin.from('audit_logs').insert({

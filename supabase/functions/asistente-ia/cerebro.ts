@@ -15,6 +15,9 @@
 //     internet) y arma la rama completa.
 //   · Cada búsqueda en internet queda como nodo bajo «Internet».
 //   · Cada «recordá…» queda bajo «Sobre vos».
+//   · De cada conversación con el dueño se sacan solos los hechos
+//     duraderos (precios de proveedor, políticas, datos técnicos…) y caen
+//     como puntos en la rama y el tema que ya existan (aprenderHechos).
 //   · Cada módulo que consulta o en el que actúa se refuerza.
 // Cómo lo usa: si el mensaje nombra algo que está en el cerebro, se le
 // pasa a la IA su resumen y el de sus vecinos («LO QUE APRENDISTE»).
@@ -364,6 +367,40 @@ export function crearCerebro(admin: Db, uid: string) {
     /** Ordena de a poco lo viejo de internet (búsquedas sueltas repetidas). */
     consolidar: (max = 10) => consolidar(max),
 
+    /** Ramas y temas que ya existen, para que lo nuevo caiga en ellos y no
+     *  se dupliquen («Proveedores» y «proveedor» son la misma rama). */
+    async mapa(): Promise<{ ramas: string[]; temas: string[] }> {
+      if (!vivo) return { ramas: [], temas: [] };
+      const [r, t] = await Promise.all([
+        admin.from('jarvis_nodos').select('etiqueta').eq('user_id', uid).like('clave', 'dom:rama:%').limit(40),
+        admin.from('jarvis_nodos').select('etiqueta').eq('user_id', uid).eq('tipo', 'tema').not('clave', 'like', 'web:%').order('usos', { ascending: false }).limit(60),
+      ]);
+      return { ramas: (r.data || []).map((x: any) => x.etiqueta), temas: (t.data || []).map((x: any) => x.etiqueta) };
+    },
+
+    /** Hechos sacados de una conversación: cada uno es un PUNTO bajo su
+     *  tema, y el tema cuelga de su rama. Si el tema o el punto ya existen,
+     *  se refuerzan en vez de duplicarse. Nunca datos personales. */
+    async aprenderHechos(hechos: { rama?: unknown; tema?: unknown; dato?: unknown }[]): Promise<Aprendido[]> {
+      const aprendidos: Aprendido[] = [];
+      for (const h of (Array.isArray(hechos) ? hechos : []).slice(0, 4)) {
+        const rama = limpio(h?.rama, 60) || 'Temas', tema = limpio(h?.tema, 60), dato = limpio(h?.dato, 400);
+        if (tema.length < 2 || dato.length < 8 || [rama, tema, dato].some(x => PRIVADO.test(x))) continue;
+        try {
+          const ramaN = await dominio(`rama:${normalizar(rama)}`, rama);
+          if (!ramaN) break;
+          const temaN = await asegurarNodo(normalizar(tema), tema, 'tema', { fuente: 'conversación', usar: true });
+          if (!temaN) continue;
+          await enlazar(ramaN.id, temaN.id, 'incluye');
+          const clave = `nota:${temaN.id.slice(0, 8)}:${normalizar(dato).slice(0, 60)}`;
+          const n = await asegurarNodo(clave, dato, 'dato', { resumen: dato, fuente: 'conversación', usar: true });
+          await enlazar(temaN.id, n?.id, 'detalle');
+          if (n) aprendidos.push({ etiqueta: dato, clave, nuevo: n.nuevo });
+        } catch (e) { console.log(`cerebro: ${e instanceof Error ? e.message : e}`); }
+      }
+      return aprendidos;
+    },
+
     /** Un «recordá…» queda bajo «Sobre vos». */
     registrarRecuerdo(texto: string, tipo: string) {
       enFondo((async () => {
@@ -431,14 +468,14 @@ export function crearCerebro(admin: Db, uid: string) {
       // Cada mensaje ordena un poco lo viejo (no frena la respuesta).
       enFondo(consolidar(8));
       const { data: nodos, error } = await admin.from('jarvis_nodos').select('id,clave,etiqueta,tipo,resumen,fuente,url,usos')
-        .eq('user_id', uid).in('tipo', ['tema', 'dato', 'fuente', 'recuerdo']).order('usos', { ascending: false }).limit(600);
+        .eq('user_id', uid).in('tipo', ['tema', 'dato', 'fuente', 'recuerdo']).order('usos', { ascending: false }).limit(1000);
       if (error) { vivo = false; return { bloque: '', usados: [], notas: [] }; }
       const msg = ` ${normalizar(texto)} `;
       const nombre = (n: Nodo) => normalizar(n.etiqueta.replace(/^(Inventario|Taller|Internet) · /, ''));
       const directos = ((nodos || []) as Nodo[])
         .filter(n => n.tipo !== 'recuerdo' && n.resumen && nombre(n).length >= 3 && msg.includes(` ${nombre(n)} `))
         .filter(n => !(esOrden && n.fuente === 'internet'))
-        .sort((x, y) => nombre(y).length - nombre(x).length || y.usos - x.usos).slice(0, 4);
+        .sort((x, y) => nombre(y).length - nombre(x).length || y.usos - x.usos).slice(0, 5);
       // Además, por PALABRAS: lo que comparte palabras importantes con el
       // mensaje (en el nombre pesa más que en el resumen). Así Jarvis revisa
       // primero lo que ya sabe aunque no se nombre el tema tal cual.
@@ -459,7 +496,7 @@ export function crearCerebro(admin: Db, uid: string) {
             return { n, p };
           })
           .filter(x => x.p >= 3 || (x.p >= 2 && palabras.length <= 3))
-          .sort((x, y) => y.p - x.p || y.n.usos - x.n.usos).slice(0, Math.max(0, 6 - directos.length));
+          .sort((x, y) => y.p - x.p || y.n.usos - x.n.usos).slice(0, Math.max(0, 8 - directos.length));
         directos.push(...puntuados.map(x => x.n));
       }
       if (!directos.length) return { bloque: '', usados: [], notas: [] };
@@ -468,7 +505,7 @@ export function crearCerebro(admin: Db, uid: string) {
       const notas: Nota[] = directos.map(n => ({ nombre: nombreHumano(n.etiqueta, n.tipo, n.url), resumen: n.fuente === 'internet' ? limpiarExtracto(primerResultado(n.resumen || ''), 260) : recortar(n.resumen || '', 260), url: n.url, fuente: n.fuente, peso: peso(n), cubre: palabras.length ? palabras.filter(w => normalizar(n.etiqueta + ' ' + (n.resumen || '')).includes(w)).length / palabras.length : 1 }));
       const ids = directos.map(n => n.id);
       const { data: enl } = await admin.from('jarvis_enlaces').select('origen,destino,relacion')
-        .eq('user_id', uid).or(`origen.in.(${ids.join(',')}),destino.in.(${ids.join(',')})`).limit(40);
+        .eq('user_id', uid).or(`origen.in.(${ids.join(',')}),destino.in.(${ids.join(',')})`).limit(120);
       const porId = new Map(((nodos || []) as Nodo[]).map(n => [n.id, n]));
       const vecinos: Nodo[] = [];
       for (const e of (enl || []) as any[]) {
@@ -476,7 +513,10 @@ export function crearCerebro(admin: Db, uid: string) {
         if (otro && otro.resumen && !ids.includes(otro.id) && !vecinos.includes(otro) && !(esOrden && otro.fuente === 'internet')) vecinos.push(otro);
       }
       const linea = (n: Nodo) => `- ${nombreHumano(n.etiqueta, n.tipo, n.url)}${n.fuente ? ` [${n.fuente}]` : ''}: ${n.fuente === 'internet' ? limpiarExtracto(n.resumen || '', 500) : recortar(n.resumen || '', 500)}${n.url ? ` (enlace: ${n.url})` : ''}`;
-      const bloque = [...directos.map(linea), ...vecinos.slice(0, 6).map(linea)].join('\n').slice(0, 4000);
+      // Primero los puntos que cuelgan de lo encontrado (lo aprendido en
+      // conversaciones y lo que agregó el dueño), después el resto.
+      vecinos.sort((x, y) => Number(y.tipo === 'dato') - Number(x.tipo === 'dato') || y.usos - x.usos);
+      const bloque = [...directos.map(linea), ...vecinos.slice(0, 12).map(linea)].join('\n').slice(0, 6000);
       enFondo((async () => {
         const ahora = new Date().toISOString();
         for (const n of directos) await admin.from('jarvis_nodos').update({ usos: (n.usos || 0) + 1, ultimo_uso: ahora }).eq('id', n.id);
