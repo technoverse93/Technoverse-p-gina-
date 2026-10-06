@@ -776,11 +776,14 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
   // Si de entrada no cabe en el plan gratis, se achica antes de gastar el intento.
   const cabe = CABE[prov.id];
   while (cabe && achique < 2 && estimar(mensajes) + (conHerramientas && achique < 2 ? estimar(herramientasDe()) : 0) > cabe) { achique++; mensajes = armar(); }
-  let tokensIn = 0, tokensOut = 0, conUso = true, paralelo = true, empezo = false, modeloReal = prov.modelo;
+  let tokensIn = 0, tokensOut = 0, conUso = true, paralelo = true, esfuerzo = true, empezo = false, modeloReal = prov.modelo;
   for (let ronda = 0; ronda <= sis.rondas; ronda++) {
     const usarHerr = conHerramientas && achique < 2 && ronda < sis.rondas;
     const piensa = PIENSA.test(prov.modelo);
-    const cuerpo: Record<string, unknown> = { model: prov.modelo, messages: mensajes, temperature: piensa ? 0.6 : 0.4, stream: true, max_tokens: prov.id === 'groq' ? 1200 : piensa ? 12000 : 4096 };
+    const cuerpo: Record<string, unknown> = { model: prov.modelo, messages: mensajes, temperature: piensa ? 0.6 : 0.4, stream: true, max_tokens: prov.id === 'groq' ? 2500 : piensa ? 12000 : 4096 };
+    // gpt-oss razona por defecto «medio» y en Groq se comía todo el espacio
+    // sin escribir la respuesta («no devolvió texto»): razonamiento corto.
+    if (/gpt-oss/i.test(prov.modelo) && esfuerzo) cuerpo.reasoning_effort = 'low';
     if (usarHerr && paralelo) cuerpo.parallel_tool_calls = true;
     if (conUso) cuerpo.stream_options = { include_usage: true };
     if (usarHerr) cuerpo.tools = herramientasDe();
@@ -809,6 +812,7 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       console.log(`${prov.id} ${prov.modelo} ronda=${ronda} -> ${r.status}: ${det.slice(0, 300)}`);
       if (conUso && (r.status === 400 || r.status === 422) && /stream_options|include_usage/i.test(det)) { conUso = false; ronda--; continue; }
       if (cuerpo.parallel_tool_calls && (r.status === 400 || r.status === 422) && /parallel/i.test(det)) { paralelo = false; ronda--; continue; }
+      if (cuerpo.reasoning_effort && (r.status === 400 || r.status === 422) && /reasoning/i.test(det)) { esfuerzo = false; ronda--; continue; }
       if (cuerpo.tools && (r.status === 400 || r.status === 404 || r.status === 422) && /tool|function/i.test(det)) { conHerramientas = false; mensajes = armar(); ronda--; continue; }
       // Muy grande para el plan gratis: se achica y se repite.
       if ((r.status === 413 || r.status === 400 || r.status === 429) && /too large|context_length|reduce the length|maximum context|tokens per minute|TPM|ITPM/i.test(det) && achique < 2) { achique++; mensajes = armar(); ronda--; continue; }
@@ -973,7 +977,8 @@ Respondé SOLO un JSON: {"rama": categoría madre corta (p. ej. "Dispositivos el
 // más que una): contra la pregunta y contra los datos que se consultaron.
 // Hasta 2 vueltas; si ninguna IA está libre, se queda la respuesta original.
 const PROMPT_REVISOR = `Sos el revisor de calidad de Jarvis, el asistente de un negocio de tecnología en Costa Rica.
-Te paso la PREGUNTA del dueño, los DATOS que se consultaron (sistema, internet, memoria) y la RESPUESTA propuesta.
+Te paso la PREGUNTA del dueño, los DATOS que se consultaron (sistema, internet, páginas web leídas, cerebro) y la RESPUESTA propuesta.
+IMPORTANTE: Jarvis SÍ busca en internet y SÍ entra a páginas web en tiempo real; lo que viene en DATOS es lo que leyó de verdad. Nunca corrijas diciendo que no puede acceder, navegar o entrar a una página. No borres datos concretos (precios, especificaciones, disponibilidad) que estén en los DATOS.
 Revisá con rigor:
 1. ¿Responde exactamente lo que se pidió, completo y sin rodeos?
 2. ¿Cada cifra, nombre, fecha o enlace coincide con los DATOS? ¿Inventa algo que los datos no dicen?
@@ -1013,7 +1018,8 @@ async function pedirJSON(prompt: string, usuario: string, op: { evitar?: string;
   lista.sort((a, b) => Number(!['groq', 'cerebras'].includes(a.id)) - Number(!['groq', 'cerebras'].includes(b.id)));
   for (const p of lista) {
     const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
-    const m = ms.find(x => disponibleModelo(claveProv({ ...p, modelo: x })));
+    // Los que piensan a fondo (Kimi) tardan más que el tope de una revisión.
+    const m = ms.find(x => !PIENSA.test(x) && disponibleModelo(claveProv({ ...p, modelo: x })));
     if (!m) continue;
     abiertos.push({ quien: nombreIA({ ...p, modelo: m }), correr: async () => {
       const r = await conTope(`${p.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(p.clave ? { Authorization: `Bearer ${p.clave}` } : {}) },
@@ -1755,9 +1761,8 @@ export async function atender(req: Request): Promise<Response> {
             const mG = modelos[0];
             emitir('estado', { texto: `${nombreIA(prov)} sigue pensando…` });
             const rapida = async (): Promise<Fin> => {
-              const gG = compuerta(); const sisG = nuevo(false, gG.emitir); sisG.acciones = false;
-              try { return { ok: true, res: await preguntarGemini(historial, mG, sisG), sis: sisG, g: gG, quien: 'gemini' }; }
-              catch (e) { anotar(`Gemini ${mG.replace(/^gemini-/, '')}`, e); modelos = modelos.slice(1); }
+              // Primero las abiertas veloces (Cerebras ~1 s); Gemini, que a veces
+              // tarda 30 s en decir «saturado», va al final.
               const veloces = proveedoresRespaldo().filter(p => ['groq', 'cerebras', 'openrouter', 'mistral'].includes(p.id) && !caidos.has(p.id));
               veloces.sort((a, b) => ['cerebras', 'groq', 'openrouter', 'mistral'].indexOf(a.id) - ['cerebras', 'groq', 'openrouter', 'mistral'].indexOf(b.id));
               let ultimo: unknown = new CupoAgotado('sin vía rápida');
@@ -1769,6 +1774,11 @@ export async function atender(req: Request): Promise<Response> {
                 const gR = compuerta(); const sisR = nuevo(true, gR.emitir); sisR.acciones = false;
                 try { return { ok: true, res: await preguntarCompatible(historial, sisR, pr), sis: sisR, g: gR, quien: nombreIA(pr) }; }
                 catch (e) { ultimo = e; anotar(nombreIA(pr), e); }
+              }
+              if (mG) {
+                const gG = compuerta(); const sisG = nuevo(false, gG.emitir); sisG.acciones = false;
+                try { return { ok: true, res: await preguntarGemini(historial, mG, sisG), sis: sisG, g: gG, quien: 'gemini' }; }
+                catch (e) { ultimo = e; anotar(`Gemini ${mG.replace(/^gemini-/, '')}`, e); modelos = modelos.slice(1); }
               }
               return { ok: false, e: ultimo, quien: 'vía rápida' };
             };
@@ -1889,11 +1899,15 @@ export async function atender(req: Request): Promise<Response> {
       const esAccion = r.consultas.some(c => c.tipo === 'accion' || c.tipo === 'navegar' || c.tipo === 'memoria');
       if (apagado || esAccion || (r.proveedor as string) === 'cerebro' || r.texto.length < 120) return salida;
       const hasta = Date.now() + 15000; // veloz: la revisión no puede frenar la respuesta
+      // Lo que de verdad devolvieron las consultas (páginas leídas, búsquedas,
+      // datos del sistema). Antes solo iba el título de cada consulta: el
+      // revisor veía un precio «sin respaldo» y lo cambiaba por «no puedo entrar».
+      const crudos = [...salida.sis.hechas.values()].map(h => `- ${h.consulta.modulo} · ${h.consulta.desc} (${h.consulta.filas}):\n${recortarTexto(JSON.stringify(h.datos), 3000)}`);
       const datos = [
-        ...r.consultas.filter(c => !c.tipo || c.tipo === 'cerebro').map(c => `- ${c.modulo} · ${c.desc} (${c.filas})${c.detalle ? `:\n${String(c.detalle).slice(0, 900)}` : ''}`),
+        ...(crudos.length ? crudos : r.consultas.filter(c => !c.tipo || c.tipo === 'cerebro').map(c => `- ${c.modulo} · ${c.desc} (${c.filas})${c.detalle ? `:\n${String(c.detalle).slice(0, 900)}` : ''}`)),
         ...(r.fuentes || []).slice(0, 6).map(f => `- Fuente web: ${f.titulo} ${f.url}`),
         ...(bloqueCerebro ? [`- EL CEREBRO (lo que el negocio ya sabe; verificá contra esto):\n${bloqueCerebro.slice(0, 3500)}`] : []),
-      ].join('\n').slice(0, 6000) || '(no se consultaron datos: es conversación o conocimiento general)';
+      ].join('\n').slice(0, 14000) || '(no se consultaron datos: es conversación o conocimiento general)';
       let actual = r.texto, cambios: string[] = [], quien = '';
       const gastoRev = { in: 0, out: 0 };
       emitir('estado', { texto: 'Revisando la respuesta…' });
@@ -1902,6 +1916,10 @@ export async function atender(req: Request): Promise<Response> {
         if (!v || v.veredicto === 'ok') { if (v) quien = v.quien; break; }
         const nueva = String(v.respuesta || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
         if (nueva.length < 40 || nueva === actual) break;
+        // Una «corrección» que cambia datos concretos por «no puedo entrar /
+        // no tengo acceso» es peor que el original: se descarta.
+        const NIEGA = /no (puedo|pude|logr[eé]|es posible) (acceder|entrar|navegar|abrir|visitar|consultar)|no tengo (acceso|la capacidad|forma)|no cuento con acceso|como (modelo|ia|inteligencia artificial) (de lenguaje )?no|no puedo navegar|sin acceso a internet/i;
+        if (NIEGA.test(nueva) && !NIEGA.test(actual)) { console.log(`revisor ${v.quien}: corrección descartada (negaba el acceso)`); break; }
         actual = nueva; quien = v.quien; cambios.push(...(v.problemas || []).map(String).slice(0, 3));
       }
       // Lo que gastó la revisión también cuenta (esté bien o no la respuesta).
