@@ -297,9 +297,13 @@ html.sin-vidrio {
 }
 html.sin-vidrio body,
 html.sin-vidrio #store-page-root { background-image: none; }
-html.sin-vidrio .cristal-vidrio,
-html.sin-vidrio .glass-nav,
-html.sin-vidrio .tv-regleta {
+/* TODO desenfoque, no solo estas tres clases: decenas de piezas usan
+   blur(var(--glass-blur)) o backdrop-blur-* de Tailwind y seguían
+   desenfocando en el teléfono (lo que más traba al desplazar). */
+html.sin-vidrio { --glass-blur: 0px; }
+html.sin-vidrio *,
+html.sin-vidrio *::before,
+html.sin-vidrio *::after {
   -webkit-backdrop-filter: none !important;
   backdrop-filter: none !important;
 }

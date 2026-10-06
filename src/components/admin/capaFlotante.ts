@@ -5,8 +5,8 @@
 // Jarvis. Reglas para que nunca se pisen entre ellas ni con el panel:
 //
 //   · Solo UNA abierta: al abrirse una, la otra se minimiza sola.
-//   · Al cambiar de pestaña, las dos se minimizan: lo que se abrió para un
-//     módulo no queda tapando el siguiente.
+//   · Al cambiar de pestaña se minimiza el chat: lo que se abrió para un
+//     módulo no queda tapando el siguiente. Jarvis se queda abierto.
 //   · En teléfono empiezan DEBAJO de la barra de pestañas. Su alto real se
 //     mide (en la APK la barra de estado lo agranda) y queda en la variable
 //     CSS `--tv-borde-cab`, que usan las dos ventanas.
@@ -30,7 +30,8 @@ export function useUnaSolaCapa(capa: Capa, abierta: boolean, cerrar: () => void,
     return () => window.removeEventListener(EVENTO, otra);
   }, [abierta, capa, cerrar]);
   useEffect(() => { if (abierta) avisarCapaAbierta(capa); }, [abierta, capa]);
-  useEffect(() => { cerrar(); }, [pestana]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Sin `pestana` (Jarvis), cambiar de módulo no la cierra.
+  useEffect(() => { if (pestana !== undefined) cerrar(); }, [pestana]); // eslint-disable-line react-hooks/exhaustive-deps
 }
 
 /** Mide el borde inferior de la barra de pestañas y lo deja en `--tv-borde-cab`. */

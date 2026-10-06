@@ -1840,8 +1840,8 @@ export default function AdminPanel({
           superadmin, «Asistencia de IA» para el resto del personal. */}
       {esStaff(currentUser?.role) && (
         <Suspense fallback={null}>
-          {/* Fuera de los módulos de pantalla completa: en Chat el botón caía
-              encima del «+» de adjuntar del redactor. */}
+          {/* En Chat y Supervisión el botón sube (abajo está el «+» de
+              adjuntar del redactor); en ningún módulo desaparece. */}
           <JarvisFlotante currentUser={currentUser} onAbrirModulo={irAModulo} pedido={pedidoJarvis} pestana={activeTab}
             sinBoton={activeTab === 'chat' || activeTab === 'supervision'} />
         </Suspense>

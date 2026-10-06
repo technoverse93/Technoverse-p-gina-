@@ -89,15 +89,17 @@ export default function JarvisFlotante({ currentUser, onAbrirModulo, sinBoton, p
   }, []);
   // Una sola ventana flotante a la vez, y se minimiza al cambiar de pestaña.
   const minimizar = useCallback(() => setAbierto(false), []);
-  useUnaSolaCapa('jarvis', abierto, minimizar, pestana);
+  // Jarvis NO se cierra al cambiar de pestaña: el dueño lo usa mientras
+  // recorre el panel. Solo cede su lugar si se abre la burbuja del chat.
+  useUnaSolaCapa('jarvis', abierto, minimizar);
   // Pedido del widget: se abre la ventana (y, si fue «Hablar», el micrófono).
   useEffect(() => { if (pedido?.n) { setMontado(true); setAbierto(true); } }, [pedido?.n]);
   const abrir = () => { setMontado(true); setAbierto(true); };
   const Icono = jarvis ? Sparkles : MessageCircleQuestion;
   return (
     <>
-      {!abierto && !sinBoton && (
-        <button type="button" className="jv-fab" data-jarvis={jarvis || undefined} style={{ zIndex: Z.fab }} onClick={abrir} aria-label={`Abrir ${nombre}`} title={nombre}>
+      {!abierto && (
+        <button type="button" className="jv-fab" data-jarvis={jarvis || undefined} data-arriba={sinBoton || undefined} style={{ zIndex: Z.fab }} onClick={abrir} aria-label={`Abrir ${nombre}`} title={nombre}>
           {jarvis ? <Orbe tam={26} /> : <Icono className="w-5 h-5" />}
         </button>
       )}
