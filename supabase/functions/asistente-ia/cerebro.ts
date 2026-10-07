@@ -473,6 +473,40 @@ export function crearCerebro(admin: Db, uid: string) {
       return total;
     },
 
+    /** FICHA VIVA DEL DUEÑO: quién es, cómo trabaja y qué le gusta. Vive en
+     *  el resumen de «Sobre vos» (se ve y se corrige en el cerebro). */
+    async ficha(): Promise<string> {
+      const { data } = await admin.from('jarvis_nodos').select('resumen').eq('user_id', uid).eq('clave', 'dom:dueno').maybeSingle();
+      const t = String(data?.resumen || '').trim();
+      return /^Lo que le pediste recordar/.test(t) ? '' : t;
+    },
+    /** La rehace (repaso nocturno) con su memoria, lo que dijo en las
+     *  conversaciones y la ficha actual (respetando lo que él corrigió). */
+    async actualizarFicha(redactar: (prompt: string, datos: string) => Promise<string | null>): Promise<boolean> {
+      const [mem, vos, msgs, actual] = await Promise.all([
+        admin.from('jarvis_memoria').select('texto,tipo').eq('user_id', uid).limit(80),
+        admin.from('jarvis_nodos').select('etiqueta,resumen,tipo').eq('user_id', uid).in('tipo', ['recuerdo', 'dato']).eq('fuente', 'vos').limit(60),
+        admin.from('ia_mensajes').select('texto,creado_en').eq('user_id', uid).eq('rol', 'user').order('creado_en', { ascending: false }).limit(80),
+        this.ficha(),
+      ]);
+      const datos = [
+        actual ? `FICHA ACTUAL (lo que el dueño haya corregido aquí manda):\n${actual}` : '',
+        (mem.data || []).length ? `MEMORIA (lo que pidió recordar):\n${(mem.data as any[]).map(m => `- ${m.texto}`).join('\n')}` : '',
+        (vos.data || []).length ? `LO QUE DIJO DE SÍ MISMO:\n${(vos.data as any[]).map(n => `- ${n.resumen || n.etiqueta}`).join('\n')}` : '',
+        (msgs.data || []).length ? `SUS ÚLTIMOS MENSAJES (para ver cómo habla, qué le importa y qué tiene pendiente):\n${(msgs.data as any[]).map(m => `- ${String(m.texto).slice(0, 200)}`).join('\n')}` : '',
+      ].filter(Boolean).join('\n\n').slice(0, 14000);
+      if (!datos.trim()) return false;
+      const t = await redactar(
+        `Sos el cerebro de Jarvis. Escribí la FICHA del dueño de Technoverse Costa Rica para que Jarvis lo conozca de verdad: cómo se llama y cómo prefiere que le hablen, cómo trabaja (horarios, rutinas, cómo decide), qué le importa del negocio ahora (metas, preocupaciones, proyectos), sus preferencias concretas y lo que tiene pendiente. Solo lo que surja de los datos; nada inventado, nada de clientes. Máximo 900 caracteres, frases cortas separadas por « · ». Devolvé SOLO JSON: {"texto":"…"}`,
+        datos,
+      ).catch(() => null);
+      if (!t || t.length < 40 || PRIVADO.test(t)) return false;
+      const vosN = await dominio('dueno', 'Sobre vos');
+      if (!vosN) return false;
+      await admin.from('jarvis_nodos').update({ resumen: recortar(t, 1200), actualizado_en: new Date().toISOString() }).eq('id', vosN.id);
+      return true;
+    },
+
     /** Respuesta de la herramienta consultar_cerebro. */
     async consultar(buscar: string): Promise<unknown> {
       const q = limpio(buscar, 200);
