@@ -191,6 +191,17 @@ type Sistema = {
 const saturadoHasta = new Map<string, number>();
 const saturado = (id: string) => (saturadoHasta.get(id) || 0) > Date.now();
 
+/** LÍNEA DE TIEMPO: Jarvis busca en sus conversaciones anteriores con el dueño. */
+const BUSCAR_CONVERSACIONES = {
+  nombre: 'buscar_conversaciones',
+  descripcion: 'Busca en TUS conversaciones anteriores con el dueño (lo que te dijo o pidió y lo que le respondiste), por palabras y/o por fechas. Usala cuando diga «la otra vez», «¿qué te había dicho de…?», «¿cuándo hablamos de…?», «lo que vimos ayer», o para retomar algo que quedó pendiente.',
+  parametros: { type: 'object', properties: {
+    buscar: { type: 'string', description: 'Palabras de lo que se habló (vacío = lo último).' },
+    desde: { type: 'string', description: 'Fecha inicial AAAA-MM-DD (opcional).' },
+    hasta: { type: 'string', description: 'Fecha final AAAA-MM-DD (opcional).' },
+  } },
+};
+
 /** Herramientas de memoria: Jarvis aprende del dueño, nunca de lo que lee afuera. */
 const MEMORIA = [
   {
@@ -317,7 +328,7 @@ function declaraciones(sis: Sistema) {
   const lista: { nombre: string; descripcion: string; parametros: Record<string, unknown> }[] = [...sis.herramientas];
   if (sis.acciones && !sis.leyoAfuera) lista.push(...ACCIONES.filter(a => !sis.utiles || sis.utiles.has(a.nombre)), NAVEGAR);
   if (sis.memoria && !sis.leyoAfuera && sis.conMemoria !== false) lista.push(...MEMORIA);
-  if (sis.cerebro) lista.push(APRENDER, CONSULTAR_CEREBRO);
+  if (sis.cerebro) lista.push(APRENDER, CONSULTAR_CEREBRO, BUSCAR_CONVERSACIONES);
   return lista;
 }
 
@@ -421,6 +432,20 @@ async function correrAprender(args: Record<string, unknown>, sis: Sistema): Prom
 async function correrHerramienta(nombre: string, args: Record<string, unknown>, sis: Sistema): Promise<unknown> {
   if (sis.cancelado && !sis.herramientas.some(h => h.nombre === nombre)) return { error: 'Cancelado: otra IA ya respondió.' };
   if (nombre === APRENDER.nombre) return await correrAprender(args, sis);
+  if (nombre === BUSCAR_CONVERSACIONES.nombre) {
+    sis.emitir('estado', { texto: 'Repasando nuestras conversaciones…' });
+    const q = String(args?.buscar ?? '').replace(/[,()%*_\\]/g, ' ').trim().slice(0, 80);
+    let consulta = sis.ctx.db.from('ia_mensajes').select('rol,texto,creado_en').order('creado_en', { ascending: false }).limit(14);
+    if (q.length >= 2) consulta = consulta.ilike('texto', `%${q}%`);
+    const fecha = (v: unknown) => (typeof v === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(v) ? v : null);
+    if (fecha(args?.desde)) consulta = consulta.gte('creado_en', `${args.desde}T00:00:00-06:00`);
+    if (fecha(args?.hasta)) consulta = consulta.lte('creado_en', `${args.hasta}T23:59:59-06:00`);
+    const { data, error } = await consulta;
+    const filas = ((data || []) as any[]).map(m => ({ cuando: new Date(m.creado_en).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }), quien: m.rol === 'user' ? 'el dueño' : 'vos (Jarvis)', texto: String(m.texto || '').slice(0, 450) }));
+    const c: Consulta = { tipo: 'cerebro', modulo: 'Conversaciones', desc: q ? `«${q}»` : 'lo último que hablamos', filas: error ? 'sin acceso' : `${filas.length} mensaje${filas.length === 1 ? '' : 's'}`, detalle: '' };
+    sis.consultas.push(c); sis.emitir('cerebro', c);
+    return error ? { error: 'No pude leer las conversaciones.' } : { mensajes: filas, nota: filas.length ? 'Citá la fecha cuando retomes algo («el martes hablamos de…»).' : 'No encontré conversaciones con eso.' };
+  }
   if (nombre === CONSULTAR_CEREBRO.nombre && sis.cerebro) {
     sis.emitir('estado', { texto: 'Revisando lo que sé…' });
     const datos = await sis.cerebro.consultar(String(args?.buscar ?? '')).catch(() => ({ error: 'No pude leer el cerebro ahora.' }));
@@ -1658,20 +1683,22 @@ export async function atender(req: Request): Promise<Response> {
     if (esCodigo) extra += `\n\nMODO PROGRAMADOR: este mensaje es de programación. Respondé como un ingeniero de software senior: entendé bien qué se necesita, dá el código COMPLETO y funcional (nada de «…resto igual»), en bloques \`\`\`lenguaje, con una explicación corta de qué hace y cómo usarlo, y avisá de errores o riesgos (seguridad, rendimiento). Si falta un dato clave, asumí lo razonable y decilo. Si te piden revisar código, señalá los errores con la línea y la corrección.`;
     const conMemoria = /record|acord|olvid|anot|prefer|siempre|nunca|de ahora en adelante|guard[aá]|no (me )?(digas|hables|uses)|llamame|forma de/i.test(texto);
     if (modo !== 'normal') {
-      const [{ data: recuerdos }, { data: buenas }, { data: malas }, { data: agenda }] = await Promise.all([
+      const [{ data: recuerdos }, { data: buenas }, { data: malas }, { data: agenda }, fichaDueno] = await Promise.all([
         admin.from('jarvis_memoria').select('texto,tipo').eq('user_id', uid).order('creada_en', { ascending: true }).limit(60),
         admin.from('ia_mensajes').select('texto').eq('user_id', uid).eq('valoracion', 1).eq('persona', modo).order('creado_en', { ascending: false }).limit(3),
         admin.from('ia_mensajes').select('nota_valoracion').eq('user_id', uid).eq('valoracion', -1).not('nota_valoracion', 'is', null).order('creado_en', { ascending: false }).limit(6),
         modo === 'jarvis' && esSuper
           ? admin.from('jarvis_agenda').select('texto,cuando').eq('user_id', uid).eq('estado', 'pendiente').order('cuando', { ascending: true, nullsFirst: false }).limit(25)
           : Promise.resolve({ data: null }),
+        cerebro ? cerebro.ficha().catch(() => '') : Promise.resolve(''),
       ]);
       const tono: Tono = (['formal', 'tico_moderado', 'tico_suelto'] as string[]).includes(ajustes?.tono) ? ajustes.tono as Tono : 'tico_moderado';
       const memoria = (recuerdos || []).map((m: any) => `- ${m.texto}`).join('\n').slice(0, 4000);
       const ejemplos: string[] = (buenas || []).map((m: any) => String(m.texto || "").slice(0, 700)).filter(Boolean);
       const evitar = (malas || []).map((m: any) => `- ${String(m.nota_valoracion).slice(0, 200)}`).join('\n');
-      extra = `\n\nTONO: ${modo === 'arquitecto' && tono === 'tico_suelto' ? TONOS.tico_moderado : TONOS[tono]}\n\n${GLOSARIO_TICO}`
+      extra += `\n\nTONO: ${modo === 'arquitecto' && tono === 'tico_suelto' ? TONOS.tico_moderado : TONOS[tono]}\n\n${GLOSARIO_TICO}`
         + (memoria ? `\n\nLO QUE SABÉS DEL DUEÑO (tu memoria; respetalo sin repetirlo):\n${memoria}` : '')
+        + (fichaDueno ? `\n\nFICHA DEL DUEÑO (quién es, cómo trabaja, qué le importa; usala para anticiparte, sin recitarla):\n${fichaDueno}` : '')
         + (ejemplos.length ? `\n\nRESPUESTAS QUE LE GUSTARON (imitá el estilo y el largo, no el contenido):\n${ejemplos.map((e, i) => `[${i + 1}] ${e}`).join('\n')}` : '')
         + (evitar ? `\n\nLO QUE NO LE GUSTÓ (evitalo):\n${evitar}` : '')
         + (modo === 'jarvis' && esSuper ? `\n\nAHORA: ${new Date().toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', weekday: 'long', day: 'numeric', month: 'long', hour: '2-digit', minute: '2-digit' })} (hora de Costa Rica; usala para «en una hora», «mañana a las 9»).\nSU AGENDA (pendientes y recordatorios):\n${(agenda || []).length ? (agenda as any[]).map(a => `- ${a.cuando ? new Date(a.cuando).toLocaleString('es-CR', { timeZone: 'America/Costa_Rica', weekday: 'short', day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' }) : 'sin hora'}: ${String(a.texto).slice(0, 160)}`).join('\n') : '(vacía)'}` : '');

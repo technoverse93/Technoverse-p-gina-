@@ -169,8 +169,9 @@ export async function tareaCron(admin: Db, tarea: string, redactar: Redactar, so
       const c = crearCerebro(admin, d.id);
       const orden = await c.editar('depurar', { aplicar: true }).catch(e => ({ ok: false, error: String(e) }));
       const vectores = await c.vectorizar(300).catch(() => 0);
+      const ficha = await c.actualizarFicha(redactar).catch(() => false);
       await c.esperar();
-      r[d.id] = { orden: (orden as any)?.nodo?.plan || orden, vectores };
+      r[d.id] = { orden: (orden as any)?.nodo?.plan || orden, vectores, ficha };
     }
     // Los avisos leídos de más de 30 días ya no hacen falta.
     await admin.from('jarvis_avisos').delete().lt('creado_en', new Date(Date.now() - 30 * 86_400_000).toISOString()).not('leido_en', 'is', null);
