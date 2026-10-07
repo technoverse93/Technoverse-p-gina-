@@ -1084,7 +1084,8 @@ Revisá con rigor:
 5. ¿Es clara y concreta (voseo costarricense, sin relleno)?
 Si está bien, devolvé {"veredicto":"ok"}.
 Si hay que mejorarla, devolvé {"veredicto":"corregir","problemas":["…"],"respuesta":"la respuesta COMPLETA corregida, en markdown, mismo tono"}.
-No cambies lo que ya está bien ni agregues datos que no estén en los DATOS. Devolvé SOLO el JSON.`;
+Corregí SOLO lo que esté mal (un dato falso, una cifra equivocada, algo que no responde). La respuesta corregida tiene que CONSERVAR todo lo que está bien: el mismo detalle y largo, las mismas cifras, enlaces, listas y estructura. NUNCA la resumas, acortes ni cambies el estilo: si el único «problema» es de estilo, largo o redacción, devolvé {"veredicto":"ok"}.
+No agregues datos que no estén en los DATOS. Devolvé SOLO el JSON.`;
 
 /**
  * Una llamada corta que devuelve JSON, a la primera IA libre. `evitar`:
@@ -1093,13 +1094,27 @@ No cambies lo que ya está bien ni agregues datos que no estén en los DATOS. De
  * para revisar, primero Gemini (si respondió un abierto) y los mejores
  * abiertos. Todos los tokens se suman a `gasto`.
  */
-async function pedirJSON(prompt: string, usuario: string, op: { evitar?: string; hasta: number; gasto: { in: number; out: number }; rapido?: boolean; valido: (j: any) => boolean; etiqueta: string }): Promise<{ j: any; quien: string } | null> {
+/** La FAMILIA de un modelo, sin importar quién lo sirva: «openai/gpt-oss-120b»
+ *  en Groq y «gpt-oss-120b» en Cerebras son el MISMO modelo. */
+function familia(m: string): string {
+  const n = m.toLowerCase().split('/').pop()!.replace(/:free$/, '');
+  const f = /(gpt-oss|llama|qwen|kimi|deepseek|glm|mistral|mixtral|magistral|codestral|devstral|gemma|gemini|command|phi|granite|nemotron)/.exec(n)?.[1];
+  return f ? f.replace(/mixtral|magistral|codestral|devstral/, 'mistral') : n;
+}
+/** Modelos chicos (≤ 20B, «mini», «instant»…): no corrigen a uno grande. */
+const CHICO = /(^|[^0-9.])([1-9]|1[0-9]|20)b\b|(^|[-_/])(mini|nano|instant|small|lite|tiny)([-_.:]|$)/i;
+
+async function pedirJSON(prompt: string, usuario: string, op: { evitar?: string; evitarModelo?: string; hasta: number; gasto: { in: number; out: number }; rapido?: boolean; valido: (j: any) => boolean; etiqueta: string }): Promise<{ j: any; quien: string } | null> {
+  // Para REVISAR hace falta otra cabeza: ni el mismo proveedor ni el mismo
+  // modelo servido por otro (gpt-oss en Cerebras no revisa a gpt-oss en Groq),
+  // y nunca uno chico corrigiendo a uno grande.
+  const otraCabeza = (m: string) => !op.evitarModelo || (familia(m) !== familia(op.evitarModelo) && !CHICO.test(m));
   const candidatos: { quien: string; correr: () => Promise<string> }[] = [];
   const contar = (i: unknown, o: unknown) => { op.gasto.in += Number(i || 0); op.gasto.out += Number(o || 0); };
   const tope = () => Math.max(1000, Math.min(op.rapido ? 12000 : 15000, op.hasta - Date.now()));
   const clave = Deno.env.get('GEMINI_API_KEY');
   const gemini = clave && op.evitar !== 'gemini'
-    ? (op.rapido ? [GEMINI_RESPALDO, GEMINI_MODEL] : [GEMINI_MODEL, GEMINI_RESPALDO]).filter(disponibleModelo).slice(0, 1).map(m => ({ quien: `Gemini · ${m}`, correr: async () => {
+    ? (op.rapido ? [GEMINI_RESPALDO, GEMINI_MODEL] : [GEMINI_MODEL, GEMINI_RESPALDO]).filter(m => disponibleModelo(m) && (!op.evitarModelo || familia(op.evitarModelo) !== 'gemini')).slice(0, 1).map(m => ({ quien: `Gemini · ${m}`, correr: async () => {
       const r = await conTope(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
         body: JSON.stringify({ system_instruction: { parts: [{ text: prompt }] }, contents: [{ role: 'user', parts: [{ text: usuario }] }], generationConfig: { temperature: 0.1, responseMimeType: 'application/json' } }) }, tope());
       if (!r.ok) { if (r.status === 429 || r.status >= 500) pausar(m, r.status); throw new Error(`gemini ${r.status}`); }
@@ -1116,7 +1131,7 @@ async function pedirJSON(prompt: string, usuario: string, op: { evitar?: string;
   for (const p of lista) {
     const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
     // Los que piensan a fondo (Kimi) tardan más que el tope de una revisión.
-    const m = ms.find(x => !PIENSA.test(x) && disponibleModelo(claveProv({ ...p, modelo: x })));
+    const m = ms.find(x => !PIENSA.test(x) && otraCabeza(x) && disponibleModelo(claveProv({ ...p, modelo: x })));
     if (!m) continue;
     abiertos.push({ quien: nombreIA({ ...p, modelo: m }), correr: async () => {
       const r = await conTope(`${p.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(p.clave ? { Authorization: `Bearer ${p.clave}` } : {}) },
@@ -1146,8 +1161,8 @@ async function pedirJSON(prompt: string, usuario: string, op: { evitar?: string;
 }
 
 /** El revisor: devuelve el veredicto de otra IA sobre la respuesta. */
-async function llamarRevisor(usuario: string, evitar: string, hasta: number, gasto: { in: number; out: number }): Promise<{ veredicto: string; problemas?: string[]; respuesta?: string; quien: string } | null> {
-  const r = await pedirJSON(PROMPT_REVISOR, usuario, { evitar, hasta, gasto, etiqueta: 'revisor', valido: j => j.veredicto === 'ok' || j.veredicto === 'corregir' });
+async function llamarRevisor(usuario: string, evitar: string, hasta: number, gasto: { in: number; out: number }, modeloQueRespondio = ''): Promise<{ veredicto: string; problemas?: string[]; respuesta?: string; quien: string } | null> {
+  const r = await pedirJSON(PROMPT_REVISOR, usuario, { evitar, evitarModelo: modeloQueRespondio || undefined, hasta, gasto, etiqueta: 'revisor', valido: j => j.veredicto === 'ok' || j.veredicto === 'corregir' });
   return r ? { ...r.j, quien: r.quien } : null;
 }
 
@@ -2059,10 +2074,13 @@ export async function atender(req: Request): Promise<Response> {
       const gastoRev = { in: 0, out: 0 };
       emitir('estado', { texto: 'Revisando la respuesta…' });
       for (let vuelta = 0; vuelta < 2 && Date.now() < hasta - 3000; vuelta++) {
-        const v = await llamarRevisor(`PREGUNTA:\n${texto}\n\nDATOS:\n${datos}\n\nRESPUESTA:\n${actual}`, String(r.proveedor), hasta, gastoRev).catch(() => null);
+        const v = await llamarRevisor(`PREGUNTA:\n${texto}\n\nDATOS:\n${datos}\n\nRESPUESTA:\n${actual}`, String(r.proveedor), hasta, gastoRev, String(r.modelo || '')).catch(() => null);
         if (!v || v.veredicto === 'ok') { if (v) quien = v.quien; break; }
         const nueva = String(v.respuesta || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
         if (nueva.length < 40 || nueva === actual) break;
+        // Una «corrección» que recorta la respuesta (más de un 25 % más corta)
+        // es un resumen, no una corrección: queda la original.
+        if (nueva.length < actual.length * 0.75) { console.log(`revisor ${v.quien}: corrección descartada (recortaba ${Math.round((1 - nueva.length / actual.length) * 100)} %)`); break; }
         // Una «corrección» que cambia datos concretos por «no puedo entrar /
         // no tengo acceso» es peor que el original: se descarta.
         const NIEGA = /no (puedo|pude|logr[eé]|es posible) (acceder|entrar|navegar|abrir|visitar|consultar)|no tengo (acceso|la capacidad|forma)|no cuento con acceso|como (modelo|ia|inteligencia artificial) (de lenguaje )?no|no puedo navegar|sin acceso a internet/i;
