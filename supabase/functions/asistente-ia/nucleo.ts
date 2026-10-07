@@ -70,6 +70,7 @@ import { createClient } from 'jsr:@supabase/supabase-js@2';
 import { disponibles, ejecutar, NOMBRE_MODULO, type Consulta, type Contexto } from './herramientas.ts';
 import { ACCIONES, MODULOS_PANEL, NAVEGAR, pideToken, validarOpciones, type CtxAccion, type Resultado as ResultadoAccion, type Tarjeta } from './acciones.ts';
 import { normalizarDictado, restaurarPrivados, separarPrivados } from './privados.ts';
+import { esCron, tareaCron } from './proactivo.ts';
 import { APRENDER, CONSULTAR_CEREBRO, crearCerebro, respuestaSinIA, type Cerebro, type Nota } from './cerebro.ts';
 import { FORMATO_REQUERIMIENTO, GLOSARIO_TICO, MAPA_SISTEMA, TONOS, type Tono } from './mapa.ts';
 
@@ -1258,6 +1259,17 @@ export async function atender(req: Request): Promise<Response> {
     const dia = diaCR();
     let convId: string | null = cuerpo?.conversacionId ? String(cuerpo.conversacionId) : null;
 
+    // JARVIS PROACTIVO: lo llama la base sola (pg_cron) con su llave.
+    const redactar = async (prompt: string, datos: string) => {
+      const g = { in: 0, out: 0 };
+      const r = await pedirJSON(prompt, datos, { hasta: Date.now() + 25000, gasto: g, rapido: true, etiqueta: 'redactar', valido: j => typeof j?.texto === 'string' && j.texto.length > 20 }).catch(() => null);
+      return r ? String(r.j.texto) : null;
+    };
+    if (accion === 'cron') {
+      if (!(await esCron(admin, req))) return responder({ ok: false, error: 'No autorizado.' }, 401);
+      return responder(await tareaCron(admin, String(cuerpo?.tarea || ''), redactar));
+    }
+
     const { data: quien } = await admin.auth.getUser(jwt);
     const uid = quien?.user?.id;
     if (!uid) return responder({ ok: false, error: 'Sesión no válida.' }, 401);
@@ -1332,6 +1344,13 @@ export async function atender(req: Request): Promise<Response> {
     }
 
     // Cambios a mano desde el cerebro 3D (agregar punto o tema, mover).
+    // El dueño pide el resumen (u otra tarea proactiva) a mano.
+    if (accion === 'proactivo') {
+      if (!esSuper) return responder({ ok: false, error: 'Solo el superadmin.' }, 403);
+      const tarea = ['resumen', 'vigilar'].includes(String(cuerpo?.tarea)) ? String(cuerpo.tarea) : 'resumen';
+      return responder(await tareaCron(admin, tarea, redactar, uid));
+    }
+
     // ---------- JARVIS PROPIO: datos para entrenar su modelo ----------
     // Arma un JSONL (formato de chat: system/user/assistant) con las
     // conversaciones del dueño con Jarvis: las respuestas finales (ya

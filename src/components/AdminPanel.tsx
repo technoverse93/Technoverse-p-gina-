@@ -214,7 +214,11 @@ export default function AdminPanel({
   // abrir el panel (por si se agendaron desde otro equipo o el widget).
   useEffect(() => {
     if (!esAdminSupremo(currentUser?.email)) return;
-    const t = setTimeout(() => { void import('../mobile/agendaJarvis').then(m => m.sincronizarAgenda()).catch(() => { /* sin agenda */ }); }, 4000);
+    const t = setTimeout(() => {
+      void import('../mobile/agendaJarvis').then(m => m.sincronizarAgenda()).catch(() => { /* sin agenda */ });
+      // Jarvis te habla primero: avisos en vivo y el resumen de la mañana.
+      void import('../mobile/avisosJarvis').then(m => m.iniciarAvisosJarvis()).catch(() => { /* sin avisos todavía */ });
+    }, 4000);
     return () => clearTimeout(t);
   }, [currentUser?.email]);
 

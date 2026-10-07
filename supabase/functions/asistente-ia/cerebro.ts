@@ -466,6 +466,13 @@ export function crearCerebro(admin: Db, uid: string) {
     /** Ordena de a poco lo viejo de internet (búsquedas sueltas repetidas). */
     consolidar: (max = 10) => consolidar(max),
 
+    /** Le pone vector a todo lo que falta (de a 50, el tope por pedido de Gemini). */
+    async vectorizar(max = 300): Promise<number> {
+      let total = 0;
+      for (let i = 0; i < max; i += 50) { const n = await vectorizarPendientes(50); total += n; if (n < 50) break; }
+      return total;
+    },
+
     /** Respuesta de la herramienta consultar_cerebro. */
     async consultar(buscar: string): Promise<unknown> {
       const q = limpio(buscar, 200);

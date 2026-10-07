@@ -227,6 +227,25 @@ span.jv-tit:hover { background: transparent; }
 .ai-root[data-jarvis] .ai-sw::after { transition: left .2s cubic-bezier(.2, .8, .2, 1); }
 .ai-root[data-jarvis] .ai-seg button[data-on] { background: var(--jv-acento); color: var(--jv-tinta-ac); box-shadow: none; }
 
+/* ---------- Avisos de Jarvis (la campana) ---------- */
+.ai-root[data-jarvis] .jv-campana { position: relative; }
+.ai-root[data-jarvis] .jv-campana-n { position: absolute; top: -3px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: var(--jv-oro); color: var(--jv-fondo); font: 700 10px/17px var(--jv-f-ui); text-align: center; pointer-events: none; }
+.ai-root[data-jarvis] .jv-aviso { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; padding: 12px; background: var(--jv-sup); border: 1px solid var(--jv-linea); border-radius: 14px; margin-top: 8px; }
+.ai-root[data-jarvis] .jv-aviso[data-leido] { opacity: .62; }
+.ai-root[data-jarvis] .jv-aviso[data-tipo="resumen"] { border-color: color-mix(in srgb, var(--jv-oro) 45%, var(--jv-linea)); background: linear-gradient(180deg, var(--jv-oro-suave), var(--jv-sup)); opacity: 1; }
+.ai-root[data-jarvis] .jv-aviso[data-nivel="urgente"] { border-color: color-mix(in srgb, #E5484D 55%, var(--jv-linea)); }
+.ai-root[data-jarvis] .jv-aviso[data-nivel="atencion"] { border-color: color-mix(in srgb, var(--jv-oro) 55%, var(--jv-linea)); }
+.ai-root[data-jarvis] .jv-aviso-ic { width: 32px; height: 32px; border-radius: 10px; display: grid; place-items: center; background: var(--jv-hundido); color: var(--jv-acento); }
+.ai-root[data-jarvis] .jv-aviso[data-nivel="urgente"] .jv-aviso-ic { color: #E5484D; }
+.ai-root[data-jarvis] .jv-aviso[data-tipo="resumen"] .jv-aviso-ic, .ai-root[data-jarvis] .jv-aviso[data-nivel="atencion"] .jv-aviso-ic { color: var(--jv-oro); }
+.ai-root[data-jarvis] .jv-aviso-tx { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.ai-root[data-jarvis] .jv-aviso-tx b { font: 600 13.5px var(--jv-f-ui); color: var(--jv-tinta); }
+.ai-root[data-jarvis] .jv-aviso-tx p { margin: 0; font: 400 13px/1.5 var(--jv-f-ui); color: var(--jv-tinta2); overflow-wrap: anywhere; }
+.ai-root[data-jarvis] .jv-aviso-pie { font: 400 11px var(--jv-f-dato); color: var(--jv-tenue); }
+.ai-root[data-jarvis] .jv-aviso-botones { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 4px; }
+.ai-root[data-jarvis] .jv-aviso-vacio { margin: 4px 2px 0; font: 400 13px/1.5 var(--jv-f-ui); color: var(--jv-tinta2); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
+.ai-root[data-jarvis] .jv-avisos-todos { justify-self: start; margin: 2px 0 2px; }
+
 /* ---------- Cerebro a pantalla completa ---------- */
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ch { display: none; }
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ajustes { padding: 0; overflow: hidden; animation: none; }

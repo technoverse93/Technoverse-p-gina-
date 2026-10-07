@@ -16,11 +16,13 @@ import {
   Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight, ShieldAlert, Wallet, MapPin,
   Paperclip, Square, RotateCcw, Pencil, Link2, Code2, FileText,
   Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot, ThumbsUp, ThumbsDown, MessageCircleQuestion, SlidersHorizontal, Search,
-  Download,
+  Download, Bell,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
 const CerebroJarvis = React.lazy(() => import('./CerebroJarvis'));
+const AvisosJarvis = React.lazy(() => import('./AvisosJarvis'));
+import { useAvisosSinLeer } from '../../mobile/avisosJarvis';
 import { BotonEscuchar, BarraLectura, AjusteVoz } from './LectorPiezas';
 import { lector, modoLectura } from '../../utils/lectorVoz';
 const MiniWidgetAjustes = React.lazy(() => import('./MiniWidgetAjustes'));
@@ -744,7 +746,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const [enviando, setEnviando] = useState(false);
   const [cargandoConv, setCargandoConv] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: 'respaldo' | 'error'; texto: string } | null>(null);
-  const [vista, setVista] = useState<'chat' | 'ajustes' | 'cerebro'>('chat');
+  const [vista, setVista] = useState<'chat' | 'ajustes' | 'cerebro' | 'avisos'>('chat');
   const [cajon, setCajon] = useState<null | 'historial' | 'cupo'>(null);
   const finRef = useRef<HTMLDivElement>(null);
   const cajaRef = useRef<HTMLTextAreaElement>(null);
@@ -763,6 +765,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   // El superadmin ES Jarvis desde el primer cuadro: antes, hasta que llegaba
   // el cupo del servidor se veía un instante el aspecto de «Asistencia de IA».
   const jarvis = soySuper && (cupo ? !!cupo.perfiles : true);
+  const avisosSinLeer = useAvisosSinLeer(jarvis);
   const conVoz = jarvis && puedeGrabarVoz();
   // El cerebro (código y datos) se baja mientras el teléfono está libre, para
   // que abra al instante en vez de quedarse un momento en blanco.
@@ -1231,7 +1234,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
               <button type="button" className="ai-menu ai-atras" aria-label="Volver al chat" title="Volver al chat" onClick={() => setVista('chat')}><ArrowLeft className="w-5 h-5" /></button>
               {jarvis && vista === 'ajustes'
                 ? <span className="jv-tit"><span><b>Ajustes de Jarvis</b><small>Se aplican al instante</small></span></span>
-                : <b className="ai-titulo">{vista === 'cerebro' ? 'Cerebro de Jarvis' : 'Ajustes del asistente'}</b>}
+                : <b className="ai-titulo">{vista === 'cerebro' ? 'Cerebro de Jarvis' : vista === 'avisos' ? 'Avisos de Jarvis' : 'Ajustes del asistente'}</b>}
             </>
           ) : (
             <>
@@ -1261,6 +1264,11 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             {cupo?.disponibles === null || !cupo ? <><b>{cupo?.usados ?? 0}</b><span className="ai-lbl"> hoy</span></> : <><b>{cupo.disponibles}</b><span className="ai-lbl"> disponibles</span></>}
           </button>
           {jarvis && vista === 'chat' && (
+            <button type="button" className="ai-chip ai-ajustes-btn jv-campana" onClick={() => setVista('avisos')} aria-label={avisosSinLeer ? `Avisos de Jarvis (${avisosSinLeer} sin ver)` : 'Avisos de Jarvis'} title="Avisos de Jarvis">
+              <Bell className="w-[18px] h-[18px]" />{avisosSinLeer > 0 && <span className="jv-campana-n" aria-hidden>{avisosSinLeer > 9 ? '9+' : avisosSinLeer}</span>}<span className="ai-lbl">Avisos</span>
+            </button>
+          )}
+          {jarvis && vista === 'chat' && (
             <button type="button" className="ai-chip ai-ajustes-btn" onClick={() => setVista('cerebro')} aria-label="Cerebro de Jarvis" title="Cerebro de Jarvis"><IconoConstelacion /><span className="ai-lbl">Cerebro</span></button>
           )}
           {soySuper && vista === 'chat' && (
@@ -1268,7 +1276,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
           )}
         </header>
 
-        {vista === 'cerebro' && jarvis ? <div className="ai-ajustes"><React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando el cerebro"><i /><i /><i /></div>}><CerebroJarvis onPreguntar={t => { setVista('chat'); void enviar(t); }} onVolver={() => setVista('chat')} /></React.Suspense></div> : vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} /> : (
+        {vista === 'avisos' && jarvis ? <React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando avisos"><i /><i /><i /></div>}><AvisosJarvis onAbrir={onAbrirModulo} /></React.Suspense> : vista === 'cerebro' && jarvis ? <div className="ai-ajustes"><React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando el cerebro"><i /><i /><i /></div>}><CerebroJarvis onPreguntar={t => { setVista('chat'); void enviar(t); }} onVolver={() => setVista('chat')} /></React.Suspense></div> : vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} /> : (
           <>
             {aviso && (
               <div className="ai-aviso" data-tipo={aviso.tipo}>
