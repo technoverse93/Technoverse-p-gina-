@@ -809,6 +809,37 @@ function normalizarUrl(u: string): string | null {
 const UA = 'Mozilla/5.0 (Linux; Android 13) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0 Mobile Safari/537.36 JarvisLector/1.0';
 const MAX_TEXTO = 9000;
 
+/**
+ * PRECIOS de una página de tienda. Casi nunca están en el texto visible al
+ * principio: las tiendas (Magento como Tienda Monge, Shopify, WooCommerce…)
+ * los ponen en datos estructurados (JSON-LD), metaetiquetas o atributos.
+ * Antes solo se leían si venían entre comillas y Jarvis decía «precio no
+ * disponible» con el precio en la página.
+ */
+function preciosDe(html: string): string[] {
+  const vistos = new Set<string>();
+  const add = (v: string | undefined, origen: string, moneda = '') => {
+    if (!v) return;
+    const n = Number(String(v).replace(/[^\d.,]/g, '').replace(/[.,](?=\d{3}(\D|$))/g, '').replace(',', '.'));
+    if (!isFinite(n) || n < 50) return;
+    const txt = `${moneda && !/^(crc|₡)$/i.test(moneda) ? moneda + ' ' : '₡'}${Math.round(n).toLocaleString('es-CR')} (${origen})`;
+    const k = String(Math.round(n));
+    if (!vistos.has(k)) { vistos.add(k); out.push(txt); }
+  };
+  const out: string[] = [];
+  const moneda = /"priceCurrency"\s*:\s*"([A-Z]{3})"/.exec(html)?.[1] || /product:price:currency"\s+content="([A-Z]{3})/.exec(html)?.[1] || '';
+  for (const m of html.matchAll(/"(price|lowPrice|highPrice)"\s*:\s*"?(\d[\d.,]*)"?/g)) add(m[2], m[1] === 'price' ? 'precio de la ficha' : m[1] === 'lowPrice' ? 'precio más bajo' : 'precio más alto', moneda);
+  for (const m of html.matchAll(/<meta[^>]+(?:property|name|itemprop)=["'](?:product:price:amount|og:price:amount|price)["'][^>]*content=["']([^"']+)/gi)) add(m[1], 'metadatos', moneda);
+  for (const m of html.matchAll(/<meta[^>]+content=["']([^"']+)["'][^>]*(?:property|name|itemprop)=["'](?:product:price:amount|og:price:amount|price)["']/gi)) add(m[1], 'metadatos', moneda);
+  for (const m of html.matchAll(/itemprop=["']price["'][^>]*content=["']([^"']+)/gi)) add(m[1], 'microdatos', moneda);
+  for (const m of html.matchAll(/data-price-amount=["'](\d[\d.]*)["']/gi)) add(m[1], 'precio mostrado', moneda);
+  for (const m of html.matchAll(/"(?:finalPrice|final_price|special_price|basePrice)"\s*:\s*\{?\s*"?(?:amount)?"?\s*:?\s*"?(\d[\d.,]*)/g)) add(m[1], 'precio final', moneda);
+  // Lo que se ve con símbolo de colones (sin etiquetas).
+  const visible = html.replace(/<(script|style)[\s\S]*?<\/\1>/gi, ' ').replace(/<[^>]+>/g, ' ');
+  for (const m of visible.matchAll(/₡\s?(\d{1,3}(?:[.,\s]\d{3})+|\d{3,})/g)) add(m[1], 'en la página');
+  return out.slice(0, 8);
+}
+
 /** HTML → texto legible (sin menús, scripts ni estilos) + enlaces útiles. */
 function htmlATexto(html: string, base: string) {
   const titulo = (/<title[^>]*>([\s\S]*?)<\/title>/i.exec(html)?.[1] || /<meta[^>]+property=["']og:title["'][^>]+content=["']([^"']+)/i.exec(html)?.[1] || '').replace(/\s+/g, ' ').trim();
@@ -831,16 +862,19 @@ function htmlATexto(html: string, base: string) {
     .replace(/<[^>]+>/g, ' ')
     .replace(/&nbsp;/g, ' ').replace(/&amp;/g, '&').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&#(\d+);/g, (_m, n) => String.fromCharCode(Number(n)))
     .replace(/[ \t]+/g, ' ').replace(/\n\s*\n+/g, '\n').trim();
-  return { titulo, descripcion, texto: (datosLd ? `[Datos del producto] ${datosLd}\n` : '') + texto, enlaces };
+  const precios = preciosDe(html);
+  return { titulo, descripcion, precios, texto: (precios.length ? `[PRECIOS EN LA PÁGINA] ${precios.join(' · ')}\n` : '') + (datosLd ? `[Datos del producto] ${datosLd}\n` : '') + texto, enlaces };
 }
 
 /** Si piden algo puntual, primero los párrafos que lo mencionan. */
 function priorizar(texto: string, buscar: string): { texto: string; recortado: boolean } {
   if (texto.length <= MAX_TEXTO) return { texto, recortado: false };
   const palabras = buscar.toLowerCase().split(/\s+/).filter(w => w.length > 2);
-  if (!palabras.length) return { texto: texto.slice(0, MAX_TEXTO), recortado: true };
   const parrafos = texto.split('\n');
-  const utiles = parrafos.filter(p => palabras.some(w => p.toLowerCase().includes(w)));
+  // Siempre primero lo que tiene precios (₡, $, «precio»), aunque no se pida:
+  // al cortar en 9 mil caracteres el precio quedaba afuera.
+  const conPrecio = (p: string) => /₡\s?\d|\$\s?\d|\bcrc\b|\bprecio\b|\bprice\b|\[PRECIOS/i.test(p);
+  const utiles = parrafos.filter(p => conPrecio(p) || palabras.some(w => p.toLowerCase().includes(w)));
   const junto = [...utiles, '…', ...parrafos.filter(p => !utiles.includes(p))].join('\n');
   return { texto: junto.slice(0, MAX_TEXTO), recortado: true };
 }
@@ -866,7 +900,7 @@ export async function leerPagina(url: string, buscar = ''): Promise<{ titulo: st
     if (/html|xml/.test(tipo) || !tipo) directa = htmlATexto((await r.text()).slice(0, 2_000_000), r.url || url);
   }
   // 2) Si no se pudo o trae casi nada (página armada con código), el lector.
-  if (!directa || directa.texto.length < 400) {
+  if (!directa || directa.texto.length < 400 || (!directa.precios.length && /producto|product|tienda|shop|store|item|sku/i.test(url + directa.titulo))) {
     const env = (globalThis as any).Deno?.env;
     const clave = String(env?.get('JINA_API_KEY') || '').trim();
     const l = await traer(`https://r.jina.ai/${url}`, 15000, { headers: { 'Accept': 'text/plain', 'X-Return-Format': 'markdown', ...(clave ? { Authorization: `Bearer ${clave}` } : {}) } });
@@ -875,7 +909,8 @@ export async function leerPagina(url: string, buscar = ''): Promise<{ titulo: st
       const titulo = (/^Title:\s*(.+)$/m.exec(md)?.[1] || directa?.titulo || '').trim();
       const contenido = md.replace(/^(Title|URL Source|Published Time|Markdown Content):.*$/gm, '').trim();
       const enlaces = [...contenido.matchAll(/\[([^\]]{3,90})\]\((https?:\/\/[^)\s]+)\)/g)].map(m => ({ texto: m[1], url: m[2] })).filter((e, i, a) => a.findIndex(x => x.url === e.url) === i).slice(0, 40);
-      const p = priorizar(contenido.replace(/!\[[^\]]*\]\([^)]*\)/g, ''), buscar);
+      const precios = directa?.precios?.length ? directa.precios : [...contenido.matchAll(/₡\s?(\d{1,3}(?:[.,\s]\d{3})+|\d{3,})/g)].map(m => `₡${m[1]} (en la página)`).filter((x, i, a) => a.indexOf(x) === i).slice(0, 8);
+      const p = priorizar((precios.length ? `[PRECIOS EN LA PÁGINA] ${precios.join(' · ')}\n` : '') + contenido.replace(/!\[[^\]]*\]\([^)]*\)/g, ''), buscar);
       if (p.texto.length > (directa?.texto.length || 0)) return { titulo, descripcion: directa?.descripcion || '', ...p, enlaces: enlaces.length ? enlaces : (directa?.enlaces || []), via: 'lector' };
     }
   }
