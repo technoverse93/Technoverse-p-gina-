@@ -727,7 +727,7 @@ function proveedoresRespaldo(): Compatible[] {
     },
     huggingface: () => compatible('huggingface', 'https://router.huggingface.co/v1', 'HF_TOKEN', 'HF_MODEL', 'openai/gpt-oss-120b'),
   };
-  const orden: string[] = String(Deno.env.get('IA_RESPALDOS') || 'cerebras,groq,mistral,nvidia,openrouter,cloudflare,huggingface,sambanova').split(',').map((t: string) => t.trim().toLowerCase());
+  const orden: string[] = String(Deno.env.get('IA_RESPALDOS') || 'cerebras,groq,mistral,openrouter,nvidia,cloudflare,huggingface').split(',').map((t: string) => t.trim().toLowerCase());
   // Un proveedor que pidió pago o rechazó la clave se salta (ver pausar 402).
   return [...new Set(orden)].map(id => todos[id]?.() || null).filter((p): p is Compatible => !!p && disponibleModelo(`prov:${p.id}`));
 }
@@ -781,6 +781,37 @@ const estimar = (x: unknown) => Math.ceil(JSON.stringify(x).length / 3.6);
  * gratis (Groq), se achica: menos historial, menos contexto y, al final,
  * sin herramientas.
  */
+/**
+ * RELEVO: si una IA se cae A MITAD de camino (ya consultó datos y se quedó
+ * sin cupo por minuto o sin texto), otra IA rápida termina la respuesta con
+ * esos MISMOS datos. Antes se tiraba todo y la siguiente empezaba de cero
+ * (o salía «saturado»). Los mensajes de consultas se pasan como texto plano
+ * para que cualquier proveedor los acepte.
+ */
+async function cerrarConDatos(mensajes: any[], sis: Sistema, excluir: string): Promise<{ texto: string; prov: Compatible; tin: number; tout: number } | null> {
+  const plano = mensajes.map(m => m.role === 'tool' ? { role: 'user', content: `DATOS DE UNA CONSULTA:\n${m.content}` }
+    : m.tool_calls ? { role: 'assistant', content: m.content || `(Consultando: ${m.tool_calls.map((t: any) => t.function?.name).join(', ')})` } : m);
+  plano.push({ role: 'user', content: 'Con los datos de arriba, respondé YA la pregunta original del dueño: completa, concreta y en el mismo tono. No pidas más consultas.' });
+  const orden = ['cerebras', 'groq', 'mistral', 'openrouter'];
+  const lista = proveedoresRespaldo().filter(p => orden.includes(p.id) && p.id !== excluir)
+    .sort((a, b) => Number(saturado(a.id)) - Number(saturado(b.id)) || orden.indexOf(a.id) - orden.indexOf(b.id));
+  for (const p of lista) {
+    if (sis.limite - Date.now() < 3000) break;
+    const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
+    const m = ms.find(x => !PIENSA.test(x) && disponibleModelo(claveProv({ ...p, modelo: x })));
+    if (!m) continue;
+    try {
+      const r = await conTope(`${p.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(p.clave ? { Authorization: `Bearer ${p.clave}` } : {}) },
+        body: JSON.stringify({ model: m, messages: plano, temperature: 0.4, max_tokens: p.id === 'groq' ? 900 : 2500, ...(/gpt-oss/i.test(m) ? { reasoning_effort: 'low' } : {}) }) }, Math.min(15000, sis.limite - Date.now()));
+      if (!r.ok) { if (r.status === 429) saturadoHasta.set(p.id, Date.now() + 60_000); console.log(`relevo ${p.id} ${m} -> ${r.status}`); continue; }
+      const d = await r.json();
+      const texto = String(d?.choices?.[0]?.message?.content || '').replace(/<think>[\s\S]*?<\/think>/gi, '').trim();
+      if (texto) { console.log(`relevo ${p.id} ${m}: terminó con los datos ya consultados`); return { texto, prov: { ...p, modelo: String(d?.model || m) }, tin: Number(d?.usage?.prompt_tokens || 0), tout: Number(d?.usage?.completion_tokens || 0) }; }
+    } catch (e) { console.log(`relevo ${p.id}: ${e instanceof Error ? e.message : e}`); }
+  }
+  return null;
+}
+
 async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compatible): Promise<Resultado> {
   const web = sis.herramientas.some(h => h.modulo === 'internet');
   let conHerramientas = sis.herramientas.length > 0;
@@ -800,10 +831,25 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
   const cabe = CABE[prov.id];
   while (cabe && achique < 2 && estimar(mensajes) + (conHerramientas && achique < 2 ? estimar(herramientasDe()) : 0) > cabe) { achique++; mensajes = armar(); }
   let tokensIn = 0, tokensOut = 0, conUso = true, paralelo = true, esfuerzo = true, empezo = false, modeloReal = prov.modelo;
-  for (let ronda = 0; ronda <= sis.rondas; ronda++) {
-    const usarHerr = conHerramientas && achique < 2 && ronda < sis.rondas;
+  // Tope de vueltas de consultas (Cerebras llegó a hacer 7 seguidas y se
+  // topó con su límite por minuto) y consultas repetidas = a responder.
+  const maxRondas = Math.min(sis.rondas, 4);
+  const firmas = new Set<string>();
+  let sinMasConsultas = false, salidaMax = 0, reintentoHerr = false;
+  // Si ya consultó datos y esta IA se cae, otra termina con esos datos.
+  const relevar = async (motivo: string): Promise<Resultado | null> => {
+    if (!mensajes.some(m => m.role === 'tool')) return null;
+    sis.emitir('estado', { texto: 'Terminando con los datos que ya tengo…' });
+    const r = await cerrarConDatos(mensajes, sis, prov.id).catch(() => null);
+    if (!r) { console.log(`${prov.id}: ${motivo}; nadie pudo relevar`); return null; }
+    tokensIn += r.tin; tokensOut += r.tout; sis.gasto.in += r.tin; sis.gasto.out += r.tout;
+    sis.emitir('reinicio', {}); sis.emitir('modelo', { modelo: r.prov.modelo }); sis.emitir('texto', { delta: r.texto });
+    return { texto: r.texto, fuentes: sis.fuentes.slice(0, 8), tokensIn, tokensOut, proveedor: r.prov.id, modelo: r.prov.modelo, busco: sis.usados.internet > 0, consultas: sis.consultas };
+  };
+  for (let ronda = 0; ronda <= maxRondas; ronda++) {
+    const usarHerr = conHerramientas && achique < 2 && ronda < maxRondas && !sinMasConsultas;
     const piensa = PIENSA.test(prov.modelo);
-    const cuerpo: Record<string, unknown> = { model: prov.modelo, messages: mensajes, temperature: piensa ? 0.6 : 0.4, stream: true, max_tokens: prov.id === 'groq' ? 2500 : piensa ? 12000 : /coder|codestral|devstral/i.test(prov.modelo) ? 8000 : 4096 };
+    const cuerpo: Record<string, unknown> = { model: prov.modelo, messages: mensajes, temperature: piensa ? 0.6 : 0.4, stream: true, max_tokens: salidaMax || (prov.id === 'groq' ? 2500 : piensa ? 12000 : /coder|codestral|devstral/i.test(prov.modelo) ? 8000 : 4096) };
     // gpt-oss razona por defecto «medio» y en Groq se comía todo el espacio
     // sin escribir la respuesta («no devolvió texto»): razonamiento corto.
     if (/gpt-oss/i.test(prov.modelo) && esfuerzo) cuerpo.reasoning_effort = sis.esfuerzo || 'low';
@@ -838,10 +884,17 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       if (cuerpo.reasoning_effort && (r.status === 400 || r.status === 422) && /reasoning/i.test(det)) { esfuerzo = false; ronda--; continue; }
       if (cuerpo.tools && (r.status === 400 || r.status === 404 || r.status === 422) && /tool|function/i.test(det)) { conHerramientas = false; mensajes = armar(); ronda--; continue; }
       // Muy grande para el plan gratis: se achica y se repite.
+      // Groq gratis: algunos modelos solo dan 1 000 tokens de SALIDA por minuto.
+      if (!salidaMax && (r.status === 413 || r.status === 429) && /output tokens per minute|OTPM/i.test(det)) { salidaMax = 900; ronda--; continue; }
       if ((r.status === 413 || r.status === 400 || r.status === 429) && /too large|context_length|reduce the length|maximum context|tokens per minute|TPM|ITPM/i.test(det) && achique < 2) { achique++; mensajes = armar(); ronda--; continue; }
       if (r.status === 402 || r.status === 401 || r.status === 403) { pausar(claveProv(prov), 402); pausar(`prov:${prov.id}`, 402); throw new CupoAgotado(`${prov.id} ${r.status === 402 ? 'pide método de pago' : 'clave rechazada'}`); }
       if (r.status === 429) saturadoHasta.set(prov.id, Date.now() + 60_000);
-      if (r.status === 429 || r.status >= 500) { pausar(claveProv(prov), r.status); throw new CupoAgotado(`${prov.id} sin cupo (${r.status})`); }
+      if (r.status === 429 || r.status >= 500) {
+        pausar(claveProv(prov), r.status);
+        const rel = ronda > 0 ? await relevar(`sin cupo (${r.status})`) : null;
+        if (rel) return rel;
+        throw new CupoAgotado(`${prov.id} sin cupo (${r.status})`);
+      }
       if (r.status === 404 || /model_not_found|decommissioned|does not exist/i.test(det)) pausar(claveProv(prov), 404);
       throw new Error(`${prov.id} respondió ${r.status}: ${det.slice(0, 200)}`);
     }
@@ -856,6 +909,9 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
         if (trozo?.model) modeloReal = String(trozo.model);
         const u = trozo?.usage || trozo?.x_groq?.usage;
         if (u) uso = u;
+        // Groq avisa los errores DENTRO del stream (p. ej. «tool_use_failed»):
+        // antes se ignoraban y quedaba «no devolvió texto».
+        if (trozo?.error) throw new Error(`${prov.id} error en vivo: ${String(trozo.error?.message || trozo.error?.code || JSON.stringify(trozo.error)).slice(0, 200)}`);
         const c = trozo?.choices?.[0];
         if (!c) continue;
         if (c.finish_reason) final = String(c.finish_reason);
@@ -882,6 +938,16 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       }
     } catch (e) {
       parar();
+      const msj = e instanceof Error ? e.message : String(e);
+      console.log(`${prov.id} ${prov.modelo} ronda=${ronda}: ${msj}`);
+      // La IA armó mal una consulta: se repite la vuelta una vez y, si vuelve
+      // a pasar, sigue sin consultas (con lo que ya tiene).
+      if (/tool_use_failed|failed to call a function|tool call|function call/i.test(msj) && usarHerr) {
+        if (!reintentoHerr) { reintentoHerr = true; ronda--; continue; }
+        sinMasConsultas = true; ronda--; continue;
+      }
+      const rel = ronda > 0 ? await relevar(msj) : null;
+      if (rel) return rel;
       if (corte.signal.aborted) { if (!piensa) pausar(claveProv(prov), 503); throw new CupoAgotado(`${prov.id} tiempo agotado`); }
       throw e;
     }
@@ -896,7 +962,10 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       tokensIn += ei; tokensOut += eo; sis.gasto.in += ei; sis.gasto.out += eo;
     }
     const validas = llamadas.filter(l => l && l.name);
-    if (validas.length && ronda < sis.rondas) {
+    // ¿Pide lo mismo que ya pidió? Ya tiene esos datos: a responder.
+    if (validas.length && validas.every(l => firmas.has(`${l.name}:${l.args}`))) { sinMasConsultas = true; mensajes.push({ role: 'user', content: 'Ya tenés esos datos arriba. Respondé ahora con ellos, sin más consultas.' }); continue; }
+    for (const l of validas) firmas.add(`${l.name}:${l.args}`);
+    if (validas.length && ronda < maxRondas) {
       if (emitido) sis.emitir('reinicio', {});
       const ids = validas.map((l, i) => l.id || `llamada_${ronda}_${i}`);
       mensajes.push({ role: 'assistant', content: texto || null, tool_calls: validas.map((l, i) => ({ id: ids[i], type: 'function', function: { name: l.name, arguments: l.args || '{}' } })) });
@@ -910,7 +979,11 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       continue;
     }
     const limpio = texto.replace(/<think>[\s\S]*?<\/think>/gi, '').replace(/^[\s\S]*<\/think>/i, '').trim();
-    if (!limpio) throw new CupoAgotado(`${prov.id} no devolvió texto${final === 'length' ? ' (se quedó pensando)' : ''}`);
+    if (!limpio) {
+      const rel = ronda > 0 ? await relevar('no devolvió texto') : null;
+      if (rel) return rel;
+      throw new CupoAgotado(`${prov.id} no devolvió texto${final === 'length' ? ' (se quedó pensando)' : ''}`);
+    }
     if (!empezo) sis.emitir('modelo', { modelo: modeloReal });
     // Lo que faltó mostrar (o todo, si se mostró algo distinto por el <think>).
     if (!emitido) sis.emitir('texto', { delta: limpio });
@@ -1923,6 +1996,7 @@ export async function atender(req: Request): Promise<Response> {
           if (probados.has(claveProv(prov)) || caidos.has(prov.id) || !disponibleModelo(claveProv(prov))) continue;
           if (Date.now() > duro) break; // la función tiene un tope de vida: no se agota esperando
           const sis = nuevo(true);
+          sis.arranque = 10000; // en la cadena de respaldo nadie se queda 30 s en fila
           emitir('estado', { texto: `Contestando con ${nombreIA(prov)}…` });
           try {
             const t0 = Date.now();
