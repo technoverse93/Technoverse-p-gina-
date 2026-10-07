@@ -37,6 +37,40 @@ const primerResultado = (r: string) => r.split(' · ')[0].replace(/^[^.:]{1,40}:
 export type Nodo = { id: string; clave: string; etiqueta: string; tipo: string; resumen: string | null; fuente: string | null; url: string | null; usos: number };
 export type Aprendido = { etiqueta: string; clave: string; nuevo: boolean };
 
+// ---------------------------------------------------------------------
+// RAMAS FIJAS: el cerebro tiene SIEMPRE las mismas ramas (antes cada IA
+// inventaba la suya y salían «Herramientas de taller» y «Herramientas y
+// Taller» por separado, o «Política Nacional»). Todo lo que aprende cae en
+// una de estas, dentro de un tema, como un dato concreto.
+// ---------------------------------------------------------------------
+export const RAMAS: { clave: string; nombre: string; guarda: string; pistas: RegExp }[] = [
+  { clave: 'productos', nombre: 'Productos y accesorios', guarda: 'Modelos, precios, SKU, especificaciones y compatibilidad de lo que se vende.', pistas: /producto|accesori|celular|tel[eé]fono|cargador|cable|funda|aud[ií]fono|laptop|computadora|tablet|reloj|electrodom|cocina|modelo|sku|precio|marca|samsung|iphone|xiaomi|motorola|dispositivo|inventario/i },
+  { clave: 'reparaciones', nombre: 'Reparaciones y técnica', guarda: 'Fallas, repuestos, procedimientos, herramientas y trucos del taller.', pistas: /repar|taller|falla|pantalla|bater[ií]a|placa|tarjeta|microsold|soldad|herramient|repuesto|desbloque|unlock|chimera|octoplus|\\bbox\\b|\\btool\\b|frp|imei|flasheo|firmware|diagn[oó]stic|t[eé]cnic/i },
+  { clave: 'proveedores', nombre: 'Proveedores y compras', guarda: 'Quién vende qué, costos de compra, tiempos de entrega y contactos de negocio.', pistas: /proveedor|mayorista|distribuid|compra|importa|pedido|costo|cotiza/i },
+  { clave: 'ventas', nombre: 'Ventas y finanzas', guarda: 'Márgenes, metas, cómo se cobra y se factura, impuestos y números del negocio.', pistas: /venta|finanz|margen|ganancia|factur|cobr|iva|impuesto|hacienda|meta|ingreso|gasto|pago|sinpe|precio de venta/i },
+  { clave: 'trabajo', nombre: 'Cómo trabajamos', guarda: 'Políticas, garantías, horarios y reglas de cómo funciona Technoverse.', pistas: /pol[ií]tica|garant[ií]a|horario|regla|procedimiento|cliente|atenci[oó]n|devoluci|negocio|tienda|empleado|personal|turno/i },
+  { clave: 'tecnologia', nombre: 'Tecnología y mercado', guarda: 'Tendencias, lanzamientos, inteligencia artificial y lo que pasa en el mercado.', pistas: /tecnolog|\bia\b|inteligencia artificial|lanzamiento|tendencia|mercado|software|\bapp|sistema operativo|android|\bios\b|internet|5g|api\b|open source|acceso|groq|openrouter|siliconflow|gemini|kimi|llm|modelo de lenguaje|\\bnube\\b|cloud/i },
+  { clave: 'mundo', nombre: 'Mundo y actualidad', guarda: 'Noticias, política, economía y lo que pasa en Costa Rica y el mundo.', pistas: /pol[ií]tica (de )?(costa rica|nacional|del pa[ií]s)|noticia|gobierno|elecci|econom[ií]a|\bpa[ií]s\b|costa rica|\bley\b|narco|seguridad (ciudadana|nacional)|clima|deporte|institucional|tipo de cambio|d[oó]lar/i },
+];
+/** La rama fija que corresponde. `propuesta` es la rama que dijo la IA (o
+ *  la rama vieja); el TEMA pesa más que todo lo demás, porque dice de qué
+ *  se trata («Mensajes al cliente» no es de reparaciones aunque viniera de
+ *  «Herramientas y taller»). */
+export function ramaCanonica(propuesta: string, tema = '', resto = ''): (typeof RAMAS)[number] {
+  const exacta = RAMAS.find(r => normalizar(propuesta) === normalizar(r.nombre) || normalizar(propuesta) === r.clave);
+  if (exacta) return exacta;
+  const contar = (t: string, re: RegExp) => (t.match(new RegExp(re.source, 'gi')) || []).length;
+  let mejor = RAMAS[0], pts = 0;
+  for (const r of RAMAS) {
+    const n = contar(tema, r.pistas) * 3 + contar(resto, r.pistas) + contar(propuesta, r.pistas);
+    if (n > pts) { pts = n; mejor = r; }
+  }
+  return pts ? mejor : RAMAS.find(r => r.clave === 'trabajo')!;
+}
+/** Lo que NO es conocimiento: lo que alguien pidió, lo que no se sabe,
+ *  reglas obvias o frases sobre Jarvis mismo. Antes se guardaba y era basura. */
+export const BASURA = /^(el|la|un|una)?\s*(due[ñn]o|usuario|cliente|jefe|superadmin)\s+(solicit|pidi|pregunt|quiere|quer[ií]a|consult|busc[oó]|necesit)|^(jarvis|el asistente|la ia|el sistema)\b|se debe (evitar|verificar|confirmar|consultar)|no se (dispone|tiene|encontr|cuenta)|no (est[aá]n?|se encuentran?|fue|fueron) (registrad|disponible|encontrad|especificad)|no hay (datos|informaci|registros)|sin (datos|informaci[oó]n) (disponible|registrad)|^(se )?(recomienda|sugiere) (verificar|consultar|revisar)|^(es importante|hay que tener en cuenta)|(pregunt[oó]|consult[oó]) por\b/i;
+
 const PRIVADO = /\b\d{8,12}\b|\d{4}[-\s]\d{4}|[^\s@]+@[^\s@]+\.[^\s@]+|\[[A-ZÉ]+·\d+\]/;
 
 /** «Teléfonos iPhone 15» → «telefonos iphone 15». */
@@ -51,6 +85,13 @@ const MODULOS: Record<string, string> = {
   inventario: 'Inventario', facturacion: 'Ventas', taller: 'Taller', chat: 'Chat', seguridad: 'Seguridad',
   finanzas: 'Finanzas', sesiones: 'Sesiones', tienda: 'Tienda en línea', internet: 'Internet', clientes: 'Clientes',
   ubicaciones: 'Ubicaciones', errores: 'Errores del sistema', vivo: 'En vivo',
+};
+
+/** Jarvis consulta SU cerebro cuando lo necesita (no solo lo que se le pasó al inicio). */
+export const CONSULTAR_CEREBRO = {
+  nombre: 'consultar_cerebro',
+  descripcion: 'Busca en TU cerebro (todo lo que aprendiste: productos, reparaciones, proveedores, políticas, lo que te dijo el dueño, lo que leíste en internet) por palabras y por significado. Usala antes de buscar en internet cuando la pregunta pueda estar en lo que ya sabés, o cuando el dueño pregunte «qué sabés de…». Con buscar vacío devuelve el mapa: ramas y temas.',
+  parametros: { type: 'object', properties: { buscar: { type: 'string', description: 'Qué buscás, en pocas palabras. Vacío = el mapa del cerebro.' } } },
 };
 
 export const APRENDER = {
@@ -124,6 +165,13 @@ export function crearCerebro(admin: Db, uid: string) {
     const d = await asegurarNodo(`dom:${clave}`, etiqueta, 'dominio');
     await enlazar(r?.id, d?.id, 'contiene');
     return d;
+  }
+  /** Una de las ramas fijas (con su nombre y lo que guarda). */
+  async function ramaFija(r: (typeof RAMAS)[number]) {
+    const n = await asegurarNodo(`dom:rama:${r.clave}`, r.nombre, 'dominio', { resumen: r.guarda });
+    const raizN = await raiz();
+    await enlazar(raizN?.id, n?.id, 'contiene');
+    return n;
   }
   async function modulo(id: string, usar = true) {
     const negocio = await dominio('negocio', 'Negocio');
@@ -313,7 +361,7 @@ export function crearCerebro(admin: Db, uid: string) {
       if (PRIVADO.test(tema) || PRIVADO.test(String(a.resumen || ''))) return { datos: { error: 'Eso parece un dato personal: no lo guardo en el cerebro.' }, aprendidos: [], fuentes: [] };
       const aprendidos: Aprendido[] = [];
       const fuentes: { titulo: string; url: string }[] = [];
-      const ramaN = await dominio(`rama:${normalizar(rama)}`, rama);
+      const ramaN = await ramaFija(ramaCanonica(rama, tema, String(a.resumen || '')));
       if (!ramaN) return { datos: { error: 'El cerebro todavía no está instalado (falta la migración).' }, aprendidos: [], fuentes: [] };
 
       // Lo que hay en el negocio sobre el tema (sin datos de clientes).
@@ -416,6 +464,22 @@ export function crearCerebro(admin: Db, uid: string) {
     /** Ordena de a poco lo viejo de internet (búsquedas sueltas repetidas). */
     consolidar: (max = 10) => consolidar(max),
 
+    /** Respuesta de la herramienta consultar_cerebro. */
+    async consultar(buscar: string): Promise<unknown> {
+      const q = limpio(buscar, 200);
+      if (q.length < 2) {
+        const { data: temas } = await admin.from('jarvis_nodos').select('id,etiqueta').eq('user_id', uid).eq('tipo', 'tema').order('usos', { ascending: false }).limit(80);
+        const { data: enl } = await admin.from('jarvis_enlaces').select('origen,destino').eq('user_id', uid).in('destino', (temas || []).map((t: any) => t.id)).limit(400);
+        const { data: ramas } = await admin.from('jarvis_nodos').select('id,etiqueta').eq('user_id', uid).eq('tipo', 'dominio').limit(40);
+        const nombreRama = new Map((ramas || []).map((r: any) => [r.id, r.etiqueta]));
+        const mapa: Record<string, string[]> = {};
+        for (const t of (temas || []) as any[]) { const r = (enl || []).find((e: any) => e.destino === t.id && nombreRama.has(e.origen)); const k = r ? String(nombreRama.get(r.origen)) : 'Sin rama'; (mapa[k] ||= []).push(t.etiqueta); }
+        return { mapa, nota: 'Estas son tus ramas y temas. Pedí uno con «buscar» para ver lo que sabés de él.' };
+      }
+      const r = await this.recordarPara(q, false);
+      return r.bloque ? { encontrado: r.bloque, temas: r.usados } : { encontrado: null, nota: 'No tenés nada guardado sobre eso. Si hace falta, buscalo en internet (lo que encontrés queda guardado).' };
+    },
+
     /** Ramas y temas que ya existen, para que lo nuevo caiga en ellos y no
      *  se dupliquen («Proveedores» y «proveedor» son la misma rama). */
     async mapa(): Promise<{ ramas: string[]; temas: string[] }> {
@@ -430,13 +494,19 @@ export function crearCerebro(admin: Db, uid: string) {
     /** Hechos sacados de una conversación: cada uno es un PUNTO bajo su
      *  tema, y el tema cuelga de su rama. Si el tema o el punto ya existen,
      *  se refuerzan en vez de duplicarse. Nunca datos personales. */
-    async aprenderHechos(hechos: { rama?: unknown; tema?: unknown; dato?: unknown }[]): Promise<Aprendido[]> {
+    async aprenderHechos(hechos: { rama?: unknown; tema?: unknown; dato?: unknown; url?: unknown }[], origen: { fuente: string; url?: string } = { fuente: 'conversación' }): Promise<Aprendido[]> {
       const aprendidos: Aprendido[] = [];
-      for (const h of (Array.isArray(hechos) ? hechos : []).slice(0, 4)) {
-        const rama = limpio(h?.rama, 60) || 'Temas', tema = limpio(h?.tema, 60), dato = limpio(h?.dato, 400);
-        if (tema.length < 2 || dato.length < 8 || [rama, tema, dato].some(x => PRIVADO.test(x))) continue;
+      for (const h of (Array.isArray(hechos) ? hechos : []).slice(0, 5)) {
+        const tema = limpio(h?.tema, 60), dato = limpio(h?.dato, 400);
+        if (tema.length < 2 || dato.length < 12 || [tema, dato].some(x => PRIVADO.test(x)) || BASURA.test(dato) || BASURA.test(tema)) continue;
+        // Un dato tiene que decir algo concreto: un número, un nombre propio o una regla clara.
+        // Una preferencia del dueño («prefiere…», «no le gusta…») va a «Sobre vos».
+        const preferencia = /\b(prefiere|le gusta|no le gusta|quiere que|odia|le molesta|le parece)\b/i.test(dato);
+        if (!preferencia && !/\d|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-Z0-9]|\b(siempre|nunca|cuesta|vale|incluye|dura|funciona|sirve|es compatible|se cobra|se usa|abre|cierra|atiende)\b/.test(dato)) continue;
+        const r = ramaCanonica(limpio(h?.rama, 60), tema, dato);
+        const url = typeof h?.url === 'string' && /^https?:\/\//.test(h.url) ? h.url : origen.url;
         try {
-          const ramaN = await dominio(`rama:${normalizar(rama)}`, rama);
+          const ramaN = preferencia ? await dominio('dueno', 'Sobre vos') : await ramaFija(r);
           if (!ramaN) break;
           const temaN = await asegurarNodo(normalizar(tema), tema, 'tema', { fuente: 'conversación', usar: true });
           if (!temaN) continue;
@@ -452,7 +522,7 @@ export function crearCerebro(admin: Db, uid: string) {
             }
           }
           const clave = `nota:${temaN.id.slice(0, 8)}:${normalizar(dato).slice(0, 60)}`;
-          const n = await asegurarNodo(clave, dato, 'dato', { resumen: dato, fuente: 'conversación', usar: true });
+          const n = await asegurarNodo(clave, dato, 'dato', { resumen: dato, fuente: origen.fuente, url, usar: true });
           if (n?.nuevo) enFondo(vectorizarPendientes(4));
           await enlazar(temaN.id, n?.id, 'detalle');
           if (n) aprendidos.push({ etiqueta: dato, clave, nuevo: n.nuevo });
@@ -510,6 +580,75 @@ export function crearCerebro(admin: Db, uid: string) {
         if (desde) await admin.from('jarvis_enlaces').delete().eq('user_id', uid).or(`and(origen.eq.${desde},destino.eq.${nodo}),and(origen.eq.${nodo},destino.eq.${desde})`);
         const enlace = await nuevoEnlace(hacia, nodo, 'incluye');
         return { ok: true, enlace };
+      }
+      if (op === 'depurar') {
+        // ORDENAR Y LIMPIAR TODO EL CEREBRO. Sin «aplicar» solo devuelve el
+        // plan (qué se borra, qué se mueve) para que el dueño lo vea primero.
+        const leerTodo = async (tabla: string, cols: string) => {
+          const filas: any[] = [];
+          for (let desde = 0; desde < 8000; desde += 1000) {
+            const { data } = await admin.from(tabla).select(cols).eq('user_id', uid).range(desde, desde + 999);
+            filas.push(...(data || []));
+            if ((data || []).length < 1000) break;
+          }
+          return filas;
+        };
+        const nodos = await leerTodo('jarvis_nodos', 'id,clave,etiqueta,tipo,resumen,fuente,url,usos,ultimo_uso,creado_en');
+        const enlaces = await leerTodo('jarvis_enlaces', 'id,origen,destino');
+        const porId = new Map(nodos.map(n => [n.id, n]));
+        const salen = new Map<string, string[]>(), entran = new Map<string, string[]>();
+        for (const e of enlaces) { (salen.get(e.origen) || salen.set(e.origen, []).get(e.origen)!).push(e.destino); (entran.get(e.destino) || entran.set(e.destino, []).get(e.destino)!).push(e.origen); }
+        const borrar = new Map<string, string>(); // id → motivo
+        const mover: { tema: string; desde: string | null; hacia: (typeof RAMAS)[number] }[] = [];
+        const CANON = new Set(RAMAS.map(r => `dom:rama:${r.clave}`));
+        const SITIO_BASURA = /rocketreach|instagram|facebook|linkedin|pinterest|tiktok|zoominfo|scribd|quora/i;
+        // 1) Datos que no son conocimiento.
+        for (const n of nodos) if (n.tipo === 'dato' && (BASURA.test(n.etiqueta) || BASURA.test(n.resumen || ''))) borrar.set(n.id, 'no es un dato útil');
+        // 2) Datos repetidos (mismo texto): queda el más usado.
+        const vistos = new Map<string, any>();
+        for (const n of nodos.filter(x => x.tipo === 'dato' && !borrar.has(x.id)).sort((x, y) => (y.usos || 0) - (x.usos || 0))) {
+          const k = normalizar(n.resumen || n.etiqueta);
+          if (vistos.has(k)) borrar.set(n.id, 'repetido'); else vistos.set(k, n);
+        }
+        // 3) Restos de búsquedas: quedan los 25 más usados/recientes; fuera los de sitios que no aportan.
+        const web = nodos.filter(n => n.tipo === 'fuente').sort((x, y) => (y.usos || 0) - (x.usos || 0) || String(y.ultimo_uso || y.creado_en).localeCompare(String(x.ultimo_uso || x.creado_en)));
+        web.forEach((n, i) => { if (SITIO_BASURA.test(`${n.etiqueta} ${n.url || ''}`)) borrar.set(n.id, 'sitio que no aporta'); else if (i >= 25 && (n.usos || 0) <= 2) borrar.set(n.id, 'búsqueda vieja'); });
+        // 4) Ramas inventadas → sus temas pasan a la rama fija que corresponde.
+        for (const r of nodos.filter(n => n.tipo === 'dominio' && String(n.clave).startsWith('dom:rama:') && !CANON.has(n.clave))) {
+          for (const t of salen.get(r.id) || []) { const tn = porId.get(t); if (tn && tn.tipo === 'tema') mover.push({ tema: t, desde: r.id, hacia: ramaCanonica(r.etiqueta, tn.etiqueta, tn.resumen || '') }); }
+          borrar.set(r.id, 'rama repetida o inventada');
+        }
+        // 5) Temas sueltos (sin rama) → a su rama fija; temas vacíos (sin nada adentro ni resumen) → fuera.
+        const enRama = (id: string) => (entran.get(id) || []).some(o => { const p = porId.get(o); return p && (p.tipo === 'dominio' || p.tipo === 'raiz') && !borrar.has(o); });
+        for (const t of nodos.filter(n => n.tipo === 'tema' && !borrar.has(n.id))) {
+          const hijos = (salen.get(t.id) || []).filter(h => !borrar.has(h) && porId.get(h));
+          if (!hijos.length && !(t.resumen || '').trim()) { borrar.set(t.id, 'tema vacío'); continue; }
+          if (!enRama(t.id) && !mover.some(m => m.tema === t.id)) mover.push({ tema: t.id, desde: null, hacia: ramaCanonica('', t.etiqueta, t.resumen || '') });
+        }
+        const plan = {
+          borrar: borrar.size, mover: mover.length,
+          motivos: [...borrar.values()].reduce((a: Record<string, number>, m) => { a[m] = (a[m] || 0) + 1; return a; }, {}),
+          ejemplos_borrar: [...borrar.keys()].slice(0, 8).map(id => porId.get(id)?.etiqueta),
+          ejemplos_mover: mover.slice(0, 30).map(m => `${porId.get(m.tema)?.etiqueta} → ${m.hacia.nombre}`),
+          total: nodos.length,
+        };
+        if (d.aplicar !== true) return { ok: true, nodo: { plan } };
+        // Aplicar: primero las ramas fijas y los movimientos, después el borrado.
+        for (const m of mover) {
+          const r = await ramaFija(m.hacia);
+          if (!r) continue;
+          if (m.desde) await admin.from('jarvis_enlaces').delete().eq('user_id', uid).eq('origen', m.desde).eq('destino', m.tema);
+          await nuevoEnlace(r.id, m.tema, 'incluye');
+        }
+        const ids = [...borrar.keys()];
+        for (let i = 0; i < ids.length; i += 80) {
+          const lote = ids.slice(i, i + 80);
+          await admin.from('jarvis_enlaces').delete().eq('user_id', uid).in('origen', lote);
+          await admin.from('jarvis_enlaces').delete().eq('user_id', uid).in('destino', lote);
+          await admin.from('jarvis_nodos').delete().eq('user_id', uid).in('id', lote);
+        }
+        temasWeb = null;
+        return { ok: true, nodo: { plan, aplicado: true } };
       }
       if (op === 'ordenar') {
         // Ordena TODO lo viejo de internet de una vez (al abrir el cerebro).

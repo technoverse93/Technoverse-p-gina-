@@ -331,6 +331,8 @@ span.jv-tit:hover { background: transparent; }
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-editor { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 :is(#admin-panel-root, body) .jv-cerebro .jv-cb-botones { display: flex; gap: 6px; justify-content: flex-end; flex-wrap: wrap; }
 :is(#admin-panel-root, body) .jv-cerebro .jv-btn { appearance: none; background: none; border: 0; margin: 0; padding: 0; font: inherit; color: inherit; text-align: left; box-sizing: border-box; cursor: pointer; display: inline-flex; align-items: center; justify-content: center; gap: 6px; min-height: 34px; padding: 6px 12px; border-radius: 10px; font: 600 12.5px var(--jv-f-ui); background: var(--jv-hundido); color: var(--jv-tinta); border: 1px solid var(--jv-linea); }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-plan { display: flex; flex-direction: column; gap: 6px; }
+:is(#admin-panel-root, body) .jv-cerebro .jv-cb-plan-botones { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 4px; }
 :is(#admin-panel-root, body) .jv-cerebro .jv-btn[data-pri] { background: var(--jv-acento); color: var(--jv-tinta-ac); border-color: transparent; }
 :is(#admin-panel-root, body) .jv-cerebro .jv-btn[data-mal] { background: transparent; color: var(--tv-danger, #C2363B); border-color: color-mix(in srgb, var(--tv-danger, #C2363B) 40%, transparent); }
 :is(#admin-panel-root, body) .jv-cerebro .jv-btn:disabled { opacity: .5; cursor: default; }

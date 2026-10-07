@@ -437,7 +437,8 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
               onAgregar={t => rama.nodo && void agregar('tema', rama.id, t)} onOlvidar={ids => olvidar(ids)} />
           ) : (
             <VistaNucleo arbol={arbol} filas={visibles} nTemas={nTemas} nPuntos={nPuntos} onRama={verRama} onElegir={elegir}
-              aprendiendo={aprendiendo} onAprender={aprender} />
+              aprendiendo={aprendiendo} onAprender={aprender}
+              onOrdenar={async aplicar => { const r = await funcion('depurar', { aplicar }); if (aplicar && r) { enMemoria = null; void cargar(); } return (r?.nodo as any)?.plan || null; }} />
           )}
         </div>
       </div>
@@ -486,9 +487,42 @@ function Agregador({ ph, onAgregar, max = 300 }: { ph: string; onAgregar: (t: st
 }
 const Punto = ({ color }: { color: string }) => <i className="jv-cb-pt" style={{ background: color, color }} aria-hidden />;
 
-function VistaNucleo({ arbol, filas, nTemas, nPuntos, onRama, onElegir, aprendiendo, onAprender }: {
+type PlanOrden = { borrar: number; mover: number; motivos: Record<string, number>; ejemplos_borrar: string[]; ejemplos_mover: string[]; total: number };
+
+/** «Ordenar el cerebro»: primero muestra qué va a limpiar y mover; se aplica solo con «Aplicar». */
+function OrdenarCerebro({ onOrdenar }: { onOrdenar: (aplicar: boolean) => Promise<PlanOrden | null> }) {
+  const [estado, setEstado] = useState<'' | 'viendo' | 'plan' | 'aplicando' | 'listo'>('');
+  const [plan, setPlan] = useState<PlanOrden | null>(null);
+  const ver = async () => { setEstado('viendo'); const p = await onOrdenar(false); setPlan(p); setEstado(p ? 'plan' : ''); };
+  const aplicar = async () => { setEstado('aplicando'); const p = await onOrdenar(true); if (p) setPlan(p); setEstado(p ? 'listo' : 'plan'); };
+  return (
+    <Bloque titulo="Orden">
+      {estado === '' && <><p className="jv-cb-meta">Limpia lo que no es conocimiento (búsquedas viejas, repetidos, frases vacías) y pone cada tema en su rama fija. Primero te muestra qué va a hacer.</p>
+        <button type="button" className="jv-btn" onClick={() => void ver()}>Ordenar el cerebro</button></>}
+      {estado === 'viendo' && <p className="jv-cb-meta" role="status">Revisando todo el cerebro…</p>}
+      {(estado === 'plan' || estado === 'aplicando') && plan && (
+        <div className="jv-cb-plan">
+          {!plan.borrar && !plan.mover ? <p className="jv-cb-meta">Está ordenado: no hay nada que limpiar ni mover.</p> : <>
+            <p className="jv-cb-texto">De {plan.total} ideas: <b>limpia {plan.borrar}</b> y <b>mueve {plan.mover}</b> a su rama.</p>
+            {!!plan.borrar && <p className="jv-cb-meta">{Object.entries(plan.motivos).map(([m, n]) => `${n} ${m}`).join(' · ')}</p>}
+            {!!plan.ejemplos_borrar.length && <p className="jv-cb-meta">Se va, por ejemplo: {plan.ejemplos_borrar.slice(0, 4).map(e => `«${e}»`).join(', ')}</p>}
+            {!!plan.ejemplos_mover.length && <p className="jv-cb-meta">Se mueve: {plan.ejemplos_mover.slice(0, 4).join(' · ')}</p>}
+            <div className="jv-cb-plan-botones">
+              <button type="button" className="jv-btn" data-pri disabled={estado === 'aplicando'} onClick={() => void aplicar()}>{estado === 'aplicando' ? 'Ordenando…' : 'Aplicar'}</button>
+              <button type="button" className="jv-btn" disabled={estado === 'aplicando'} onClick={() => { setPlan(null); setEstado(''); }}>Cancelar</button>
+            </div>
+          </>}
+        </div>
+      )}
+      {estado === 'listo' && plan && <p className="jv-cb-meta" role="status">Listo: limpió {plan.borrar} y movió {plan.mover}. El cerebro quedó ordenado en sus ramas.</p>}
+    </Bloque>
+  );
+}
+
+function VistaNucleo({ arbol, filas, nTemas, nPuntos, onRama, onElegir, aprendiendo, onAprender, onOrdenar }: {
   arbol: Arbol; filas: Fila[]; nTemas: number; nPuntos: number; onRama: (id: string) => void; onElegir: (id: string) => void;
   aprendiendo: { estado: 'no' | 'si' | 'ok' | 'error'; texto: string }; onAprender: (t: string) => Promise<void>;
+  onOrdenar: (aplicar: boolean) => Promise<PlanOrden | null>;
 }) {
   const [q, setQ] = useState('');
   const res = useMemo(() => {
@@ -528,6 +562,7 @@ function VistaNucleo({ arbol, filas, nTemas, nPuntos, onRama, onElegir, aprendie
               : aprendiendo.estado === 'error' ? aprendiendo.texto : 'Lo investiga en inventario, taller e internet y nace una estrella en la rama que corresponda.'}
         </p>
       </Bloque>
+      <OrdenarCerebro onOrdenar={onOrdenar} />
       {!!ultimos.length && (
         <Bloque titulo="Lo último">
           <div>{ultimos.map(u => <button key={u.id} type="button" className="jv-cb-fila" onClick={() => onElegir(u.id)}><Punto color={color(u.id)} /><div><em>Aprendió «{u.nombre}»</em></div><small>{haceCuanto(u.creado_en)}</small></button>)}</div>
