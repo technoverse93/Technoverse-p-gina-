@@ -69,7 +69,9 @@ export function ramaCanonica(propuesta: string, tema = '', resto = ''): (typeof 
 }
 /** Lo que NO es conocimiento: lo que alguien pidió, lo que no se sabe,
  *  reglas obvias o frases sobre Jarvis mismo. Antes se guardaba y era basura. */
-export const BASURA = /^(el|la|un|una)?\s*(due[ñn]o|usuario|cliente|jefe|superadmin)\s+(solicit|pidi|pregunt|quiere|quer[ií]a|consult|busc[oó]|necesit)|^(jarvis|el asistente|la ia|el sistema)\b|se debe (evitar|verificar|confirmar|consultar)|no se (dispone|tiene|encontr|cuenta)|no (est[aá]n?|se encuentran?|fue|fueron) (registrad|disponible|encontrad|especificad)|no hay (datos|informaci|registros)|sin (datos|informaci[oó]n) (disponible|registrad)|^(se )?(recomienda|sugiere) (verificar|consultar|revisar)|^(es importante|hay que tener en cuenta)|(pregunt[oó]|consult[oó]) por\b/i;
+export const BASURA = /^(el|la|un|una)?\s*(due[ñn]o|usuario|cliente|jefe|superadmin)\s+(solicit|pidi|pregunt|quiere|quer[ií]a|consult|busc[oó]|necesit)|^(jarvis|el asistente|la ia|el sistema)\b|se debe (evitar|verificar|confirmar|consultar)|no se (dispone|tiene|encontr|cuenta)|no (est[aá]n?|se encuentran?|fue|fueron) (registrad|disponible|encontrad|especificad)|no hay (datos|informaci|registros)|sin (datos|informaci[oó]n) (disponible|registrad)|^(se )?(recomienda|sugiere) (verificar|consultar|revisar)|^(es importante|hay que tener en cuenta)|(pregunt[oó]|consult[oó]) por\b|no (est[aá] |se encuentra |aparece |figura )?disponible|no aparece|no se (pudo|logr[oó])|al momento de la consulta|^precio:? no/i;
+/** Sitios cuyos resultados no aportan conocimiento (perfiles, redes). */
+export const SITIO_BASURA = /rocketreach|instagram|facebook|linkedin|pinterest|tiktok|zoominfo|scribd|quora/i;
 
 const PRIVADO = /\b\d{8,12}\b|\d{4}[-\s]\d{4}|[^\s@]+@[^\s@]+\.[^\s@]+|\[[A-ZÉ]+·\d+\]/;
 
@@ -601,7 +603,6 @@ export function crearCerebro(admin: Db, uid: string) {
         const borrar = new Map<string, string>(); // id → motivo
         const mover: { tema: string; desde: string | null; hacia: (typeof RAMAS)[number] }[] = [];
         const CANON = new Set(RAMAS.map(r => `dom:rama:${r.clave}`));
-        const SITIO_BASURA = /rocketreach|instagram|facebook|linkedin|pinterest|tiktok|zoominfo|scribd|quora/i;
         // 1) Datos que no son conocimiento.
         for (const n of nodos) if (n.tipo === 'dato' && (BASURA.test(n.etiqueta) || BASURA.test(n.resumen || ''))) borrar.set(n.id, 'no es un dato útil');
         // 2) Datos repetidos (mismo texto): queda el más usado.
@@ -678,7 +679,11 @@ export function crearCerebro(admin: Db, uid: string) {
       if (error) { vivo = false; return { bloque: '', usados: [], notas: [] }; }
       const msg = ` ${normalizar(texto)} `;
       const nombre = (n: Nodo) => normalizar(n.etiqueta.replace(/^(Inventario|Taller|Internet) · /, ''));
-      const directos = ((nodos || []) as Nodo[])
+      // Lo que es basura (aunque todavía no se haya ordenado el cerebro) no se
+      // recuerda: antes «Precio no disponible…» volvía en cada respuesta y
+      // Jarvis repetía su propio error.
+      const sirve = (n: Nodo) => !(BASURA.test(n.etiqueta) || BASURA.test(n.resumen || '') || SITIO_BASURA.test(`${n.etiqueta} ${n.url || ''}`));
+      const directos = ((nodos || []) as Nodo[]).filter(sirve)
         .filter(n => n.tipo !== 'recuerdo' && n.resumen && nombre(n).length >= 3 && msg.includes(` ${nombre(n)} `))
         .filter(n => !(esOrden && n.fuente === 'internet'))
         .sort((x, y) => nombre(y).length - nombre(x).length || y.usos - x.usos).slice(0, 5);
@@ -693,7 +698,7 @@ export function crearCerebro(admin: Db, uid: string) {
       const palabras = [...new Set(normalizar(texto).split(/[^a-z0-9ñ]+/).filter(w => w.length >= 4 && !VACIAS.has(w)).map(raiz))];
       if (palabras.length) {
         const ya = new Set(directos.map(n => n.id));
-        const puntuados = ((nodos || []) as Nodo[])
+        const puntuados = ((nodos || []) as Nodo[]).filter(sirve)
           .filter(n => !ya.has(n.id) && n.tipo !== 'recuerdo' && n.resumen && !(esOrden && n.fuente === 'internet'))
           .map(n => {
             const et = normalizar(n.etiqueta), res = normalizar(n.resumen || '');
@@ -708,7 +713,7 @@ export function crearCerebro(admin: Db, uid: string) {
       // Lo que se parece por SIGNIFICADO aunque no comparta palabras.
       {
         const ya = new Set(directos.map(n => n.id));
-        const sem = (await porSignificado).filter(x => x.similitud >= 0.62 && !ya.has(x.id) && x.tipo !== 'recuerdo' && x.resumen && !(esOrden && x.fuente === 'internet'));
+        const sem = (await porSignificado).filter(x => sirve(x) && x.similitud >= 0.62 && !ya.has(x.id) && x.tipo !== 'recuerdo' && x.resumen && !(esOrden && x.fuente === 'internet'));
         directos.push(...sem.slice(0, Math.max(0, 10 - directos.length)));
       }
       if (!directos.length) return { bloque: '', usados: [], notas: [] };
