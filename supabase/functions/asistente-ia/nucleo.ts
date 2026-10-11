@@ -67,10 +67,11 @@
 
 import 'jsr:@supabase/functions-js/edge-runtime.d.ts';
 import { createClient } from 'jsr:@supabase/supabase-js@2';
-import { disponibles, ejecutar, NOMBRE_MODULO, type Consulta, type Contexto } from './herramientas.ts';
+import { disponibles, ejecutar, leerPagina, NOMBRE_MODULO, type Consulta, type Contexto } from './herramientas.ts';
 import { ACCIONES, MODULOS_PANEL, NAVEGAR, pideToken, validarOpciones, type CtxAccion, type Resultado as ResultadoAccion, type Tarjeta } from './acciones.ts';
 import { normalizarDictado, restaurarPrivados, separarPrivados } from './privados.ts';
 import { esCron, tareaCron } from './proactivo.ts';
+import { eventoDePrueba, informe, nombreComponente, registrar, type Prueba } from './salud.ts';
 import { APRENDER, CONSULTAR_CEREBRO, crearCerebro, respuestaSinIA, type Cerebro, type Nota } from './cerebro.ts';
 import { FORMATO_REQUERIMIENTO, GLOSARIO_TICO, MAPA_SISTEMA, TONOS, type Tono } from './mapa.ts';
 
@@ -1186,6 +1187,91 @@ async function pedirJSON(prompt: string, usuario: string, op: { evitar?: string;
   return null;
 }
 
+// ---------------------------------------------------------------------
+// SALUD: la prueba diaria (y el botón «Probar ahora»)
+// ---------------------------------------------------------------------
+/** Prueba cada IA de la cadena, la principal, Gemini y cada herramienta con
+ *  un pedido mínimo, todas a la vez (≈ 2 s; la principal puede tardar
+ *  más). No pausa a nadie: solo mide. */
+async function probarSalud(admin: any): Promise<Prueba[]> {
+  const medir = async (componente: string, fn: () => Promise<{ modelo?: string; detalle?: string } | void>, tope = 25000): Promise<Prueba> => {
+    const t0 = Date.now();
+    let reloj: ReturnType<typeof setTimeout> | undefined;
+    try {
+      // Lo que llegue tarde (o falle tarde) se descarta sin romper nada.
+      const trabajo = fn(); trabajo.catch(() => {});
+      const r = await Promise.race([trabajo, new Promise<never>((_, no) => { reloj = setTimeout(() => no(new Error('no respondió a tiempo')), tope); })]);
+      return { componente, ok: true, ms: Date.now() - t0, modelo: r?.modelo, detalle: r?.detalle || 'responde' };
+    } catch (e) {
+      const m = e instanceof Error ? e.message : String(e);
+      return { componente, ok: false, ms: Date.now() - t0, detalle: (m === 'tiempo agotado' ? 'no respondió a tiempo' : m).slice(0, 160) };
+    } finally { clearTimeout(reloj); }
+  };
+  const chat = async (p: Compatible, m: string, tope: number) => {
+    const r = await conTope(`${p.url}/chat/completions`, { method: 'POST', headers: { 'Content-Type': 'application/json', ...(p.clave ? { Authorization: `Bearer ${p.clave}` } : {}) },
+      body: JSON.stringify({ model: m, temperature: 0, max_tokens: 80, messages: [{ role: 'user', content: 'Respondé solo con la palabra: listo' }] }) }, tope);
+    if (!r.ok) throw new Error(`${r.status} ${(await r.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 110)}`.trim());
+    const d = await r.json();
+    if (!d?.choices?.length) throw new Error(d?.error?.message ? String(d.error.message).slice(0, 120) : 'respuesta vacía');
+    return { modelo: m };
+  };
+  const pruebas: Promise<Prueba>[] = [];
+  const cadena = proveedoresRespaldo().filter(p => p.id !== 'local');
+  for (const p of cadena) {
+    pruebas.push(medir(`ia:${p.id}`, async () => {
+      const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
+      return chat(p, ms.find(x => !PIENSA.test(x)) || ms[0] || p.modelo, 20000);
+    }));
+  }
+  // La principal (Kimi K3): piensa, así que tiene más margen.
+  pruebas.push(medir('ia:principal', async () => {
+    const pr = (await proveedoresPrincipales())[0];
+    if (!pr) return { detalle: 'apagada (IA_PRINCIPAL=gemini) o sin proveedor' };
+    const r = await chat(pr, pr.modelo, 45000);
+    return { ...r, detalle: `responde en ${NOMBRE_PROV[pr.id]}` };
+  }, 47000));
+  const claveG = Deno.env.get('GEMINI_API_KEY');
+  if (claveG) {
+    pruebas.push(medir('ia:gemini', async () => {
+      const r = await conTope(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': claveG },
+        body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Respondé solo con la palabra: listo' }] }], generationConfig: { temperature: 0, maxOutputTokens: 200 } }) }, 20000);
+      if (!r.ok) throw new Error(`${r.status} ${(await r.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 110)}`.trim());
+      return { modelo: GEMINI_MODEL };
+    }));
+    pruebas.push(medir('vectores', async () => {
+      const modelo = Deno.env.get('GEMINI_EMBED_MODEL') || 'gemini-embedding-001';
+      const r = await conTope(`https://generativelanguage.googleapis.com/v1beta/models/${modelo}:embedContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': claveG },
+        body: JSON.stringify({ model: `models/${modelo}`, content: { parts: [{ text: 'cargador rápido 20W' }] }, outputDimensionality: 768 }) }, 10000);
+      if (!r.ok) throw new Error(`${r.status}`);
+      const d = await r.json();
+      if ((d?.embedding?.values || []).length !== 768) throw new Error('vector incompleto');
+      const [{ count: total }, { count: con }] = await Promise.all([
+        admin.from('jarvis_nodos').select('id', { count: 'exact', head: true }),
+        admin.from('jarvis_nodos').select('id', { count: 'exact', head: true }).not('embedding', 'is', null),
+      ]);
+      return { modelo, detalle: total != null ? `${con ?? 0} de ${total} ideas con vector` : 'responde' };
+    }, 15000));
+  }
+  pruebas.push(medir('internet', async () => {
+    const ctx: Contexto = { db: admin, esSuper: true, hoy: diaCR(), fuentes: [] };
+    const r = await ejecutar('buscar_web', { consulta: 'tipo de cambio dólar Costa Rica hoy' }, ctx, disponibles(null, true));
+    const d = r.datos as any;
+    if (d?.error) throw new Error(String(d.error).split('.')[0]);
+    return { detalle: d?.resultados?.length ? `${d.resultados.length} fuentes` : 'responde (resumen de Groq)' };
+  }));
+  pruebas.push(medir('paginas', async () => {
+    const r = await leerPagina('https://example.com');
+    if (!r || r.texto.length < 20) throw new Error('no pudo leer la página de prueba');
+    return { detalle: `lee (${r.via})` };
+  }));
+  pruebas.push(medir('base', async () => {
+    const { count, error } = await admin.from('products').select('id', { count: 'exact', head: true });
+    if (error) throw new Error(error.message);
+    return { detalle: `${count ?? 0} productos a la vista` };
+  }, 10000));
+  return Promise.all(pruebas);
+}
+
 /** El revisor: devuelve el veredicto de otra IA sobre la respuesta. */
 async function llamarRevisor(usuario: string, evitar: string, hasta: number, gasto: { in: number; out: number }, modeloQueRespondio = ''): Promise<{ veredicto: string; problemas?: string[]; respuesta?: string; quien: string } | null> {
   const r = await pedirJSON(PROMPT_REVISOR, usuario, { evitar, evitarModelo: modeloQueRespondio || undefined, hasta, gasto, etiqueta: 'revisor', valido: j => j.veredicto === 'ok' || j.veredicto === 'corregir' });
@@ -1292,7 +1378,7 @@ export async function atender(req: Request): Promise<Response> {
     };
     if (accion === 'cron') {
       if (!(await esCron(admin, req))) return responder({ ok: false, error: 'No autorizado.' }, 401);
-      return responder(await tareaCron(admin, String(cuerpo?.tarea || ''), redactar));
+      return responder(await tareaCron(admin, String(cuerpo?.tarea || ''), redactar, undefined, () => probarSalud(admin)));
     }
 
     const { data: quien } = await admin.auth.getUser(jwt);
@@ -1374,6 +1460,14 @@ export async function atender(req: Request): Promise<Response> {
       if (!esSuper) return responder({ ok: false, error: 'Solo el superadmin.' }, 403);
       const tarea = ['resumen', 'vigilar'].includes(String(cuerpo?.tarea)) ? String(cuerpo.tarea) : 'resumen';
       return responder(await tareaCron(admin, tarea, redactar, uid));
+    }
+
+    // SALUD: el panel de Ajustes («Probar ahora» corre la prueba completa).
+    if (accion === 'salud') {
+      if (!esSuper) return responder({ ok: false, error: 'Solo el superadmin.' }, 403);
+      const recien = cuerpo?.probar === true ? await probarSalud(admin) : null;
+      if (recien) await registrar(admin, recien.map(eventoDePrueba));
+      return responder({ ...(await informe(admin)), ...(recien ? { recien: recien.map(p => ({ ...p, nombre: nombreComponente(p.componente) })) } : {}) });
     }
 
     // ---------- JARVIS PROPIO: datos para entrenar su modelo ----------
@@ -2099,7 +2193,11 @@ export async function atender(req: Request): Promise<Response> {
     // Responder y después REVISAR: otra IA compara la respuesta con la
     // pregunta y los datos consultados; si encuentra errores, la corrige
     // (hasta 2 vueltas) y en pantalla queda la versión corregida.
-    const correr = async (emitir: Emisor) => {
+    // SALUD: cuánto tarda en aparecer la primera letra y en terminar.
+    let inicioMsg = 0, primerTexto = 0;
+    const correr = async (emitirFuera: Emisor) => {
+      inicioMsg = Date.now(); primerTexto = 0;
+      const emitir: Emisor = (evento, datos) => { if (evento === 'texto' && !primerTexto) primerTexto = Date.now() - inicioMsg; emitirFuera(evento, datos); };
       const salida = await correrBase(emitir);
       if (!salida) return salida;
       const r = salida.res;
@@ -2246,16 +2344,31 @@ export async function atender(req: Request): Promise<Response> {
       cupo: cupoDespues(r.res),
     });
     const descartarNueva = async () => { if (nueva) await admin.from('ia_conversaciones').delete().eq('id', convId); };
+    // SALUD: cada respuesta (o cada vez que ninguna IA pudo) queda anotada:
+    // quién respondió, cuánto tardó, qué falló antes y qué dijo el revisor.
+    const anotarSalud = (r: { res: Resultado } | null, error?: string) => {
+      const rev = r?.res.consultas.find(c => c.tipo === 'revision');
+      return registrar(admin, {
+        user_id: uid, tipo: r ? 'respuesta' : error ? 'error' : 'sin_servicio', modo, perfil: perfilUsado,
+        proveedor: r ? String(r.res.proveedor) : null, modelo: r?.res.modelo || null, ok: !!r,
+        ms: inicioMsg ? Date.now() - inicioMsg : null, primer_ms: primerTexto || null, ia_ms: r?.res.ms ?? null,
+        revision: rev ? String(rev.filas) : null, revisor: rev ? String(rev.desc) : null, fallos: [...fallos],
+        herramientas: r ? r.res.consultas.filter(c => c.tipo !== 'revision').map(c => c.modulo) : [],
+        tokens: r ? r.res.tokensIn + r.res.tokensOut : null, detalle: error || null,
+      });
+    };
 
     if (cuerpo?.envivo !== true) {
       let salida: Awaited<ReturnType<typeof correr>>;
-      try { salida = await correr(() => {}); } catch (e) { await descartarNueva(); throw e; }
+      try { salida = await correr(() => {}); } catch (e) { await descartarNueva(); await anotarSalud(null, e instanceof Error ? e.message : String(e)); throw e; }
       if (!salida) {
         await descartarNueva();
         console.log('sin servicio: ningún modelo respondió');
+        await enSegundoPlano(anotarSalud(null));
         return responder({ ok: false, codigo: 'sin_servicio', error: sinServicio(), cupo: antes }, 503);
       }
-      await enSegundoPlano(guardar(salida.res, salida.sis));
+      const hecha = salida;
+      await enSegundoPlano(Promise.all([guardar(hecha.res, hecha.sis), anotarSalud(hecha)]));
       return responder(final(salida));
     }
 
@@ -2283,13 +2396,18 @@ export async function atender(req: Request): Promise<Response> {
               await descartarNueva();
               console.log('sin servicio: ningún modelo respondió');
               emitir('error', { ok: false, codigo: 'sin_servicio', error: sinServicio(), cupo: antes });
+              await anotarSalud(null);
             } else {
               emitir('fin', final(salida));
-              await guardar(salida.res, salida.sis).catch(e => console.log(`guardado falló: ${e instanceof Error ? e.message : e}`));
+              await Promise.all([
+                guardar(salida.res, salida.sis).catch(e => console.log(`guardado falló: ${e instanceof Error ? e.message : e}`)),
+                anotarSalud(salida),
+              ]);
             }
           } catch (e) {
             await descartarNueva();
             emitir('error', { ok: false, error: e instanceof Error ? e.message : 'No se pudo responder.' });
+            await anotarSalud(null, e instanceof Error ? e.message : String(e));
           } finally {
             try { control.close(); } catch { /* ya cerrado */ }
           }

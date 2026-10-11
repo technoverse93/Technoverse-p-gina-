@@ -8,6 +8,7 @@
 //     nuevo, y un día de ventas muy por debajo de lo normal.
 //   · resumen (7:00 a. m.): el resumen de la mañana, con la voz de Jarvis.
 //   · repaso (2:30 a. m.): ordena el cerebro solo y le pone vector a todo.
+//   · pruebas (6:45 a. m.): prueba cada IA y herramienta (ver salud.ts).
 // Cada aviso queda en `jarvis_avisos` (una sola vez: clave única) y la app
 // lo muestra al instante y lo notifica en el teléfono.
 // La llamada se valida con la llave de `jarvis_cron`, que solo puede leer
@@ -15,6 +16,7 @@
 // =====================================================================
 
 import { crearCerebro } from './cerebro.ts';
+import { avisosDePrueba, eventoDePrueba, lineaSalud, registrar, type Prueba } from './salud.ts';
 
 type Db = any;
 type Aviso = { tipo: string; clave: string; titulo: string; cuerpo: string; nivel?: 'info' | 'atencion' | 'urgente'; destino?: string };
@@ -107,7 +109,7 @@ async function vigilar(admin: Db): Promise<Aviso[]> {
 async function resumen(admin: Db, uid: string, nombre: string, redactar: Redactar): Promise<Aviso> {
   const dia = diaCR();
   const ayer = diaCR(new Date(Date.now() - 86_400_000));
-  const [fac, agenda, prods, taller, chats, intentos, pendientes] = await Promise.all([
+  const [fac, agenda, prods, taller, chats, intentos, pendientes, salud] = await Promise.all([
     admin.from('invoices').select('total,created_at').gte('created_at', inicioDia(ayer)).lt('created_at', inicioDia(dia)).limit(5000),
     admin.from('jarvis_agenda').select('texto,cuando').eq('user_id', uid).eq('estado', 'pendiente').lt('cuando', new Date(new Date(inicioDia(dia)).getTime() + 86_400_000).toISOString()).order('cuando').limit(10),
     admin.from('products').select('name,stock,min_stock').eq('active', true).gt('min_stock', 0).limit(3000),
@@ -115,6 +117,7 @@ async function resumen(admin: Db, uid: string, nombre: string, redactar: Redacta
     admin.from('chat_conversations').select('id').gt('unread_count', 0).neq('status', 'resuelto').limit(50),
     admin.from('login_audit_logs').select('id').eq('exito', false).gt('ocurrido_en', new Date(Date.now() - 86_400_000).toISOString()).limit(500),
     admin.from('jarvis_avisos').select('titulo').eq('user_id', uid).is('leido_en', null).neq('tipo', 'resumen').limit(20),
+    lineaSalud(admin).catch(() => ''),
   ]);
   const ventas = (fac.data || []) as any[];
   const total = ventas.reduce((a, x) => a + Number(x.total || 0), 0);
@@ -130,10 +133,11 @@ async function resumen(admin: Db, uid: string, nombre: string, redactar: Redacta
     `Chats con mensajes sin responder: ${(chats.data || []).length}.`,
     `Intentos de ingreso fallidos en 24 h: ${(intentos.data || []).length}.`,
     `Avisos sin leer: ${(pendientes.data || []).length ? (pendientes.data as any[]).map(a => a.titulo).join('; ') : 'ninguno'}.`,
-  ].join('\n');
+    salud,
+  ].filter(Boolean).join('\n');
   const fecha = new Date().toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', weekday: 'long', day: 'numeric', month: 'long' });
   const texto = await redactar(
-    `Sos Jarvis, el asistente personal del dueño de Technoverse Costa Rica (tienda y taller de celulares). Escribí su RESUMEN DE LA MAÑANA para escucharlo en voz alta: saludo corto con su nombre, lo más importante primero, cifras exactas de los datos, y cerrá con UNA recomendación concreta para hoy. 4 a 7 frases, voseo costarricense cálido, sin listas ni títulos, sin inventar nada que no esté en los datos. Devolvé SOLO JSON: {"texto":"…"}`,
+    `Sos Jarvis, el asistente personal del dueño de Technoverse Costa Rica (tienda y taller de celulares). Escribí su RESUMEN DE LA MAÑANA para escucharlo en voz alta: saludo corto con su nombre, lo más importante primero, cifras exactas de los datos, y cerrá con UNA recomendación concreta para hoy. Tu propia salud (la línea «Salud de Jarvis») mencionala solo si algo falla, en una frase. 4 a 7 frases, voseo costarricense cálido, sin listas ni títulos, sin inventar nada que no esté en los datos. Devolvé SOLO JSON: {"texto":"…"}`,
     `Nombre del dueño: ${nombre}\nHoy es ${fecha}.\n\nDATOS:\n${datos}`,
   ).catch(() => null);
   const plano = `Buenos días${nombre ? `, ${nombre}` : ''}. Ayer cerramos en ${colon(total)} con ${ventas.length} venta${ventas.length === 1 ? '' : 's'}. ${(agenda.data || []).length ? `Hoy tenés ${(agenda.data || []).length} pendiente${(agenda.data || []).length === 1 ? '' : 's'} en la agenda. ` : ''}${bajos.length ? `${bajos.length} producto${bajos.length === 1 ? ' está' : 's están'} en el mínimo. ` : ''}${(chats.data || []).length ? `Hay ${(chats.data || []).length} chat${(chats.data || []).length === 1 ? '' : 's'} esperando respuesta. ` : ''}Que tengás un buen día.`;
@@ -141,7 +145,7 @@ async function resumen(admin: Db, uid: string, nombre: string, redactar: Redacta
 }
 
 // ----------------------------- LA PUERTA -----------------------------
-export async function tareaCron(admin: Db, tarea: string, redactar: Redactar, soloUid?: string): Promise<Record<string, unknown>> {
+export async function tareaCron(admin: Db, tarea: string, redactar: Redactar, soloUid?: string, probar?: () => Promise<Prueba[]>): Promise<Record<string, unknown>> {
   let q = admin.from('profiles').select('id,name,email').eq('role', 'superadmin').limit(5);
   if (soloUid) q = q.eq('id', soloUid);
   const { data: duenos } = await q;
@@ -173,9 +177,22 @@ export async function tareaCron(admin: Db, tarea: string, redactar: Redactar, so
       await c.esperar();
       r[d.id] = { orden: (orden as any)?.nodo?.plan || orden, vectores, ficha };
     }
-    // Los avisos leídos de más de 30 días ya no hacen falta.
-    await admin.from('jarvis_avisos').delete().lt('creado_en', new Date(Date.now() - 30 * 86_400_000).toISOString()).not('leido_en', 'is', null);
+    // Los avisos leídos de más de 30 días y el registro de salud de más de
+    // 60 días ya no hacen falta.
+    await Promise.all([
+      admin.from('jarvis_avisos').delete().lt('creado_en', new Date(Date.now() - 30 * 86_400_000).toISOString()).not('leido_en', 'is', null),
+      admin.from('jarvis_eventos').delete().lt('creado_en', new Date(Date.now() - 60 * 86_400_000).toISOString()),
+    ]);
     return { ok: true, repaso: r };
+  }
+  if (tarea === 'pruebas') {
+    if (!probar) return { ok: false, error: 'Sin pruebas.' };
+    const pruebas = await probar();
+    await registrar(admin, pruebas.map(eventoDePrueba));
+    const avisos = avisosDePrueba(pruebas);
+    let nuevos = 0;
+    for (const d of lista) nuevos += await guardar(admin, d.id, avisos);
+    return { ok: true, pruebas: pruebas.map(p => ({ c: p.componente, ok: p.ok, ms: p.ms })), nuevos };
   }
   return { ok: false, error: `Tarea desconocida: ${tarea}` };
 }

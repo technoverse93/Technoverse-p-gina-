@@ -246,6 +246,53 @@ span.jv-tit:hover { background: transparent; }
 .ai-root[data-jarvis] .jv-aviso-vacio { margin: 4px 2px 0; font: 400 13px/1.5 var(--jv-f-ui); color: var(--jv-tinta2); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .ai-root[data-jarvis] .jv-avisos-todos { justify-self: start; margin: 2px 0 2px; }
 
+/* ---------- Salud de Jarvis (Ajustes) ---------- */
+.ai-root[data-jarvis] .jv-salud { gap: 8px; --jv-mal: #E5484D; }
+.ai-root[data-jarvis] .jv-salud-estado { --k: var(--jv-a-neg); display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px; background: var(--jv-sup); border: 1px solid color-mix(in srgb, var(--k) 40%, var(--jv-linea)); border-radius: 14px; }
+.ai-root[data-jarvis] .jv-salud-estado[data-estado="atencion"] { --k: var(--jv-oro); }
+.ai-root[data-jarvis] .jv-salud-estado[data-estado="mal"] { --k: var(--jv-mal); }
+.ai-root[data-jarvis] .jv-salud-ic { width: 40px; height: 40px; border-radius: 12px; display: grid; place-items: center; color: var(--k); background: color-mix(in srgb, var(--k) 14%, transparent); }
+.ai-root[data-jarvis] .jv-salud-tx { min-width: 0; display: flex; flex-direction: column; gap: 2px; }
+.ai-root[data-jarvis] .jv-salud-tx b { font: 600 14px var(--jv-f-ui); color: var(--jv-tinta); }
+.ai-root[data-jarvis] .jv-salud-tx span { font: 400 12.5px/1.45 var(--jv-f-ui); color: var(--jv-tinta2); }
+.ai-root[data-jarvis] .jv-salud-cifras { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); margin: 0; background: var(--jv-sup); border: 1px solid var(--jv-linea); border-radius: 14px; }
+.ai-root[data-jarvis] .jv-salud-cifras > div { min-width: 0; padding: 10px 10px 9px; display: flex; flex-direction: column; gap: 3px; }
+.ai-root[data-jarvis] .jv-salud-cifras > div + div { border-left: 1px solid var(--jv-linea); }
+.ai-root[data-jarvis] .jv-salud-cifras dt { font: 500 10.5px/1.25 var(--jv-f-ui); color: var(--jv-tenue); }
+.ai-root[data-jarvis] .jv-salud-cifras dd { margin: 0; font: 600 16px var(--jv-f-dato); color: var(--jv-tinta); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ai-root[data-jarvis] .jv-salud-cifras dd small { font: 400 11px var(--jv-f-ui); color: var(--jv-tenue); }
+@media (max-width: 420px) {
+  .ai-root[data-jarvis] .jv-salud-cifras { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .ai-root[data-jarvis] .jv-salud-cifras > div:nth-child(3) { border-left: 0; }
+  .ai-root[data-jarvis] .jv-salud-cifras > div:nth-child(n+3) { border-top: 1px solid var(--jv-linea); }
+}
+.ai-root[data-jarvis] .jv-salud-dias { display: grid; grid-template-columns: repeat(7, minmax(0, 1fr)); gap: 6px; padding: 10px 12px 8px; background: var(--jv-sup); border: 1px solid var(--jv-linea); border-radius: 14px; }
+.ai-root[data-jarvis] .jv-sd-dia { display: flex; flex-direction: column; align-items: center; gap: 4px; min-width: 0; }
+.ai-root[data-jarvis] .jv-sd-barra { width: 100%; max-width: 22px; height: 48px; display: flex; flex-direction: column; justify-content: flex-end; gap: 2px; border-radius: 6px; background: var(--jv-hundido); overflow: hidden; }
+.ai-root[data-jarvis] .jv-sd-barra i { display: block; width: 100%; min-height: 3px; background: var(--jv-acento); }
+.ai-root[data-jarvis] .jv-sd-barra i[data-k="mal"] { background: var(--jv-mal); }
+.ai-root[data-jarvis] .jv-sd-dia small { font: 500 10.5px var(--jv-f-dato); color: var(--jv-tenue); }
+.ai-root[data-jarvis] .jv-salud-sub { margin: 8px 2px 0; font: 600 12.5px var(--jv-f-ui); color: var(--jv-tinta); display: flex; gap: 6px; align-items: baseline; flex-wrap: wrap; }
+.ai-root[data-jarvis] .jv-salud-sub small { font: 400 11px var(--jv-f-ui); color: var(--jv-tenue); }
+.ai-root[data-jarvis] .jv-salud-lista { list-style: none; margin: 0; padding: 0; background: var(--jv-sup); border: 1px solid var(--jv-linea); border-radius: 14px; }
+.ai-root[data-jarvis] .jv-salud-lista > li { display: grid; grid-template-columns: 10px minmax(0, 1fr) auto; gap: 10px; align-items: start; padding: 10px 12px; }
+.ai-root[data-jarvis] .jv-salud-lista > li + li { border-top: 1px solid var(--jv-linea); }
+.ai-root[data-jarvis] .jv-salud-lista > li.jv-sd-vacio { display: block; font: 400 12.5px/1.5 var(--jv-f-ui); color: var(--jv-tinta2); }
+.ai-root[data-jarvis] .jv-sd-luz { width: 9px; height: 9px; margin-top: 4px; border-radius: 50%; background: var(--jv-linea); }
+.ai-root[data-jarvis] .jv-sd-luz[data-ok="si"] { background: var(--jv-a-neg); box-shadow: 0 0 0 3px color-mix(in srgb, var(--jv-a-neg) 18%, transparent); }
+.ai-root[data-jarvis] .jv-sd-luz[data-ok="no"] { background: var(--jv-mal); box-shadow: 0 0 0 3px color-mix(in srgb, var(--jv-mal) 18%, transparent); }
+.ai-root[data-jarvis] .jv-sd-tx { min-width: 0; display: flex; flex-direction: column; gap: 2px; font: 400 12.5px/1.45 var(--jv-f-ui); color: var(--jv-tinta2); overflow-wrap: anywhere; }
+.ai-root[data-jarvis] .jv-sd-tx b { font: 600 13px var(--jv-f-ui); color: var(--jv-tinta); }
+.ai-root[data-jarvis] .jv-sd-error { color: var(--jv-mal) !important; }
+.ai-root[data-jarvis] .jv-sd-pie { font: 400 11px/1.4 var(--jv-f-ui); color: var(--jv-tenue); }
+.ai-root[data-jarvis] .jv-sd-ms { font: 500 12px var(--jv-f-dato); color: var(--jv-tinta2); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.ai-root[data-jarvis] .jv-salud-pie { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 12px; margin-top: 4px; }
+.ai-root[data-jarvis] .jv-salud-pie > span { font: 400 11.5px/1.4 var(--jv-f-ui); color: var(--jv-tenue); min-width: 0; }
+.ai-root[data-jarvis] .jv-salud-nota { margin: 0 2px; font: 400 13px/1.5 var(--jv-f-ui); color: var(--jv-tinta2); }
+.ai-root[data-jarvis] .jv-salud-nota code { font: 500 12px var(--jv-f-dato); color: var(--jv-tinta); overflow-wrap: anywhere; }
+.ai-root[data-jarvis] .jv-gira { animation: jv-gira 1s linear infinite; }
+@keyframes jv-gira { to { transform: rotate(360deg); } }
+
 /* ---------- Cerebro a pantalla completa ---------- */
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ch { display: none; }
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ajustes { padding: 0; overflow: hidden; animation: none; }
@@ -253,7 +300,7 @@ span.jv-tit:hover { background: transparent; }
 @media (prefers-reduced-motion: reduce) {
   .jv-orbe .p, .jv-pensando .s { animation: none; }
   .ai-root[data-jarvis] .ai-msgs, .ai-root[data-jarvis] .ai-ajustes, .ai-root[data-jarvis] .ai-ia, .ai-root[data-jarvis] .ai-yo-g,
-  .ai-root[data-jarvis] .ai-acc, .ai-root[data-jarvis] .ai-cajon { animation: none; }
+  .ai-root[data-jarvis] .ai-acc, .ai-root[data-jarvis] .ai-cajon, .ai-root[data-jarvis] .jv-gira { animation: none; }
 }
 
 /* Ajustes finos (prioridad sobre las reglas del panel con #admin-panel-root). */
