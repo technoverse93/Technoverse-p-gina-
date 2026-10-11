@@ -8,13 +8,13 @@
 // =====================================================================
 
 import { useEffect, useMemo, useState } from 'react';
-import { Bell, MessageSquare, Package, ShieldAlert, Wrench, TrendingDown, Sun, Volume2, ArrowUpRight, Check, RefreshCw } from 'lucide-react';
+import { Bell, MessageSquare, Package, ShieldAlert, Wrench, TrendingDown, Sun, Volume2, ArrowUpRight, Check, RefreshCw, HeartPulse } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { cargarAvisos, marcarLeidos, EVENTO_AVISO, type AvisoJarvis } from '../../mobile/avisosJarvis';
 import { lector } from '../../utils/lectorVoz';
 
-const ICONO: Record<string, LucideIcon> = { resumen: Sun, chat: MessageSquare, stock: Package, seguridad: ShieldAlert, taller: Wrench, ventas: TrendingDown };
+const ICONO: Record<string, LucideIcon> = { resumen: Sun, chat: MessageSquare, stock: Package, seguridad: ShieldAlert, taller: Wrench, ventas: TrendingDown, salud: HeartPulse };
 const hace = (f: string) => {
   const m = Math.max(1, Math.round((Date.now() - new Date(f).getTime()) / 60_000));
   if (m < 60) return `hace ${m} min`;

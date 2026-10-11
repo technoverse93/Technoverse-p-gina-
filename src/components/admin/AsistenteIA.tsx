@@ -22,6 +22,7 @@ import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
 const CerebroJarvis = React.lazy(() => import('./CerebroJarvis'));
 const AvisosJarvis = React.lazy(() => import('./AvisosJarvis'));
+const SaludJarvis = React.lazy(() => import('./SaludJarvis'));
 import { useAvisosSinLeer } from '../../mobile/avisosJarvis';
 import { BotonEscuchar, BarraLectura, AjusteVoz } from './LectorPiezas';
 import { lector, modoLectura } from '../../utils/lectorVoz';
@@ -1276,7 +1277,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
           )}
         </header>
 
-        {vista === 'avisos' && jarvis ? <React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando avisos"><i /><i /><i /></div>}><AvisosJarvis onAbrir={onAbrirModulo} /></React.Suspense> : vista === 'cerebro' && jarvis ? <div className="ai-ajustes"><React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando el cerebro"><i /><i /><i /></div>}><CerebroJarvis onPreguntar={t => { setVista('chat'); void enviar(t); }} onVolver={() => setVista('chat')} /></React.Suspense></div> : vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} /> : (
+        {vista === 'avisos' && jarvis ? <React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando avisos"><i /><i /><i /></div>}><AvisosJarvis onAbrir={onAbrirModulo} /></React.Suspense> : vista === 'cerebro' && jarvis ? <div className="ai-ajustes"><React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando el cerebro"><i /><i /><i /></div>}><CerebroJarvis onPreguntar={t => { setVista('chat'); void enviar(t); }} onVolver={() => setVista('chat')} /></React.Suspense></div> : vista === 'ajustes' && soySuper ? <AjustesIA onCambio={cargarCupo} cupo={cupo} jarvis={jarvis} /> : (
           <>
             {aviso && (
               <div className="ai-aviso" data-tipo={aviso.tipo}>
@@ -1491,7 +1492,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   );
 }
 
-function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null }) {
+function AjustesIA({ onCambio, cupo, jarvis = false }: { onCambio: () => void; cupo: Cupo | null; jarvis?: boolean }) {
   const toast = useToast();
   const [aj, setAj] = useState<Ajustes | null>(null);
   const [uso, setUso] = useState<{ email: string; mensajes: number; tokens: number; es_super: boolean }[]>([]);
@@ -1525,6 +1526,7 @@ function AjustesIA({ onCambio, cupo }: { onCambio: () => void; cupo: Cupo | null
   const H = ({ area, children }: { area: string; children: React.ReactNode }) => <h4><i className="jv-pt" data-area={area} aria-hidden="true" />{children}</h4>;
   return (
     <div className="ai-ajustes">
+      {jarvis && cupo?.perfiles && <div data-orden="0"><React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando la salud de Jarvis"><i /><i /></div>}><SaludJarvis /></React.Suspense></div>}
       <div className="ai-aj" data-orden="4">
         <H area="int">Capacidades <small>gratis</small></H>
         {CAPACIDADES.map(m => (
