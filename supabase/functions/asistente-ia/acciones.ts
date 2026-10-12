@@ -99,6 +99,28 @@ function exigir(cond: unknown, msg: string): asserts cond { if (!cond) throw new
 const ES_IP = /^(\d{1,3}\.){3}\d{1,3}$|^[0-9a-f]{0,4}(:[0-9a-f]{0,4}){2,7}$/i;
 const ES_CORREO = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
+/**
+ * La cédula en HACIENDA (consulta pública del Ministerio de Hacienda, la misma que usa la
+ * factura electrónica): nombre oficial y tipo de identificación, para llenar la tarjeta del
+ * cobro. Si no responde o no está inscrita, null (queda lo que dijo el dueño o la última factura).
+ */
+async function consultarHacienda(cedula: string): Promise<{ nombre: string; tipo: string } | null> {
+  if (!/^\d{9,12}$/.test(cedula)) return null;
+  const corte = new AbortController();
+  const reloj = setTimeout(() => corte.abort(), 6000);
+  try {
+    const r = await fetch(`https://api.hacienda.go.cr/fe/ae?identificacion=${cedula}`, { signal: corte.signal, headers: { Accept: 'application/json' } });
+    if (!r.ok) return null;
+    const d = await r.json();
+    const nombre = String(d?.nombre || '').replace(/\s+/g, ' ').trim();
+    return nombre ? { nombre, tipo: String(d?.tipoIdentificacion || '') } : null;
+  } catch {
+    return null;
+  } finally {
+    clearTimeout(reloj);
+  }
+}
+
 /** «Mozilla/5.0 (Linux; Android 10; SM-A125M) … wv» → «SM-A125M · APK». */
 export function equipoDe(ua: string | null | undefined): string {
   const u = String(ua || '');
@@ -387,7 +409,7 @@ export const ACCIONES: Accion[] = [
   {
     nombre: 'preparar_cobro',
     bitacora: 'Cobro preparado por Javier',
-    descripcion: 'PREPARA un cobro con factura electrónica (servicio con repuestos del inventario). Calcula el precio en el servidor a partir del costo real y el margen, o usa el monto que se indique, o el precio de venta del inventario. El superadmin revisa los datos del cliente y los montos en una tarjeta y confirma; el panel emite la factura por el mismo camino del módulo de Cobros. Usala solo cuando pida cobrar o facturar. Los datos del cliente llegan como marcas [CÉDULA·1], [CORREO·1], [TEL·1]: pasalas tal cual en `cliente`, nunca inventes cédulas ni correos.',
+    descripcion: 'PREPARA un cobro con factura electrónica (servicio con repuestos del inventario). Calcula el precio en el servidor a partir del costo real y el margen, o usa el monto que se indique, o el precio de venta del inventario. Busca la cédula en Hacienda y llena el nombre oficial. El superadmin revisa los datos del cliente y los montos en una tarjeta y confirma; el panel emite la factura por el mismo camino del módulo de Cobros. Usala solo cuando pida cobrar o facturar. Un producto que no está en el inventario va en `servicio` con `monto_total`. Los datos del cliente llegan como marcas [CÉDULA·1], [CORREO·1], [TEL·1]: pasalas tal cual en `cliente`, nunca inventes cédulas ni correos.',
     parametros: {
       type: 'object',
       properties: {
@@ -436,6 +458,17 @@ export const ACCIONES: Accion[] = [
         if (!cedula) cedula = String(f.customer_identification || '').replace(/\D/g, '');
         if (!correo) correo = String(f.customer_email || '');
         if (f.customer_identification_type) idTipo = String(f.customer_identification_type);
+      }
+
+      // ---- Hacienda: nombre oficial y tipo de identificación de la cédula ----
+      let enHacienda = false;
+      if (cedula) {
+        const h = await consultarHacienda(cedula);
+        if (h) {
+          enHacienda = true;
+          nombre = h.nombre;
+          if (['01', '02', '03', '04'].includes(h.tipo)) idTipo = h.tipo;
+        }
       }
 
       // ---- Repuestos: inventario real (costo, precio, existencias) ----
@@ -491,7 +524,7 @@ export const ACCIONES: Accion[] = [
             ...(manoObra ? [{ etiqueta: 'Mano de obra', valor: `${colon(manoObra)} + IVA` }] : []),
             { etiqueta: 'Total', valor: `${colon(total)} (IVA ${colon(total - sinIva)} incluido) · ${como}` },
             { etiqueta: 'Ganancia', valor: `${colon(ganancia)} · ${sinIva > 0 ? Math.round(ganancia / sinIva * 100) : 0} % sobre el precio sin IVA` },
-            ...(previo ? [{ etiqueta: 'Cliente', valor: 'Datos tomados de su última factura. Revisalos.' }] : []),
+            ...(enHacienda ? [{ etiqueta: 'Cliente', valor: `${nombre} · según Hacienda` }] : previo ? [{ etiqueta: 'Cliente', valor: 'Datos tomados de su última factura. Revisalos.' }] : []),
           ],
           opciones: [
             { id: 'nombre', tipo: 'texto', etiqueta: 'Cliente', defecto: nombre, max: 100 },
@@ -499,7 +532,8 @@ export const ACCIONES: Accion[] = [
               valores: [{ valor: '01', texto: 'Física' }, { valor: '02', texto: 'Jurídica' }, { valor: '03', texto: 'DIMEX' }, { valor: '04', texto: 'NITE' }] },
             { id: 'cedula', tipo: 'texto', etiqueta: 'Número', defecto: cedula, teclado: 'numeric', max: 12 },
             { id: 'correo', tipo: 'texto', etiqueta: 'Correo', defecto: correo, teclado: 'email', max: 120 },
-            { id: 'medio', tipo: 'elegir', etiqueta: 'Pago', defecto: args.medio === 'Efectivo' ? 'Efectivo' : 'SINPE',
+            // Si no dijo el medio: SINPE si dio teléfono, efectivo si no (así la tarjeta ya queda lista).
+            { id: 'medio', tipo: 'elegir', etiqueta: 'Pago', defecto: args.medio === 'Efectivo' || args.medio === 'SINPE' ? String(args.medio) : (telefono.length === 8 ? 'SINPE' : 'Efectivo'),
               valores: [{ valor: 'SINPE', texto: 'SINPE Móvil' }, { valor: 'Efectivo', texto: 'Efectivo' }] },
             { id: 'telefono', tipo: 'texto', etiqueta: 'Teléfono SINPE', defecto: telefono, teclado: 'tel', max: 12 },
             { id: 'garantia', tipo: 'elegir', etiqueta: 'Garantía', defecto: String([1, 3, 12].includes(Number(args.garantia_meses)) ? Number(args.garantia_meses) : 3),
@@ -513,7 +547,7 @@ export const ACCIONES: Accion[] = [
         paraIA: {
           total_colones: total, como_se_calculo: como, repuestos: lineas.map(l => `${l.cantidad} × ${l.nombre}`),
           ganancia_colones: Math.round(ganancia),
-          cliente: previo ? 'encontrado en facturas anteriores' : (cedula || correo ? 'con datos del mensaje' : 'faltan sus datos: los completa en la tarjeta'),
+          cliente: enHacienda ? 'encontrado en Hacienda (nombre oficial)' : previo ? 'encontrado en facturas anteriores' : (cedula || correo ? 'con datos del mensaje' : 'faltan sus datos: los completa en la tarjeta'),
         },
       };
     },

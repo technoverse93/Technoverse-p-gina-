@@ -81,7 +81,7 @@ import { esCron, tareaCron } from './proactivo.ts';
 import { eventoDePrueba, informe, nombreComponente, registrar, type Prueba } from './salud.ts';
 import { empujarAviso, empujarChat, enviarPrueba, responderDesdePush } from './push.ts';
 import { crearTarea, procesarTareas, purgarTareas, type MotorTareas, type PasoPlan, type ResultadoCrear, type Tarea } from './tareas.ts';
-import { ClienteRepo, configRepo, correrHerramientaRepo, MAX_ARCHIVOS, MAX_PROPUESTAS_DIA, NOMBRES_REPO, type EstadoRepo, type ResultadoPropuesta } from './repo.ts';
+import { ClienteRepo, configLectura, configRepo, correrHerramientaRepo, MAX_ARCHIVOS, MAX_PROPUESTAS_DIA, NOMBRES_REPO, type EstadoRepo, type ResultadoPropuesta } from './repo.ts';
 import { armarPromptImagen, ESTILOS_VALIDOS, FORMATOS_VALIDOS, generarCopy, generarImagen, type EstiloId, type FormatoId } from './estudio.ts';
 import { ACCIONES_TELEFONO, PANTALLAS_AJUSTES, prepararTelefono, SOLO_APK, type PedidoTelefono } from './telefono.ts';
 import { APRENDER, CONSULTAR_CEREBRO, crearCerebro, respuestaSinIA, type Cerebro, type Nota } from './cerebro.ts';
@@ -127,6 +127,16 @@ const ESTADO_ACCION: Record<string, string> = {
   propuesta: 'propuesta, sin confirmar', ejecutando: 'ejecutándose', ejecutada: 'ejecutada', fallida: 'falló',
   cancelada: 'cancelada por el superadmin, no se hizo nada', vencida: 'venció sin confirmarse, no se hizo nada', deshecha: 'deshecha',
 };
+/** Cambia un valor privado (correo, IP) por una marca estable de esta conversación; avisa las nuevas. */
+function marcarPrivado(privados: Record<string, string>, tipo: string, valor: string, alCrear: (k: string, v: string) => void): string {
+  const ya = Object.entries(privados).find(([k, v]) => k.startsWith(`${tipo}·`) && v === valor);
+  if (ya) return `[${ya[0]}]`;
+  const n = Object.keys(privados).filter(k => k.startsWith(`${tipo}·`)).length + 1;
+  const k = `${tipo}·${n}`;
+  privados[k] = valor;
+  alCrear(k, valor);
+  return `[${k}]`;
+}
 /** La hora de ahora en Costa Rica, como se dice: «2:47 p. m.». */
 const horaCR = () => new Intl.DateTimeFormat('es-CR', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Costa_Rica' }).format(new Date());
 const sistema = (hoy: string, conHerramientas: boolean, esSuper: boolean, web = false, forzarWeb = false, modo: Modo = 'normal') => modo === 'arquitecto' ? arquitecto(hoy, web) : `Eres el asistente del panel de Technoverse Costa Rica, una tienda y taller de celulares y accesorios.
@@ -453,7 +463,7 @@ function declaraciones(sis: Sistema) {
   if (sis.cerebro && sis.telefono) lista.push(MIRAR);
   // Un encargo creado después de leer algo de afuera podría traer órdenes escondidas: tampoco.
   if (sis.cerebro && sis.encargar && !sis.leyoAfuera) lista.push(ENCARGAR, PROPONER_CODIGO);
-  if (sis.repo) lista.push(REPO_LEER, REPO_LISTAR, REPO_BUSCAR, PROPONER_CAMBIO);
+  if (sis.repo) lista.push(REPO_LEER, REPO_LISTAR, REPO_BUSCAR, ...(sis.repo.soloLectura ? [] : [PROPONER_CAMBIO]));
   return lista;
 }
 
@@ -1224,6 +1234,11 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       const rel = ronda > 0 ? await relevar('no devolvió texto') : null;
       if (rel) return rel;
       throw new CupoAgotado(`${prov.id} no devolvió texto${final === 'length' ? ' (se quedó pensando)' : ''}`);
+    }
+    // Llamada a herramienta escrita como TEXTO en vez de hacerla («Search web.{"action": "buscar_web"…}»,
+    // visto con gpt-oss): no es una respuesta; se descarta y contesta la IA siguiente.
+    if (/(^|\n)\s*(search web\.|\{\s*"(action|name|tool)"\s*:\s*"[a-z_]+")/i.test(limpio.slice(0, 400)) || /"action"\s*:\s*"(buscar_web|leer_pagina|consultar_[a-z_]+)"/.test(limpio)) {
+      throw new CupoAgotado(`${prov.id} escribió una llamada a herramienta en vez de hacerla`);
     }
     if (!empezo) sis.emitir('modelo', { modelo: modeloReal });
     // Lo que faltó mostrar (o todo, si se mostró algo distinto por el <think>).
@@ -2324,6 +2339,7 @@ export async function atender(req: Request): Promise<Response> {
     // Desde el mini-widget del teléfono la respuesta se lee en un recuadro
     // chico (y muchas veces en voz alta): corta y sin tablas. Las acciones
     // siguen igual que en la app.
+    if (esSuper && modo === 'jarvis') extra += `\n\nCÓDIGO DEL SISTEMA: podés LEER el código de la app (repo_listar, repo_buscar por nombre de archivo, repo_leer) para diagnosticar fallos reales. Si te preguntan por qué algo falla o cómo funciona una parte, buscá el archivo, leelo y respondé con lo que dice el código, citando archivo y línea. Desde el chat no podés cambiar nada.\nCIBERSEGURIDAD: para un día concreto («ayer», «antier») pasá \`dia\`; para «excepto el equipo X» o «además de mí» usá \`excepto\` (con «yo» para sacar lo del dueño). Contestá SOLO con lo que traen las consultas (el \`detalle\` con marcas [CUENTA·n] e [IP·n]); si algo no está, decí que no hay registro.`;
     if (cuerpo?.desde === 'widget') extra += `\n\nESTÁS EN EL MINI-WIDGET DEL TELÉFONO (un recuadro chico en la pantalla de inicio, que muchas veces se escucha en voz alta): respondé MUY corto y directo: una o dos frases (unas 30 palabras como mucho), sin tablas, listas ni títulos. Las cifras, completas. Si preparás una acción que pide confirmación, decí en una frase qué preparaste: el dueño la confirma tocando «Abrir conversación» en el widget.`;
 
     // Control del teléfono: solo cuando la respuesta llega en vivo a la app (el widget y el modo sin
@@ -2398,7 +2414,13 @@ export async function atender(req: Request): Promise<Response> {
       const nuevo = (tiempoPropio = false, emitirA: Emisor = emitir): Sistema => {
         const fuentes: { titulo: string; url: string }[] = [];
         const sis: Sistema = {
-          ctx: { db: comoUsuario, esSuper, hoy: dia, fuentes }, herramientas, consultas: [], usados: {}, hechas, emitir: emitirA, esSuper,
+          ctx: {
+            db: comoUsuario, esSuper, hoy: dia, fuentes,
+            // Carril privado del detalle de seguridad (ver Contexto.marcar): la IA ve marcas; el panel, el dato.
+            ...(esSuper ? { marcar: (tipo: 'CUENTA' | 'IP', valor: string) => marcarPrivado(privados, tipo, valor, (k, v) => emitirA('privados', { privados: { [k]: v } })), yo: { email: quien?.user?.email || '', modelo: (yo as any).modelo || null, device: (yo as any).device || null } } : {}),
+          }, herramientas, consultas: [], usados: {}, hechas, emitir: emitirA, esSuper,
+          // LECTURA DEL CÓDIGO (solo superadmin, solo leer): para diagnosticar fallos reales con el código a la vista.
+          ...(esSuper && modo === 'jarvis' ? { repo: { cliente: new ClienteRepo(configLectura()), propuesta: null, soloLectura: true } } : {}),
           limite: tiempoPropio ? Math.max(limiteT, Date.now() + TOPE_RESPALDO_MS) : limiteT,
           caps, forzarWeb: cuerpo?.buscar === true, adjuntos: adjuntos.map(a => ({ mimeType: a.mimeType, data: a.data })), fuentes,
           modo, pensar: conf.pensar, intento: conf.intento,
@@ -2772,7 +2794,10 @@ export async function atender(req: Request): Promise<Response> {
       // de lo que dijo el dueño: lo de afuera nunca se cuela como «hecho».
       // Lo que gasta también se cobra: se suma a la respuesta y al día.
       if (cerebro && esSuper && modo === 'jarvis' && mods.aprender !== false && Deno.env.get('IA_APRENDER') !== '0'
-        && (res.proveedor as string) !== 'cerebro' && texto.trim().length >= 12) {
+        && (res.proveedor as string) !== 'cerebro' && texto.trim().length >= 12
+        // Lo de ciberseguridad (quién entró, equipos, IPs) es del momento y cambia todo el tiempo: no se
+        // aprende. Pasó: el cerebro guardó «ayer entraron 5 usuarios» de una respuesta inventada y la repetía.
+        && !res.consultas.some(c => c.modulo === 'Ciberseguridad')) {
         const g = { in: 0, out: 0 };
         const afuera = sis.leyoAfuera || res.busco;
         const rev = res.consultas.find(c => c.tipo === 'revision' && c.filas === 'corregida');
@@ -2825,7 +2850,7 @@ export async function atender(req: Request): Promise<Response> {
         ? `Ninguna IA pudo responder. Lo que pasó:\n${[...new Set(fallos)].slice(0, 8).map(f => `• ${f}`).join('\n')}`
         : 'Google y las IAs de respaldo están saturados en este momento. Intenta en unos minutos.';
     const final = (r: { res: Resultado; respaldo: boolean }) => ({
-      ok: true, conversacionId: convId, nueva, respaldo: r.respaldo, sinBusqueda: false, ...(transcrito ? { pregunta, privados } : {}),
+      ok: true, conversacionId: convId, nueva, respaldo: r.respaldo, sinBusqueda: false, ...(transcrito ? { pregunta } : {}), ...(esSuper ? { privados } : {}),
       mensaje: { id: idRespuesta, idPregunta, escalado: perfilUsado !== perfil, rol: 'assistant', texto: r.res.texto, fuentes: r.res.fuentes, tokens_in: r.res.tokensIn, tokens_out: r.res.tokensOut, proveedor: r.res.proveedor, modelo: r.res.modelo, busco: r.res.busco, consultas: r.res.consultas, perfil: perfilUsado, persona: modo === 'normal' ? null : modo, ms: r.res.ms ?? null },
       cupo: cupoDespues(r.res),
     });

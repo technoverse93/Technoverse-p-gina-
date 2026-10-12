@@ -492,6 +492,18 @@ function TarjetaConsulta({ c }: { c: Consulta }) {
 /** Un mensaje del historial. Memoizado: escribir en la caja (que cambia el
  *  estado del módulo en cada letra) ya no vuelve a formatear todo el
  *  historial, que en un teléfono de gama de entrada se notaba. */
+/**
+ * Las marcas del carril privado que llegaron del servidor ([CUENTA·1], [IP·1]…): la IA habla con
+ * marcas y la pantalla del dueño muestra el dato real. Se guardan en esta sesión del navegador.
+ */
+const CLAVE_MARCAS = 'tv_marcas_privadas';
+const MARCAS_VISTA: Record<string, string> = (() => { try { return JSON.parse(sessionStorage.getItem(CLAVE_MARCAS) || '{}'); } catch { return {}; } })();
+function sumarMarcas(m: Record<string, string>) {
+  let cambio = false;
+  for (const [k, v] of Object.entries(m || {})) if (/^[A-ZÉ]+·\d+$/.test(k) && typeof v === 'string' && MARCAS_VISTA[k] !== v) { MARCAS_VISTA[k] = v; cambio = true; }
+  if (cambio) { try { sessionStorage.setItem(CLAVE_MARCAS, JSON.stringify(MARCAS_VISTA)); } catch { /* sin almacenamiento */ } }
+}
+
 const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar, onValorar }: { m: Mensaje; onCopiar: (t: string) => void; onRegenerar?: () => void; onEditar?: () => void; onValorar?: (id: string, v: number | null, nota?: string) => void }) {
   const [nota, setNota] = useState<string | null>(null);
   // Los hooks van SIEMPRE antes de cualquier `return` (los dos contextos de abajo estaban después).
@@ -537,7 +549,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
     <div className="ai-ia" aria-live={enVivo ? 'polite' : undefined}>
       {!!lecturas.length && <div className="ai-herrs">{lecturas.map((c, i) => <React.Fragment key={i}><TarjetaConsulta c={c} /></React.Fragment>)}</div>}
       {m.texto
-        ? <div className="ai-tx"><Formato texto={m.texto} />{enVivo && <span className="ai-cursor" />}</div>
+        ? <div className="ai-tx"><Formato texto={restaurarPrivados(m.texto, MARCAS_VISTA)} />{enVivo && <span className="ai-cursor" />}</div>
         : enVivo && (jv ? <Pensando texto={m.estado || 'Pensando…'} /> : <div className="ai-buscando"><span className="ai-puntos"><i /><i /><i /></span>{m.estado || 'Pensando…'}</div>)}
       {graficos.map((c, i) => <React.Fragment key={`g${i}`}><GraficoComparado g={c.grafico!} /></React.Fragment>)}
       {irs.map((c, i) => <React.Fragment key={`n${i}`}><IrModulo titulo={c.desc} destino={c.destino!} /></React.Fragment>)}
@@ -964,7 +976,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
     const crudo = opciones.audio ? '' : (contenido ?? texto).trim();
     // Javier: los datos personales se quedan en este aparato (ver separarPrivados).
     const sep = jarvis ? separarPrivados(crudo, privadosRef.current) : { texto: crudo, privados: {} };
-    if (jarvis) privadosRef.current = sep.privados;
+    if (jarvis) { privadosRef.current = sep.privados; sumarMarcas(sep.privados); }
     // Por voz, el texto lo pone el servidor al transcribir (un solo viaje).
     const t = opciones.audio ? '🎤 …' : sep.texto;
     if (!t || enviando || agotado) return;
@@ -1054,9 +1066,11 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
             // Por voz: aquí llega lo que se entendió, para mostrarlo ya.
             if (d.pregunta) setMensajes(prev => prev.map(m => (m.pendiente && m.rol === 'user' ? { ...m, texto: d.pregunta } : m)));
             // Lo dictado también pasa por el carril privado (en el servidor): se guardan sus marcas.
-            if (d.privados && typeof d.privados === 'object') privadosRef.current = { ...privadosRef.current, ...d.privados };
+            if (d.privados && typeof d.privados === 'object') { privadosRef.current = { ...privadosRef.current, ...d.privados }; sumarMarcas(d.privados); }
             return;
           }
+          // Marcas nuevas del detalle de seguridad: se guardan para mostrar el dato real.
+          if (evento === 'privados') { if (d.privados && typeof d.privados === 'object') { privadosRef.current = { ...privadosRef.current, ...d.privados }; sumarMarcas(d.privados); } return; }
           if (evento === 'texto') { borrador.texto += d.delta || ''; borrador.estado = undefined; sinRelleno(); flujo?.agregar(d.delta || ''); }
           else if (evento === 'estado') { borrador.estado = d.texto; if (d.respuestaLista) flujo?.completo(); }
           else if (evento === 'consulta') borrador.consultas = [...(borrador.consultas || []), d];
@@ -1102,6 +1116,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
         if (manosRef.current) setManos(false);
         return;
       }
+      if (res.privados && typeof res.privados === 'object') { privadosRef.current = { ...privadosRef.current, ...res.privados }; sumarMarcas(res.privados); }
       setMensajes(prev => [...prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false, ...(res.pregunta ? { texto: res.pregunta } : {}) } : m)), { id: `a-${Date.now()}`, ...res.mensaje }]);
       setCupo(res.cupo);
       // Respuesta hablada: lo que faltaba por decir (o todo, si nunca llegó en vivo).

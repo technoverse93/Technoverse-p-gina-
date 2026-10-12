@@ -20,6 +20,17 @@
 
 export interface ConfigRepo { token: string; repo: string; base: string }
 
+/**
+ * SOLO LECTURA, sin token (pedido del dueño, 2026-10-12: «que pueda leer todo el código para
+ * darnos información de fallos reales; no puede cambiar nada todavía»). El repositorio es
+ * público: los archivos se leen por raw.githubusercontent.com (sin el tope de la API) y la
+ * lista de archivos sale del árbol de git (una consulta, guardada unos minutos). Con
+ * GITHUB_TOKEN se usa el token (más cupo y búsqueda por contenido).
+ */
+export function configLectura(env: { get(k: string): string | undefined } = (globalThis as any).Deno?.env): ConfigRepo {
+  return configRepo(env) || { token: '', repo: env?.get('GITHUB_REPO') || 'technoverse93/Technoverse-p-gina-', base: env?.get('GITHUB_BASE') || 'main' };
+}
+
 export function configRepo(env: { get(k: string): string | undefined } = (globalThis as any).Deno?.env): ConfigRepo | null {
   const token = env?.get('GITHUB_TOKEN');
   if (!token || token.length < 20) return null;
@@ -114,7 +125,7 @@ export class ClienteRepo {
     const r = await this.f(`https://api.github.com${global ? '' : `/repos/${this.cfg.repo}`}${ruta}`, {
       ...resto,
       headers: {
-        Authorization: `Bearer ${this.cfg.token}`, 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'phill-technoverse',
+        ...(this.cfg.token ? { Authorization: `Bearer ${this.cfg.token}` } : {}), 'X-GitHub-Api-Version': '2022-11-28', 'User-Agent': 'phill-technoverse',
         Accept: raw ? 'application/vnd.github.raw+json' : 'application/vnd.github+json',
         ...(resto.body ? { 'Content-Type': 'application/json' } : {}),
         ...(resto.headers as Record<string, string> | undefined),
@@ -132,10 +143,32 @@ export class ClienteRepo {
     return `GitHub respondió ${r.status} al ${que}${r.json?.message ? `: ${String(r.json.message).slice(0, 160)}` : ''}.`;
   }
 
+  /** ¿Puede escribir (proponer cambios)? Solo con token. */
+  get conToken(): boolean { return !!this.cfg.token; }
+
+  /** Todas las rutas de archivos del repositorio (del árbol de git), guardadas 10 minutos. */
+  private static arbol: { clave: string; rutas: string[]; hasta: number } | null = null;
+  async rutas(): Promise<string[] | null> {
+    const clave = `${this.cfg.repo}@${this.cfg.base}`;
+    if (ClienteRepo.arbol && ClienteRepo.arbol.clave === clave && ClienteRepo.arbol.hasta > Date.now()) return ClienteRepo.arbol.rutas;
+    const r = await this.api(`/git/trees/${encodeURIComponent(this.cfg.base)}?recursive=1`);
+    if (!r.ok || !Array.isArray(r.json?.tree)) return null;
+    const rutas = r.json.tree.filter((e: any) => e.type === 'blob').map((e: any) => String(e.path)).filter((x: string) => !PROHIBIDAS.some(re => re.test(x)));
+    ClienteRepo.arbol = { clave, rutas, hasta: Date.now() + 600_000 };
+    return rutas;
+  }
+
   /** El texto de un archivo (de main). */
   async leer(ruta: string): Promise<{ ok: true; contenido: string } | { ok: false; error: string; noExiste?: boolean }> {
     const v = rutaPermitida(ruta);
     if (!v.ok) return v;
+    if (!this.cfg.token) {
+      // Sin token: el archivo crudo del repositorio público (no gasta el cupo de la API).
+      const r = await this.f(`https://raw.githubusercontent.com/${this.cfg.repo}/${encodeURIComponent(this.cfg.base)}/${v.ruta.split('/').map(encodeURIComponent).join('/')}`, { headers: { 'User-Agent': 'phill-technoverse' } });
+      if (r.status === 404) return { ok: false, error: `No existe «${v.ruta}».`, noExiste: true };
+      if (!r.ok) return { ok: false, error: `GitHub respondió ${r.status} al leer ${v.ruta}.` };
+      return { ok: true, contenido: await r.text() };
+    }
     const r = await this.api(`/contents/${v.ruta.split('/').map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(this.cfg.base)}`, { raw: true });
     if (r.status === 404) return { ok: false, error: `No existe «${v.ruta}».`, noExiste: true };
     if (!r.ok) return { ok: false, error: this.falla(r, `leer ${v.ruta}`) };
@@ -145,6 +178,20 @@ export class ClienteRepo {
   async listar(ruta: string): Promise<{ ok: true; entradas: { nombre: string; tipo: string; tamano: number }[] } | { ok: false; error: string }> {
     const v = ruta.trim() === '' || ruta.trim() === '/' ? ({ ok: true, ruta: '' } as const) : rutaPermitida(ruta);
     if (!v.ok) return v;
+    if (!this.cfg.token) {
+      const todas = await this.rutas();
+      if (!todas) return { ok: false, error: 'GitHub no respondió la lista de archivos (cupo sin token agotado): probá en unos minutos.' };
+      const pref = v.ruta ? `${v.ruta.replace(/\/+$/, '')}/` : '';
+      const vistas = new Map<string, string>();
+      for (const x of todas) {
+        if (!x.startsWith(pref)) continue;
+        const resto = x.slice(pref.length);
+        const [primero, ...mas] = resto.split('/');
+        if (!vistas.has(primero)) vistas.set(primero, mas.length ? 'dir' : 'file');
+      }
+      if (!vistas.size) return { ok: false, error: `No existe «${v.ruta || '/'}».` };
+      return { ok: true, entradas: [...vistas].map(([nombre, tipo]) => ({ nombre, tipo, tamano: 0 })) };
+    }
     const r = await this.api(`/contents/${v.ruta.split('/').filter(Boolean).map(encodeURIComponent).join('/')}?ref=${encodeURIComponent(this.cfg.base)}`);
     if (r.status === 404) return { ok: false, error: `No existe «${v.ruta || '/'}».` };
     if (!r.ok || !Array.isArray(r.json)) return { ok: false, error: this.falla(r, `listar ${v.ruta || '/'}`) };
@@ -154,6 +201,14 @@ export class ClienteRepo {
   async buscar(texto: string): Promise<{ ok: true; resultados: { ruta: string; fragmentos: string[] }[] } | { ok: false; error: string }> {
     const q = String(texto || '').replace(/["\\]/g, ' ').trim().slice(0, 100);
     if (q.length < 2) return { ok: false, error: 'Decime qué buscar.' };
+    if (!this.cfg.token) {
+      // Sin token, GitHub no deja buscar por contenido: se busca por NOMBRE de archivo y carpeta.
+      const todas = await this.rutas();
+      if (!todas) return { ok: false, error: 'GitHub no respondió la lista de archivos: probá en unos minutos.' };
+      const palabras = q.toLowerCase().split(/\s+/).filter(Boolean);
+      const hallados = todas.filter(x => palabras.every(p => x.toLowerCase().includes(p))).slice(0, 15);
+      return { ok: true, resultados: hallados.map(ruta => ({ ruta, fragmentos: ['(coincide el nombre del archivo; leelo con repo_leer)'] })) };
+    }
     const r = await this.api(`/search/code?q=${encodeURIComponent(`${q} repo:${this.cfg.repo}`)}&per_page=10`, { global: true, headers: { Accept: 'application/vnd.github.text-match+json' } });
     if (!r.ok) return { ok: false, error: this.falla(r, 'buscar en el código') };
     const items = Array.isArray(r.json?.items) ? r.json.items : [];
@@ -243,7 +298,7 @@ export class ClienteRepo {
 /** Largo máximo (ya escapado como JSON) del texto de un archivo en cada lectura. */
 const LARGO_LECTURA = 7800;
 export const NOMBRES_REPO = { leer: 'repo_leer', listar: 'repo_listar', buscar: 'repo_buscar', proponer: 'proponer_cambio' } as const;
-export interface EstadoRepo { cliente: ClienteRepo; propuesta: ResultadoPropuesta | null }
+export interface EstadoRepo { cliente: ClienteRepo; propuesta: ResultadoPropuesta | null; /** En el chat: solo leer, nunca proponer. */ soloLectura?: boolean }
 
 /**
  * Lo que responde cada herramienta del agente de código. Un error se le devuelve a la IA
@@ -272,6 +327,7 @@ export async function correrHerramientaRepo(nombre: string, args: Record<string,
     return r.ok ? { resultados: r.resultados, ...(r.resultados.length ? {} : { nota: 'Sin resultados: probá otra palabra o recorré las carpetas con repo_listar.' }) } : { error: r.error };
   }
   if (nombre === NOMBRES_REPO.proponer) {
+    if (repo.soloLectura) return { error: 'Desde el chat solo puedo leer el código, no cambiarlo. Para proponer un cambio, pedime un encargo de código.' };
     if (repo.propuesta?.ok) return { hecho: true, url: repo.propuesta.url, nota: 'Ya abriste esa propuesta; no abras otra.' };
     const crudos = Array.isArray(args?.cambios) ? args.cambios as Record<string, unknown>[] : [];
     const r = await repo.cliente.proponer({
