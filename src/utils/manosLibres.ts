@@ -49,3 +49,11 @@ export const ESPERA_RELLENO_MS = 2600;
 const RELLENOS = ['Un momento.', 'Lo reviso.', 'Ya lo miro.', 'Dame un segundo.'];
 let turnoRelleno = 0;
 export function fraseRelleno(): string { return RELLENOS[turnoRelleno++ % RELLENOS.length]; }
+
+// ------------------------- interrumpir hablando encima -------------------------
+const CLAVE_INTERRUMPIR = 'tv_voz_interrumpir';
+/** ¿Se puede interrumpir a Phill hablándole encima? (activado por defecto; con auriculares va mejor) */
+export function interrumpirActivo(): boolean {
+  try { return localStorage.getItem(CLAVE_INTERRUMPIR) !== 'no'; } catch { return true; }
+}
+export function fijarInterrumpir(si: boolean): void { try { localStorage.setItem(CLAVE_INTERRUMPIR, si ? 'si' : 'no'); } catch { /* sin almacenamiento */ } }

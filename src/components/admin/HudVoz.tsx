@@ -30,8 +30,10 @@ const AYUDA: Record<FaseManos, string> = {
   espera: '',
 };
 
-export default function HudVoz({ fase, vos, jarvis, onToque, onTerminar }: {
+export default function HudVoz({ fase, vos, jarvis, onToque, onTerminar, interrumpe = false }: {
   fase: FaseManos; vos: string; jarvis: string; onToque: () => void; onTerminar: () => void;
+  /** Se puede interrumpir a Phill hablándole encima (el oído está vigilando). */
+  interrumpe?: boolean;
 }) {
   const orbe = useRef<HTMLButtonElement>(null);
   const faseRef = useRef(fase);
@@ -67,7 +69,7 @@ export default function HudVoz({ fase, vos, jarvis, onToque, onTerminar }: {
       </button>
       <div className="jv-hud-tx" aria-live="polite">
         <b className="jv-hud-estado">{ETIQUETA[fase]}</b>
-        <span className="jv-hud-ayuda">{AYUDA[fase]}</span>
+        <span className="jv-hud-ayuda">{fase === 'hablando' && interrumpe ? 'Hablá encima para interrumpirlo, o tocá el orbe.' : AYUDA[fase]}</span>
         {vos && <p className="jv-hud-vos"><small>Vos</small>{vos}</p>}
         {jarvis && fase !== 'escuchando' && <p className="jv-hud-jarvis"><small>Phill</small>{jarvis}</p>}
       </div>

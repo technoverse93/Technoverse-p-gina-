@@ -102,7 +102,7 @@ async function medirSalida(a: HTMLAudioElement): Promise<() => void> {
 }
 
 let sonando: HTMLAudioElement | null = null;
-export async function decir(texto: string): Promise<void> {
+export async function decir(texto: string, alEmpezar?: () => void): Promise<void> {
   const wav = await preparar(texto);
   const url = URL.createObjectURL(wav);
   let soltar = () => {};
@@ -115,6 +115,7 @@ export async function decir(texto: string): Promise<void> {
       a.onended = () => ok();
       a.onerror = () => mal(new Error('No se pudo reproducir la voz.'));
       a.onpause = () => { if (!a.ended) ok(); };
+      alEmpezar?.();
       void a.play().catch(mal);
     });
   } finally { soltar(); URL.revokeObjectURL(url); sonando = null; }

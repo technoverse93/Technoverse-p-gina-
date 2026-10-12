@@ -43,7 +43,8 @@ export function fijarModoLectura(m: ModoLectura): void {
 }
 
 // ------------------------- motores -------------------------
-type Motor = { decir: (texto: string) => Promise<void>; callar: () => void; preparar?: (texto: string) => void };
+// `alEmpezar` avisa cuándo el audio realmente empieza a sonar (para saber cuándo cae el eco en el micrófono).
+type Motor = { decir: (texto: string, alEmpezar?: () => void) => Promise<void>; callar: () => void; preparar?: (texto: string) => void };
 
 /** La voz propia de Phill (neuronal, en el aparato). Si falla una vez en
  *  esta sesión, se vuelve a la voz del teléfono sin cortar la lectura. */
@@ -51,12 +52,12 @@ let propiaFallo = false;
 function motorPropio(): Motor | null {
   if (propiaFallo || !propia.usarVozPropia()) return null;
   return {
-    decir: async (texto: string) => {
-      try { await propia.decir(texto); }
+    decir: async (texto: string, alEmpezar?: () => void) => {
+      try { await propia.decir(texto, alEmpezar); }
       catch (e) {
         propiaFallo = true;
         const otro = (await nativo()) || navegador();
-        if (otro) await otro.decir(texto); else throw e;
+        if (otro) await otro.decir(texto, alEmpezar); else throw e;
       }
     },
     callar: () => propia.callar(),
@@ -80,9 +81,9 @@ function nativo(): Promise<Motor | null> {
       return {
         // Recién abierta la app, el motor de Android puede no estar listo:
         // se reintenta un momento. Si el idioma no está, se usa «es».
-        decir: async (texto: string) => {
+        decir: async (texto: string, alEmpezar?: () => void) => {
           for (let intento = 0; intento < 5; intento++) {
-            try { await TextToSpeech.speak({ text: texto, lang, rate: 1.0, pitch: 1.0, volume: 1.0, category: 'playback' }); return; }
+            try { alEmpezar?.(); await TextToSpeech.speak({ text: texto, lang, rate: 1.0, pitch: 1.0, volume: 1.0, category: 'playback' }); return; }
             catch (e) {
               const msg = String((e as Error)?.message || e);
               if (/not yet initialized/i.test(msg) && intento < 4) { await espera(400); continue; }
@@ -110,8 +111,9 @@ function navegador(): Motor | null {
     return voces[0] || null;
   };
   return {
-    decir: (texto: string) => new Promise<void>(ok => {
+    decir: (texto: string, alEmpezar?: () => void) => new Promise<void>(ok => {
       const u = new SpeechSynthesisUtterance(texto);
+      u.onstart = () => alEmpezar?.();
       const v = elegirVoz();
       if (v) u.voice = v;
       u.lang = v?.lang || 'es-MX';
@@ -149,6 +151,7 @@ let flujoAbierto = false;  // todavía pueden llegar oraciones
 let despertar: (() => void) | null = null;
 let motorActual: Motor | null = null;
 let sonando = -1;          // oración que está sonando (-1: ninguna)
+let inicioDeOracion = 0;   // cuándo empezó a sonar la última oración (el eco da un golpe ahí)
 /** Cuánto sin texto nuevo antes de decir la última oración que esperaba un espacio. */
 const ESPERA_QUIETO_MS = 650;
 
@@ -187,7 +190,8 @@ async function leerDesde(desde: number, gen: number, id: string) {
     const cortada = new Promise<void>(ok => { cortes.push(ok); });
     // La siguiente oración se va generando mientras suena esta.
     if (m.preparar && frases[i + 1]) m.preparar(frases[i + 1]);
-    const dicha = m.decir(frases[i]).then(() => true, () => false);
+    inicioDeOracion = Date.now();
+    const dicha = m.decir(frases[i], () => { inicioDeOracion = Date.now(); }).then(() => true, () => false);
     const ok = await Promise.race([dicha, cortada.then(() => true)]);
     if (gen !== generacion) return;
     sonando = -1;
@@ -218,6 +222,8 @@ export interface FlujoLector {
 
 export const lector = {
   obtener: (): EstadoLector => actual,
+  /** Cuándo empezó a sonar la última oración (ms desde 1970; 0 si ninguna). */
+  inicioOracion: (): number => inicioDeOracion,
   suscribir(f: () => void): () => void { oyentes.add(f); return () => { oyentes.delete(f); }; },
 
   /** Lee un texto (corta lo que se estuviera leyendo). */

@@ -31,7 +31,8 @@ import type { FaseManos } from './HudVoz';
 import type { PiezaChat } from './PiezaPauta';
 import { lector, modoLectura, paraHablar, puedeHablar } from '../../utils/lectorVoz';
 import { nivelVoz } from '../../utils/nivelVoz';
-import { ESPERA_RELLENO_MS, esDespedida, fraseRelleno, PAUSAS_MS, pausaElegida, saludoManos } from '../../utils/manosLibres';
+import { ESPERA_RELLENO_MS, esDespedida, fraseRelleno, interrumpirActivo, PAUSAS_MS, pausaElegida, saludoManos } from '../../utils/manosLibres';
+import { abrirOido, type Oido } from '../../utils/oidoVoz';
 const MiniWidgetAjustes = React.lazy(() => import('./MiniWidgetAjustes'));
 import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../../supabaseClient';
 import { cabeceraClientInfo } from '../../utils/dispositivo';
@@ -785,6 +786,12 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const vaciasSeguidas = useRef(0);   // veces seguidas que se escuchó y no habló nadie
   const despedir = useRef(false);     // lo último que dijiste fue una despedida
   const grabandoManos = useRef(false);
+  // El «oído»: el micrófono de manos libres, abierto todo el rato (ver oidoVoz.ts).
+  const oido = useRef<Oido | null>(null);
+  const oidoListo = useRef<Promise<Oido | null>>(Promise.resolve(null));
+  const falsasSeguidas = useRef(0);       // pausas por «alguien habla» que no eran nadie
+  const interrupcionOff = useRef(false);  // se apagó sola: el altavoz se escuchaba solo
+  const audioPendiente = useRef<(() => void) | null>(null); // lo que dijiste mientras Phill todavía terminaba de contestar
   const { estado: estadoLector } = useLector();
   // Phill se enciende solo cuando el servidor ya lo tiene (la función
   // nueva informa las velocidades en el cupo); antes, todo queda como siempre.
@@ -1039,6 +1046,12 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
         flujo?.cancelar();
         if (res?.cupo) setCupo(res.cupo);
         setMensajes(prev => prev.filter(m => !m.pendiente && m.id !== BORRADOR));
+        // Manos libres: un ruido que no era voz (una tos, un golpe) no saca a nadie del modo;
+        // a la segunda seguida, Phill deja de insistir (igual que cuando nadie habla).
+        if (res?.codigo === 'sin_voz' && manosRef.current) {
+          if (++vaciasSeguidas.current >= 2) { setManos(false); toast.info('No te escuché, así que salí del modo manos libres. Tocá el botón cuando quieras seguir.'); }
+          return;
+        }
         setTexto(crudo);
         setAviso({ tipo: 'error', texto: res?.error || 'No se pudo enviar. Revisa la conexión e intenta de nuevo.' });
         if (manosRef.current) setManos(false);
@@ -1101,11 +1114,17 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     const auto = manosRef.current;
     try {
       // En manos libres la grabación avisa el volumen (para el orbe) y se
-      // corta sola cuando hacés una pausa después de hablar.
-      grabacion.current = await grabarNotaDeVoz(auto ? {
-        alNivel: n => nivelVoz.fijar(n, 'mic'), silencioMs: PAUSAS_MS[pausaElegida()], esperaMs: 9000,
-        alPausa: por => { if (por === 'fin') void terminarVozRef.current(); else nadieHabloRef.current(); },
-      } : {});
+      // corta sola cuando hacés una pausa después de hablar. Con el «oído»
+      // abierto se usa ese (guarda lo previo: no se pierde el comienzo); si no
+      // se pudo abrir, la grabadora de siempre.
+      const alPausa = (por: 'fin' | 'nadie') => { if (por === 'fin') void terminarVozRef.current(); else nadieHabloRef.current(); };
+      const o = auto ? await oidoListo.current : null;
+      if (auto && !manosRef.current) return;
+      if (o?.abierto()) {
+        grabacion.current = o.escuchar({ alNivel: n => nivelVoz.fijar(n, 'mic'), silencioMs: PAUSAS_MS[pausaElegida()], esperaMs: 9000, alPausa });
+      } else {
+        grabacion.current = await grabarNotaDeVoz(auto ? { alNivel: n => nivelVoz.fijar(n, 'mic'), silencioMs: PAUSAS_MS[pausaElegida()], esperaMs: 9000, alPausa } : {});
+      }
       grabandoManos.current = auto;
       inicioVoz.current = Date.now();
       setSegVoz(0);
@@ -1139,7 +1158,9 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
       // Un solo viaje: el audio va con el mensaje y el servidor lo
       // transcribe y responde de una vez.
       setVoz(null);
-      void enviarRef.current('', { porVoz: seg, audio: { datos: audio, tipo: blob.type || 'audio/webm' } });
+      const mandar = () => { void enviarRef.current('', { porVoz: seg, audio: { datos: audio, tipo: blob.type || 'audio/webm' } }); };
+      // Si le hablaste encima mientras todavía terminaba de contestar, se manda apenas termine.
+      if (enviandoRef.current) audioPendiente.current = mandar; else mandar();
     } catch {
       toast.error('No se pudo leer el audio. Probá de nuevo.');
     } finally {
@@ -1157,6 +1178,12 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     }, 250);
     return () => clearInterval(t);
   }, [voz]);
+  useEffect(() => {
+    if (enviando || !audioPendiente.current) return;
+    const mandar = audioPendiente.current;
+    audioPendiente.current = null;
+    mandar();
+  }, [enviando]);
   // «Hablar» desde el widget: se empieza a escuchar en cuanto Phill está listo.
   const vozAtendida = useRef(0);
   useEffect(() => {
@@ -1165,7 +1192,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     void empezarVoz();
   }, [pedirVoz, conVoz]); // eslint-disable-line react-hooks/exhaustive-deps
   // Al salir del módulo, el micrófono se suelta.
-  useEffect(() => () => { grabacion.current?.cancelar(); }, []);
+  useEffect(() => () => { grabacion.current?.cancelar(); oido.current?.cerrar(); oido.current = null; }, []);
 
   // ------------------------- MANOS LIBRES -------------------------
   // Escuchar → (pausa) → mandar → Phill contesta hablando → escuchar otra
@@ -1188,7 +1215,43 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     nivelVoz.apagar();
     if (grabandoManos.current && grabacion.current) { grabacion.current.cancelar(); grabacion.current = null; setVoz(null); }
     grabandoManos.current = false;
+    audioPendiente.current = null;
+    oido.current?.cerrar(); oido.current = null; oidoListo.current = Promise.resolve(null);
   }, [manos]);
+  // INTERRUMPIR HABLANDO ENCIMA: mientras Phill habla (o está en pausa porque oyó algo),
+  // el oído vigila. Si hablás de verdad, se calla y te toma desde un instante antes;
+  // si era una tos o el eco, sigue donde iba. Si el altavoz se escucha solo tres veces
+  // seguidas, se apaga en esta sesión (con auriculares funciona mejor; el orbe sigue sirviendo).
+  const lectorActivo = estadoLector !== 'callado';
+  useEffect(() => {
+    if (!manos || !lectorActivo || !interrumpirActivo() || interrupcionOff.current) return;
+    let vivo = true, soltar: (() => void) | null = null;
+    void oidoListo.current.then(o => {
+      if (!vivo || !o?.abierto()) return;
+      soltar = o.vigilar({
+        inicioOracion: () => lector.inicioOracion(),
+        silencioMs: PAUSAS_MS[pausaElegida()],
+        alPausar: () => lector.pausar(),
+        alFalsaAlarma: () => {
+          lector.seguir();
+          if (++falsasSeguidas.current >= 3) {
+            interrupcionOff.current = true;
+            toast.info('Apagué la interrupción por voz: el altavoz se escuchaba solo. Con auriculares funciona mejor. Igual podés tocar el orbe para interrumpirlo.');
+          }
+        },
+        alConfirmar: g => {
+          falsasSeguidas.current = 0; vaciasSeguidas.current = 0;
+          lector.callar();
+          grabacion.current = g; grabandoManos.current = true;
+          inicioVoz.current = Date.now() - 900;
+          setSegVoz(0); setVoz('grabando');
+        },
+        alNivel: n => nivelVoz.fijar(n, 'mic'),
+        alPausa: por => { if (por === 'fin') void terminarVozRef.current(); else nadieHabloRef.current(); },
+      });
+    });
+    return () => { vivo = false; soltar?.(); };
+  }, [manos, lectorActivo]); // eslint-disable-line react-hooks/exhaustive-deps
   // La pantalla no se apaga mientras se conversa.
   useEffect(() => {
     if (!manos) return;
@@ -1198,8 +1261,10 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   }, [manos]);
   const iniciarManos = () => {
     if (!conVoz || manos || enviando) return;
-    vaciasSeguidas.current = 0; despedir.current = false;
+    vaciasSeguidas.current = 0; despedir.current = false; falsasSeguidas.current = 0; interrupcionOff.current = false;
     lector.callar(); setMenu(null); setVista('chat'); setManos(true);
+    // El micrófono se abre ya (aquí hay un toque real) y queda abierto mientras dure la conversación.
+    oidoListo.current = abrirOido().then(o => { if (!manosRef.current) { o.cerrar(); return null; } oido.current = o; return o; }).catch(() => null);
     // Phill saluda por tu nombre; después te escucha.
     if (puedeHablar()) {
       setSaludando(true);
@@ -1231,6 +1296,8 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const editarUltima = useCallback(() => { setTexto(ultimaPregunta); setEditando(true); setTimeout(() => cajaRef.current?.focus(), 30); }, [ultimaPregunta]);
   const enviarRef = useRef(enviar);
   enviarRef.current = enviar;
+  const enviandoRef = useRef(false);
+  enviandoRef.current = enviando;
   const empezarVozRef = useRef(empezarVoz);
   empezarVozRef.current = empezarVoz;
 
@@ -1603,7 +1670,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
       )}
       {manos && jarvis && (
         <React.Suspense fallback={null}>
-          <HudVoz fase={faseManos}
+          <HudVoz fase={faseManos} interrumpe={interrumpirActivo() && !interrupcionOff.current}
             vos={[...mensajes].reverse().find(m => m.rol === 'user' && !m.pendiente)?.texto || ''}
             jarvis={paraHablar([...mensajes].reverse().find(m => m.rol === 'assistant')?.texto || '').slice(0, 420)}
             onToque={tocarOrbe} onTerminar={terminarManos} />

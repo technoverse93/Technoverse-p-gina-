@@ -18,6 +18,10 @@ export interface OpcionesSilencio {
   esperaMs?: number;
   /** Voz seguida mínima para contar como habla (no un golpe). */
   minHablaMs?: number;
+  /** El ruido de fondo ya se conoce (el «oído» lo mide siempre): no hace falta calibrar al empezar. */
+  pisoInicial?: number;
+  /** Ya se sabe que hablaron (una interrupción confirmada): termina cuando haya silencio, sin pedir más voz. */
+  yaHablo?: boolean;
 }
 
 export function crearDetector(op: OpcionesSilencio = {}) {
@@ -25,15 +29,16 @@ export function crearDetector(op: OpcionesSilencio = {}) {
   const esperaMs = op.esperaMs ?? 9000;
   const minHablaMs = op.minHablaMs ?? 220;
   let t0 = 0;
-  let piso = 0.006, muestras = 0;
+  const calibrar = op.pisoInicial === undefined;
+  let piso = op.pisoInicial ?? 0.006, muestras = 0;
   let inicioVoz = 0, ultimaVoz = 0;
-  let hablo = false;
+  let hablo = !!op.yaHablo;
   return {
     /** Se llama con cada medición. Devuelve qué pasa ahora. */
     procesar(rms: number, ahora: number): Veredicto {
-      if (!t0) t0 = ahora;
+      if (!t0) { t0 = ahora; if (hablo) { inicioVoz = ahora; ultimaVoz = ahora; } }
       // Los primeros 400 ms calibran el ruido de fondo (sin contar voz fuerte).
-      if (ahora - t0 < 400) {
+      if (calibrar && ahora - t0 < 400) {
         if (rms < 0.05) { piso = (piso * muestras + rms) / (muestras + 1); muestras++; }
         return 'nada';
       }

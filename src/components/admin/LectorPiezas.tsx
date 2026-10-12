@@ -10,10 +10,10 @@
 // =====================================================================
 
 import { useState, useSyncExternalStore } from 'react';
-import { Volume2, Pause, Play, Square, VolumeX, Download, Check, Timer } from 'lucide-react';
+import { Volume2, Pause, Play, Square, VolumeX, Download, Check, Timer, Mic } from 'lucide-react';
 import { lector, modoLectura, fijarModoLectura, puedeHablar, type ModoLectura } from '../../utils/lectorVoz';
 import * as propia from '../../utils/vozPropia';
-import { fijarPausa, PAUSAS, pausaElegida, type PausaVoz } from '../../utils/manosLibres';
+import { fijarInterrumpir, fijarPausa, interrumpirActivo, PAUSAS, pausaElegida, type PausaVoz } from '../../utils/manosLibres';
 
 export function useLector() {
   return useSyncExternalStore(lector.suscribir, lector.obtener, lector.obtener);
@@ -79,8 +79,15 @@ export function AjusteVoz() {
 /** Manos libres: cuánto silencio espera Phill antes de dar por terminado lo que decís. */
 function PausaManos() {
   const [pausa, setPausa] = useState<PausaVoz>(() => pausaElegida());
+  const [interrumpir, setInterrumpir] = useState(() => interrumpirActivo());
   return (
     <>
+      <div className="ai-modu">
+        <span className="ai-modu-ic"><Mic className="w-4 h-4" /></span>
+        <span className="ai-modu-t"><b>Interrumpirlo hablando</b><span>En manos libres, si le hablás encima, Phill se calla y te escucha. Funciona mejor con auriculares; si el altavoz lo hace interrumpirse solo, apagalo.</span></span>
+        <button type="button" role="switch" aria-checked={interrumpir} className="ai-sw" data-on={interrumpir || undefined}
+          onClick={() => { fijarInterrumpir(!interrumpir); setInterrumpir(!interrumpir); }} aria-label="Interrumpir a Phill hablándole encima" />
+      </div>
       <div className="ai-modu">
         <span className="ai-modu-ic"><Timer className="w-4 h-4" /></span>
         <span className="ai-modu-t"><b>Pausa para contestar</b><span>{PAUSAS.find(p => p.id === pausa)?.ayuda}</span></span>
