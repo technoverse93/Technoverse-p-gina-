@@ -8,8 +8,10 @@ import android.content.Intent;
 import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
+import android.os.SystemClock;
 import android.speech.RecognizerIntent;
 import android.view.Gravity;
+import android.view.MotionEvent;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -83,6 +85,8 @@ public class JarvisRapido extends BridgeActivity {
     private boolean desdeBurbuja = false;
     private int anclaY = -1;
     private int anclaX = -1;
+    /** Cuándo se abrió o reabrió (uptime): un toque «afuera» justo al abrir no la guarda. */
+    private long abiertaEn = 0;
     private ActivityResultLauncher<Intent> dictado;
     /** Dónde está el widget en la pantalla (px), si se abrió desde su caja. */
     private Rect marco = null;
@@ -145,6 +149,7 @@ public class JarvisRapido extends BridgeActivity {
         });
 
         creada = true;
+        abiertaEn = SystemClock.uptimeMillis();
         aplicarModo();
         // Si la abrió «Oye Javier», ya abrió: se quita el aviso de «tocá para hablar».
         OyeVisibilidad.aperturaConfirmada();
@@ -175,6 +180,7 @@ public class JarvisRapido extends BridgeActivity {
         comoAsistente = intent.getBooleanExtra(EXTRA_ASISTENTE, false);
         leerBurbuja(intent);
         marco = marcoDe(intent);
+        abiertaEn = SystemClock.uptimeMillis();
         aplicarModo();
         OyeVisibilidad.aperturaConfirmada();
         if ("voz".equals(modo)) dictar();
@@ -315,7 +321,7 @@ public class JarvisRapido extends BridgeActivity {
     private void aplicarModo() {
         Window ventana = getWindow();
         ventana.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
-            | WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+            | WindowManager.LayoutParams.FLAG_DIM_BEHIND | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH);
         ventana.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN | WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
         float d = getResources().getDisplayMetrics().density;
         int anchoPantalla = getResources().getDisplayMetrics().widthPixels;
@@ -330,7 +336,9 @@ public class JarvisRapido extends BridgeActivity {
             ventana.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
             return;
         }
-        ventana.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+        // FLAG_WATCH_OUTSIDE_TOUCH: avisa (ACTION_OUTSIDE) cuando se toca FUERA de la tarjeta, para
+        // guardarla (ver dispatchTouchEvent).
+        ventana.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL | WindowManager.LayoutParams.FLAG_WATCH_OUTSIDE_TOUCH);
         if (desdeBurbuja && anclaY >= 0) {
             // Desde la burbuja, en cualquier modo: una tarjeta chica a su lado (nunca a lo ancho).
             Rect r = recuadroBurbuja(modo);
@@ -362,6 +370,36 @@ public class JarvisRapido extends BridgeActivity {
         ventana.setAttributes(lp);
         ventana.setGravity(Gravity.BOTTOM);
         ventana.setLayout(WindowManager.LayoutParams.MATCH_PARENT, alto);
+    }
+
+    /**
+     * Tocar FUERA de la tarjeta (WhatsApp, YouTube, el escritorio…) la guarda: el dueño reportó que
+     * con el chat de Javier abierto no podía tocar ni escribir en la app de atrás hasta cerrarlo (con
+     * una ventana de otra tarea delante, la de atrás queda sin el foco del teclado). Como las burbujas
+     * de Messenger: el toque sigue a la app de atrás (la ventana no es modal) y la tarjeta se va, y
+     * la burbuja vuelve para reabrirla. Las ventanas que están por encima (teclado, barras) no
+     * disparan esto, solo los toques a la app de atrás.
+     */
+    @Override
+    public boolean dispatchTouchEvent(MotionEvent ev) {
+        if (ev != null && ev.getActionMasked() == MotionEvent.ACTION_OUTSIDE && guardarAlTocarAfuera()) return true;
+        return super.dispatchTouchEvent(ev);
+    }
+
+    private boolean guardarAlTocarAfuera() {
+        if ("voz".equals(modo)) return false; // sin tarjeta: la ventana ni recibe toques
+        if (SystemClock.uptimeMillis() - abiertaEn < 700) return false; // el mismo toque que la abrió
+        guardar();
+        return true;
+    }
+
+    /**
+     * Guarda la tarjeta: «oye» (escuchando) termina; el chat o la hoja se van al fondo CON lo que
+     * estaban haciendo (una respuesta en camino no se pierde) y se reabren desde la burbuja o el widget.
+     */
+    void guardar() {
+        if ("oye".equals(modo)) cerrar();
+        else moveTaskToBack(true);
     }
 
     /** La página cambió de modo (la barrita pasó a la conversación completa): la ventana se ajusta. */
