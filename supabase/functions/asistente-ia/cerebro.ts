@@ -203,7 +203,17 @@ export function crearCerebro(admin: Db, uid: string) {
     conVectores = !error;
     return conVectores;
   }
-  async function vectores(textos: string[]): Promise<number[][] | null> {
+  // El mismo texto se vectoriza varias veces por pregunta (respuesta de memoria, búsqueda en el cerebro,
+  // búsquedas en internet ya hechas): una sola llamada a Gemini por texto, las demás reusan la promesa.
+  const vectoresDe = new Map<string, Promise<number[][] | null>>();
+  function vectores(textos: string[]): Promise<number[][] | null> {
+    if (textos.length !== 1) return vectoresSinCache(textos);
+    const k = textos[0].slice(0, 2000);
+    let p = vectoresDe.get(k);
+    if (!p) { p = vectoresSinCache(textos); vectoresDe.set(k, p); }
+    return p;
+  }
+  async function vectoresSinCache(textos: string[]): Promise<number[][] | null> {
     const clave = (globalThis as any).Deno?.env?.get('GEMINI_API_KEY');
     if (!clave || !textos.length) return null;
     const modelo = (globalThis as any).Deno?.env?.get('GEMINI_EMBED_MODEL') || 'gemini-embedding-001';
