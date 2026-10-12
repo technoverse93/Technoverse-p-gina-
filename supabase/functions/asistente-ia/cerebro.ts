@@ -50,6 +50,9 @@ export const RAMAS: { clave: string; nombre: string; guarda: string; pistas: Reg
   { clave: 'ventas', nombre: 'Ventas y finanzas', guarda: 'Márgenes, metas, cómo se cobra y se factura, impuestos y números del negocio.', pistas: /venta|finanz|margen|ganancia|factur|cobr|iva|impuesto|hacienda|meta|ingreso|gasto|pago|sinpe|precio de venta/i },
   { clave: 'trabajo', nombre: 'Cómo trabajamos', guarda: 'Políticas, garantías, horarios y reglas de cómo funciona Technoverse.', pistas: /pol[ií]tica|garant[ií]a|horario|regla|procedimiento|cliente|atenci[oó]n|devoluci|negocio|tienda|empleado|personal|turno/i },
   { clave: 'tecnologia', nombre: 'Tecnología y mercado', guarda: 'Tendencias, lanzamientos, inteligencia artificial y lo que pasa en el mercado.', pistas: /tecnolog|\bia\b|inteligencia artificial|lanzamiento|tendencia|mercado|software|\bapp|sistema operativo|android|\bios\b|internet|5g|api\b|open source|acceso|groq|openrouter|siliconflow|gemini|kimi|llm|modelo de lenguaje|\\bnube\\b|cloud/i },
+  // El propio sistema: lo que Javier estudió del código (repositorio). Solo cae aquí lo que viene de
+  // estudiar el código (aprenderDelCodigo), por eso las pistas son estrechas.
+  { clave: 'sistema', nombre: 'Sistema Technoverse (el código)', guarda: 'Cómo está hecha la app: panel, tienda, APK, Javier y el servidor, archivo por archivo.', pistas: /c[oó]digo fuente|repositorio|\bsrc\/|supabase\/functions|native-android|\.tsx?\b|\.java\b/i },
   { clave: 'mundo', nombre: 'Mundo y actualidad', guarda: 'Noticias, política, economía y lo que pasa en Costa Rica y el mundo.', pistas: /pol[ií]tica (de )?(costa rica|nacional|del pa[ií]s)|noticia|gobierno|elecci|econom[ií]a|\bpa[ií]s\b|costa rica|\bley\b|narco|seguridad (ciudadana|nacional)|clima|deporte|institucional|tipo de cambio|d[oó]lar/i },
 ];
 /** La rama fija que corresponde. `propuesta` es la rama que dijo la IA (o
@@ -505,6 +508,116 @@ export function crearCerebro(admin: Db, uid: string) {
       if (!vosN) return false;
       await admin.from('jarvis_nodos').update({ resumen: recortar(t, 1200), actualizado_en: new Date().toISOString() }).eq('id', vosN.id);
       return true;
+    },
+
+    // ------------------------------------------------------------------
+    // ESTUDIO DEL CÓDIGO (pedido del dueño, 2026-10-12): Javier estudia su propio
+    // repositorio archivo por archivo y lo guarda en la rama «Sistema Technoverse».
+    // ------------------------------------------------------------------
+    /** Qué archivos ya estudió y con qué versión ({ ruta: huella }). */
+    async progresoEstudio(): Promise<Record<string, string>> {
+      if (!vivo) return {};
+      const { data } = await admin.from('jarvis_nodos').select('resumen').eq('user_id', uid).eq('clave', 'sis:progreso').maybeSingle();
+      try { return JSON.parse(String(data?.resumen || '{}')) || {}; } catch { return {}; }
+    },
+    async guardarProgreso(p: Record<string, string>): Promise<void> {
+      const n = await asegurarNodo('sis:progreso', 'Estudio del código', 'interno');
+      if (n) await admin.from('jarvis_nodos').update({ resumen: JSON.stringify(p), actualizado_en: new Date().toISOString() }).eq('id', n.id);
+    },
+    /**
+     * Lo aprendido de UN archivo: un tema (el área) en la rama del sistema y un dato por cosa
+     * importante. Volver a estudiar el archivo REEMPLAZA lo anterior (lo viejo se borra).
+     */
+    async aprenderDelCodigo(ruta: string, tema: string, hechos: string[], url: string): Promise<number> {
+      const rama = RAMAS.find(r => r.clave === 'sistema')!;
+      const t = limpio(tema, 60) || ruta;
+      const ramaN = await ramaFija(rama);
+      if (!ramaN) return 0;
+      const temaN = await asegurarNodo(`sis:tema:${normalizar(t)}`, t, 'tema', { fuente: 'código', usar: false });
+      if (!temaN) return 0;
+      await enlazar(ramaN.id, temaN.id, 'incluye');
+      const base = `sis:${normalizar(ruta)}:`;
+      let n = 0;
+      for (const h of hechos.slice(0, 10)) {
+        const dato = limpio(h, 600);
+        if (dato.length < 15 || PRIVADO.test(dato)) continue;
+        const d = await asegurarNodo(`${base}${n}`, recortar(dato, 80), 'dato', { resumen: dato, fuente: 'código', url });
+        if (!d) continue;
+        // Texto nuevo → vector nuevo (lo pone vectorizarPendientes).
+        await admin.from('jarvis_nodos').update({ embedding: null }).eq('id', d.id).then(() => {}, () => {});
+        await enlazar(temaN.id, d.id, 'incluye');
+        n++;
+      }
+      // Lo que sobró de un estudio anterior más largo, se borra.
+      const { data: viejos } = await admin.from('jarvis_nodos').select('id,clave').eq('user_id', uid).like('clave', `${base}%`);
+      const sobran = (viejos || []).filter((v: any) => Number(String(v.clave).slice(base.length)) >= n).map((v: any) => v.id);
+      if (sobran.length) await admin.from('jarvis_nodos').delete().in('id', sobran);
+      return n;
+    },
+
+    // ------------------------------------------------------------------
+    // RESPUESTAS APRENDIDAS: lo que ya contestó bien (y no cambia con el día) lo vuelve a
+    // contestar de su cerebro, sin IAs ni internet. Lo que salió mal se borra y queda la
+    // corrección. Se reconoce la pregunta por su SIGNIFICADO (vector), no por las palabras.
+    // ------------------------------------------------------------------
+    async respuestaGuardada(pregunta: string, minimo = 0.93): Promise<{ texto: string; fecha: string; similitud: number; pregunta: string } | null> {
+      if (!vivo || !(await hayVectores())) return null;
+      const v = await vectores([limpio(pregunta, 400)]);
+      if (!v) return null;
+      const mejor = (await semejantes(v[0], 6)).find(x => x.tipo === 'respuesta');
+      if (!mejor || mejor.similitud < minimo) return null;
+      const { data } = await admin.from('jarvis_nodos').select('resumen,actualizado_en,usos').eq('id', mejor.id).maybeSingle();
+      if (!data?.resumen) return null;
+      if (Date.now() - new Date(data.actualizado_en).getTime() > 45 * 86400_000) return null; // muy vieja: se vuelve a pensar
+      enFondo(admin.from('jarvis_nodos').update({ usos: (data.usos || 0) + 1, ultimo_uso: new Date().toISOString() }).eq('id', mejor.id));
+      return { texto: String(data.resumen), fecha: String(data.actualizado_en), similitud: mejor.similitud, pregunta: mejor.etiqueta };
+    },
+    async aprenderRespuesta(pregunta: string, respuesta: string): Promise<boolean> {
+      const p = limpio(pregunta, 300), r = String(respuesta || '').trim();
+      if (!vivo || p.length < 8 || r.length < 20 || PRIVADO.test(p) || PRIVADO.test(r)) return false;
+      const n = await asegurarNodo(`resp:${normalizar(p).slice(0, 90)}`, recortar(p, 80), 'respuesta', { resumen: recortar(r, 1500), fuente: 'respuesta aprendida', usar: true });
+      if (!n) return false;
+      const d = await dominio('respuestas', 'Respuestas aprendidas');
+      await enlazar(d?.id, n.id, 'incluye');
+      // El vector es el de la PREGUNTA (así se reconoce la misma pregunta dicha de otra forma).
+      if (await hayVectores()) {
+        const v = await vectores([p]);
+        if (v) await admin.from('jarvis_nodos').update({ embedding: JSON.stringify(v[0]) }).eq('id', n.id);
+      }
+      return true;
+    },
+    /** Una respuesta que estaba mal se borra (la exacta y las que son la misma pregunta). */
+    async olvidarRespuesta(pregunta: string): Promise<number> {
+      const p = limpio(pregunta, 300);
+      if (!vivo || p.length < 3) return 0;
+      const ids = new Set<string>();
+      const { data: exacta } = await admin.from('jarvis_nodos').select('id').eq('user_id', uid).eq('clave', `resp:${normalizar(p).slice(0, 90)}`).maybeSingle();
+      if (exacta?.id) ids.add(exacta.id);
+      if (await hayVectores()) {
+        const v = await vectores([p]);
+        if (v) for (const x of await semejantes(v[0], 6)) if (x.tipo === 'respuesta' && x.similitud >= 0.93) ids.add(x.id);
+      }
+      if (ids.size) await admin.from('jarvis_nodos').delete().in('id', [...ids]);
+      return ids.size;
+    },
+    /** ¿Ya buscó esto en internet hace poco? Lo guardado (si es la misma búsqueda por significado). */
+    async webReciente(consulta: string, dias = 7): Promise<{ titulo: string; url: string | null; resumen: string; fecha: string; similitud: number } | null> {
+      if (!vivo || !(await hayVectores())) return null;
+      const v = await vectores([limpio(consulta, 300)]);
+      if (!v) return null;
+      const m = (await semejantes(v[0], 6)).find(x => (x.tipo === 'fuente' || (x.tipo === 'tema' && String(x.clave).startsWith('web:'))) && x.similitud >= 0.9 && !!x.resumen);
+      if (!m) return null;
+      const { data } = await admin.from('jarvis_nodos').select('actualizado_en').eq('id', m.id).maybeSingle();
+      if (!data || Date.now() - new Date(data.actualizado_en).getTime() > dias * 86400_000) return null;
+      return { titulo: m.etiqueta, url: m.url, resumen: String(m.resumen), fecha: String(data.actualizado_en), similitud: m.similitud };
+    },
+
+    /** Lo que se lleva el teléfono para contestar SIN INTERNET: respuestas aprendidas y datos. */
+    async paraSinConexion(max = 600): Promise<{ tipo: string; tema: string; texto: string; fuente: string | null }[]> {
+      if (!vivo) return [];
+      const { data } = await admin.from('jarvis_nodos').select('tipo,etiqueta,resumen,fuente').eq('user_id', uid)
+        .in('tipo', ['respuesta', 'dato', 'recuerdo']).not('resumen', 'is', null).order('usos', { ascending: false }).limit(max);
+      return ((data || []) as any[]).filter(n => !PRIVADO.test(String(n.resumen))).map(n => ({ tipo: n.tipo, tema: String(n.etiqueta || ''), texto: String(n.resumen || ''), fuente: n.fuente || null }));
     },
 
     /** Respuesta de la herramienta consultar_cerebro. */

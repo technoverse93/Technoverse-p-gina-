@@ -82,7 +82,8 @@ import { eventoDePrueba, informe, nombreComponente, registrar, type Prueba } fro
 import { empujarAviso, empujarChat, enviarPrueba, responderDesdePush } from './push.ts';
 import { crearTarea, procesarTareas, purgarTareas, type MotorTareas, type PasoPlan, type ResultadoCrear, type Tarea } from './tareas.ts';
 import { MAPA_CODIGO } from './mapa-codigo.ts';
-import { ClienteRepo, configLectura, configRepo, correrHerramientaRepo, MAX_ARCHIVOS, MAX_PROPUESTAS_DIA, NOMBRES_REPO, type EstadoRepo, type ResultadoPropuesta } from './repo.ts';
+import { estudiarRepo, type PedirEstudio } from './estudio-repo.ts';
+import { ClienteRepo, configLectura, configRepo, correrHerramientaRepo, rutaPermitida, MAX_ARCHIVOS, MAX_PROPUESTAS_DIA, NOMBRES_REPO, type EstadoRepo, type ResultadoPropuesta } from './repo.ts';
 import { armarPromptImagen, ESTILOS_VALIDOS, FORMATOS_VALIDOS, generarCopy, generarImagen, type EstiloId, type FormatoId } from './estudio.ts';
 import { ACCIONES_TELEFONO, PANTALLAS_AJUSTES, prepararTelefono, SOLO_APK, type PedidoTelefono } from './telefono.ts';
 import { APRENDER, CONSULTAR_CEREBRO, crearCerebro, respuestaSinIA, type Cerebro, type Nota } from './cerebro.ts';
@@ -205,6 +206,8 @@ type Sistema = {
   encargar?: (titulo: string, instruccion: string) => Promise<ResultadoCrear>;
   /** Solo en un encargo de código: el repositorio (leer, buscar y PROPONER; nunca fusionar) y lo ya propuesto. */
   repo?: EstadoRepo;
+  /** El dueño pidió buscar DE NUEVO («otra vez», «actualizá»): no se usa lo que ya estaba en el cerebro. */
+  refrescar?: boolean;
   /** Cuántas vueltas de consultas se permiten (por defecto 4; un encargo de código necesita más). */
   rondasMax?: number;
   /** Tokens gastados en ESTE mensaje por todas las IAs (también los
@@ -707,6 +710,16 @@ async function correrHerramienta(nombre: string, args: Record<string, unknown>, 
   }
   if (MEMORIA.some(m => m.nombre === nombre)) return await correrMemoria(nombre, args, sis);
   if (nombre === NAVEGAR.nombre || ACCIONES.some(a => a.nombre === nombre)) return await correrAccion(nombre, args, sis);
+  // YA LO BUSCÓ: si la misma búsqueda (por significado) está en el cerebro de los últimos días,
+  // se usa eso y no se vuelve a internet (salvo que el dueño pida buscar de nuevo).
+  if (nombre === 'buscar_web' && sis.cerebro && !sis.forzarWeb && !sis.refrescar) {
+    const ya = await sis.cerebro.webReciente(String(args?.consulta ?? '')).catch(() => null);
+    if (ya) {
+      const c: Consulta = { tipo: 'cerebro', modulo: 'Cerebro', desc: `ya lo había buscado · «${String(args?.consulta ?? '').slice(0, 50)}»`, filas: `del ${new Date(ya.fecha).toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', day: 'numeric', month: 'short' })}`, detalle: ya.titulo };
+      sis.consultas.push(c); sis.emitir('cerebro', c);
+      return { desde_tu_cerebro: true, buscado_el: ya.fecha, resultados: [{ titulo: ya.titulo, url: ya.url, extracto: ya.resumen }], nota: 'Esto ya lo habías buscado y está en tu cerebro: usalo sin volver a internet. Si el dueño pide buscar de nuevo o el dato parece viejo, decíselo.' };
+    }
+  }
   const clave = `${nombre}:${JSON.stringify(args || {})}`;
   let salida = sis.hechas.get(clave);
   if (!salida) {
@@ -1390,6 +1403,34 @@ function familia(m: string): string {
 /** Modelos chicos (≤ 20B, «mini», «instant»…): no corrigen a uno grande. */
 const CHICO = /(^|[^0-9.])([1-9]|[12][0-9]|3[0-2])b\b|(^|[-_/])(mini|nano|instant|small|lite|tiny)([-_.:]|$)/i;
 
+// ---------------------------------------------------------------------
+// CEREBRO PRIMERO: qué preguntas se pueden contestar de memoria
+// ---------------------------------------------------------------------
+/** Lo que cambia con el día o depende de datos vivos: siempre se vuelve a consultar. */
+const DEL_MOMENTO = /\b(hoy|ahora|ahorita|ayer|antier|anoche|ma[ñn]ana|esta (semana|ma[ñn]ana|tarde|noche)|este mes|[uú]ltim[oa]s?|reciente|hora|qu[eé] d[ií]a|fecha|cu[aá]nt[oa]s?|ventas?|vend[ií]|stock|existencia|inventario|ingres[oó]|ingresaron|visit|sesi[oó]n|conectad|bloque|chats?|pendiente|agenda|clima|precio|cuesta|vale|tipo de cambio|d[oó]lar|cobr|factur|orden|taller|cliente)\b/i;
+/** Pidió buscar de nuevo: nada de memoria. */
+const OTRA_VEZ = /\b(de nuevo|otra vez|nuevamente|actualiz|refresc|busc[aá]lo (de nuevo|otra vez)|verific[aá]lo)\b/i;
+function puedeDeMemoria(t: string, esOrden: boolean): boolean {
+  const x = t.trim();
+  return !esOrden && x.length >= 8 && !DEL_MOMENTO.test(x) && !OTRA_VEZ.test(x) && !/\[[A-ZÉ]+·\d+\]/.test(x);
+}
+/** «Eso es falso», «está mal»: el dueño está corrigiendo la respuesta anterior. */
+const ES_CORRECCION = /^(no[,.!]?\s+)?(eso\s+)?(es\s+falso|est[aá]\s+mal|no\s+es\s+(as[ií]|cierto|correcto|verdad)|te\s+equivocaste|incorrect|mal\s+hecho|hacelo\s+bien|hazlo\s+bien|corregi|corrig)/i;
+
+/** Lo que usa el estudio del código para que una IA resuma un archivo (JSON con tema y hechos). */
+const pedirEstudio: PedirEstudio = async (prompt, datos) => {
+  const r = await pedirJSON(prompt, datos, { hasta: Date.now() + 40000, gasto: { in: 0, out: 0 }, etiqueta: 'estudio', valido: j => Array.isArray(j?.hechos) && j.hechos.length > 0 }).catch(() => null);
+  return r ? r.j : null;
+};
+/** Una vuelta del estudio del código para cada superadmin (la llama la tarea programada). */
+async function estudiarDuenos(admin: any): Promise<void> {
+  const { data } = await admin.from('profiles').select('id').eq('role', 'superadmin').limit(3);
+  for (const d of (data || []) as any[]) {
+    const r = await estudiarRepo(crearCerebro(admin, d.id), pedirEstudio, { max: 6, hastaMs: Date.now() + 120_000 });
+    console.log(`estudio del código: ${r.estudiados.length} archivo(s), ${r.hechos} hecho(s), faltan ${r.pendientes} de ${r.total}${r.fallidos.length ? ` · fallaron ${r.fallidos.join(', ')}` : ''}`);
+  }
+}
+
 async function pedirJSON(prompt: string, usuario: string, op: { evitar?: string; evitarModelo?: string; hasta: number; gasto: { in: number; out: number }; rapido?: boolean; valido: (j: any) => boolean; etiqueta: string }): Promise<{ j: any; quien: string } | null> {
   // Para REVISAR hace falta otra cabeza: ni el mismo proveedor ni el mismo
   // modelo servido por otro (gpt-oss en Cerebras no revisa a gpt-oss en Groq),
@@ -1834,6 +1875,8 @@ export async function atender(req: Request): Promise<Response> {
       if (cuerpo?.tarea === 'tareas') { const r = await procesarTareas(admin, crearMotorTareas(admin)); void purgarTareas(admin).catch(() => {}); return responder({ ...r }); }
       // Un cliente escribió en el chat: avisar al personal (push al teléfono).
       if (cuerpo?.tarea === 'push_chat') return responder(await empujarChat(admin, String(cuerpo?.datos?.mensaje || '')));
+      // Cada 15 minutos (con «vigilar»), Javier estudia unos archivos más de su propio código.
+      if (cuerpo?.tarea === 'vigilar' && Deno.env.get('IA_ESTUDIAR') !== '0') (globalThis as any).EdgeRuntime?.waitUntil?.(estudiarDuenos(admin).catch((e: unknown) => console.log(`estudio: ${e instanceof Error ? e.message : e}`)));
       return responder(await tareaCron(admin, String(cuerpo?.tarea || ''), redactar, undefined, () => probarSalud(admin)));
     }
 
@@ -2052,8 +2095,33 @@ export async function atender(req: Request): Promise<Response> {
     }
 
     // ------------------------- 👍 / 👎 -------------------------
+    // ------------- CEREBRO PROPIO: estudiar el código ya, y lo que se lleva el teléfono sin internet -------------
+    if (accion === 'estudiar' || accion === 'estudio_estado') {
+      if (!esSuper) return responder({ ok: false, error: 'Solo el superadmin.' }, 403);
+      const c = crearCerebro(admin, uid);
+      if (accion === 'estudiar') {
+        const r = await estudiarRepo(c, pedirEstudio, { max: Math.min(10, Number(cuerpo?.max) || 6), hastaMs: Date.now() + 110_000 });
+        return responder({ ok: true, ...r });
+      }
+      const p = await c.progresoEstudio();
+      return responder({ ok: true, estudiados: Object.keys(p).length, total: MAPA_CODIGO.filter(e => /\.(tsx?|java|sql|mjs|js|sh|yml)$/.test(e.ruta) && rutaPermitida(e.ruta).ok).length });
+    }
+    if (accion === 'cerebro_offline') {
+      if (!esSuper) return responder({ ok: false, error: 'Solo el superadmin.' }, 403);
+      const notas = await crearCerebro(admin, uid).paraSinConexion(Math.min(1500, Number(cuerpo?.max) || 800));
+      return responder({ ok: true, notas, generado: new Date().toISOString() });
+    }
+
     if (accion === 'valorar') {
       const v = Number(cuerpo?.valor);
+      // 👎: lo que contestó mal se borra de lo aprendido (así no lo repite de memoria).
+      if (v === -1 && esSuper) {
+        const { data: resp } = await admin.from('ia_mensajes').select('conversacion_id,creado_en').eq('id', String(cuerpo?.id || '')).eq('user_id', uid).maybeSingle();
+        if (resp) {
+          const { data: preg } = await admin.from('ia_mensajes').select('texto').eq('conversacion_id', resp.conversacion_id).eq('rol', 'user').lte('creado_en', resp.creado_en).order('creado_en', { ascending: false }).limit(1).maybeSingle();
+          if (preg?.texto) await crearCerebro(admin, uid).olvidarRespuesta(String(preg.texto)).catch(() => 0);
+        }
+      }
       const { error } = await admin.from('ia_mensajes').update({
         valoracion: v === 1 || v === -1 ? v : null,
         nota_valoracion: v === -1 && cuerpo?.nota ? String(cuerpo.nota).slice(0, 200) : null,
@@ -2369,7 +2437,7 @@ export async function atender(req: Request): Promise<Response> {
     // Desde el mini-widget del teléfono la respuesta se lee en un recuadro
     // chico (y muchas veces en voz alta): corta y sin tablas. Las acciones
     // siguen igual que en la app.
-    if (esSuper && modo === 'jarvis') extra += `\n\nCÓDIGO DEL SISTEMA (tu cerebro del sistema): para CUALQUIER pregunta sobre la app, el panel, la tienda/página, la APK o vos mismo —cómo funciona algo, por qué falla, dónde está— usá primero sistema_buscar (qué hace cada archivo) y después repo_leer para el detalle; respondé con lo que dice el código, citando el archivo. NUNCA busques en internet cosas del propio sistema: internet es solo para lo de afuera (precios de otras tiendas, productos, noticias). Desde el chat no podés cambiar nada.\nCIBERSEGURIDAD: para un día concreto («ayer», «antier») pasá \`dia\`; para «excepto el equipo X» o «además de mí» usá \`excepto\` (con «yo» para sacar lo del dueño). Contestá SOLO con lo que traen las consultas (el \`detalle\` con marcas [CUENTA·n] e [IP·n]); si algo no está, decí que no hay registro.`;
+    if (esSuper && modo === 'jarvis') extra += `\n\nCÓDIGO DEL SISTEMA (tu cerebro del sistema): para CUALQUIER pregunta sobre la app, el panel, la tienda/página, la APK o vos mismo —cómo funciona algo, por qué falla, dónde está— usá primero sistema_buscar (qué hace cada archivo) y después repo_leer para el detalle; respondé con lo que dice el código, citando el archivo. NUNCA busques en internet cosas del propio sistema: internet es solo para lo de afuera (precios de otras tiendas, productos, noticias). Desde el chat no podés cambiar nada.\nTU CEREBRO PRIMERO: antes de ir a internet, mirá lo que ya sabés (LO QUE APRENDISTE, consultar_cerebro, sistema_buscar). Lo que ya buscaste hace poco está guardado: usalo y no lo busques de nuevo, salvo que el dueño lo pida o el dato sea del día.\nCIBERSEGURIDAD: para un día concreto («ayer», «antier») pasá \`dia\`; para «excepto el equipo X» o «además de mí» usá \`excepto\` (con «yo» para sacar lo del dueño). Contestá SOLO con lo que traen las consultas (el \`detalle\` con marcas [CUENTA·n] e [IP·n]); si algo no está, decí que no hay registro.`;
     if (cuerpo?.desde === 'widget') extra += `\n\nESTÁS EN EL MINI-WIDGET DEL TELÉFONO (un recuadro chico en la pantalla de inicio, que muchas veces se escucha en voz alta): respondé MUY corto y directo: una o dos frases (unas 30 palabras como mucho), sin tablas, listas ni títulos. Las cifras, completas. Si preparás una acción que pide confirmación, decí en una frase qué preparaste: el dueño la confirma tocando «Abrir conversación» en el widget.`;
 
     // Control del teléfono: solo cuando la respuesta llega en vivo a la app (el widget y el modo sin
@@ -2452,7 +2520,7 @@ export async function atender(req: Request): Promise<Response> {
           // LECTURA DEL CÓDIGO (solo superadmin, solo leer): para diagnosticar fallos reales con el código a la vista.
           ...(esSuper && modo === 'jarvis' ? { repo: { cliente: new ClienteRepo(configLectura()), propuesta: null, soloLectura: true } } : {}),
           limite: tiempoPropio ? Math.max(limiteT, Date.now() + TOPE_RESPALDO_MS) : limiteT,
-          caps, forzarWeb: cuerpo?.buscar === true, adjuntos: adjuntos.map(a => ({ mimeType: a.mimeType, data: a.data })), fuentes,
+          caps, forzarWeb: cuerpo?.buscar === true, refrescar: OTRA_VEZ.test(texto), adjuntos: adjuntos.map(a => ({ mimeType: a.mimeType, data: a.data })), fuentes,
           modo, pensar: conf.pensar, intento: conf.intento,
           acciones: modo === 'jarvis' && mods.acciones !== false && !adjuntos.length,
           leyoAfuera: adjuntos.length > 0, ctxAcc: modo === 'jarvis' ? ctxAcc : null, guardarPropuesta, propuestas,
@@ -2478,6 +2546,20 @@ export async function atender(req: Request): Promise<Response> {
           return null;
         }
       };
+      // 0) SU CEREBRO PRIMERO: si ya contestó bien esta misma pregunta (por significado) y no es algo
+      //    que cambia con el día, lo dice de memoria: sin IAs ni internet.
+      if (cerebro && puedeDeMemoria(texto, esOrdenMsg) && !adjuntos.length && cuerpo?.buscar !== true) {
+        const memo = await cerebro.respuestaGuardada(texto).catch(() => null);
+        if (memo) {
+          const t0 = Date.now();
+          const sis = nuevo(true);
+          const marca: Consulta = { tipo: 'cerebro', modulo: 'Cerebro', desc: 'de memoria (ya lo sabía)', filas: `${Math.round(memo.similitud * 100)} % igual a «${memo.pregunta.slice(0, 50)}»`, detalle: `aprendido el ${new Date(memo.fecha).toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', day: 'numeric', month: 'short' })}` };
+          sis.consultas.push(marca); emitir('cerebro', marca);
+          emitir('modelo', { modelo: 'cerebro' });
+          emitir('texto', { delta: memo.texto });
+          return listo({ texto: memo.texto, fuentes: [], tokensIn: 0, tokensOut: 0, proveedor: 'cerebro' as any, modelo: 'cerebro (de memoria)', busco: false, consultas: sis.consultas }, t0, false, sis);
+        }
+      }
       if (local && Deno.env.get('LLM_LOCAL_PRIMERO') === '1') {
         const r = await probarLocal();
         if (r) return r;
@@ -2818,6 +2900,24 @@ export async function atender(req: Request): Promise<Response> {
         }),
       ]);
       if (uso.error) console.log(`no se guardó el uso: ${uso.error.message}`);
+      // RESPUESTAS APRENDIDAS (cerebro propio): lo que contestó bien y no cambia con el día queda para
+      // contestarlo de memoria la próxima vez. Si el dueño está corrigiendo («eso es falso»), la
+      // respuesta mala de la pregunta anterior se borra y queda ESTA (la corrección) en su lugar.
+      if (cerebro && esSuper && modo === 'jarvis' && (res.proveedor as string) !== 'cerebro' && !adjuntos.length) {
+        try {
+          const vivos = ['Ciberseguridad', 'Inventario', 'Facturación', 'Taller', 'Finanzas', 'Errores del sistema', 'Conversaciones'];
+          const usoDatosVivos = res.consultas.some(c => vivos.includes(c.modulo) || ['accion', 'navegar', 'telefono', 'tarea', 'pieza', 'memoria'].includes(String(c.tipo || '')));
+          if (ES_CORRECCION.test(texto.trim())) {
+            const anterior = [...historial].reverse().find(h => h.rol === 'user' && h.texto.trim() !== texto.trim())?.texto || '';
+            if (anterior) {
+              await cerebro.olvidarRespuesta(anterior);
+              if (!usoDatosVivos && puedeDeMemoria(anterior, false)) await cerebro.aprenderRespuesta(anterior, res.texto);
+            }
+          } else if (!usoDatosVivos && puedeDeMemoria(texto, esOrdenMsg) && res.texto.length <= 2500) {
+            await cerebro.aprenderRespuesta(texto, res.texto);
+          }
+        } catch (e) { console.log(`respuesta aprendida: ${e instanceof Error ? e.message : e}`); }
+      }
       // APRENDER SOLO (Javier del superadmin): una IA rápida y gratis saca los
       // hechos duraderos del intercambio y caen en la rama y el tema que ya
       // existan. Si se leyó internet, un enlace o un archivo, solo se aprende
