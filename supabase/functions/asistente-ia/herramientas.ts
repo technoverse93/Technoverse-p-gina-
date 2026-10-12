@@ -860,32 +860,9 @@ export const HERRAMIENTAS: Herramienta[] = [
       if (!clave && !claveGroqBusqueda()) {
         return { datos: { error: 'La búsqueda en internet no está configurada (falta TAVILY_API_KEY o GROQ_API_KEY).' }, consulta: { modulo: 'Internet', desc: 'búsqueda no configurada', filas: '—', detalle: '', sinPermiso: true } };
       }
-      // 1) Tavily (resultados con extracto, ~1 s). 2) Si no está o falla:
-      //    Groq «compound», un modelo que BUSCA EN INTERNET por su cuenta
-      //    (directo, gratis) y devuelve un resumen con sus fuentes.
-      let resultados: { titulo: string; url: string; extracto: string }[] = [];
-      let resumen = '';
-      if (clave) {
-        const corte = new AbortController();
-        const t = setTimeout(() => corte.abort(), 10000);
-        try {
-          const r = await fetch('https://api.tavily.com/search', {
-            method: 'POST', signal: corte.signal,
-            headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clave}` },
-            body: JSON.stringify({ query: consulta, max_results: 5, search_depth: 'basic', topic: a.noticias ? 'news' : 'general', include_answer: false }),
-          });
-          if (!r.ok) throw new Error(`Tavily ${r.status}`);
-          const d = await r.json();
-          resultados = (d?.results || []).slice(0, 5).map((x: any) => ({
-            titulo: String(x.title || '').slice(0, 120), url: String(x.url || ''), extracto: String(x.content || '').slice(0, 700),
-          })).filter((x: any) => x.url);
-        } catch (e) { console.log(`tavily: ${e instanceof Error ? e.message : e}`); }
-        finally { clearTimeout(t); }
-      }
-      if (!resultados.length && claveGroqBusqueda()) {
-        const g = await buscarConGroq(consulta, !!a.noticias).catch(e => { console.log(`groq compound: ${e instanceof Error ? e.message : e}`); return null; });
-        if (g) { resultados = g.resultados; resumen = g.resumen; }
-      }
+      // 1) Tavily (resultados con extracto, ~1 s). 2) Si no está o falla: Groq «compound».
+      const web = await buscarWeb(consulta, !!a.noticias);
+      const resultados = web.resultados, resumen = web.resumen;
       if (!resultados.length && !resumen) {
         return { datos: { error: 'La búsqueda en internet no respondió. Decile al dueño que no pudiste buscar ahora y respondé con lo que sabés, aclarándolo.' }, consulta: { modulo: 'Internet', desc: `«${consulta.slice(0, 60)}»`, filas: 'sin respuesta', detalle: '' } };
       }
@@ -1065,6 +1042,37 @@ export async function leerPagina(url: string, buscar = ''): Promise<{ titulo: st
 }
 
 /** La clave de Groq (para su modelo que busca en internet). */
+/**
+ * Búsqueda en internet: Tavily (resultados con extracto, ~1 s) y, si no está o falla, Groq «compound», un
+ * modelo que busca en la web por su cuenta. La usan la herramienta buscar_web y el autoestudio de Javier.
+ */
+export async function buscarWeb(consulta: string, noticias = false, profunda = false): Promise<{ resultados: { titulo: string; url: string; extracto: string }[]; resumen: string }> {
+  const clave = (globalThis as any).Deno?.env?.get('TAVILY_API_KEY');
+  let resultados: { titulo: string; url: string; extracto: string }[] = [];
+  let resumen = '';
+  if (clave) {
+    const corte = new AbortController();
+    const t = setTimeout(() => corte.abort(), profunda ? 15000 : 10000);
+    try {
+      const r = await fetch('https://api.tavily.com/search', {
+        method: 'POST', signal: corte.signal,
+        headers: { 'Content-Type': 'application/json', Authorization: `Bearer ${clave}` },
+        body: JSON.stringify({ query: consulta, max_results: 5, search_depth: profunda ? 'advanced' : 'basic', topic: noticias ? 'news' : 'general', include_answer: false }),
+      });
+      if (!r.ok) throw new Error(`Tavily ${r.status}`);
+      const d = await r.json();
+      resultados = (d?.results || []).slice(0, 5).map((x: any) => ({
+        titulo: String(x.title || '').slice(0, 120), url: String(x.url || ''), extracto: String(x.content || '').slice(0, profunda ? 1500 : 700),
+      })).filter((x: any) => x.url);
+    } catch (e) { console.log(`tavily: ${e instanceof Error ? e.message : e}`); }
+    finally { clearTimeout(t); }
+  }
+  if (!resultados.length && claveGroqBusqueda()) {
+    const g = await buscarConGroq(consulta, noticias).catch(e => { console.log(`groq compound: ${e instanceof Error ? e.message : e}`); return null; });
+    if (g) { resultados = g.resultados; resumen = g.resumen; }
+  }
+  return { resultados, resumen };
+}
 function claveGroqBusqueda(): string | null {
   const env = (globalThis as any).Deno?.env;
   return String(env?.get('GROQ_API_KEY') || '').trim() || null;

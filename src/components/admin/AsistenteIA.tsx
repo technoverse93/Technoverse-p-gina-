@@ -2038,13 +2038,13 @@ function AjustesIA({ onCambio, cupo, jarvis = false }: { onCambio: () => void; c
  * apurar el estudio.
  */
 function CerebroPropio() {
-  const [estudio, setEstudio] = useState<{ estudiados: number; total: number } | null>(null);
+  const [estudio, setEstudio] = useState<{ estudiados: number; total: number; temas: number; temasTotal: number; huecos: number } | null>(null);
   const [estudiando, setEstudiando] = useState(false);
   const [nota, setNota] = useState('');
   const [copia, setCopia] = useState(() => estadoCopia());
   const leerEstado = useCallback(async () => {
     const { data } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'estudio_estado' } });
-    if (data?.ok) setEstudio({ estudiados: Number(data.estudiados) || 0, total: Number(data.total) || 0 });
+    if (data?.ok) setEstudio({ estudiados: Number(data.estudiados) || 0, total: Number(data.total) || 0, temas: Number(data.temas?.estudiados) || 0, temasTotal: Number(data.temas?.total) || 0, huecos: Number(data.temas?.huecos) || 0 });
   }, []);
   useEffect(() => { void leerEstado(); }, [leerEstado]);
   const estudiar = async () => {
@@ -2052,7 +2052,12 @@ function CerebroPropio() {
     const { data, error } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'estudiar', max: 8 } });
     setEstudiando(false);
     if (error || !data?.ok) { setNota('No se pudo estudiar ahora. Probá en un rato.'); return; }
-    setNota(data.estudiados?.length ? `Aprendió ${data.hechos} cosa${data.hechos === 1 ? '' : 's'} de ${data.estudiados.length} archivo${data.estudiados.length === 1 ? '' : 's'}.` : 'Nada nuevo para estudiar en esta tanda.');
+    const temas: string[] = data.temas?.estudiados || [];
+    const partes = [
+      data.estudiados?.length ? `${data.estudiados.length} archivo${data.estudiados.length === 1 ? '' : 's'} del código (${data.hechos} cosa${data.hechos === 1 ? '' : 's'})` : '',
+      temas.length ? `${temas.length} tema${temas.length === 1 ? '' : 's'}: ${temas.join(', ')}` : '',
+    ].filter(Boolean);
+    setNota(partes.length ? `Aprendió ${partes.join(' y ')}.` : 'Nada nuevo para estudiar en esta tanda.');
     void leerEstado();
   };
   const llevar = async () => { setNota('Llevando el cerebro al teléfono…'); const ok = await actualizarCopia(true); setCopia(estadoCopia()); setNota(ok ? 'Listo: el teléfono tiene la copia más nueva.' : 'No se pudo bajar ahora.'); };
@@ -2067,6 +2072,13 @@ function CerebroPropio() {
           <span>Javier lee todo el sistema archivo por archivo y lo guarda en su cerebro (rama «Sistema Technoverse»). Sigue solo cada 15 minutos; si un archivo cambia, lo vuelve a estudiar.</span>
         </span>
         <button type="button" className="ai-chip" disabled={estudiando} onClick={() => void estudiar()}>{estudiando ? 'Estudiando…' : 'Estudiar ahora'}</button>
+      </div>
+      <div className="ai-modu">
+        <span className="ai-modu-ic"><Brain className="w-4 h-4" /></span>
+        <span className="ai-modu-t">
+          <b>Plan de estudio{estudio ? ` · ${estudio.temas} de ${estudio.temasTotal} temas` : ''}{estudio && estudio.huecos ? ` · ${estudio.huecos} pregunta${estudio.huecos === 1 ? '' : 's'} por estudiar` : ''}</b>
+          <span>Estudia solo, con propósito: reparación de celulares, ciberseguridad, facturación y leyes de Costa Rica, programación. Lo que no supo contestar lo estudia después. No guarda precios, ofertas ni noticias.</span>
+        </span>
       </div>
       <div className="ai-modu">
         <span className="ai-modu-ic"><Download className="w-4 h-4" /></span>
