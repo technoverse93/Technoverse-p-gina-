@@ -196,8 +196,21 @@ export async function correrTelefono(p: PedidoTelefono, privados: Record<string,
   if (previo && !opciones.elegido && !opciones.forzar) return;
   if (previo?.estado === 'ejecutando') return;
   fijar(p.id, { estado: 'ejecutando', mensaje: 'Haciéndolo…' });
-  try { fijar(p.id, await ejecutarTelefono(p, privados, opciones.elegido)); }
-  catch (e) { fijar(p.id, fallo(e instanceof Error && e.message ? e.message : 'No se pudo hacer en el teléfono.')); }
+  let r: ResultadoTelefono;
+  try { r = await ejecutarTelefono(p, privados, opciones.elegido); }
+  catch (e) { r = fallo(e instanceof Error && e.message ? e.message : 'No se pudo hacer en el teléfono.'); }
+  fijar(p.id, r);
+  for (const f of alTerminar) { try { f(p, r); } catch { /* quien escucha no frena el pedido */ } }
+}
+
+/** Pedidos que dejan OTRA app al frente (la ventanita de Phill se quita para que se vea). */
+export const ABRE_OTRA_APP: ReadonlySet<AccionTelefono> = new Set<AccionTelefono>(['abrir_app', 'llamar', 'whatsapp', 'sms', 'calendario', 'mapa', 'musica', 'ajustes', 'enlace']);
+
+const alTerminar = new Set<(p: PedidoTelefono, r: ResultadoTelefono) => void>();
+/** Avisa cada pedido terminado (hecho o no). Devuelve cómo dejar de escuchar. */
+export function alTerminarTelefono(f: (p: PedidoTelefono, r: ResultadoTelefono) => void): () => void {
+  alTerminar.add(f);
+  return () => { alTerminar.delete(f); };
 }
 
 /** Para pruebas: borra los estados. */

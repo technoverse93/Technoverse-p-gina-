@@ -8,7 +8,7 @@ import { enviarErroresPendientes } from './utils/erroresPantalla';
 import { OverlayProvider, useToast } from './components/ui/Overlays';
 import { conexionBloqueada, detalleDeBloqueo, conTope } from './utils/adminLogin';
 import { registrarVisita, leerDatosDelAparato } from './utils/huella';
-import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada } from './utils/biometria';
+import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada, capacidadesDeDesbloqueo, entrarConBiometria, type CapacidadesDesbloqueo } from './utils/biometria';
 import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO, UMBRAL_REINGRESO_RAPIDO_MS } from './mobile/appLock';
 import { marcarBloqueo, esAplicacionNativa } from './utils/biometriaNativa';
 import { supabase } from './supabaseClient';
@@ -38,6 +38,31 @@ const AdminPanel = lazy(() => import('./components/AdminPanel'));
 
 /** Ver el efecto que la escribe, dentro de App(), para el porqué. */
 const CLAVE_ULTIMO_CORREO = 'technoverse_ultimo_correo';
+
+// El último perfil leído en este aparato (id, correo, nombre y rol). Sirve para entrar AL INSTANTE —al abrir la
+// app o al aprobar la huella— sin esperar a la red; el perfil real se vuelve a leer enseguida y, si cambió
+// (otro rol, otro nombre), se corrige. Solo se usa si coincide con la sesión que ya está abierta en el aparato:
+// los datos los protege el servidor igual, esto solo evita la espera en pantalla.
+const CLAVE_PERFIL = 'technoverse_perfil_guardado';
+function perfilGuardado(id?: string): User | null {
+  if (!id) return null;
+  try {
+    const p = JSON.parse(localStorage.getItem(CLAVE_PERFIL) || 'null');
+    return p && p.id === id && typeof p.role === 'string' && typeof p.email === 'string' ? { id: p.id, email: p.email, role: p.role, name: p.name || p.email } : null;
+  } catch { return null; }
+}
+function guardarPerfil(u: User): void {
+  try { localStorage.setItem(CLAVE_PERFIL, JSON.stringify({ id: u.id, email: u.email, name: u.name, role: u.role })); } catch { /* sin almacenamiento */ }
+}
+const mismoPerfil = (a: User, b: User) => a.id === b.id && a.role === b.role && a.email === b.email && a.name === b.name;
+
+/** Devuelve `valor` si `promesa` no responde (o falla) a tiempo. */
+function conLimite<T>(promesa: Promise<T>, ms: number, valor: T): Promise<T> {
+  return new Promise<T>(resolver => {
+    const t = setTimeout(() => resolver(valor), ms);
+    promesa.then(v => { clearTimeout(t); resolver(v); }, () => { clearTimeout(t); resolver(valor); });
+  });
+}
 
 function AdminPanelFallback() {
   return (
@@ -299,10 +324,29 @@ function AppInner() {
         8000
       );
       if (!perfil) return null;
-      return { id: perfil.id, email: perfil.email, role: perfil.role, name: perfil.name || perfil.email };
+      const u: User = { id: perfil.id, email: perfil.email, role: perfil.role, name: perfil.name || perfil.email };
+      guardarPerfil(u);
+      return u;
     } catch {
       return null;
     }
+  };
+
+  /**
+   * Entra con el perfil de esta sesión: al instante si este aparato ya lo conoce (y lo confirma por detrás),
+   * o esperando la lectura si no. Devuelve false si no hubo forma de saber quién es.
+   */
+  const entrarConPerfil = async (userId?: string, vigente: () => boolean = () => true): Promise<boolean> => {
+    const guardado = perfilGuardado(userId);
+    if (guardado) {
+      setCurrentUser(guardado);
+      void cargarPerfilCompleto(userId).then(p => { if (vigente() && p && !mismoPerfil(p, guardado)) setCurrentUser(p); });
+      return true;
+    }
+    const perfil = await cargarPerfilCompleto(userId);
+    if (!vigente() || !perfil) return false;
+    setCurrentUser(perfil);
+    return true;
   };
 
   useEffect(() => {
@@ -341,10 +385,7 @@ function AppInner() {
         const usuario = data?.session?.user;
         if (!vigente || !usuario?.id) return;
 
-        const perfil = await cargarPerfilCompleto(usuario.id);
-        if (!vigente || !perfil) return;
-
-        setCurrentUser(perfil);
+        await entrarConPerfil(usuario.id, () => vigente);
       } catch {
         /* sin sesión recuperable se sigue como visitante: nada se rompe */
       } finally {
@@ -395,6 +436,12 @@ function AppInner() {
   const handleLogin = (user: User) => {
     setCandadoOmitido(false);
     setCurrentUser(user);
+    // La APK es la app del panel: entrar (con la huella desde el menú de sesión, o con la contraseña) lleva
+    // directo al panel, sin quedarse en la tienda.
+    if (esAplicacionNativa() && esStaff(user.role)) {
+      try { window.history.replaceState(null, '', '/admin'); } catch { /* el estado alcanza */ }
+      setCurrentView('admin');
+    }
     window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: user } }));
     setAutoOpenLogin(false);
     triggerRefresh();
@@ -669,6 +716,61 @@ function AppInner() {
     return () => window.removeEventListener('technoverse_sync_error', alFallarGuardado);
   }, [toast]);
 
+  // ---------------------------------------------------------------------
+  // HUELLA AL ABRIR LA APK: SOLO EL DIÁLOGO DEL TELÉFONO
+  // ---------------------------------------------------------------------
+  // Pedido del dueño: «no quiero imágenes ni pantallas de solicitud, solo que pida la huella el dispositivo;
+  // si es reconocida, que ingrese a la sesión; si no es reconocida o no tiene huella, no se pide». Por eso en
+  // la APK no se dibuja ningún candado: se lanza el diálogo de huella del sistema y
+  //   · huella reconocida → se entra al panel (al instante si este aparato ya conoce el perfil);
+  //   · cancelada, no reconocida o sin lector → queda la tienda; para entrar: menú de sesión → huella
+  //     (la sesión sigue cerrada con llave, nadie entra sin el dedo).
+  // Solo si el teléfono no tiene lector pero sí un PIN/patrón propio de la app se muestra el candado con el
+  // teclado (es la única forma de abrirlo). En la web sigue el candado de siempre.
+  // Va aquí, antes de cualquier `return`: un hook debajo de un `return` apaga toda la app (ver AdminPanel).
+  const candadoArranqueActivo = !accesoBloqueado && sesionVerificada && !currentUser && sesionBloqueada() && !(candadoOmitido && currentView === 'store');
+  const [candadoConTeclado, setCandadoConTeclado] = useState(false);
+  const huellaEnCurso = useRef(false);
+  useEffect(() => {
+    if (!candadoArranqueActivo || !esAplicacionNativa() || huellaEnCurso.current) return;
+    huellaEnCurso.current = true;
+    let vigente = true;
+    const irALaTienda = () => {
+      setCandadoOmitido(true);
+      try { window.history.replaceState(null, '', '/'); } catch { /* el estado alcanza */ }
+      setCurrentView('store');
+    };
+    void (async () => {
+      try {
+        const alterno: CapacidadesDesbloqueo = { biometria: true, metodoLocal: null, hayAlguno: true };
+        const c = await conLimite(capacidadesDeDesbloqueo(), 3500, alterno);
+        if (!vigente) return;
+        if (!c.hayAlguno) {
+          // Sin ninguna forma de abrir el cerrojo en este teléfono: no se pide nada y se entra (como antes).
+          const { data } = await conTope(supabase.auth.getSession(), 8000);
+          if (await entrarConPerfil(data?.session?.user?.id, () => vigente)) { marcarBloqueo(false); return; }
+          irALaTienda();
+          return;
+        }
+        if (!c.biometria) { setCandadoConTeclado(true); return; }
+        let correo = '';
+        try { correo = localStorage.getItem(CLAVE_ULTIMO_CORREO) || ''; } catch { /* sin almacenamiento */ }
+        const r = await entrarConBiometria(correo);
+        if (!vigente) return;
+        if (r.ok && await entrarConPerfil(r.userId, () => vigente)) { marcarBloqueo(false); return; }
+        if (r.ok) marcarBloqueo(true);   // dedo aprobado pero sin perfil (sin red): la llave sigue puesta
+        if (!r.ok && !r.cancelado && r.mensaje) toast.warning(r.mensaje);
+        irALaTienda();
+      } catch {
+        if (vigente) irALaTienda();
+      } finally {
+        huellaEnCurso.current = false;
+      }
+    })();
+    return () => { vigente = false; };
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [candadoArranqueActivo]);
+
   if (accesoBloqueado) {
     return <PantallaBloqueada porCuenta={bloqueoPorCuenta} />;
   }
@@ -798,7 +900,7 @@ function AppInner() {
           porque este candado nunca usó ese estado — se apaga solo en
           cuanto `currentUser` deja de ser null (o `handleLogout` limpia
           `sesionBloqueada`, lo que ocurra). */}
-      {arranqueFrioBloqueado && (
+      {arranqueFrioBloqueado && (!esAplicacionNativa() || candadoConTeclado) && (
         <ReautenticacionRapidaOverlay
           variante="arranque"
           email={(() => { try { return localStorage.getItem(CLAVE_ULTIMO_CORREO) || ''; } catch { return ''; } })()}

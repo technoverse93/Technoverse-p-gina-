@@ -2,6 +2,7 @@ package com.technoverse.admin;
 
 import android.Manifest;
 import android.app.NotificationManager;
+import android.app.role.RoleManager;
 import android.content.ActivityNotFoundException;
 import android.content.Context;
 import android.content.Intent;
@@ -46,7 +47,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 )
 public class OyePhillPlugin extends Plugin {
     /** La web la compara con la que entiende. */
-    static final int VERSION = 1;
+    static final int VERSION = 2;
 
     private OyePhillService.Oyente mio;
     private Thread bajada;
@@ -105,6 +106,20 @@ public class OyePhillPlugin extends Plugin {
         return a;
     }
 
+    /** ¿Phill es la app de asistente del teléfono (botón de inicio / encendido)? */
+    private static boolean esAsistente(Context c) {
+        try {
+            if (Build.VERSION.SDK_INT >= 29) {
+                RoleManager roles = c.getSystemService(RoleManager.class);
+                return roles != null && roles.isRoleAvailable(RoleManager.ROLE_ASSISTANT) && roles.isRoleHeld(RoleManager.ROLE_ASSISTANT);
+            }
+            String actual = Settings.Secure.getString(c.getContentResolver(), "assistant");
+            return actual != null && actual.startsWith(c.getPackageName() + "/");
+        } catch (Throwable t) {
+            return false;
+        }
+    }
+
     private JSObject estadoJs() {
         Context c = getContext();
         File raiz = OyeModelo.raiz(c);
@@ -128,6 +143,7 @@ public class OyePhillPlugin extends Plugin {
         r.put("ultimoOido", OyePhillService.ultimoOido);
         r.put("ultimaDecision", OyePhillService.ultimaDecision);
         r.put("sdk", Build.VERSION.SDK_INT);
+        r.put("asistente", esAsistente(c));
         return r;
     }
 
@@ -380,6 +396,10 @@ public class OyePhillPlugin extends Plugin {
             i = Build.VERSION.SDK_INT >= 23
                 ? new Intent(Settings.ACTION_REQUEST_IGNORE_BATTERY_OPTIMIZATIONS, Uri.parse("package:" + paquete))
                 : new Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS, Uri.parse("package:" + paquete));
+        } else if ("asistente".equals(cual)) {
+            // «App de asistente digital» (en algunos teléfonos, dentro de «Apps predeterminadas»).
+            i = new Intent(Settings.ACTION_VOICE_INPUT_SETTINGS);
+            if (i.resolveActivity(c.getPackageManager()) == null && Build.VERSION.SDK_INT >= 24) i = new Intent(Settings.ACTION_MANAGE_DEFAULT_APPS_SETTINGS);
         } else if ("notificaciones".equals(cual) && Build.VERSION.SDK_INT >= 26) {
             i = new Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS).putExtra(Settings.EXTRA_APP_PACKAGE, paquete);
         } else {

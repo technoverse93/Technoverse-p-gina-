@@ -30,7 +30,7 @@ import java.security.KeyStore;
 @CapacitorPlugin(name = "JarvisWidget")
 public class JarvisWidgetPlugin extends Plugin {
     /** La web la compara: 3 = Phill con sesión, usable en el propio recuadro. */
-    static final int VERSION = 4;
+    static final int VERSION = 5;
 
     private int pedidos = 0;
 
@@ -59,7 +59,11 @@ public class JarvisWidgetPlugin extends Plugin {
         JSObject r = new JSObject();
         boolean activo = JarvisWidget.activo(getContext());
         // «Oye Phill» abre esta misma ventanita: prenderlo en este teléfono es el permiso (el de la huella del widget no hace falta).
-        if (!activo && getActivity() instanceof JarvisRapido && "oye".equals(((JarvisRapido) getActivity()).modo())) activo = OyePrefs.activo(getContext());
+        // Lo mismo si lo abrió el botón del asistente: elegir a Phill como asistente del teléfono es el permiso.
+        if (!activo && getActivity() instanceof JarvisRapido && "oye".equals(((JarvisRapido) getActivity()).modo())) {
+            JarvisRapido v = (JarvisRapido) getActivity();
+            activo = v.comoAsistente() || OyePrefs.activo(getContext());
+        }
         r.put("activo", activo);
         r.put("enVentanita", getActivity() instanceof JarvisRapido);
         r.put("version", VERSION);

@@ -23,9 +23,9 @@
 import { Capacitor } from '@capacitor/core';
 import * as propia from './vozPropia';
 import { crearFlujoHabla } from './flujoVoz';
-import { enOraciones, paraHablar } from './textoHablado';
+import { enOraciones, MAX_CARACTERES_AL_RESPONDER, paraHablar } from './textoHablado';
 
-export { paraHablar };
+export { MAX_CARACTERES_AL_RESPONDER, paraHablar };
 
 export type ModoLectura = 'nunca' | 'voz' | 'siempre';
 export type EstadoLector = { estado: 'callado' | 'hablando' | 'pausado'; id: string | null };
@@ -242,12 +242,12 @@ export const lector = {
    * Empieza a hablar MIENTRAS la respuesta todavía llega: cada oración se dice
    * apenas se completa. Corta lo que se estuviera leyendo.
    */
-  abrirFlujo(id: string): FlujoLector {
+  abrirFlujo(id: string, opciones: { maxCaracteres?: number } = {}): FlujoLector {
     lector.callar();
     const mio = ++contadorFlujos;
     flujoVigente = mio; flujoAbierto = true;
     frases = []; indice = 0;
-    const f = crearFlujoHabla();
+    const f = crearFlujoHabla({ maxCaracteres: opciones.maxCaracteres });
     let empezado = false, recibido = 0;
     let quieto: ReturnType<typeof setTimeout> | 0 = 0;
     const vigente = () => flujoVigente === mio;

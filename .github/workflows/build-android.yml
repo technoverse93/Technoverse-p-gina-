@@ -322,6 +322,29 @@ jobs:
               texto = texto.replace('</application>', ventanita, 1)
               print('Ventanita JarvisRapido declarada en el manifiesto.')
 
+          if 'PhillAsistente' not in texto:
+              # Phill como asistente del teléfono (mantener inicio / encendido, como
+              # Google o Siri): un trampolín sin pantalla que abre la ventanita en
+              # modo «oye». Se elige en Android → App de asistente digital.
+              asistente = (
+                  '        <activity\n'
+                  '            android:name=".PhillAsistente"\n'
+                  '            android:exported="true"\n'
+                  '            android:label="Phill"\n'
+                  '            android:theme="@android:style/Theme.Translucent.NoTitleBar"\n'
+                  '            android:taskAffinity="com.technoverse.admin.jarvis"\n'
+                  '            android:excludeFromRecents="true"\n'
+                  '            android:noHistory="true">\n'
+                  '            <intent-filter>\n'
+                  '                <action android:name="android.intent.action.ASSIST" />\n'
+                  '                <category android:name="android.intent.category.DEFAULT" />\n'
+                  '            </intent-filter>\n'
+                  '        </activity>\n'
+                  '    </application>'
+              )
+              texto = texto.replace('</application>', asistente, 1)
+              print('Phill como asistente (ASSIST) declarado en el manifiesto.')
+
           if 'RECOGNIZE_SPEECH' not in texto:
               # Android 11+: para hablar (voz del teléfono) y dictar hay que
               # declarar que la app busca esos servicios.
@@ -356,7 +379,7 @@ jobs:
           PY
 
           echo "--- AndroidManifest.xml (Jarvis) ---"
-          grep -n "JarvisWidget\|JarvisRapido\|RECOGNIZE_SPEECH\|technoverse\|jarvis_atajos" android/app/src/main/AndroidManifest.xml
+          grep -n "JarvisWidget\|JarvisRapido\|PhillAsistente\|RECOGNIZE_SPEECH\|technoverse\|jarvis_atajos" android/app/src/main/AndroidManifest.xml
 
       # AVISOS PUSH (Firebase) Y RESPUESTA DESDE LA NOTIFICACIÓN
       # ---------------------------------------------------------------

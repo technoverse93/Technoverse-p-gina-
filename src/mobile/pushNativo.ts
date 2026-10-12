@@ -31,11 +31,13 @@ interface PluginPush {
 const Nativo = registerPlugin<PluginPush>('PushNativo');
 
 export type EstadoPush = 'activo' | 'web' | 'apk_vieja' | 'sin_firebase' | 'sin_permiso' | 'sin_sql' | 'error';
+/** Estados que no son una falla sino algo opcional todavía sin configurar: se muestran sin rojo. */
+export const ESTADO_PENDIENTE: ReadonlySet<EstadoPush> = new Set<EstadoPush>(['sin_firebase', 'web']);
 export const TEXTO_ESTADO: Record<EstadoPush, string> = {
   activo: 'Activos en este teléfono: te avisan aunque la app esté cerrada.',
   web: 'Solo funcionan en la app del teléfono (APK).',
   apk_vieja: 'Esta APK es anterior a los avisos. Instalá la nueva.',
-  sin_firebase: 'Falta conectar Firebase a la APK (el archivo google-services.json).',
+  sin_firebase: 'Opcional, sin configurar todavía: mientras tanto los avisos salen con la app abierta. Para que lleguen con la app cerrada hay que conectar Firebase una vez (lo hace el dueño del repositorio).',
   sin_permiso: 'Android tiene las notificaciones apagadas para la app. Activalas en Ajustes del teléfono.',
   sin_sql: 'Falta correr en Supabase el SQL de avisos (migracion_chat_push.sql).',
   error: 'No se pudo activar. Se reintenta al abrir la app.',
