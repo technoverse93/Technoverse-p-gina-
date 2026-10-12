@@ -16,7 +16,7 @@ import {
   Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight, ShieldAlert, Wallet, MapPin,
   Paperclip, Square, RotateCcw, Pencil, Link2, Code2, FileText,
   Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot, ThumbsUp, ThumbsDown, MessageCircleQuestion, SlidersHorizontal, Search,
-  Download, Bell, AudioLines,
+  Download, Bell, AudioLines, Camera,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
@@ -24,6 +24,7 @@ const CerebroJarvis = React.lazy(() => import('./CerebroJarvis'));
 const AvisosJarvis = React.lazy(() => import('./AvisosJarvis'));
 const SaludJarvis = React.lazy(() => import('./SaludJarvis'));
 const HudVoz = React.lazy(() => import('./HudVoz'));
+const CamaraPhill = React.lazy(() => import('./CamaraPhill'));
 const PiezaPauta = React.lazy(() => import('./PiezaPauta'));
 import { useAvisosSinLeer } from '../../mobile/avisosJarvis';
 import { BotonEscuchar, BarraLectura, AjusteVoz, useLector } from './LectorPiezas';
@@ -801,7 +802,9 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const oidoListo = useRef<Promise<Oido | null>>(Promise.resolve(null));
   const falsasSeguidas = useRef(0);       // pausas por «alguien habla» que no eran nadie
   const interrupcionOff = useRef(false);  // se apagó sola: el altavoz se escuchaba solo
-  const audioPendiente = useRef<(() => void) | null>(null); // lo que dijiste mientras Phill todavía terminaba de contestar
+  const audioPendiente = useRef<(() => void) | null>(null); // lo que dijiste (o la foto que sacaste) mientras Phill todavía terminaba de contestar
+  // «Mirá esto»: la cámara en vivo. `auto`: Phill la abrió por vos (cuenta 3, 2, 1 y manda la foto).
+  const [camara, setCamara] = useState<null | { auto: boolean; motivo: string }>(null);
   const { estado: estadoLector } = useLector();
   // Phill se enciende solo cuando el servidor ya lo tiene (la función
   // nueva informa las velocidades en el cupo); antes, todo queda como siempre.
@@ -935,7 +938,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
 
   const nueva = () => { setActiva(null); setMensajes([]); setAviso(null); setCajon(null); setVista('chat'); setTimeout(() => cajaRef.current?.focus(), 50); };
 
-  const enviar = async (contenido?: string, opciones: { regenerar?: boolean; porVoz?: number; audio?: { datos: string; tipo: string } } = {}) => {
+  const enviar = async (contenido?: string, opciones: { regenerar?: boolean; porVoz?: number; audio?: { datos: string; tipo: string }; adjuntos?: Adjunto[] } = {}) => {
     const crudo = opciones.audio ? '' : (contenido ?? texto).trim();
     // Phill: los datos personales se quedan en este aparato (ver separarPrivados).
     const sep = jarvis ? separarPrivados(crudo, privadosRef.current) : { texto: crudo, privados: {} };
@@ -946,7 +949,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     lector.callar();
     // Editar el último mensaje = regenerar con el texto nuevo.
     const regenerar = opciones.regenerar || editando;
-    const mios = regenerar ? [] : adjuntos;
+    const mios = regenerar ? [] : (opciones.adjuntos || adjuntos);
     if (!opciones.audio) setTexto('');
     setAdjuntos([]);
     setEditando(false);
@@ -1041,6 +1044,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             borrador.consultas = [...(borrador.consultas || []), { tipo: 'accion', id: d.id, modulo: d.tarjeta?.modulo || 'Phill', desc: d.tarjeta?.titulo || 'Acción', filas: 'propuesta', detalle: '' }];
           }
           else if (evento === 'navegar' || evento === 'memoria' || evento === 'pieza') borrador.consultas = [...(borrador.consultas || []), d];
+          else if (evento === 'camara') setCamara({ auto: true, motivo: String(d?.motivo || '') });
           else if (evento === 'telefono') {
             // Se hace en el acto en el teléfono; la tarjeta deja a la vista qué pasó.
             if (d?.telefono?.id && !(borrador.consultas || []).some(c => c.telefono?.id === d.telefono.id)) borrador.consultas = [...(borrador.consultas || []), d];
@@ -1209,6 +1213,29 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   }, [pedirVoz, conVoz]); // eslint-disable-line react-hooks/exhaustive-deps
   // Al salir del módulo, el micrófono se suelta.
   useEffect(() => () => { grabacion.current?.cancelar(); oido.current?.cerrar(); oido.current = null; }, []);
+
+  // ------------------------- «MIRÁ ESTO» -------------------------
+  const alFoto = async (f: File) => {
+    const modo = camara;
+    setCamara(null);
+    try {
+      const a = await prepararArchivo(f);
+      if (!a) { toast.error('No pude leer esa foto.'); return; }
+      if (modo?.auto) {
+        // Phill la pidió: se manda enseguida (apenas termine de contestar lo que estaba diciendo).
+        const mandar = () => { void enviarRef.current('Acá está lo que te quería mostrar.', { adjuntos: [a] }); };
+        if (enviandoRef.current) audioPendiente.current = mandar; else mandar();
+      } else {
+        setAdjuntos(prev => [...prev, a].slice(0, 3));
+        if (manosRef.current) {
+          // Phill habla: se corta la escucha en curso (si no, grabaría su propia voz) y, al terminar, vuelve a escuchar.
+          if (grabacion.current) { grabacion.current.cancelar(); grabacion.current = null; setVoz(null); }
+          void lector.hablar('Listo, ya la veo. ¿Qué querés saber de esto?', 'foto-lista');
+        }
+        else setTimeout(() => cajaRef.current?.focus(), 50);
+      }
+    } catch (e: any) { toast.error(e?.message || 'No se pudo usar la foto.'); }
+  };
 
   // ------------------------- MANOS LIBRES -------------------------
   // Escuchar → (pausa) → mandar → Phill contesta hablando → escuchar otra
@@ -1643,6 +1670,11 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                       <span className="ai-pop-ic"><Paperclip className="w-4 h-4" /></span><span>Adjuntar foto o documento<small>{adjuntos.length >= 3 ? 'Ya hay 3 en este mensaje' : 'Fotos, PDF, txt, csv · hasta 3'}</small></span>
                     </button>
                   )}
+                  {archivosPermitidos && (
+                    <button type="button" className="ai-mas-op" role="menuitem" disabled={adjuntos.length >= 3} onClick={() => { setMenu(null); setCamara({ auto: false, motivo: '' }); }}>
+                      <span className="ai-pop-ic"><Camera className="w-4 h-4" /></span><span>Mirá esto (cámara)<small>Mostrale algo a Phill con la cámara</small></span>
+                    </button>
+                  )}
                   {busquedaPermitida && (
                     <button type="button" className="ai-mas-op" role="menuitemcheckbox" aria-checked={buscar} onClick={() => { setBuscar(v => !v); setMenu(null); }}>
                       <span className="ai-pop-ic"><Globe className="w-4 h-4" /></span><span>Buscar en internet<small>{buscar ? 'Activado para la próxima respuesta' : 'La próxima respuesta busca primero'}</small></span>
@@ -1685,9 +1717,14 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
           )}
         </div>
       )}
+      {camara && (
+        <React.Suspense fallback={null}>
+          <CamaraPhill auto={camara.auto} motivo={camara.motivo} onFoto={f => void alFoto(f)} onCerrar={() => setCamara(null)} />
+        </React.Suspense>
+      )}
       {manos && jarvis && (
         <React.Suspense fallback={null}>
-          <HudVoz fase={faseManos} interrumpe={interrumpirActivo() && !interrupcionOff.current}
+          <HudVoz fase={faseManos} interrumpe={interrumpirActivo() && !interrupcionOff.current} onCamara={() => setCamara({ auto: false, motivo: '' })}
             vos={[...mensajes].reverse().find(m => m.rol === 'user' && !m.pendiente)?.texto || ''}
             jarvis={paraHablar([...mensajes].reverse().find(m => m.rol === 'assistant')?.texto || '').slice(0, 420)}
             onToque={tocarOrbe} onTerminar={terminarManos} />

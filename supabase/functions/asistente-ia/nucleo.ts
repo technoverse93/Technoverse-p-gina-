@@ -251,6 +251,12 @@ const TELEFONO = {
   }, required: ['accion'] },
 };
 
+const MIRAR = {
+  nombre: 'mirar',
+  descripcion: 'Abre la CÁMARA del teléfono del dueño para que te muestre algo. Usala cuando diga «mirá esto», «fijate en esto», «qué es esto», «leé esto», «decime qué ves» o pida que veas algo con la cámara (un equipo, una pantalla rota, un recibo, un producto, una etiqueta). Después decile en UNA frase corta que la abriste («Dale, mostrame») y nada más: en cuanto saque la foto te llega como un mensaje nuevo y ahí la analizás.',
+  parametros: { type: 'object', properties: { motivo: { type: 'string', description: 'Qué quiere que mires, con sus palabras (opcional).' } } },
+};
+
 /** Herramientas de memoria: Phill aprende del dueño, nunca de lo que lee afuera. */
 const MEMORIA = [
   {
@@ -378,7 +384,9 @@ function declaraciones(sis: Sistema) {
   if (sis.acciones && !sis.leyoAfuera) lista.push(...ACCIONES.filter(a => !sis.utiles || sis.utiles.has(a.nombre)), NAVEGAR);
   if (sis.memoria && !sis.leyoAfuera && sis.conMemoria !== false) lista.push(...MEMORIA);
   if (sis.cerebro) lista.push(APRENDER, CONSULTAR_CEREBRO, BUSCAR_CONVERSACIONES, CREAR_PAUTA);
-  if (sis.cerebro && sis.telefono) lista.push(TELEFONO);
+  // Igual que las acciones: después de leer algo de afuera (internet, un enlace, una foto) no se hace nada en el teléfono.
+  if (sis.cerebro && sis.telefono && !sis.leyoAfuera) lista.push(TELEFONO);
+  if (sis.cerebro && sis.telefono) lista.push(MIRAR);
   return lista;
 }
 
@@ -515,7 +523,11 @@ async function correrHerramienta(nombre: string, args: Record<string, unknown>, 
       nota: 'La tarjeta con la pieza ya diseñada quedó en pantalla, con botón para abrirla en el Estudio. No repitas todo el texto: decí en una frase qué armaste y qué podés cambiar.',
     };
   }
-  if (nombre === TELEFONO.nombre && sis.cerebro && sis.telefono) {
+  if (nombre === MIRAR.nombre && sis.cerebro && sis.telefono) {
+    sis.emitir('camara', { motivo: String(args?.motivo || '').slice(0, 120) });
+    return { hecho: true, nota: 'Se abrió la cámara del dueño. Decile en UNA frase corta que ya la abriste («Dale, mostrame») y nada más: no describas ni supongas qué va a mostrar. En cuanto saque la foto te llega como un mensaje nuevo.' };
+  }
+  if (nombre === TELEFONO.nombre && sis.cerebro && sis.telefono && !sis.leyoAfuera) {
     const r = prepararTelefono(args, `tel-${crypto.randomUUID().slice(0, 8)}`);
     if (!r.ok) return { error: r.error };
     const { pedido } = r;
@@ -2019,7 +2031,7 @@ export async function atender(req: Request): Promise<Response> {
 
     // Control del teléfono: solo cuando la respuesta llega en vivo a la app (el widget y el modo sin
     // eventos no pueden ejecutarlo, y Phill no debe decir «listo» sin que pase nada).
-    if (esSuper && modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget') extra += `\n\nTENÉS LA HERRAMIENTA «telefono» para hacer cosas en el celular del dueño${cuerpo?.nativa === true ? '' : ' (ahora está en el navegador: solo llamar, escribir, calendario, mapa y enlaces, con un botón; alarmas, temporizador, abrir apps, música, linterna y ajustes solo se pueden desde la app del teléfono)'}: alarmas, temporizadores, abrir apps, llamar, WhatsApp, mensajes de texto, calendario, mapa, música, linterna, ajustes y enlaces. Cuando pida algo así («poneme una alarma», «llamá a…», «escribile a… que…», «abrí…», «llevame a…»), usala EN ESA MISMA RESPUESTA, sin pedir permiso: la orden ya es la confirmación. Para llamar o escribir pasá el nombre del contacto, nunca un número. Si falta un dato, preguntá una sola cosa. Después, en una frase y en pasado: «Listo, puse la alarma a las 6:30».`;
+    if (esSuper && modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget') extra += `\n\nTENÉS LA HERRAMIENTA «telefono» para hacer cosas en el celular del dueño${cuerpo?.nativa === true ? '' : ' (ahora está en el navegador: solo llamar, escribir, calendario, mapa y enlaces, con un botón; alarmas, temporizador, abrir apps, música, linterna y ajustes solo se pueden desde la app del teléfono)'}: alarmas, temporizadores, abrir apps, llamar, WhatsApp, mensajes de texto, calendario, mapa, música, linterna, ajustes y enlaces. Si dice «mirá esto», «fijate en esto» o algo parecido, usá la herramienta «mirar» para abrirle la cámara. Cuando pida algo así («poneme una alarma», «llamá a…», «escribile a… que…», «abrí…», «llevame a…»), usala EN ESA MISMA RESPUESTA, sin pedir permiso: la orden ya es la confirmación. Para llamar o escribir pasá el nombre del contacto, nunca un número. Si falta un dato, preguntá una sola cosa. Después, en una frase y en pasado: «Listo, puse la alarma a las 6:30».`;
 
     // El panel va a DECIR la respuesta en voz alta (manos libres, o «cuando hablo»):
     // más corta y sin formato, para que suene como una persona y empiece rápido.

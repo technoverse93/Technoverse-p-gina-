@@ -135,6 +135,7 @@ export async function abrirOido(): Promise<Oido> {
   let anilloN = 0;
   const recientes: number[] = [];            // últimos volúmenes (≈ 2.5 s): de ahí sale el ruido de fondo
   let consumidor: Bloque | null = null;
+  let escuchando = false;                     // hay un turno de escucha en curso: no se lo pisa con la vigilancia
   const piso = () => (recientes.length < 8 ? 0.008 : Math.max(0.003, Math.min(0.02, Math.min(...recientes))));
 
   proc.onaudioprocess = (e: AudioProcessingEvent) => {
@@ -161,7 +162,7 @@ export async function abrirOido(): Promise<Oido> {
 
   /** El manejador de una captura: se la suelta con `detener` o `cancelar` y deja de recibir audio. */
   const manejador = (cap: ReturnType<typeof crearCaptura>, mio: Bloque, alNivel?: (n: number) => void): GrabacionEnCurso => {
-    const soltar = () => { if (consumidor === mio) consumidor = null; alNivel?.(0); };
+    const soltar = () => { if (consumidor === mio) { consumidor = null; escuchando = false; } alNivel?.(0); };
     return {
       detener: async () => {
         soltar();
@@ -181,12 +182,12 @@ export async function abrirOido(): Promise<Oido> {
       // Lo último que se oyó ya está en el anillo: no se pierde el comienzo.
       const cap = crearCaptura([...anillo], det, op, false);
       const mio: Bloque = (rms, pcm, ahora) => cap.alBloque(rms, pcm, ahora);
-      consumidor = mio;
+      consumidor = mio; escuchando = true;
       return manejador(cap, mio, op.alNivel);
     },
 
     vigilar(op) {
-      if (!abierto) return () => {};
+      if (!abierto || escuchando) return () => {};
       const inter = crearInterruptor();
       let previo: Int16Array[] = [];          // lo que había justo antes de pausar
       let desdePausa: Int16Array[] = [];      // y lo que llegó mientras se confirmaba
@@ -201,7 +202,7 @@ export async function abrirOido(): Promise<Oido> {
         else if (a === 'confirmar') {
           const det = crearDetector({ silencioMs: op.silencioMs, esperaMs: 6000, pisoInicial: piso(), yaHablo: true });
           cap = crearCaptura([...previo, ...desdePausa], det, op, true);
-          previo = []; desdePausa = [];
+          previo = []; desdePausa = []; escuchando = true;
           op.alConfirmar(manejador(cap, mio, op.alNivel));
         }
       };
