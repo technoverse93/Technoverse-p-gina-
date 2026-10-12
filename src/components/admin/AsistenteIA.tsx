@@ -35,6 +35,7 @@ import { nivelVoz } from '../../utils/nivelVoz';
 import { ESPERA_RELLENO_MS, esDespedida, fraseRelleno, interrumpirActivo, PAUSAS_MS, pausaElegida, saludoManos } from '../../utils/manosLibres';
 import { abrirOido, type Oido } from '../../utils/oidoVoz';
 import TarjetaTelefono from './TarjetaTelefono';
+import TarjetaTarea, { EVENTO_REFRESCAR_CHAT } from './TarjetaTarea';
 import { correrTelefono, type PedidoTelefono } from '../../utils/telefono';
 import { enAppDelTelefono } from '../../mobile/telefonoNativo';
 const MiniWidgetAjustes = React.lazy(() => import('./MiniWidgetAjustes'));
@@ -65,11 +66,13 @@ interface Panel { columnas: string[]; filas: (string | number | null)[][]; punto
 interface Consulta {
   modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean; panel?: Panel;
   /** Phill: «accion» es una propuesta (tarjeta con confirmar); «navegar», un botón para abrir un módulo. */
-  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision' | 'pieza' | 'telefono'; id?: string; destino?: string; grafico?: Grafico;
+  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision' | 'pieza' | 'telefono' | 'tarea'; id?: string; destino?: string; grafico?: Grafico;
   /** Una pieza de pauta armada por Phill (tarjeta con vista previa). */
   pieza?: PiezaChat;
   /** Algo que Phill hace en el teléfono (alarma, llamada, mapa…). */
   telefono?: PedidoTelefono;
+  /** Un encargo que Phill hace en segundo plano (tarjeta con su avance). */
+  tarea?: { id: string; titulo: string };
 }
 type Perfil = 'rapido' | 'equilibrado' | 'profundo';
 type Persona = 'jarvis' | 'arquitecto';
@@ -521,6 +524,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
   const acciones = (m.consultas || []).filter(c => c.tipo === 'accion' && c.id);
   const piezas = (m.consultas || []).filter(c => c.tipo === 'pieza' && c.pieza);
   const telefonos = (m.consultas || []).filter(c => c.tipo === 'telefono' && c.telefono);
+  const tareas = (m.consultas || []).filter(c => c.tipo === 'tarea' && c.tarea);
   const ejecutarTel = React.useContext(TelefonoCtx);
   const perfil = PERFILES.find(p => p.id === m.perfil);
   const esRequerimiento = m.persona === 'arquitecto' && /REQUERIMIENTO:/.test(m.texto);
@@ -535,6 +539,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
       {irs.map((c, i) => <React.Fragment key={`n${i}`}><IrModulo titulo={c.desc} destino={c.destino!} /></React.Fragment>)}
       {acciones.map(c => <React.Fragment key={c.id}><TarjetaAccion id={c.id!} /></React.Fragment>)}
       {piezas.map((c, i) => <React.Fragment key={`p${i}`}><PiezaEnChat pieza={c.pieza!} /></React.Fragment>)}
+      {tareas.map(c => <React.Fragment key={`t${c.tarea!.id}`}><TarjetaTarea id={c.tarea!.id} titulo={c.tarea!.titulo} /></React.Fragment>)}
       {ejecutarTel && telefonos.map(c => <React.Fragment key={c.telefono!.id}><TarjetaTelefono pedido={c.telefono!} onEjecutar={ejecutarTel} /></React.Fragment>)}
       {memorias.map((c, i) => <React.Fragment key={`m${i}`}><ChipMemoria id={c.id} texto={c.desc} estado={c.filas} detalle={c.detalle} /></React.Fragment>)}
       {cerebros.map((c, i) => <React.Fragment key={`c${i}`}><ChipCerebro texto={c.desc} aprendido={c.filas === 'aprendido'} /></React.Fragment>)}
@@ -1045,6 +1050,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
           }
           else if (evento === 'navegar' || evento === 'memoria' || evento === 'pieza') borrador.consultas = [...(borrador.consultas || []), d];
           else if (evento === 'camara') setCamara({ auto: true, motivo: String(d?.motivo || '') });
+          else if (evento === 'tarea') { if (d?.tarea?.id && !(borrador.consultas || []).some(c => c.tarea?.id === d.tarea.id)) borrador.consultas = [...(borrador.consultas || []), d]; }
           else if (evento === 'telefono') {
             // Se hace en el acto en el teléfono; la tarjeta deja a la vista qué pasó.
             if (d?.telefono?.id && !(borrador.consultas || []).some(c => c.telefono?.id === d.telefono.id)) borrador.consultas = [...(borrador.consultas || []), d];
@@ -1341,6 +1347,17 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   enviarRef.current = enviar;
   const enviandoRef = useRef(false);
   enviandoRef.current = enviando;
+  // Un encargo de Phill terminó y dejó su resultado en el chat: se vuelve a leer la conversación.
+  useEffect(() => {
+    const alRefrescar = () => {
+      if (!activa || enviandoRef.current) return;
+      enVuelo.delete(activa);
+      void leerMensajes(activa).then(ms => { if (ms) setMensajes(ms); });
+      void cargarConvs();
+    };
+    window.addEventListener(EVENTO_REFRESCAR_CHAT, alRefrescar);
+    return () => window.removeEventListener(EVENTO_REFRESCAR_CHAT, alRefrescar);
+  }, [activa, cargarConvs]);
   const empezarVozRef = useRef(empezarVoz);
   empezarVozRef.current = empezarVoz;
 

@@ -338,6 +338,19 @@ span.jv-tit:hover { background: transparent; }
 .ai-root[data-jarvis] .jv-tel-botones:empty { display: none; }
 .ai-root[data-jarvis] .jv-tel-botones .ai-chip small { margin-left: 6px; font: 400 11px var(--jv-f-dato); color: var(--jv-tenue); }
 
+/* ---------- Encargos de Phill en segundo plano ---------- */
+.ai-root[data-jarvis] .jv-tarea { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 10px 12px; background: var(--jv-sup); border: 1px solid var(--jv-linea); border-radius: 14px; min-width: 0; }
+.ai-root[data-jarvis] .jv-tarea > header { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ai-root[data-jarvis] .jv-tarea > header b { flex: 1 1 auto; min-width: 0; font: 600 13px var(--jv-f-ui); color: var(--jv-tinta); overflow-wrap: anywhere; }
+.ai-root[data-jarvis] .jv-tarea-ic { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 9px; background: var(--jv-hundido); color: var(--jv-oro); }
+.ai-root[data-jarvis] .jv-tarea-x { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 50%; border: 1px solid var(--jv-linea); background: transparent; color: var(--jv-tenue); }
+.ai-root[data-jarvis] .jv-tarea-msj { display: flex; align-items: center; gap: 6px; margin: 0; font: 400 12.5px/1.4 var(--jv-f-ui); color: var(--jv-tinta2); }
+.ai-root[data-jarvis] .jv-tarea[data-estado="lista"] .jv-tarea-msj { color: var(--jv-acento); }
+.ai-root[data-jarvis] .jv-tarea[data-estado="error"] .jv-tarea-msj { color: #E5484D; }
+.ai-root[data-jarvis] .jv-tarea-paso { margin: 0; font: 400 11.5px/1.4 var(--jv-f-ui); color: var(--jv-tenue); overflow-wrap: anywhere; }
+.ai-root[data-jarvis] .jv-tarea-barra { height: 4px; border-radius: 4px; background: var(--jv-hundido); overflow: hidden; }
+.ai-root[data-jarvis] .jv-tarea-barra i { display: block; height: 100%; background: var(--jv-acento); transition: width .4s ease; }
+
 /* ---------- «Mirá esto»: la cámara de Phill ---------- */
 .jv-cam { position: fixed; inset: 0; z-index: 2147483000; display: flex; flex-direction: column; justify-content: space-between; background: #05080d; color: #fff; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
 .jv-cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #05080d; }
