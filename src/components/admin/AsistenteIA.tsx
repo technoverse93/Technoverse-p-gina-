@@ -39,6 +39,7 @@ import TarjetaTarea, { EVENTO_REFRESCAR_CHAT } from './TarjetaTarea';
 import { correrTelefono, type PedidoTelefono } from '../../utils/telefono';
 import { enAppDelTelefono } from '../../mobile/telefonoNativo';
 const MiniWidgetAjustes = React.lazy(() => import('./MiniWidgetAjustes'));
+const OyePhillAjustes = React.lazy(() => import('./OyePhillAjustes'));
 import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../../supabaseClient';
 import { cabeceraClientInfo } from '../../utils/dispositivo';
 import { useToast, useConfirm } from '../ui/Overlays';
@@ -51,6 +52,7 @@ import type { GrabacionEnCurso } from '../../utils/grabadorVoz';
 import { aparatoActual } from '../../seguridad/killSwitch';
 import { separarPrivados, restaurarPrivados } from '../../utils/privados';
 import { partirLinea } from '../../utils/formatoLinea';
+import { dictadoNativo } from '../../mobile/dictadoNativo';
 import { Orbe, Pensando, IconoConstelacion, areaDe, saludo } from './JarvisVisual';
 
 /** Abre un módulo del panel en su pestaña (lo da AdminPanel). */
@@ -744,8 +746,12 @@ const SUGERENCIAS_ARQ = [
   { t: 'Priorizar', d: 'Qué hacer primero', p: 'De estas ideas, ¿cuál conviene hacer primero y por qué?: ' },
 ];
 
-function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, conversacionInicial }: {
+function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 0, onFinManos, onRespuesta, conversacionInicial }: {
   currentUser: User | null; onAbrirModulo?: (m: string) => void; pedirVoz?: number;
+  /** «Oye Phill»: la ventanita lo abrió para hablar de una (manos libres). Cambia con cada llamado. */
+  manosAlAbrir?: number;
+  /** Cuando termina esa conversación en manos libres (para cerrar la ventanita). */
+  onFinManos?: () => void;
   /** La ventanita del widget lo usa para dejar la última respuesta a la vista. */
   onRespuesta?: (pregunta: string, respuesta: string) => void;
   /** Abrir en esta conversación (la del mini-widget, para seguirla aquí). */
@@ -795,6 +801,9 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const [segVoz, setSegVoz] = useState(0);
   const grabacion = useRef<GrabacionEnCurso | null>(null);
   const inicioVoz = useRef(0);
+  // DICTADO DEL TELÉFONO (opcional): el texto aparece mientras hablás (ver src/mobile/dictadoNativo.ts).
+  const dictadoActivo = useRef(false);
+  const [textoVivo, setTextoVivo] = useState('');
   // MANOS LIBRES: escuchar → contestar hablando → volver a escuchar, sin tocar nada.
   const [manos, setManos] = useState(false);
   const [saludando, setSaludando] = useState(false);
@@ -1134,11 +1143,43 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   // ------------------------------ VOZ ------------------------------
   // Se graba con la misma grabadora de las notas de voz del chat (funciona
   // en la APK), se transcribe en el servidor y se manda como mensaje.
+  // Si la persona prendió el «Dictado del teléfono», se escucha con el reconocedor de Android y el texto va
+  // apareciendo en vivo; si no se pudo empezar, se sigue con la grabadora de siempre (nunca se pierde el micrófono).
+  const empezarDictadoNativo = async (): Promise<boolean> => {
+    setTextoVivo('');
+    const r = await dictadoNativo.empezar({
+      alParcial: t => setTextoVivo(t),
+      alFinal: t => { void alFinalDictado(t); },
+      alError: (codigo, mensaje) => alErrorDictado(codigo, mensaje),
+      alFin: () => { dictadoActivo.current = false; setVoz(null); setTextoVivo(''); },
+    });
+    if (!r.ok) return false;
+    dictadoActivo.current = true;
+    inicioVoz.current = Date.now();
+    setSegVoz(0);
+    setVoz('grabando');
+    return true;
+  };
+  const alFinalDictado = async (t: string) => {
+    const seg = Math.max(1, Math.round((Date.now() - inicioVoz.current) / 1000));
+    dictadoActivo.current = false; setVoz(null); setTextoVivo('');
+    const limpio = t.trim();
+    if (!limpio) { toast.info('No te escuché. Probá de nuevo.'); return; }
+    // Si todavía estaba contestando, se manda apenas termine (igual que el audio).
+    const mandar = () => { void enviarRef.current(limpio, { porVoz: seg }); };
+    if (enviandoRef.current) audioPendiente.current = mandar; else mandar();
+  };
+  const alErrorDictado = (codigo: string, mensaje: string) => {
+    dictadoActivo.current = false; setVoz(null); setTextoVivo('');
+    if (codigo === 'sin_voz') { toast.info('No te escuché. Probá de nuevo.'); return; }
+    toast.info(`${mensaje} Probá de nuevo; si sigue, apagá el «Dictado del teléfono» en Ajustes.`);
+  };
   const empezarVoz = async () => {
     if (voz || enviando) return;
     lector.callar();
     setMenu(null);
     const auto = manosRef.current;
+    if (!auto && dictadoNativo.preferido() && await empezarDictadoNativo()) return;
     try {
       // En manos libres la grabación avisa el volumen (para el orbe) y se
       // corta sola cuando hacés una pausa después de hablar. Con el «oído»
@@ -1168,8 +1209,18 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   };
   const nadieHabloRef = useRef(nadieHablo);
   nadieHabloRef.current = nadieHablo;
-  const cancelarVoz = () => { grabacion.current?.cancelar(); grabacion.current = null; setVoz(null); };
+  const cancelarVoz = () => {
+    if (dictadoActivo.current) { dictadoActivo.current = false; void dictadoNativo.cancelar(); setTextoVivo(''); }
+    grabacion.current?.cancelar(); grabacion.current = null; setVoz(null);
+  };
   const terminarVoz = async () => {
+    // Dictado del teléfono: se le pide que entregue lo que entendió (llega por alFinalDictado).
+    if (dictadoActivo.current) {
+      void dictadoNativo.detener();
+      // Por si el reconocedor del teléfono no contesta: no se queda colgado.
+      setTimeout(() => { if (dictadoActivo.current) { dictadoActivo.current = false; void dictadoNativo.cancelar(); setVoz(null); setTextoVivo(''); } }, 6000);
+      return;
+    }
     const g = grabacion.current;
     if (!g) return;
     grabacion.current = null;
@@ -1219,7 +1270,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     void empezarVoz();
   }, [pedirVoz, conVoz]); // eslint-disable-line react-hooks/exhaustive-deps
   // Al salir del módulo, el micrófono se suelta.
-  useEffect(() => () => { grabacion.current?.cancelar(); oido.current?.cerrar(); oido.current = null; }, []);
+  useEffect(() => () => { grabacion.current?.cancelar(); oido.current?.cerrar(); oido.current = null; if (dictadoActivo.current) void dictadoNativo.cancelar(); }, []);
 
   // ------------------------- «MIRÁ ESTO» -------------------------
   const alFoto = async (f: File) => {
@@ -1322,6 +1373,25 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     }
   };
   const terminarManos = () => { despedir.current = false; setManos(false); lector.callar(); };
+  // «Oye Phill»: la ventanita se abrió para hablar de una (manos libres). Cuando esa conversación termina
+  // (te despedís, no hablás o la cortás), se avisa para que la ventanita se cierre sola y el oído vuelva a escuchar.
+  const manosAtendida = useRef(0);
+  const abiertoPorOye = useRef(false);
+  useEffect(() => {
+    if (!manosAlAbrir || manosAlAbrir === manosAtendida.current || !conVoz || manos || enviando) return;
+    manosAtendida.current = manosAlAbrir;
+    abiertoPorOye.current = true;
+    iniciarManos();
+  }, [manosAlAbrir, conVoz]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Solo cuando manos libres PASA de prendido a apagado (no al montar, que también lo ve apagado).
+  const manosAntes = useRef(false);
+  useEffect(() => {
+    const termino = manosAntes.current && !manos;
+    manosAntes.current = manos;
+    if (!termino || !abiertoPorOye.current) return;
+    abiertoPorOye.current = false;
+    onFinManos?.();
+  }, [manos]); // eslint-disable-line react-hooks/exhaustive-deps
   /** Tocar el orbe: según lo que esté pasando, manda, interrumpe o cancela. */
   const tocarOrbe = () => {
     if (voz === 'grabando') void terminarVoz();
@@ -1589,7 +1659,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                     {voz === 'grabando' ? (
                       <>
                         <span className="ai-rec" />
-                        <span>Escuchando…</span>
+                        <span className={textoVivo ? 'ai-vivo' : undefined}>{textoVivo || 'Escuchando…'}</span>
                         <span className="ai-onda" aria-hidden="true">{ONDA.map((d, i) => <i key={i} style={{ animationDelay: d }} />)}</span>
                         <span className="ai-reloj">{reloj(segVoz)}</span>
                         <button type="button" className="ai-ib" onClick={cancelarVoz} aria-label="Descartar grabación" title="Descartar grabación"><X className="w-4 h-4" /></button>
@@ -1821,6 +1891,7 @@ function AjustesIA({ onCambio, cupo, jarvis = false }: { onCambio: () => void; c
         <AjusteVoz />
       </div>
       {cupo?.perfiles && <div data-orden="8"><React.Suspense fallback={null}><MiniWidgetAjustes /></React.Suspense></div>}
+      {cupo?.perfiles && <div data-orden="8"><React.Suspense fallback={null}><OyePhillAjustes /></React.Suspense></div>}
       {cupo?.perfiles && <div data-orden="9"><EntrenarJarvis /></div>}
       {cupo?.perfiles && <div className="ai-aj" data-orden="1">
         <H area="neg">Lo que hace solo <small>solo superadmin</small></H>

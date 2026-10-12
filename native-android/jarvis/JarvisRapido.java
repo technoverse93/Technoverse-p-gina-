@@ -66,7 +66,7 @@ public class JarvisRapido extends BridgeActivity {
     static String modoDe(Intent intent) {
         if (intent == null) return "hoja";
         String m = intent.getStringExtra(EXTRA_MODO);
-        if ("voz".equals(m) || "escribir".equals(m) || "hoja".equals(m)) return m;
+        if ("voz".equals(m) || "escribir".equals(m) || "hoja".equals(m) || "oye".equals(m)) return m;
         return intent.getBooleanExtra(EXTRA_VOZ, false) ? "voz" : "hoja";
     }
 
@@ -112,7 +112,22 @@ public class JarvisRapido extends BridgeActivity {
 
         creada = true;
         aplicarModo();
+        // Si la abrió «Oye Phill», ya abrió: se quita el aviso de «tocá para hablar».
+        OyePhillService.aperturaConfirmada();
         if ("voz".equals(modo)) dictar();
+    }
+
+    // Mientras la ventanita se ve, el micrófono lo usa ella: «Oye Phill» se calla y vuelve al cerrarla.
+    @Override
+    public void onStart() {
+        super.onStart();
+        OyePhillService.visible(this, true);
+    }
+
+    @Override
+    public void onStop() {
+        OyePhillService.visible(this, false);
+        super.onStop();
     }
 
     @Override
@@ -125,6 +140,7 @@ public class JarvisRapido extends BridgeActivity {
         modo = modoDe(intent);
         marco = marcoDe(intent);
         aplicarModo();
+        OyePhillService.aperturaConfirmada();
         if ("voz".equals(modo)) dictar();
     }
 

@@ -9,11 +9,12 @@
 //     espera Phill, en manos libres, antes de dar por terminado lo que decís.
 // =====================================================================
 
-import { useState, useSyncExternalStore } from 'react';
-import { Volume2, Pause, Play, Square, VolumeX, Download, Check, Timer, Mic } from 'lucide-react';
+import { useEffect, useState, useSyncExternalStore } from 'react';
+import { Volume2, Pause, Play, Square, VolumeX, Download, Check, Timer, Mic, Captions } from 'lucide-react';
 import { lector, modoLectura, fijarModoLectura, puedeHablar, type ModoLectura } from '../../utils/lectorVoz';
 import * as propia from '../../utils/vozPropia';
 import { fijarInterrumpir, fijarPausa, interrumpirActivo, PAUSAS, pausaElegida, type PausaVoz } from '../../utils/manosLibres';
+import { dictadoNativo } from '../../mobile/dictadoNativo';
 
 export function useLector() {
   return useSyncExternalStore(lector.suscribir, lector.obtener, lector.obtener);
@@ -70,8 +71,31 @@ export function AjusteVoz() {
         ))}
       </div>
       <PausaManos />
+      <DictadoTelefono />
       <VozPropia />
       {disponible && <button type="button" className="ai-chip ai-voz-prueba" onClick={() => void lector.hablar('Pura vida. Soy Phill, y así suena mi voz cuando te respondo hablando.', 'prueba')}><Volume2 className="w-4 h-4" />Probar la voz</button>}
+    </div>
+  );
+}
+
+/** Dictado del teléfono: al tocar el micrófono, el texto aparece mientras hablás. Solo en la app; opcional. */
+function DictadoTelefono() {
+  const disponible = dictadoNativo.disponible();
+  const [on, setOn] = useState(() => dictadoNativo.preferido());
+  const [hay, setHay] = useState<boolean | null>(null);
+  useEffect(() => { if (disponible) void dictadoNativo.hayReconocedor().then(setHay); }, [disponible]);
+  if (!disponible) return null;
+  return (
+    <div className="ai-modu">
+      <span className="ai-modu-ic"><Captions className="w-4 h-4" /></span>
+      <span className="ai-modu-t">
+        <b>Dictado del teléfono</b>
+        <span>{hay === false
+          ? 'Este teléfono no trae reconocimiento de voz.'
+          : 'Al tocar el micrófono ves lo que decís mientras hablás. Usa el reconocimiento de voz de Android (puede usar internet). Si falla, Phill usa su micrófono de siempre. En manos libres no se usa.'}</span>
+      </span>
+      <button type="button" role="switch" aria-checked={on} className="ai-sw" data-on={on || undefined} disabled={hay === false}
+        onClick={() => { dictadoNativo.fijarPreferido(!on); setOn(!on); }} aria-label="Dictado del teléfono con texto en vivo" />
     </div>
   );
 }

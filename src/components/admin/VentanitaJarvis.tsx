@@ -194,6 +194,8 @@ export default function VentanitaJarvis() {
   const [fase, setFase] = useState<Fase>('cargando');
   const [usuario, setUsuario] = useState<User | null>(null);
   const [pedirVoz, setPedirVoz] = useState(0);
+  // «Oye Phill»: cuenta de llamados (cada uno arranca manos libres una vez).
+  const [pedirManos, setPedirManos] = useState(0);
   const [intento, setIntento] = useState(0);
   // Cómo se abrió: hoja completa, pregunta dictada o barrita para escribir.
   const [modo, setModo] = useState<ModoVentanita | null>(null);
@@ -219,6 +221,7 @@ export default function VentanitaJarvis() {
       if (m === 'escribir') void widgetNativo.estado().then(e => { if (e.version) { setMarco(e.marco); setNoche(e.noche); setHistorial(e.historial.slice(-12)); } });
       if (m === 'voz' && p.texto) setPendiente(p.texto);
       if (m === 'hoja' && p.voz) setPedirVoz(p.n);
+      if (m === 'oye') setPedirManos(p.n);
     };
     if (ultimoPedido) atender(ultimoPedido);
     alPedir.add(atender);
@@ -242,6 +245,8 @@ export default function VentanitaJarvis() {
       }
       if (!vivo) return;
       setModo(m => m || e.modo);
+      // Si la abrió «Oye Phill», arranca manos libres de una (el aviso del puente puede haber llegado antes de escuchar).
+      if (e.modo === 'oye') setPedirManos(n => n || 1);
       setMarco(e.marco); setNoche(e.noche); setHistorial(e.historial.slice(-12));
       setConversacion(e.conversacion || conversacionDelWidget());
       if (!e.version) { setFase('sin_puente'); return; }
@@ -419,7 +424,7 @@ export default function VentanitaJarvis() {
             {fase === 'listo' && usuario && modo ? (
               <ErrorDeCarga>
                 <Suspense fallback={<Esqueleto />}>
-                  <AsistenteIA currentUser={usuario} onAbrirModulo={abrirApp} pedirVoz={pedirVoz} onRespuesta={alResponder} conversacionInicial={conversacion} />
+                  <AsistenteIA currentUser={usuario} onAbrirModulo={abrirApp} pedirVoz={pedirVoz} manosAlAbrir={pedirManos} onFinManos={cerrar} onRespuesta={alResponder} conversacionInicial={conversacion} />
                 </Suspense>
               </ErrorDeCarga>
             ) : aviso ? (

@@ -481,6 +481,96 @@ jobs:
           echo "--- AndroidManifest.xml (teléfono) ---"
           grep -n "SET_ALARM\|READ_CONTACTS\|<queries>\|LAUNCHER" android/app/src/main/AndroidManifest.xml || true
 
+      # «OYE PHILL» Y EL DICTADO DEL TELÉFONO
+      # ---------------------------------------------------------------
+      # Dos cosas opcionales (apagadas hasta que el dueño las prende en Phill →
+      # Ajustes), que viven en `native-android/oye/` y se copian aquí:
+      #   · «Oye Phill»: un servicio en primer plano (OyePhillService) que, con
+      #     el teléfono desbloqueado, espera el llamado con un reconocedor de
+      #     voz que corre EN el teléfono, sin internet (Vosk, Apache 2.0), y
+      #     abre Phill (la ventanita) en manos libres. El modelo de voz en
+      #     español (~40 MB) NO va en la APK: se baja una sola vez desde
+      #     Ajustes. Hace falta la librería (Vosk + JNA, ~12 MB) y los permisos
+      #     de micrófono en primer plano, «mostrar sobre otras apps» (para que
+      #     Phill se abra solo desde el fondo), batería y vibración.
+      #   · El dictado del teléfono (DictadoNativoPlugin): el reconocedor de
+      #     voz de Android con el texto apareciendo mientras se habla (las
+      #     consultas de RecognitionService ya las declara el paso del widget).
+      # Todo es idempotente, como el resto de lo nativo: android/ nace de cero.
+      - name: Instalar «Oye Phill» y el dictado del teléfono (Vosk)
+        run: |
+          PAQUETE=android/app/src/main/java/com/technoverse/admin
+          cp native-android/oye/*.java "$PAQUETE/"
+
+          python3 - <<'PY'
+          # --- Vosk (reconocedor sin internet) y JNA (lo que lo conecta con Java) ---
+          ruta = 'android/app/build.gradle'
+          texto = open(ruta, encoding='utf-8').read()
+          marca = "implementation project(':capacitor-android')"
+          if marca not in texto:
+              raise SystemExit('No se encontró la dependencia de capacitor-android en android/app/build.gradle.')
+          lineas = []
+          if 'net.java.dev.jna:jna' not in texto:
+              lineas.append("    implementation 'net.java.dev.jna:jna:5.13.0@aar'")
+          if 'vosk-android' not in texto:
+              lineas.append("    implementation 'com.alphacephei:vosk-android:0.3.47'")
+          if lineas:
+              texto = texto.replace(marca, marca + '\n' + '\n'.join(lineas), 1)
+              open(ruta, 'w', encoding='utf-8').write(texto)
+              print('Dependencias de «Oye Phill» agregadas a android/app/build.gradle: ' + ', '.join(l.strip() for l in lineas))
+          else:
+              print('Vosk y JNA ya estaban declarados; no se toca nada.')
+          PY
+
+          python3 - <<'PY'
+          # --- Permisos y el servicio del micrófono en el manifiesto ---
+          ruta = 'android/app/src/main/AndroidManifest.xml'
+          texto = open(ruta, encoding='utf-8').read()
+          if '</manifest>' not in texto or '</application>' not in texto:
+              raise SystemExit('El manifiesto no tiene el formato esperado.')
+          # Se busca con la comilla de cierre para no confundir FOREGROUND_SERVICE con FOREGROUND_SERVICE_MEDIA_PROJECTION.
+          permisos = [
+              'android.permission.FOREGROUND_SERVICE',
+              'android.permission.FOREGROUND_SERVICE_MICROPHONE',
+              'android.permission.POST_NOTIFICATIONS',
+              'android.permission.RECORD_AUDIO',
+              'android.permission.SYSTEM_ALERT_WINDOW',
+              'android.permission.REQUEST_IGNORE_BATTERY_OPTIMIZATIONS',
+              'android.permission.VIBRATE',
+          ]
+          agregados = []
+          pedazos = ''
+          for p in permisos:
+              if ('"' + p + '"') not in texto:
+                  pedazos += '    <uses-permission android:name="' + p + '" />\n'
+                  agregados.append(p.split('.')[-1])
+          if pedazos:
+              texto = texto.replace('</manifest>', pedazos + '</manifest>', 1)
+          if 'OyePhillService' not in texto:
+              servicio = (
+                  '        <service\n'
+                  '            android:name=".OyePhillService"\n'
+                  '            android:foregroundServiceType="microphone"\n'
+                  '            android:exported="false" />\n'
+                  '    </application>'
+              )
+              texto = texto.replace('</application>', servicio, 1)
+              agregados.append('<service OyePhillService>')
+          if agregados:
+              open(ruta, 'w', encoding='utf-8').write(texto)
+              print('Declarado en el manifiesto para «Oye Phill»: ' + ', '.join(agregados) + '.')
+          else:
+              print('El manifiesto ya tenía lo de «Oye Phill»; no se toca nada.')
+          PY
+
+          echo "--- android/app/build.gradle (Oye Phill) ---"
+          grep -n "vosk\|jna" android/app/build.gradle || true
+          echo "--- AndroidManifest.xml (Oye Phill) ---"
+          grep -n "FOREGROUND_SERVICE\|SYSTEM_ALERT_WINDOW\|RECORD_AUDIO\|IGNORE_BATTERY\|VIBRATE\|OyePhillService\|POST_NOTIFICATIONS" android/app/src/main/AndroidManifest.xml || true
+          # Aviso informativo (no corta la compilación): ¿responde la dirección del modelo de voz que bajará la app?
+          echo "--- modelo de voz de Vosk (lo baja la app, no la compilación) ---"
+          curl -sSIL -m 30 "https://alphacephei.com/vosk/models/vosk-model-small-es-0.42.zip" | grep -i "^HTTP\|^content-length\|^content-type" || echo "::warning::No se pudo consultar la dirección del modelo de voz de Vosk."
+
       # Ícono del lanzador con el logo oficial de la tienda, en vez del
       # robot de Capacitor por defecto. Igual que el manifiesto de arriba:
       # android/ nace de cero en cada corrida, así que los mipmap/ que
