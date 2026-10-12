@@ -21,6 +21,9 @@ on:
       - 'src/**'
       - 'public/**'
       - 'index.html'
+      # La ventanita de Phill (widget, «Oye Phill», botón del asistente) es otra página de la app.
+      - 'jarvis-rapido.html'
+      - '.github/workflows/ota-publish.yml'
       - 'package.json'
       - 'package-lock.json'
       - 'vite.config.ts'
