@@ -426,6 +426,61 @@ jobs:
           grep -n "JarvisPushService\|ResponderReceiver\|MESSAGING_EVENT\|POST_NOTIFICATIONS" android/app/src/main/AndroidManifest.xml || true
           grep -n "firebase" android/app/build.gradle || true
 
+      # EL TELÉFONO DE PHILL (alarmas, llamadas, WhatsApp, calendario, mapas…)
+      # ---------------------------------------------------------------
+      # Phill hace cosas en el celular del dueño: poner una alarma o un
+      # temporizador, abrir una app, llamar, escribir por WhatsApp o SMS,
+      # agendar en el calendario, llevarlo con el mapa, poner música, prender
+      # la linterna. Casi todo son intents estándar de Android (la persona
+      # solo toca «Llamar» o «Enviar»); el único permiso en ejecución es el de
+      # contactos, para buscar a alguien por nombre. Vive en
+      # `native-android/telefono/` y se copia aquí (android/ nace de cero):
+      #   · TelefonoNativoPlugin: el puente con la web (MainActivity lo registra).
+      #   · Manifiesto: SET_ALARM, READ_CONTACTS y <queries> para poder listar
+      #     las apps instaladas (Android 11+ oculta las demás por defecto).
+      - name: Instalar el teléfono de Phill (alarmas, llamadas, WhatsApp, mapas)
+        run: |
+          PAQUETE=android/app/src/main/java/com/technoverse/admin
+          cp native-android/telefono/*.java "$PAQUETE/"
+
+          python3 - <<'PY'
+          import re
+          ruta = 'android/app/src/main/AndroidManifest.xml'
+          texto = open(ruta, encoding='utf-8').read()
+          if '</manifest>' not in texto:
+              raise SystemExit('No se encontró el cierre </manifest>.')
+          lanzador = (
+              '        <intent>\n'
+              '            <action android:name="android.intent.action.MAIN" />\n'
+              '            <category android:name="android.intent.category.LAUNCHER" />\n'
+              '        </intent>\n'
+          )
+          cambios = []
+          pedazos = ''
+          if 'permission.SET_ALARM' not in texto:
+              pedazos += '    <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />\n'
+              cambios.append('SET_ALARM')
+          if 'permission.READ_CONTACTS' not in texto:
+              pedazos += '    <uses-permission android:name="android.permission.READ_CONTACTS" />\n'
+              cambios.append('READ_CONTACTS')
+          if '<queries>' not in texto:
+              pedazos += '    <queries>\n' + lanzador + '    </queries>\n'
+              cambios.append('<queries>')
+          elif not re.search(r'<queries>.*?category.LAUNCHER.*?</queries>', texto, re.S):
+              # Ya había un <queries>: se le suma la consulta de las apps con ícono.
+              texto = texto.replace('<queries>', '<queries>\n' + lanzador, 1)
+              cambios.append('<queries> (consulta de apps)')
+          if pedazos:
+              texto = texto.replace('</manifest>', pedazos + '</manifest>', 1)
+          if cambios:
+              open(ruta, 'w', encoding='utf-8').write(texto)
+              print('Declarado en el manifiesto para el teléfono de Phill: ' + ', '.join(cambios) + '.')
+          else:
+              print('El manifiesto ya tenía lo del teléfono de Phill; no se toca nada.')
+          PY
+          echo "--- AndroidManifest.xml (teléfono) ---"
+          grep -n "SET_ALARM\|READ_CONTACTS\|<queries>\|LAUNCHER" android/app/src/main/AndroidManifest.xml || true
+
       # Ícono del lanzador con el logo oficial de la tienda, en vez del
       # robot de Capacitor por defecto. Igual que el manifiesto de arriba:
       # android/ nace de cero en cada corrida, así que los mipmap/ que

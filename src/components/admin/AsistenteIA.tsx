@@ -33,6 +33,9 @@ import { lector, modoLectura, paraHablar, puedeHablar } from '../../utils/lector
 import { nivelVoz } from '../../utils/nivelVoz';
 import { ESPERA_RELLENO_MS, esDespedida, fraseRelleno, interrumpirActivo, PAUSAS_MS, pausaElegida, saludoManos } from '../../utils/manosLibres';
 import { abrirOido, type Oido } from '../../utils/oidoVoz';
+import TarjetaTelefono from './TarjetaTelefono';
+import { correrTelefono, type PedidoTelefono } from '../../utils/telefono';
+import { enAppDelTelefono } from '../../mobile/telefonoNativo';
 const MiniWidgetAjustes = React.lazy(() => import('./MiniWidgetAjustes'));
 import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../../supabaseClient';
 import { cabeceraClientInfo } from '../../utils/dispositivo';
@@ -50,6 +53,8 @@ import { Orbe, Pensando, IconoConstelacion, areaDe, saludo } from './JarvisVisua
 /** Abre un módulo del panel en su pestaña (lo da AdminPanel). */
 const AbrirModuloCtx = React.createContext<((m: string) => void) | undefined>(undefined);
 const VerCerebroCtx = React.createContext<(() => void) | undefined>(undefined);
+/** Ejecuta (o repite) un pedido de Phill al teléfono: lo da AsistenteIA, que tiene los datos privados. */
+const TelefonoCtx = React.createContext<((p: PedidoTelefono, o?: { elegido?: string; forzar?: boolean }) => void) | undefined>(undefined);
 /** Phill (superadmin) usa el diseño de constelaciones; el resto del personal, el de siempre. */
 const JarvisCtx = React.createContext(false);
 
@@ -59,9 +64,11 @@ interface Panel { columnas: string[]; filas: (string | number | null)[][]; punto
 interface Consulta {
   modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean; panel?: Panel;
   /** Phill: «accion» es una propuesta (tarjeta con confirmar); «navegar», un botón para abrir un módulo. */
-  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision' | 'pieza'; id?: string; destino?: string; grafico?: Grafico;
+  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision' | 'pieza' | 'telefono'; id?: string; destino?: string; grafico?: Grafico;
   /** Una pieza de pauta armada por Phill (tarjeta con vista previa). */
   pieza?: PiezaChat;
+  /** Algo que Phill hace en el teléfono (alarma, llamada, mapa…). */
+  telefono?: PedidoTelefono;
 }
 type Perfil = 'rapido' | 'equilibrado' | 'profundo';
 type Persona = 'jarvis' | 'arquitecto';
@@ -512,6 +519,8 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
   const irs = (m.consultas || []).filter(c => c.tipo === 'navegar' && c.destino);
   const acciones = (m.consultas || []).filter(c => c.tipo === 'accion' && c.id);
   const piezas = (m.consultas || []).filter(c => c.tipo === 'pieza' && c.pieza);
+  const telefonos = (m.consultas || []).filter(c => c.tipo === 'telefono' && c.telefono);
+  const ejecutarTel = React.useContext(TelefonoCtx);
   const perfil = PERFILES.find(p => p.id === m.perfil);
   const esRequerimiento = m.persona === 'arquitecto' && /REQUERIMIENTO:/.test(m.texto);
   const jv = React.useContext(JarvisCtx);
@@ -525,6 +534,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
       {irs.map((c, i) => <React.Fragment key={`n${i}`}><IrModulo titulo={c.desc} destino={c.destino!} /></React.Fragment>)}
       {acciones.map(c => <React.Fragment key={c.id}><TarjetaAccion id={c.id!} /></React.Fragment>)}
       {piezas.map((c, i) => <React.Fragment key={`p${i}`}><PiezaEnChat pieza={c.pieza!} /></React.Fragment>)}
+      {ejecutarTel && telefonos.map(c => <React.Fragment key={c.telefono!.id}><TarjetaTelefono pedido={c.telefono!} onEjecutar={ejecutarTel} /></React.Fragment>)}
       {memorias.map((c, i) => <React.Fragment key={`m${i}`}><ChipMemoria id={c.id} texto={c.desc} estado={c.filas} detalle={c.detalle} /></React.Fragment>)}
       {cerebros.map((c, i) => <React.Fragment key={`c${i}`}><ChipCerebro texto={c.desc} aprendido={c.filas === 'aprendido'} /></React.Fragment>)}
       {esRequerimiento && !enVivo && (
@@ -810,6 +820,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     return () => { if (w.cancelIdleCallback) w.cancelIdleCallback(id); else clearTimeout(id); };
   }, [jarvis]);
   const privadosRef = useRef<Record<string, string>>({});
+  const ejecutarTelefonoPedido = useCallback((p: PedidoTelefono, o?: { elegido?: string; forzar?: boolean }) => { void correrTelefono(p, privadosRef.current, o); }, []);
   useEffect(() => { privadosRef.current = {}; }, [activa]);
   // La voz se calla si la app pasa a segundo plano o se cierra el asistente.
   useEffect(() => {
@@ -1008,7 +1019,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
         {
           accion: 'enviar', texto: opciones.audio ? '' : t, conversacionId: activa, idPregunta, idRespuesta, buscar: buscar && busquedaPermitida, regenerar, adjuntos: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
           // Phill: el aparato propio va para que nunca proponga bloquearse a sí mismo.
-          ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, hablado: hablarla || undefined, privados: sep.privados, ...(opciones.audio ? { audio: opciones.audio.datos, tipoAudio: opciones.audio.tipo } : {}), yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
+          ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, hablado: hablarla || undefined, nativa: enAppDelTelefono() || undefined, privados: sep.privados, ...(opciones.audio ? { audio: opciones.audio.datos, tipoAudio: opciones.audio.tipo } : {}), yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
         },
         (evento, d) => {
           if (evento === 'inicio') {
@@ -1030,6 +1041,11 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             borrador.consultas = [...(borrador.consultas || []), { tipo: 'accion', id: d.id, modulo: d.tarjeta?.modulo || 'Phill', desc: d.tarjeta?.titulo || 'Acción', filas: 'propuesta', detalle: '' }];
           }
           else if (evento === 'navegar' || evento === 'memoria' || evento === 'pieza') borrador.consultas = [...(borrador.consultas || []), d];
+          else if (evento === 'telefono') {
+            // Se hace en el acto en el teléfono; la tarjeta deja a la vista qué pasó.
+            if (d?.telefono?.id && !(borrador.consultas || []).some(c => c.telefono?.id === d.telefono.id)) borrador.consultas = [...(borrador.consultas || []), d];
+            void correrTelefono(d.telefono, privadosRef.current);
+          }
           else if (evento === 'cerebro') borrador.consultas = [...(borrador.consultas || []).filter(c => !(c.tipo === 'cerebro' && c.filas === d.filas)), d];
           else return;
           pedirPintar();
@@ -1399,6 +1415,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const verCerebro = () => setVista('cerebro');
   return (
     <AbrirModuloCtx.Provider value={onAbrirModulo}>
+    <TelefonoCtx.Provider value={ejecutarTelefonoPedido}>
     <VerCerebroCtx.Provider value={jarvis ? verCerebro : undefined}>
     <JarvisCtx.Provider value={jarvis}>
     <div className="ai-root" id="view-asistente" data-jarvis={jarvis || undefined} data-vista={vista}>
@@ -1679,6 +1696,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     </div>
     </JarvisCtx.Provider>
     </VerCerebroCtx.Provider>
+    </TelefonoCtx.Provider>
     </AbrirModuloCtx.Provider>
   );
 }

@@ -31,11 +31,13 @@ export type Consulta = {
   detalle: string;      // lo que leyó la IA, resumido (se ve al abrir la tarjeta)
   sinPermiso?: boolean;
   /** Marcas de Phill dentro de la respuesta: tarjeta de acción o botón para abrir un módulo. */
-  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision' | 'pieza';
+  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision' | 'pieza' | 'telefono';
   id?: string;
   destino?: string;
   /** Una pieza de pauta armada por Phill (tarjeta con vista previa y botón al Estudio). */
   pieza?: Record<string, unknown>;
+  /** Un pedido al teléfono del dueño (alarma, llamada, mapa…): la app lo ejecuta en el aparato. */
+  telefono?: Record<string, unknown>;
   /** Carril de pantalla: detalle completo que NO se manda a la IA. */
   panel?: Panel;
   /** Gráfico de barras comparado (este período contra el anterior). */

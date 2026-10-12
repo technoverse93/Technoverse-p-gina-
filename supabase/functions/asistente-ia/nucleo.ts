@@ -74,6 +74,7 @@ import { esCron, tareaCron } from './proactivo.ts';
 import { eventoDePrueba, informe, nombreComponente, registrar, type Prueba } from './salud.ts';
 import { empujarChat, enviarPrueba, responderDesdePush } from './push.ts';
 import { armarPromptImagen, ESTILOS_VALIDOS, FORMATOS_VALIDOS, generarCopy, generarImagen, type EstiloId, type FormatoId } from './estudio.ts';
+import { ACCIONES_TELEFONO, PANTALLAS_AJUSTES, prepararTelefono, SOLO_APK, type PedidoTelefono } from './telefono.ts';
 import { APRENDER, CONSULTAR_CEREBRO, crearCerebro, respuestaSinIA, type Cerebro, type Nota } from './cerebro.ts';
 import { FORMATO_REQUERIMIENTO, GLOSARIO_TICO, MAPA_SISTEMA, TONOS, type Tono } from './mapa.ts';
 
@@ -173,6 +174,10 @@ type Sistema = {
   memoria: { guardar: (texto: string, tipo: string) => Promise<string>; olvidar: (buscar: string) => Promise<{ id: string; texto: string; tipo: string }[]> } | null;
   /** Cerebro de Phill (grafo de lo que aprende). */
   cerebro: Cerebro | null;
+  /** Control del teléfono: «nativa» = el dueño está en la app del teléfono; «web» = en el navegador; null = no se puede (widget o sin eventos en vivo). */
+  telefono?: 'nativa' | 'web' | null;
+  /** Pedidos al teléfono de ESTE mensaje: si otra IA repite uno, no se hace dos veces. */
+  telefonos?: Map<string, PedidoTelefono>;
   /** Tokens gastados en ESTE mensaje por todas las IAs (también los
    *  intentos que fallaron a medias y la revisión): lo que se cobra. */
   gasto: { in: number; out: number };
@@ -215,6 +220,35 @@ const CREAR_PAUTA = {
     estilo: { type: 'string', enum: ['premium', 'claro', 'vibrante', 'oferta'], description: 'Estilo visual (opcional: si no, se elige el que va con el objetivo).' },
     instrucciones: { type: 'string', description: 'Lo que pidió el dueño con sus palabras (opcional): «para el fin de semana», «tono divertido»…' },
   }, required: ['producto'] },
+};
+
+const TELEFONO = {
+  nombre: 'telefono',
+  descripcion: 'Hace algo en el TELÉFONO del dueño (la app de su celular): poner una alarma o un temporizador, abrir una app, llamar o escribirle por WhatsApp o mensaje de texto a un contacto, crear un evento en el calendario, buscar un lugar o llevarlo con el mapa, poner música, prender la linterna, abrir un ajuste o un enlace. Usala cuando pida «poneme una alarma a las 6», «avisame en 10 minutos», «llamá a Laura», «escribile a Marco por WhatsApp que ya está listo», «abrí Spotify», «llevame al Walmart de Escazú», «agendame el jueves a las 3». Se hace en el acto en su teléfono (para llamar o escribir, él solo toca «Llamar» o «Enviar» en la app que se abre). PARA LLAMAR O ESCRIBIR pasá el NOMBRE del contacto en `contacto`: los números nunca los ves ni los inventás (si el dueño dictó uno, te llega como una marca tipo [TEL·1]: pasala tal cual en `numero`). Si falta un dato (a qué hora, a quién), preguntá UNA cosa. Después decile en una frase, en pasado, qué hiciste.',
+  parametros: { type: 'object', properties: {
+    accion: { type: 'string', enum: ACCIONES_TELEFONO as unknown as string[], description: 'Qué hacer en el teléfono.' },
+    hora: { type: 'string', description: 'alarma: hora en 24 h, como 06:30 o 18:45.' },
+    dias: { type: 'array', items: { type: 'string' }, description: 'alarma (opcional): días que se repite, como lunes, martes… o «entre semana», «fin de semana», «todos». Sin esto suena una sola vez.' },
+    etiqueta: { type: 'string', description: 'alarma o temporizador (opcional): nombre corto, como «Gimnasio» o «Pan».' },
+    horas: { type: 'number', description: 'temporizador: horas.' },
+    minutos: { type: 'number', description: 'temporizador: minutos.' },
+    segundos: { type: 'number', description: 'temporizador: segundos.' },
+    app: { type: 'string', description: 'abrir_app: nombre de la app como lo dice el dueño («WhatsApp», «Spotify», «cámara», «calculadora»).' },
+    contacto: { type: 'string', description: 'llamar, whatsapp o sms: NOMBRE del contacto (como «Laura»). Nunca un número.' },
+    numero: { type: 'string', description: 'llamar, whatsapp o sms: solo si el dueño dictó un número; pasá la marca [TEL·1] tal cual te llegó.' },
+    mensaje: { type: 'string', description: 'whatsapp o sms: el texto a enviar, como lo escribiría el dueño (corto y natural).' },
+    titulo: { type: 'string', description: 'calendario: nombre del evento.' },
+    inicio: { type: 'string', description: 'calendario: fecha y hora de inicio, como 2026-10-14T15:00 (hora de Costa Rica) o solo la fecha 2026-10-14 si es todo el día.' },
+    fin: { type: 'string', description: 'calendario (opcional): fecha y hora de fin, mismo formato.' },
+    duracion_min: { type: 'number', description: 'calendario (opcional): duración en minutos si no hay fin. Por defecto 60.' },
+    lugar: { type: 'string', description: 'calendario (opcional): dónde es.' },
+    descripcion: { type: 'string', description: 'calendario (opcional): detalle corto.' },
+    consulta: { type: 'string', description: 'mapa: lugar o dirección · musica: artista, canción o género.' },
+    navegar: { type: 'boolean', description: 'mapa: true para que lo lleve (navegación), false para solo mostrarlo.' },
+    encender: { type: 'boolean', description: 'linterna: true para prender, false para apagar.' },
+    pantalla: { type: 'string', enum: PANTALLAS_AJUSTES as unknown as string[], description: 'ajustes: qué pantalla de ajustes abrir.' },
+    url: { type: 'string', description: 'enlace: dirección que empieza con http:// o https://.' },
+  }, required: ['accion'] },
 };
 
 /** Herramientas de memoria: Phill aprende del dueño, nunca de lo que lee afuera. */
@@ -344,6 +378,7 @@ function declaraciones(sis: Sistema) {
   if (sis.acciones && !sis.leyoAfuera) lista.push(...ACCIONES.filter(a => !sis.utiles || sis.utiles.has(a.nombre)), NAVEGAR);
   if (sis.memoria && !sis.leyoAfuera && sis.conMemoria !== false) lista.push(...MEMORIA);
   if (sis.cerebro) lista.push(APRENDER, CONSULTAR_CEREBRO, BUSCAR_CONVERSACIONES, CREAR_PAUTA);
+  if (sis.cerebro && sis.telefono) lista.push(TELEFONO);
   return lista;
 }
 
@@ -478,6 +513,27 @@ async function correrHerramienta(nombre: string, args: Record<string, unknown>, 
       pieza: { producto: p.name, precio: Number(p.price) || 0, formato, objetivo, estilo, titular: copy.titular, subtitulo: copy.subtitulo, cta: copy.cta, caption: copy.caption, hashtags: copy.hashtags },
       ...(orden.length > 1 ? { otros_parecidos: orden.slice(1, 4).map((x: any) => x.name) } : {}),
       nota: 'La tarjeta con la pieza ya diseñada quedó en pantalla, con botón para abrirla en el Estudio. No repitas todo el texto: decí en una frase qué armaste y qué podés cambiar.',
+    };
+  }
+  if (nombre === TELEFONO.nombre && sis.cerebro && sis.telefono) {
+    const r = prepararTelefono(args, `tel-${crypto.randomUUID().slice(0, 8)}`);
+    if (!r.ok) return { error: r.error };
+    const { pedido } = r;
+    if (sis.telefono === 'web' && SOLO_APK.includes(pedido.accion)) return { error: 'El dueño está en el navegador, no en la app del teléfono: eso solo se puede desde la app (APK). Decíselo en una frase.' };
+    // Si otra IA repite el mismo pedido en este mensaje, no se hace dos veces.
+    const clave = JSON.stringify([pedido.accion, pedido.datos]);
+    const previo = sis.telefonos?.get(clave);
+    const efectivo = previo ?? pedido;
+    sis.telefonos?.set(clave, efectivo);
+    const c: Consulta = { tipo: 'telefono', modulo: 'Teléfono', desc: efectivo.titulo, filas: 'lista', detalle: '', telefono: efectivo as unknown as Record<string, unknown> };
+    // Cada intento de IA lleva su propia lista de consultas: la tarjeta tiene que quedar en la respuesta que gane.
+    sis.consultas.push(c);
+    sis.emitir('telefono', c);
+    return {
+      hecho: true, que: efectivo.titulo,
+      nota: sis.telefono === 'nativa'
+        ? 'Se hace en el acto en el teléfono del dueño (para llamar o escribir, él solo toca «Llamar» o «Enviar» en la app que se abre). Contestá en UNA frase corta y en pasado («Listo, puse la alarma a las 6:30»). No repitas datos.'
+        : 'El dueño está en el navegador: se le dejó una tarjeta con un botón para abrirlo. Decíselo en una frase.',
     };
   }
   if (nombre === BUSCAR_CONVERSACIONES.nombre) {
@@ -1961,6 +2017,10 @@ export async function atender(req: Request): Promise<Response> {
     // siguen igual que en la app.
     if (cuerpo?.desde === 'widget') extra += `\n\nESTÁS EN EL MINI-WIDGET DEL TELÉFONO (un recuadro chico en la pantalla de inicio, que muchas veces se escucha en voz alta): respondé corto y directo, de 1 a 4 frases, sin tablas ni títulos. Las cifras, completas. Si preparás una acción que pide confirmación, decí en una frase qué preparaste: el dueño la confirma tocando «Abrir conversación» en el widget.`;
 
+    // Control del teléfono: solo cuando la respuesta llega en vivo a la app (el widget y el modo sin
+    // eventos no pueden ejecutarlo, y Phill no debe decir «listo» sin que pase nada).
+    if (esSuper && modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget') extra += `\n\nTENÉS LA HERRAMIENTA «telefono» para hacer cosas en el celular del dueño${cuerpo?.nativa === true ? '' : ' (ahora está en el navegador: solo llamar, escribir, calendario, mapa y enlaces, con un botón; alarmas, temporizador, abrir apps, música, linterna y ajustes solo se pueden desde la app del teléfono)'}: alarmas, temporizadores, abrir apps, llamar, WhatsApp, mensajes de texto, calendario, mapa, música, linterna, ajustes y enlaces. Cuando pida algo así («poneme una alarma», «llamá a…», «escribile a… que…», «abrí…», «llevame a…»), usala EN ESA MISMA RESPUESTA, sin pedir permiso: la orden ya es la confirmación. Para llamar o escribir pasá el nombre del contacto, nunca un número. Si falta un dato, preguntá una sola cosa. Después, en una frase y en pasado: «Listo, puse la alarma a las 6:30».`;
+
     // El panel va a DECIR la respuesta en voz alta (manos libres, o «cuando hablo»):
     // más corta y sin formato, para que suene como una persona y empiece rápido.
     if (esSuper && cuerpo?.hablado === true && cuerpo?.desde !== 'widget') extra += `\n\nTU RESPUESTA SE VA A DECIR EN VOZ ALTA (el dueño te escucha, no te lee): hablá como una persona, en frases cortas y naturales, de 1 a 4 oraciones. Empezá directo por lo que pidió, sin saludar ni repetir la pregunta. Nada de tablas, viñetas, títulos, negritas, enlaces ni emojis. Las cifras, completas y como se dicen («182 mil colones», «6 ventas»). Si hay mucho detalle, decí lo principal y que el resto queda en pantalla. Si preparaste una acción o una tarjeta, decí en una frase qué preparaste.`;
@@ -2006,6 +2066,7 @@ export async function atender(req: Request): Promise<Response> {
       const listo = (res: Resultado, t0: number, respaldo: boolean, sis: Sistema) =>
         ({ res: { ...res, tokensIn: gasto.in, tokensOut: gasto.out, ms: Date.now() - t0 }, respaldo, sis });
       const propuestas = new Map<string, { r: unknown; marca: Consulta; evento: unknown }>();
+      const telefonos = new Map<string, PedidoTelefono>();
       const guardarPropuesta = async (nombreAcc: string, args: Record<string, unknown>, objetivo: Record<string, unknown>, tarjeta: Tarjeta) => {
         const { data, error } = await admin.from('ia_acciones').insert({ user_id: uid, conversacion_id: convId, accion: nombreAcc, args, objetivo, tarjeta }).select('id,vence_en').single();
         if (error) throw new Error(`No se pudo guardar la propuesta: ${error.message}`);
@@ -2023,6 +2084,7 @@ export async function atender(req: Request): Promise<Response> {
           acciones: modo === 'jarvis' && mods.acciones !== false && !adjuntos.length,
           leyoAfuera: adjuntos.length > 0, ctxAcc: modo === 'jarvis' ? ctxAcc : null, guardarPropuesta, propuestas,
           extra, rondas, memoria: memoriaFns, cerebro, gasto, utiles, conMemoria,
+          telefono: modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget' ? (cuerpo?.nativa === true ? 'nativa' : 'web') : null, telefonos,
         };
         marcarCerebro(sis, 'usado', usadosCerebro);
         return sis;

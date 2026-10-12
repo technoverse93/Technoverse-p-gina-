@@ -325,6 +325,19 @@ span.jv-tit:hover { background: transparent; }
 .ai-root[data-jarvis] .jv-pieza-error { margin: 0; font: 400 12px var(--jv-f-ui); color: #E5484D; }
 .ai-root[data-jarvis] .jv-pieza-botones { display: flex; flex-wrap: wrap; gap: 6px; }
 
+/* ---------- Lo que Phill hace en el teléfono ---------- */
+.ai-root[data-jarvis] .jv-tel { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 10px 12px; background: var(--jv-sup); border: 1px solid var(--jv-linea); border-radius: 14px; min-width: 0; }
+.ai-root[data-jarvis] .jv-tel > header { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ai-root[data-jarvis] .jv-tel > header b { flex: 1 1 auto; min-width: 0; font: 600 13px var(--jv-f-ui); color: var(--jv-tinta); overflow-wrap: anywhere; }
+.ai-root[data-jarvis] .jv-tel-ic { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 9px; background: var(--jv-hundido); color: var(--jv-oro); }
+.ai-root[data-jarvis] .jv-tel-est { display: inline-flex; align-items: center; gap: 4px; flex: none; font: 500 11px var(--jv-f-ui); color: var(--jv-tenue); }
+.ai-root[data-jarvis] .jv-tel[data-estado="hecho"] .jv-tel-est { color: var(--jv-acento); }
+.ai-root[data-jarvis] .jv-tel[data-estado="error"] .jv-tel-est, .ai-root[data-jarvis] .jv-tel[data-estado="sin_contacto"] .jv-tel-est, .ai-root[data-jarvis] .jv-tel[data-estado="solo_app"] .jv-tel-est { color: #E5484D; }
+.ai-root[data-jarvis] .jv-tel-msj { margin: 0; font: 400 12.5px/1.45 var(--jv-f-ui); color: var(--jv-tinta2); overflow-wrap: anywhere; }
+.ai-root[data-jarvis] .jv-tel-botones { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-root[data-jarvis] .jv-tel-botones:empty { display: none; }
+.ai-root[data-jarvis] .jv-tel-botones .ai-chip small { margin-left: 6px; font: 400 11px var(--jv-f-dato); color: var(--jv-tenue); }
+
 /* ---------- Cerebro a pantalla completa ---------- */
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ch { display: none; }
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ajustes { padding: 0; overflow: hidden; animation: none; }
