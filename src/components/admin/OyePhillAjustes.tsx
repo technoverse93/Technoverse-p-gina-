@@ -13,7 +13,7 @@
 // =====================================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AudioLines, Check, Download, Pause, Play, Plus, RefreshCcw, Square, TriangleAlert, X } from 'lucide-react';
+import { AudioLines, Check, CircleDot, Download, Pause, Play, Plus, RefreshCcw, Square, TriangleAlert, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useConfirm } from '../ui/Overlays';
 import { oyePhill, type AjusteAndroid } from '../../mobile/oyePhill';
@@ -200,6 +200,19 @@ export default function OyePhillAjustes() {
             disabled={ocupado || !!bajando || (!activo && !puede)} onClick={() => void (activo ? apagar() : activar())} aria-label="«Oye Phill» en este teléfono" />
         )}
       </div>
+
+      {nativo && e && e.version >= 2 && (
+        <div className="ai-modu">
+          <span className="ai-modu-ic"><CircleDot className="w-4 h-4" /></span>
+          <span className="ai-modu-t">
+            <b>{e.asistente ? 'Con el botón del teléfono: listo' : 'Llamarlo con el botón del teléfono'}</b>
+            <span>{e.asistente
+              ? 'Mantené apretado el botón de inicio (o el de encendido, si tu teléfono lo usa para el asistente) y Phill aparece abajo, escuchando, sin tapar la pantalla.'
+              : 'Como Google o Siri: elegí a Technoverse en «App de asistente digital». Después, mantené apretado el botón de inicio (o el de encendido) y Phill aparece abajo, escuchando.'}</span>
+          </span>
+          <button type="button" className="ai-chip" onClick={() => void oyePhill.abrirAjuste('asistente')}>{e.asistente ? 'Cambiar' : 'Elegir'}</button>
+        </div>
+      )}
 
       {nativo && !apkVieja && e && est && (activo || e.probando || est.tono === 'error') && (
         <p className="ai-oye-estado" data-tono={est.tono} role="status">

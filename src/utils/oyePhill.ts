@@ -36,6 +36,8 @@ export interface EstadoOye {
   ultimoOido: string;
   ultimaDecision: string;
   sdk: number;
+  /** ¿Phill es la app de asistente del teléfono (mantener inicio / encendido)? Desde la versión 2 del complemento. */
+  asistente?: boolean;
 }
 
 export const FRASE_MIN_PALABRAS = 2;

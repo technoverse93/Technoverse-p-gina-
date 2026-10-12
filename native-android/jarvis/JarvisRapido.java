@@ -45,6 +45,9 @@ import java.util.ArrayList;
  *    widget (sin oscurecer), con el teclado abajo; la respuesta queda en el
  *    widget. Si no se sabe dónde está el widget, una barrita sobre el teclado.
  *  · «hoja»: Phill completo, para confirmar acciones o ver tablas.
+ *  · «oye»: lo llamaste («Oye Phill» o el botón del asistente, ver
+ *    PhillAsistente): un panel chico abajo, escuchando de una, SIN oscurecer
+ *    la pantalla (como el asistente de Google). Si abre otra app, se quita.
  *
  * La página decide si puede abrir: widget activado en este teléfono, sesión
  * del superadmin y sin bloqueo de aparato. El candado de huella de la app no
@@ -54,11 +57,14 @@ public class JarvisRapido extends BridgeActivity {
     static final String EXTRA_MODO = "modo";
     /** Widgets puestos antes del modo «voz»: se leían con este dato. */
     static final String EXTRA_VOZ = "voz";
+    /** La abrió el botón del asistente del teléfono (PhillAsistente). */
+    static final String EXTRA_ASISTENTE = "asistente";
     static final String PAGINA = "/jarvis-rapido.html";
 
     private boolean conPagina = false;
     private boolean creada = false;
     private String modo = "hoja";
+    private boolean comoAsistente = false;
     private ActivityResultLauncher<Intent> dictado;
     /** Dónde está el widget en la pantalla (px), si se abrió desde su caja. */
     private Rect marco = null;
@@ -74,6 +80,11 @@ public class JarvisRapido extends BridgeActivity {
         return modo;
     }
 
+    /** ¿La abrió el botón del asistente? (elegir a Phill como asistente ya es el permiso). */
+    boolean comoAsistente() {
+        return comoAsistente;
+    }
+
     @Override
     public void onCreate(Bundle savedInstanceState) {
         // Antes de super.onCreate(): ahí el puente arma su lista de plugins y
@@ -81,6 +92,7 @@ public class JarvisRapido extends BridgeActivity {
         registerPlugin(JarvisWidgetPlugin.class);
         config = configConPagina();
         modo = modoDe(getIntent());
+        comoAsistente = getIntent() != null && getIntent().getBooleanExtra(EXTRA_ASISTENTE, false);
         marco = marcoDe(getIntent());
         super.onCreate(savedInstanceState);
         dictado = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::alDictar);
@@ -138,6 +150,7 @@ public class JarvisRapido extends BridgeActivity {
         if (!creada || intent == null) return;
         setIntent(intent);
         modo = modoDe(intent);
+        comoAsistente = intent.getBooleanExtra(EXTRA_ASISTENTE, false);
         marco = marcoDe(intent);
         aplicarModo();
         OyeVisibilidad.aperturaConfirmada();
@@ -205,9 +218,10 @@ public class JarvisRapido extends BridgeActivity {
     private void aplicarModo() {
         Window ventana = getWindow();
         ventana.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
-        if ("voz".equals(modo) || ("escribir".equals(modo) && marco != null)) {
-            // Por voz no se ve nada; al escribir sobre el widget, el chat ocupa
-            // su recuadro y la pantalla de inicio queda tal cual (sin oscurecer).
+        if ("voz".equals(modo) || "oye".equals(modo) || ("escribir".equals(modo) && marco != null)) {
+            // Por voz no se ve nada; al llamarlo, un panel chico abajo; al escribir
+            // sobre el widget, el chat ocupa su recuadro. En los tres, lo de atrás
+            // queda tal cual (sin oscurecer), para ver lo que Phill hace.
             ventana.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
         } else {
             ventana.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);

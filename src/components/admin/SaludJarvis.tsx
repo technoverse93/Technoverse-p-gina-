@@ -10,7 +10,7 @@
 import { useEffect, useState } from 'react';
 import { HeartPulse, RefreshCw, BellRing } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
-import { estadoPush, iniciarPush, TEXTO_ESTADO, type EstadoPush } from '../../mobile/pushNativo';
+import { ESTADO_PENDIENTE, estadoPush, iniciarPush, TEXTO_ESTADO, type EstadoPush } from '../../mobile/pushNativo';
 
 type PruebaInfo = { ok: boolean; ms: number; detalle: string; modelo?: string | null; cuando: string };
 type Ia = { id: string; nombre: string; respondio: number; fallos: number; ms: number | null; ultimoError: string; ultimoErrorEn: string | null; prueba: PruebaInfo | null };
@@ -166,10 +166,10 @@ export default function SaludJarvis() {
       <h5 className="jv-salud-sub">Avisos al teléfono <small>chat y Phill, aunque la app esté cerrada</small></h5>
       <ul className="jv-salud-lista">
         <li>
-          <i className="jv-sd-luz" data-ok={push ? (push === 'activo' ? 'si' : 'no') : undefined} aria-label={push === 'activo' ? 'Activos' : 'Sin activar'} />
+          <i className="jv-sd-luz" data-ok={push && !ESTADO_PENDIENTE.has(push) ? (push === 'activo' ? 'si' : 'no') : undefined} aria-label={push === 'activo' ? 'Activos' : 'Sin activar'} />
           <span className="jv-sd-tx">
-            <b>{push === 'activo' ? 'Activos' : 'Sin activar'}</b>
-            <span className={push && push !== 'activo' ? 'jv-sd-error' : undefined}>{push ? TEXTO_ESTADO[push] : 'Se activan al abrir la app del teléfono con tu sesión.'}</span>
+            <b>{push === 'activo' ? 'Activos' : push && ESTADO_PENDIENTE.has(push) ? 'Sin configurar (opcional)' : 'Sin activar'}</b>
+            <span className={push && push !== 'activo' && !ESTADO_PENDIENTE.has(push) ? 'jv-sd-error' : undefined}>{push ? TEXTO_ESTADO[push] : 'Se activan al abrir la app del teléfono con tu sesión.'}</span>
             {pushNota && <span className="jv-sd-pie" role="status">{pushNota}</span>}
           </span>
           <span className="jv-sd-ms"><button type="button" className="ai-chip" disabled={pushOcupado} onClick={() => void probarPush()}><BellRing className="w-4 h-4" />{pushOcupado ? 'Probando…' : 'Enviar prueba'}</button></span>

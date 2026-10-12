@@ -2245,7 +2245,7 @@ export async function atender(req: Request): Promise<Response> {
     // Desde el mini-widget del teléfono la respuesta se lee en un recuadro
     // chico (y muchas veces en voz alta): corta y sin tablas. Las acciones
     // siguen igual que en la app.
-    if (cuerpo?.desde === 'widget') extra += `\n\nESTÁS EN EL MINI-WIDGET DEL TELÉFONO (un recuadro chico en la pantalla de inicio, que muchas veces se escucha en voz alta): respondé corto y directo, de 1 a 4 frases, sin tablas ni títulos. Las cifras, completas. Si preparás una acción que pide confirmación, decí en una frase qué preparaste: el dueño la confirma tocando «Abrir conversación» en el widget.`;
+    if (cuerpo?.desde === 'widget') extra += `\n\nESTÁS EN EL MINI-WIDGET DEL TELÉFONO (un recuadro chico en la pantalla de inicio, que muchas veces se escucha en voz alta): respondé MUY corto y directo: una o dos frases (unas 30 palabras como mucho), sin tablas, listas ni títulos. Las cifras, completas. Si preparás una acción que pide confirmación, decí en una frase qué preparaste: el dueño la confirma tocando «Abrir conversación» en el widget.`;
 
     // Control del teléfono: solo cuando la respuesta llega en vivo a la app (el widget y el modo sin
     // eventos no pueden ejecutarlo, y Phill no debe decir «listo» sin que pase nada).
@@ -2253,7 +2253,7 @@ export async function atender(req: Request): Promise<Response> {
 
     // El panel va a DECIR la respuesta en voz alta (manos libres, o «cuando hablo»):
     // más corta y sin formato, para que suene como una persona y empiece rápido.
-    if (esSuper && cuerpo?.hablado === true && cuerpo?.desde !== 'widget') extra += `\n\nTU RESPUESTA SE VA A DECIR EN VOZ ALTA (el dueño te escucha, no te lee): hablá como una persona, en frases cortas y naturales, de 1 a 4 oraciones. Empezá directo por lo que pidió, sin saludar ni repetir la pregunta. Nada de tablas, viñetas, títulos, negritas, enlaces ni emojis. Las cifras, completas y como se dicen («182 mil colones», «6 ventas»). Si hay mucho detalle, decí lo principal y que el resto queda en pantalla. Si preparaste una acción o una tarjeta, decí en una frase qué preparaste.`;
+    if (esSuper && cuerpo?.hablado === true && cuerpo?.desde !== 'widget') extra += `\n\nTU RESPUESTA SE VA A DECIR EN VOZ ALTA (el dueño te escucha, no te lee): hablá como una persona, MUY corto: una o dos oraciones simples (unas 30 palabras como mucho), como respondería un asistente de voz del teléfono. Empezá directo por lo que pidió, sin saludar, sin repetir la pregunta y sin explicar cómo lo hiciste. Una sola idea por oración. Nada de tablas, viñetas, títulos, negritas, enlaces ni emojis. Las cifras, completas y como se dicen («182 mil colones», «6 ventas»). Si hay mucho detalle, decí solo lo principal (el dato o el resultado) y nada más; no enumeres. Si preparaste una acción o una tarjeta, decí en una frase qué preparaste.`;
 
     // ---------------------------------------------------------------
     // Conversación con la IA. `emitir` manda eventos en vivo si el panel
@@ -2608,7 +2608,9 @@ export async function atender(req: Request): Promise<Response> {
       const r = salida.res;
       const apagado = Deno.env.get('IA_REVISAR') === '0' || (ajustes?.modulos as any)?.revisar === false;
       const esAccion = r.consultas.some(c => c.tipo === 'accion' || c.tipo === 'navegar' || c.tipo === 'memoria');
-      if (apagado || esAccion || (r.proveedor as string) === 'cerebro' || r.texto.length < 120) return salida;
+      // Por voz no se revisa: la revisión tarda y, si corrige, Phill tendría que volver a empezar a hablar.
+      const porVoz = cuerpo?.hablado === true || cuerpo?.desde === 'widget';
+      if (apagado || esAccion || porVoz || (r.proveedor as string) === 'cerebro' || r.texto.length < 120) return salida;
       const hasta = Date.now() + 15000; // veloz: la revisión no puede frenar la respuesta
       // Lo que de verdad devolvieron las consultas (páginas leídas, búsquedas,
       // datos del sistema). Antes solo iba el título de cada consulta: el

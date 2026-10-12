@@ -33,6 +33,7 @@ import { iniciarKillSwitch, fijarHuellaAparato, fijarModeloAparato } from '../..
 import { obtenerHuellaAparato } from '../../utils/fingerprint';
 import { sincronizarPaseSinTocarCandado } from '../../utils/biometriaNativa';
 import { lector, modoLectura } from '../../utils/lectorVoz';
+import { ABRE_OTRA_APP, alTerminarTelefono } from '../../utils/telefono';
 import type { User } from '../../types';
 
 const AsistenteIA = lazy(() => import('./AsistenteIA'));
@@ -357,6 +358,11 @@ export default function VentanitaJarvis() {
     }
   }, [fase, modo, pendiente, trabajando, responderEnWidget]);
   const abrirApp = useCallback((modulo?: string) => { lector.callar(); void widgetNativo.abrirApp(modulo); }, []);
+  // Si Phill abrió otra app (WhatsApp, el mapa, una llamada…), la ventanita se quita para que se
+  // vea lo que hizo, como el asistente de Google. La respuesta queda en el widget.
+  useEffect(() => alTerminarTelefono((p, r) => {
+    if (r.estado === 'hecho' && ABRE_OTRA_APP.has(p.accion)) cerrar();
+  }), [cerrar]);
   const alResponder = useCallback((pregunta: string, respuesta: string) => { void widgetNativo.ultimaRespuesta(pregunta, respuesta); }, []);
 
   const aviso = fase !== 'cargando' && fase !== 'listo' ? AVISOS[fase] : null;
@@ -410,7 +416,8 @@ export default function VentanitaJarvis() {
     <OverlayProvider>
       <div id="admin-panel-root" className="vj-raiz">
         {nativa && <button type="button" className="vj-velo" aria-label="Cerrar Phill" tabIndex={-1} onClick={cerrar} />}
-        <section className="jv-hoja vj-hoja" role="dialog" aria-label="Phill" data-compacta={aviso ? '' : undefined}>
+        <section className="jv-hoja vj-hoja" role="dialog" aria-label="Phill" data-compacta={aviso ? '' : undefined}
+          data-oye={modo === 'oye' ? '' : undefined} data-listo={fase === 'listo' ? '' : undefined}>
           <header className="jv-hoja-cab vj-cab">
             <span><Sparkles className="w-3.5 h-3.5" />Phill</span>
             {nativa && !aviso && (

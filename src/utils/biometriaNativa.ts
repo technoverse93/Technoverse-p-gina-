@@ -671,7 +671,9 @@ export async function entrarConBiometriaNativa(): Promise<ResultadoNativo> {
     const { data: yaHabia } = await supabase.auth.getSession();
     if (sesionVigente(yaHabia?.session)) {
       const s = yaHabia!.session!;
-      await guardarPaseActual(s.refresh_token, s.user?.email);
+      // El pase se guarda por detrás (es la misma sesión de siempre): no se hace esperar a la persona
+      // para entrar mientras el llavero escribe.
+      void guardarPaseActual(s.refresh_token, s.user?.email).catch(() => { /* lo rearma el próximo ingreso */ });
       marcarBloqueo(false);   // la huella abre la llave
       return { ok: true, mensaje: 'Bienvenido.', userId: s.user?.id, email: s.user?.email || undefined };
     }

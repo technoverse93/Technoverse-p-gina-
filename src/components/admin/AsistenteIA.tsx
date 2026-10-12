@@ -30,7 +30,7 @@ import { useAvisosSinLeer } from '../../mobile/avisosJarvis';
 import { BotonEscuchar, BarraLectura, AjusteVoz, useLector } from './LectorPiezas';
 import type { FaseManos } from './HudVoz';
 import type { PiezaChat } from './PiezaPauta';
-import { lector, modoLectura, paraHablar, puedeHablar } from '../../utils/lectorVoz';
+import { lector, MAX_CARACTERES_AL_RESPONDER, modoLectura, paraHablar, puedeHablar } from '../../utils/lectorVoz';
 import { nivelVoz } from '../../utils/nivelVoz';
 import { ESPERA_RELLENO_MS, esDespedida, fraseRelleno, interrumpirActivo, PAUSAS_MS, pausaElegida, saludoManos } from '../../utils/manosLibres';
 import { abrirOido, type Oido } from '../../utils/oidoVoz';
@@ -1006,7 +1006,9 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
     // oración) en vez de esperar a que termine de escribirse.
     const lectura = modoLectura();
     const hablarla = manosRef.current || lectura === 'siempre' || (lectura === 'voz' && !!(opciones.audio || opciones.porVoz));
-    const flujo = hablarla ? lector.abrirFlujo(idRespuesta) : null;
+    // Si la pregunta fue por voz, se dice corto (unas dos oraciones): el detalle queda escrito.
+    const porVozEsta = manosRef.current || !!(opciones.audio || opciones.porVoz);
+    const flujo = hablarla ? lector.abrirFlujo(idRespuesta, porVozEsta ? { maxCaracteres: MAX_CARACTERES_AL_RESPONDER } : {}) : null;
     // En manos libres, si todavía no salió nada a los ~2.6 s (está consultando), una frase corta llena el silencio.
     let relleno: ReturnType<typeof setTimeout> | 0 = flujo && manosRef.current ? setTimeout(() => flujo.decir(fraseRelleno()), ESPERA_RELLENO_MS) : 0;
     const sinRelleno = () => { if (relleno) { clearTimeout(relleno); relleno = 0; } };
@@ -1365,14 +1367,15 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
     (navigator as any).wakeLock?.request?.('screen').then((c: any) => { if (vivo) candado = c; else void c.release?.(); }).catch(() => {});
     return () => { vivo = false; void candado?.release?.().catch?.(() => {}); };
   }, [manos]);
-  const iniciarManos = () => {
+  /** `llamado`: lo abrió «Oye Phill» o el botón del asistente: escucha de una, sin saludo (como Google). */
+  const iniciarManos = (llamado?: unknown) => {
     if (!conVoz || manos || enviando) return;
     vaciasSeguidas.current = 0; despedir.current = false; falsasSeguidas.current = 0; interrupcionOff.current = false;
     lector.callar(); setMenu(null); setVista('chat'); setManos(true);
     // El micrófono se abre ya (aquí hay un toque real) y queda abierto mientras dure la conversación.
     oidoListo.current = abrirOido().then(o => { if (!manosRef.current) { o.cerrar(); return null; } oido.current = o; return o; }).catch(() => null);
-    // Phill saluda por tu nombre; después te escucha.
-    if (puedeHablar()) {
+    // Phill saluda por tu nombre; después te escucha. Si lo llamaste, ya sabe que querés hablar: escucha directo.
+    if (llamado !== true && puedeHablar()) {
       setSaludando(true);
       void lector.hablar(saludoManos(currentUser?.name, avisosSinLeer), 'saludo-manos').finally(() => setSaludando(false));
     }
@@ -1386,7 +1389,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
     if (!manosAlAbrir || manosAlAbrir === manosAtendida.current || !conVoz || manos || enviando) return;
     manosAtendida.current = manosAlAbrir;
     abiertoPorOye.current = true;
-    iniciarManos();
+    iniciarManos(true);
   }, [manosAlAbrir, conVoz]); // eslint-disable-line react-hooks/exhaustive-deps
   // Solo cuando manos libres PASA de prendido a apagado (no al montar, que también lo ve apagado).
   const manosAntes = useRef(false);

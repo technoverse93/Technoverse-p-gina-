@@ -17,7 +17,7 @@ import type { EstadoOye } from '../utils/oyePhill';
 
 interface Resp { ok: boolean; error?: string }
 type RespEstado = Resp & Partial<EstadoOye>;
-export type AjusteAndroid = 'overlay' | 'bateria' | 'notificaciones' | 'app';
+export type AjusteAndroid = 'overlay' | 'bateria' | 'notificaciones' | 'app' | 'asistente';
 export interface LineaOida { texto: string; fin: boolean; despierta: boolean; motivo: string }
 
 interface PluginOye {

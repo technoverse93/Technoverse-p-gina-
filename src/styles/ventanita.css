@@ -114,6 +114,92 @@ html.tv-ventanita #root { height: 100%; }
 
 /* La escena del cerebro y su árbol, a la medida de la hoja (como en el panel). */
 
+/* ---------------------------------------------------------------------
+   LLAMADO («Oye Phill» o el botón del asistente del teléfono)
+   ---------------------------------------------------------------------
+   Como el asistente de Google: un panel chico pegado abajo, sin tapar la
+   pantalla (la ventana nativa ya no la oscurece), con el orbe a la
+   izquierda y lo último dicho al lado. Si Phill abre otra app, la ventanita
+   se quita sola para que se vea. Tocar arriba (fuera del panel) lo cierra. */
+.jv-hoja.vj-hoja[data-oye] {
+  top: auto;
+  left: 10px;
+  right: 10px;
+  bottom: calc(10px + env(safe-area-inset-bottom, 0px));
+  height: min(176px, 40dvh);
+  border-radius: 26px;
+  box-shadow: 0 14px 44px rgba(0, 0, 0, .34);
+}
+.jv-hoja.vj-hoja[data-oye][data-compacta] { height: auto; }
+@media (min-width: 640px) {
+  .jv-hoja.vj-hoja[data-oye] { left: 0; right: 0; width: min(520px, calc(100vw - 32px)); }
+}
+/* Con Phill listo, sin cabecera: el panel es solo el orbe y lo que se dice. */
+.vj-hoja[data-oye][data-listo] .vj-cab { display: none; }
+.vj-hoja[data-oye][data-listo] .jv-hoja-cuerpo { padding: 0; }
+
+/* Mientras escucha o habla (manos libres): traslúcido, se ve lo de atrás. */
+.jv-hoja.vj-hoja[data-oye]:has(.jv-hud) { background: transparent; border-color: rgba(255, 255, 255, .14); }
+.vj-hoja[data-oye] .ai-root[data-jarvis]:has(> .jv-hud) { background: transparent; }
+.vj-hoja[data-oye] .ai-root[data-jarvis]:has(> .jv-hud) > :not(.jv-hud) { visibility: hidden; }
+.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud {
+  flex-direction: row;
+  justify-content: flex-start;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px 12px 8px;
+  overflow: hidden;
+  background: color-mix(in srgb, var(--jv-cielo-2) 86%, transparent);
+  -webkit-backdrop-filter: blur(22px) saturate(1.2);
+  backdrop-filter: blur(22px) saturate(1.2);
+}
+.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-orbe { width: 92px; height: 92px; }
+.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-orbe .jv-orbe { width: 66px; height: 66px; }
+.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-tx {
+  flex: 1;
+  align-self: stretch;
+  justify-content: center;
+  align-items: flex-start;
+  gap: 2px;
+  padding-top: 26px;
+  text-align: left;
+}
+.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-estado { font-size: 11.5px; letter-spacing: .16em; }
+.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-ayuda { display: none; }
+.vj-hoja[data-oye] .ai-root[data-jarvis] :is(.jv-hud-vos, .jv-hud-jarvis) {
+  margin: 2px 0 0;
+  padding: 0;
+  background: none;
+  border: 0;
+  border-radius: 0;
+  max-height: none;
+  overflow: hidden;
+  font-size: 15px;
+  line-height: 1.4;
+  display: -webkit-box;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 3;
+}
+.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-vos { color: var(--jv-tinta2); }
+/* Lo último dicho: si ya contestó, solo su respuesta. */
+.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-vos:has(+ .jv-hud-jarvis) { display: none; }
+.vj-hoja[data-oye] .ai-root[data-jarvis] :is(.jv-hud-vos, .jv-hud-jarvis) small { display: none; }
+/* Terminar y «Mirá esto»: solo el ícono, arriba a la derecha. */
+.vj-hoja[data-oye] .ai-root[data-jarvis] :is(.jv-hud-x, .jv-hud-cam) {
+  position: absolute;
+  top: 10px;
+  left: auto;
+  width: 34px;
+  height: 34px;
+  padding: 0;
+  justify-content: center;
+  gap: 0;
+  font-size: 0;
+  border-radius: 50%;
+}
+.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-x { right: 10px; }
+.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-cam { right: 52px; }
+
 @media (prefers-reduced-motion: reduce) {
   .jv-hoja.vj-hoja { animation: none; }
 }

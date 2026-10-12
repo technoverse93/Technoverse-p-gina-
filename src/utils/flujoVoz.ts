@@ -135,7 +135,7 @@ export function crearFlujoHabla(opciones: { maxCaracteres?: number } = {}): Fluj
       if (cerrado) return [];
       const salida = procesar(true);
       cerrado = true;
-      if (cortado) salida.push('El resto lo tenés en pantalla.');
+      if (cortado) salida.push('El resto está en pantalla.');
       if (hayTabla) salida.push('Te dejé una tabla en pantalla.');
       if (hayCodigo) salida.push('Te dejé un bloque de código en pantalla.');
       return salida;

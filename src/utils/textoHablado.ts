@@ -6,6 +6,11 @@
 // =====================================================================
 
 export const MAX_CARACTERES = 1800;
+/**
+ * Tope de lo que se dice solo, sin que nadie lo pida (la respuesta a una pregunta hecha por voz):
+ * unas dos o tres oraciones, ~20 s. Lo demás queda escrito en pantalla.
+ */
+export const MAX_CARACTERES_AL_RESPONDER = 360;
 
 /** Limpia UNA pieza de texto: sin símbolos de formato, enlaces ni emojis, con «colones». */
 export function limpiarInline(t: string): string {
