@@ -72,7 +72,8 @@ import { ACCIONES, MODULOS_PANEL, NAVEGAR, pideToken, validarOpciones, type CtxA
 import { normalizarDictado, restaurarPrivados, separarPrivados } from './privados.ts';
 import { esCron, tareaCron } from './proactivo.ts';
 import { eventoDePrueba, informe, nombreComponente, registrar, type Prueba } from './salud.ts';
-import { empujarChat, enviarPrueba, responderDesdePush } from './push.ts';
+import { empujarAviso, empujarChat, enviarPrueba, responderDesdePush } from './push.ts';
+import { crearTarea, procesarTareas, purgarTareas, type MotorTareas, type PasoPlan, type ResultadoCrear, type Tarea } from './tareas.ts';
 import { armarPromptImagen, ESTILOS_VALIDOS, FORMATOS_VALIDOS, generarCopy, generarImagen, type EstiloId, type FormatoId } from './estudio.ts';
 import { ACCIONES_TELEFONO, PANTALLAS_AJUSTES, prepararTelefono, SOLO_APK, type PedidoTelefono } from './telefono.ts';
 import { APRENDER, CONSULTAR_CEREBRO, crearCerebro, respuestaSinIA, type Cerebro, type Nota } from './cerebro.ts';
@@ -178,6 +179,8 @@ type Sistema = {
   telefono?: 'nativa' | 'web' | null;
   /** Pedidos al teléfono de ESTE mensaje: si otra IA repite uno, no se hace dos veces. */
   telefonos?: Map<string, PedidoTelefono>;
+  /** Deja un encargo para hacer en segundo plano (solo si la respuesta llega en vivo a la app). */
+  encargar?: (titulo: string, instruccion: string) => Promise<ResultadoCrear>;
   /** Tokens gastados en ESTE mensaje por todas las IAs (también los
    *  intentos que fallaron a medias y la revisión): lo que se cobra. */
   gasto: { in: number; out: number };
@@ -249,6 +252,15 @@ const TELEFONO = {
     pantalla: { type: 'string', enum: PANTALLAS_AJUSTES as unknown as string[], description: 'ajustes: qué pantalla de ajustes abrir.' },
     url: { type: 'string', description: 'enlace: dirección que empieza con http:// o https://.' },
   }, required: ['accion'] },
+};
+
+const ENCARGAR = {
+  nombre: 'encargar_tarea',
+  descripcion: 'Deja un ENCARGO que hacés vos solo en segundo plano, sin que el dueño espere ni tenga la app abierta, y le avisás al terminar (notificación y el resultado en este chat). Usala para trabajos de VARIOS pasos que tardan: investigar precios o productos en internet, revisar varios módulos y armar un informe, preparar el cierre del día, comparar proveedores, listar qué hay que comprar. En segundo plano SOLO se consulta e investiga: no se cambia nada del sistema. Si el pedido es una pregunta rápida o una orden (cambiar algo), no la uses: respondé o actuá ahora.',
+  parametros: { type: 'object', properties: {
+    instruccion: { type: 'string', description: 'Qué hay que hacer, completo y claro, con todo lo que pidió el dueño (productos, plazos, a qué comparar, qué decisión quiere tomar).' },
+    titulo: { type: 'string', description: 'Nombre corto del encargo, de 3 a 6 palabras.' },
+  }, required: ['instruccion'] },
 };
 
 const MIRAR = {
@@ -387,6 +399,8 @@ function declaraciones(sis: Sistema) {
   // Igual que las acciones: después de leer algo de afuera (internet, un enlace, una foto) no se hace nada en el teléfono.
   if (sis.cerebro && sis.telefono && !sis.leyoAfuera) lista.push(TELEFONO);
   if (sis.cerebro && sis.telefono) lista.push(MIRAR);
+  // Un encargo creado después de leer algo de afuera podría traer órdenes escondidas: tampoco.
+  if (sis.cerebro && sis.encargar && !sis.leyoAfuera) lista.push(ENCARGAR);
   return lista;
 }
 
@@ -522,6 +536,17 @@ async function correrHerramienta(nombre: string, args: Record<string, unknown>, 
       ...(orden.length > 1 ? { otros_parecidos: orden.slice(1, 4).map((x: any) => x.name) } : {}),
       nota: 'La tarjeta con la pieza ya diseñada quedó en pantalla, con botón para abrirla en el Estudio. No repitas todo el texto: decí en una frase qué armaste y qué podés cambiar.',
     };
+  }
+  if (nombre === ENCARGAR.nombre && sis.cerebro && sis.encargar && !sis.leyoAfuera) {
+    const titulo = String(args?.titulo ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const instruccion = String(args?.instruccion ?? '').replace(/\s+/g, ' ').trim().slice(0, 2000);
+    if (instruccion.length < 20) return { error: 'Falta decir bien qué hay que hacer: pasá la instrucción completa, con todo lo que pidió el dueño.' };
+    const nombreEncargo = titulo.length >= 3 ? titulo : instruccion.slice(0, 60);
+    const r = await sis.encargar(nombreEncargo, instruccion);
+    if (!r.ok) return { error: r.error };
+    const c: Consulta = { tipo: 'tarea', modulo: 'Encargo', desc: nombreEncargo, filas: 'pendiente', detalle: '', tarea: { id: r.id, titulo: nombreEncargo } };
+    sis.consultas.push(c); sis.emitir('tarea', c);
+    return { hecho: true, nota: 'El encargo quedó en marcha: lo hacés vos solo en segundo plano (aunque cierre la app), le avisás con una notificación cuando termine y el resultado queda en este chat. Decile en UNA frase corta que ya empezaste y que le avisás. NO inventes ningún resultado ni digas cuánto va a tardar.' };
   }
   if (nombre === MIRAR.nombre && sis.cerebro && sis.telefono) {
     sis.emitir('camara', { motivo: String(args?.motivo || '').slice(0, 120) });
@@ -1393,6 +1418,93 @@ async function pedirParaEstudio(prompt: string, usuario: string, valido: (j: any
   return r?.j ?? null;
 }
 
+// ---------------------------------------------------------------------
+// TAREAS EN SEGUNDO PLANO: la IA que usa el orquestador (ver tareas.ts)
+// ---------------------------------------------------------------------
+const PROMPT_PLAN = `Sos Phill, el asistente del dueño de Technoverse Costa Rica (tienda y taller de celulares y accesorios). Te dejó un ENCARGO para hacer en segundo plano. Dividilo en 1 a 5 pasos CONCRETOS y en orden. Cada paso tiene que poder hacerse con consultas de SOLO LECTURA al sistema (inventario, ventas, facturas, taller, existencias, finanzas) o buscando en internet, y se escribe como una orden completa y autosuficiente («Buscá en internet el precio de…», «Consultá las existencias de…»). Si el encargo es simple, un solo paso. No incluyas «redactar el informe» (eso se hace aparte) ni nada que cambie datos. Respondé SOLO un JSON: {"titulo": "3 a 6 palabras", "pasos": ["…", "…"]}`;
+const PROMPT_INFORME = `Sos Phill. Redactá el INFORME FINAL de un encargo que hiciste en segundo plano para el dueño de Technoverse Costa Rica: español de Costa Rica con voseo, claro y concreto. Empezá por la conclusión o la recomendación; después el detalle con las cifras y las fuentes que aparezcan en lo averiguado (nombres de tiendas, enlaces). Si algún paso no pudo hacerse, decilo en una línea. Podés usar listas cortas o una tabla markdown si ayudan. No inventes ningún dato que no esté en lo averiguado. Máximo unas 350 palabras. Respondé SOLO un JSON: {"texto": "…markdown…"}`;
+const REGLAS_SEGUNDO_PLANO = `\n\nESTÁS TRABAJANDO EN SEGUNDO PLANO en un encargo del dueño: él NO está leyendo esto ahora y no podés preguntarle nada. Hacé SOLO el paso que te toca, con tus consultas de solo lectura (inventario, ventas, taller, internet…). Toda cifra sale de una consulta; si un dato no se pudo conseguir, decilo claro en vez de inventarlo. Respondé con lo averiguado, concreto y corto (unas 250 palabras como máximo), con cifras y fuentes (tiendas o enlaces) si buscaste en internet. No saludes ni hagas preguntas.`;
+
+function crearMotorTareas(admin: any): MotorTareas {
+  const gasto = { in: 0, out: 0 };
+  return {
+    async planificar(instruccion) {
+      const r = await pedirJSON(PROMPT_PLAN, instruccion, { hasta: Date.now() + 25000, gasto, rapido: true, etiqueta: 'plan', valido: j => Array.isArray(j?.pasos) && j.pasos.length >= 1 }).catch(() => null);
+      return r ? { titulo: typeof r.j.titulo === 'string' ? r.j.titulo : undefined, pasos: r.j.pasos.map((x: unknown) => String(x ?? '')) } : null;
+    },
+
+    async correrPaso(objetivo, contexto, limiteMs, instruccion = '') {
+      const { data: aj } = await admin.from('ia_ajustes').select('modulos').eq('id', 1).maybeSingle();
+      const mods = (aj?.modulos || {}) as Record<string, boolean>;
+      const fuentes: { titulo: string; url: string }[] = [];
+      const sis: Sistema = {
+        // Con el cliente de servicio: son las mismas consultas de solo lectura del dueño, sin su sesión.
+        ctx: { db: admin, esSuper: true, hoy: diaCR(), fuentes }, herramientas: disponibles(mods, true), consultas: [], usados: {}, hechas: new Map(),
+        emitir: () => {}, esSuper: true, limite: Date.now() + limiteMs,
+        caps: { enlaces: mods.enlaces !== false, codigo: mods.codigo !== false, archivos: false }, forzarWeb: false, adjuntos: [], fuentes,
+        modo: 'jarvis', pensar: 'low', intento: 30000,
+        // Sin acciones, sin memoria y sin cerebro: en segundo plano solo se consulta (no hay quién confirme).
+        acciones: false, leyoAfuera: false, ctxAcc: null,
+        guardarPropuesta: async () => { throw new Error('En segundo plano no se hacen cambios.'); }, propuestas: new Map(),
+        extra: REGLAS_SEGUNDO_PLANO, rondas: 6, memoria: null, cerebro: null, gasto, conMemoria: false, telefono: null,
+      };
+      const historial: Turno[] = [{ rol: 'user', texto: `${instruccion ? `ENCARGO COMPLETO DEL DUEÑO (para que sepas el contexto):\n${instruccion}\n\n` : ''}LO YA AVERIGUADO EN PASOS ANTERIORES:\n${contexto || '(nada todavía)'}\n\nTU PASO AHORA:\n${objetivo}` }];
+      const vistos = new Set<string>();
+      const candidatos: Compatible[] = [];
+      for (const p of [...await proveedoresPrincipales().catch(() => [] as Compatible[]), ...proveedoresRespaldo()]) {
+        const k = claveProv(p);
+        if (!vistos.has(k) && disponibleModelo(k)) { vistos.add(k); candidatos.push(p); }
+      }
+      for (const p of candidatos.slice(0, 4)) {
+        if (sis.limite - Date.now() < 8000) break;
+        try { const r = await preguntarCompatible(historial, sis, p); if (r.texto.trim()) return r.texto; }
+        catch (e) { console.log(`tarea paso ${p.id}: ${e instanceof Error ? e.message : e}`); }
+      }
+      for (const m of [GEMINI_RESPALDO, GEMINI_MODEL]) {
+        if (sis.limite - Date.now() < 8000 || !disponibleModelo(m)) continue;
+        try { const r = await preguntarGemini(historial, m, sis); if (r.texto.trim()) return r.texto; }
+        catch (e) { console.log(`tarea paso gemini ${m}: ${e instanceof Error ? e.message : e}`); }
+      }
+      return null;
+    },
+
+    async redactar(instruccion, pasos) {
+      const datos = `ENCARGO: ${instruccion}\n\nLO AVERIGUADO:\n${pasos.map((p: PasoPlan) => `PASO ${p.n} — ${p.objetivo}\n${p.estado === 'hecho' ? p.resultado : '(No se pudo completar este paso.)'}`).join('\n\n')}`.slice(0, 20000);
+      const r = await pedirJSON(PROMPT_INFORME, datos, { hasta: Date.now() + 28000, gasto, rapido: false, etiqueta: 'informe', valido: j => typeof j?.texto === 'string' && j.texto.trim().length > 40 }).catch(() => null);
+      return r ? String(r.j.texto) : null;
+    },
+
+    async terminado(t: Tarea, texto: string, ok: boolean) {
+      const ahora = new Date().toISOString();
+      // El resultado queda en el chat (en la conversación donde se pidió, o en la más reciente).
+      try {
+        let conv = t.conversacion_id;
+        if (conv) { const { data } = await admin.from('ia_conversaciones').select('id').eq('id', conv).maybeSingle(); if (!data?.id) conv = null; }
+        if (!conv) { const { data } = await admin.from('ia_conversaciones').select('id').eq('user_id', t.user_id).order('actualizado_en', { ascending: false }).limit(1).maybeSingle(); conv = data?.id || null; }
+        if (!conv) { const { data } = await admin.from('ia_conversaciones').insert({ user_id: t.user_id, titulo: t.titulo.slice(0, 60) }).select('id').single(); conv = data?.id || null; }
+        if (conv) {
+          await admin.from('ia_mensajes').insert({
+            id: crypto.randomUUID(), conversacion_id: conv, user_id: t.user_id, rol: 'assistant',
+            texto: ok ? `✅ Terminé el encargo «${t.titulo}».\n\n${texto}` : `⚠️ ${texto}`,
+            creado_en: ahora, fuentes: [], tokens_in: 0, tokens_out: 0, proveedor: null, modelo: null, busco: false,
+            // La tarjeta del encargo ya está en la respuesta donde se pidió (y se actualiza sola): acá va solo el texto.
+            consultas: [],
+            perfil: null, persona: 'jarvis', ms: null,
+          });
+          await admin.from('ia_conversaciones').update({ actualizado_en: ahora }).eq('id', conv);
+        }
+      } catch (e) { console.log(`tarea ${t.id}: no se pudo dejar el resultado en el chat: ${e instanceof Error ? e.message : e}`); }
+      // El aviso (campanita) y la notificación en el teléfono.
+      const resumen = texto.replace(/[*_#>`|]/g, '').replace(/\s+/g, ' ').trim().slice(0, 280);
+      const aviso = { tipo: 'tarea', titulo: ok ? `Phill terminó: ${t.titulo}` : `Phill no pudo terminar: ${t.titulo}`, cuerpo: resumen, nivel: ok ? 'info' : 'atencion' };
+      try {
+        const { error } = await admin.from('jarvis_avisos').insert({ user_id: t.user_id, clave: `tarea:${t.id}`, ...aviso });
+        if (!error) await empujarAviso(admin, t.user_id, aviso);
+      } catch (e) { console.log(`tarea ${t.id}: no se pudo avisar: ${e instanceof Error ? e.message : e}`); }
+    },
+  };
+}
+
 /** El revisor: devuelve el veredicto de otra IA sobre la respuesta. */
 async function llamarRevisor(usuario: string, evitar: string, hasta: number, gasto: { in: number; out: number }, modeloQueRespondio = ''): Promise<{ veredicto: string; problemas?: string[]; respuesta?: string; quien: string } | null> {
   const r = await pedirJSON(PROMPT_REVISOR, usuario, { evitar, evitarModelo: modeloQueRespondio || undefined, hasta, gasto, etiqueta: 'revisor', valido: j => j.veredicto === 'ok' || j.veredicto === 'corregir' });
@@ -1499,6 +1611,8 @@ export async function atender(req: Request): Promise<Response> {
     };
     if (accion === 'cron') {
       if (!(await esCron(admin, req))) return responder({ ok: false, error: 'No autorizado.' }, 401);
+      // Los encargos de Phill en segundo plano: retoma lo pendiente o cortado (ver tareas.ts).
+      if (cuerpo?.tarea === 'tareas') { const r = await procesarTareas(admin, crearMotorTareas(admin)); void purgarTareas(admin).catch(() => {}); return responder({ ...r }); }
       // Un cliente escribió en el chat: avisar al personal (push al teléfono).
       if (cuerpo?.tarea === 'push_chat') return responder(await empujarChat(admin, String(cuerpo?.datos?.mensaje || '')));
       return responder(await tareaCron(admin, String(cuerpo?.tarea || ''), redactar, undefined, () => probarSalud(admin)));
@@ -2031,7 +2145,7 @@ export async function atender(req: Request): Promise<Response> {
 
     // Control del teléfono: solo cuando la respuesta llega en vivo a la app (el widget y el modo sin
     // eventos no pueden ejecutarlo, y Phill no debe decir «listo» sin que pase nada).
-    if (esSuper && modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget') extra += `\n\nTENÉS LA HERRAMIENTA «telefono» para hacer cosas en el celular del dueño${cuerpo?.nativa === true ? '' : ' (ahora está en el navegador: solo llamar, escribir, calendario, mapa y enlaces, con un botón; alarmas, temporizador, abrir apps, música, linterna y ajustes solo se pueden desde la app del teléfono)'}: alarmas, temporizadores, abrir apps, llamar, WhatsApp, mensajes de texto, calendario, mapa, música, linterna, ajustes y enlaces. Si dice «mirá esto», «fijate en esto» o algo parecido, usá la herramienta «mirar» para abrirle la cámara. Cuando pida algo así («poneme una alarma», «llamá a…», «escribile a… que…», «abrí…», «llevame a…»), usala EN ESA MISMA RESPUESTA, sin pedir permiso: la orden ya es la confirmación. Para llamar o escribir pasá el nombre del contacto, nunca un número. Si falta un dato, preguntá una sola cosa. Después, en una frase y en pasado: «Listo, puse la alarma a las 6:30».`;
+    if (esSuper && modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget') extra += `\n\nTENÉS LA HERRAMIENTA «telefono» para hacer cosas en el celular del dueño${cuerpo?.nativa === true ? '' : ' (ahora está en el navegador: solo llamar, escribir, calendario, mapa y enlaces, con un botón; alarmas, temporizador, abrir apps, música, linterna y ajustes solo se pueden desde la app del teléfono)'}: alarmas, temporizadores, abrir apps, llamar, WhatsApp, mensajes de texto, calendario, mapa, música, linterna, ajustes y enlaces. Si dice «mirá esto», «fijate en esto» o algo parecido, usá la herramienta «mirar» para abrirle la cámara. Para trabajos de VARIOS pasos que tardan (investigar precios en internet, revisar varios módulos y armar un informe, el cierre del día, qué comprar esta semana) usá «encargar_tarea»: lo hacés vos solo en segundo plano y le avisás cuando termine (en segundo plano solo se consulta, no se cambia nada); lo rápido respondelo vos ahora. Cuando pida algo así («poneme una alarma», «llamá a…», «escribile a… que…», «abrí…», «llevame a…»), usala EN ESA MISMA RESPUESTA, sin pedir permiso: la orden ya es la confirmación. Para llamar o escribir pasá el nombre del contacto, nunca un número. Si falta un dato, preguntá una sola cosa. Después, en una frase y en pasado: «Listo, puse la alarma a las 6:30».`;
 
     // El panel va a DECIR la respuesta en voz alta (manos libres, o «cuando hablo»):
     // más corta y sin formato, para que suene como una persona y empiece rápido.
@@ -2079,6 +2193,18 @@ export async function atender(req: Request): Promise<Response> {
         ({ res: { ...res, tokensIn: gasto.in, tokensOut: gasto.out, ms: Date.now() - t0 }, respaldo, sis });
       const propuestas = new Map<string, { r: unknown; marca: Consulta; evento: unknown }>();
       const telefonos = new Map<string, PedidoTelefono>();
+      // Los encargos de este mensaje: si otra IA repite el mismo, no se crea dos veces.
+      const encargos = new Map<string, ResultadoCrear>();
+      const encargar = async (titulo: string, instruccion: string): Promise<ResultadoCrear> => {
+        const k = `${titulo}|${instruccion}`;
+        const previo = encargos.get(k);
+        if (previo) return previo;
+        const r = await crearTarea(admin, { user_id: uid, conversacion_id: convId, titulo, instruccion });
+        encargos.set(k, r);
+        // Arranca ya (sigue trabajando aunque la respuesta del chat termine); la tarea programada es la red de seguridad.
+        if (r.ok) (globalThis as any).EdgeRuntime?.waitUntil?.(procesarTareas(admin, crearMotorTareas(admin), { soloId: r.id }).catch((e: unknown) => console.log(`encargo ${r.id}: ${e instanceof Error ? e.message : e}`)));
+        return r;
+      };
       const guardarPropuesta = async (nombreAcc: string, args: Record<string, unknown>, objetivo: Record<string, unknown>, tarjeta: Tarjeta) => {
         const { data, error } = await admin.from('ia_acciones').insert({ user_id: uid, conversacion_id: convId, accion: nombreAcc, args, objetivo, tarjeta }).select('id,vence_en').single();
         if (error) throw new Error(`No se pudo guardar la propuesta: ${error.message}`);
@@ -2097,6 +2223,7 @@ export async function atender(req: Request): Promise<Response> {
           leyoAfuera: adjuntos.length > 0, ctxAcc: modo === 'jarvis' ? ctxAcc : null, guardarPropuesta, propuestas,
           extra, rondas, memoria: memoriaFns, cerebro, gasto, utiles, conMemoria,
           telefono: modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget' ? (cuerpo?.nativa === true ? 'nativa' : 'web') : null, telefonos,
+          encargar: esSuper && modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget' ? encargar : undefined,
         };
         marcarCerebro(sis, 'usado', usadosCerebro);
         return sis;
