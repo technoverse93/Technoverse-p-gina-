@@ -8,6 +8,8 @@
 // Jarvis habla con la voz del teléfono como antes.
 // =====================================================================
 
+import { aVisual, nivelVoz, rms8 } from './nivelVoz';
+
 export const VOCES_PROPIAS = [
   { id: 'es_MX-ald-medium', nombre: 'Jarvis', detalle: 'Masculina, latina · ~60 MB' },
   { id: 'es_MX-claude-high', nombre: 'Jarvis HD', detalle: 'Masculina, más natural · ~110 MB' },
@@ -78,19 +80,43 @@ export function preparar(texto: string): Promise<Blob> {
   return p;
 }
 
+/** El volumen de la voz mientras suena, para que el orbe de «manos libres»
+ *  la acompañe. Si el aparato no deja medirla, suena igual (sin orbe vivo). */
+let contextoSalida: AudioContext | null = null;
+async function medirSalida(a: HTMLAudioElement): Promise<() => void> {
+  try {
+    const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+    contextoSalida ||= new Ctx();
+    if (contextoSalida.state === 'suspended') await contextoSalida.resume().catch(() => {});
+    // Si el contexto no quedó andando, NO se conecta: el audio saldría mudo.
+    if (contextoSalida.state !== 'running') return () => {};
+    const fuente = contextoSalida.createMediaElementSource(a);
+    const analizador = contextoSalida.createAnalyser();
+    analizador.fftSize = 512;
+    fuente.connect(analizador);
+    analizador.connect(contextoSalida.destination);
+    const datos = new Uint8Array(analizador.fftSize);
+    const reloj = setInterval(() => { analizador.getByteTimeDomainData(datos); nivelVoz.fijar(aVisual(rms8(datos)), 'voz'); }, 50);
+    return () => { clearInterval(reloj); nivelVoz.apagar(); try { fuente.disconnect(); analizador.disconnect(); } catch { /* ya suelto */ } };
+  } catch { return () => {}; }
+}
+
 let sonando: HTMLAudioElement | null = null;
 export async function decir(texto: string): Promise<void> {
   const wav = await preparar(texto);
   const url = URL.createObjectURL(wav);
+  let soltar = () => {};
   try {
+    const a = new Audio(url);
+    sonando = a;
+    soltar = await medirSalida(a);
+    if (sonando !== a) return; // mientras se preparaba, alguien la calló
     await new Promise<void>((ok, mal) => {
-      const a = new Audio(url);
-      sonando = a;
       a.onended = () => ok();
       a.onerror = () => mal(new Error('No se pudo reproducir la voz.'));
       a.onpause = () => { if (!a.ended) ok(); };
       void a.play().catch(mal);
     });
-  } finally { URL.revokeObjectURL(url); sonando = null; }
+  } finally { soltar(); URL.revokeObjectURL(url); sonando = null; }
 }
 export function callar(): void { if (sonando) { sonando.pause(); sonando = null; } }

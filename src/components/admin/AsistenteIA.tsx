@@ -16,16 +16,20 @@ import {
   Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight, ShieldAlert, Wallet, MapPin,
   Paperclip, Square, RotateCcw, Pencil, Link2, Code2, FileText,
   Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot, ThumbsUp, ThumbsDown, MessageCircleQuestion, SlidersHorizontal, Search,
-  Download, Bell,
+  Download, Bell, AudioLines,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
 const CerebroJarvis = React.lazy(() => import('./CerebroJarvis'));
 const AvisosJarvis = React.lazy(() => import('./AvisosJarvis'));
 const SaludJarvis = React.lazy(() => import('./SaludJarvis'));
+const HudVoz = React.lazy(() => import('./HudVoz'));
 import { useAvisosSinLeer } from '../../mobile/avisosJarvis';
-import { BotonEscuchar, BarraLectura, AjusteVoz } from './LectorPiezas';
-import { lector, modoLectura } from '../../utils/lectorVoz';
+import { BotonEscuchar, BarraLectura, AjusteVoz, useLector } from './LectorPiezas';
+import type { FaseManos } from './HudVoz';
+import { lector, modoLectura, paraHablar, puedeHablar } from '../../utils/lectorVoz';
+import { nivelVoz } from '../../utils/nivelVoz';
+import { esDespedida, saludoManos } from '../../utils/manosLibres';
 const MiniWidgetAjustes = React.lazy(() => import('./MiniWidgetAjustes'));
 import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../../supabaseClient';
 import { cabeceraClientInfo } from '../../utils/dispositivo';
@@ -761,6 +765,15 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const [segVoz, setSegVoz] = useState(0);
   const grabacion = useRef<GrabacionEnCurso | null>(null);
   const inicioVoz = useRef(0);
+  // MANOS LIBRES: escuchar → contestar hablando → volver a escuchar, sin tocar nada.
+  const [manos, setManos] = useState(false);
+  const [saludando, setSaludando] = useState(false);
+  const manosRef = useRef(false);
+  manosRef.current = manos;
+  const vaciasSeguidas = useRef(0);   // veces seguidas que se escuchó y no habló nadie
+  const despedir = useRef(false);     // lo último que dijiste fue una despedida
+  const grabandoManos = useRef(false);
+  const { estado: estadoLector } = useLector();
   // Jarvis se enciende solo cuando el servidor ya lo tiene (la función
   // nueva informa las velocidades en el cupo); antes, todo queda como siempre.
   // El superadmin ES Jarvis desde el primer cuadro: antes, hasta que llegaba
@@ -1006,15 +1019,17 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
         setMensajes(prev => prev.filter(m => !m.pendiente && m.id !== BORRADOR));
         setTexto(crudo);
         setAviso({ tipo: 'error', texto: res?.error || 'No se pudo enviar. Revisa la conexión e intenta de nuevo.' });
+        if (manosRef.current) setManos(false);
         return;
       }
       setMensajes(prev => [...prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false, ...(res.pregunta ? { texto: res.pregunta } : {}) } : m)), { id: `a-${Date.now()}`, ...res.mensaje }]);
       setCupo(res.cupo);
       // Respuesta hablada: siempre, o cuando la pregunta fue por voz.
       const lectura = modoLectura();
-      if (res.mensaje?.texto && (lectura === 'siempre' || (lectura === 'voz' && (opciones.audio || opciones.porVoz)))) {
+      if (res.mensaje?.texto && (manosRef.current || lectura === 'siempre' || (lectura === 'voz' && (opciones.audio || opciones.porVoz)))) {
         void lector.hablar(res.mensaje.texto, res.mensaje.id || `a-${Date.now()}`);
       }
+      if (manosRef.current && esDespedida(opciones.audio ? (res.pregunta || '') : crudo)) despedir.current = true;
       if (onRespuesta && res.mensaje?.texto) {
         // Con los datos reales en vez de las marcas del carril privado: es la pantalla del dueño.
         onRespuesta(restaurarPrivados(opciones.audio ? (res.pregunta || '') : crudo, privadosRef.current), restaurarPrivados(res.mensaje.texto, privadosRef.current));
@@ -1028,7 +1043,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
       if (control.signal.aborted) {
         // Detenido: la conversación vuelve a como estaba y el texto a la caja.
         setMensajes(antes);
-        setTexto(t);
+        setTexto(manosRef.current && opciones.audio ? '' : t);
         setAviso({ tipo: 'respaldo', texto: 'Respuesta detenida.' });
       } else if (recuperar()) {
         setMensajes(prev => prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false } : m)));
@@ -1036,6 +1051,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
         setMensajes(prev => prev.filter(m => !m.pendiente && m.id !== BORRADOR));
         setTexto(crudo);
         setAviso({ tipo: 'error', texto: 'No se pudo enviar. Revisa la conexión e intenta de nuevo.' });
+        if (manosRef.current) setManos(false);
       }
     } finally {
       cortar.current = null;
@@ -1058,15 +1074,30 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     if (voz || enviando) return;
     lector.callar();
     setMenu(null);
+    const auto = manosRef.current;
     try {
-      grabacion.current = await grabarNotaDeVoz();
+      // En manos libres la grabación avisa el volumen (para el orbe) y se
+      // corta sola cuando hacés una pausa después de hablar.
+      grabacion.current = await grabarNotaDeVoz(auto ? {
+        alNivel: n => nivelVoz.fijar(n, 'mic'), silencioMs: 1500, esperaMs: 9000,
+        alPausa: por => { if (por === 'fin') void terminarVozRef.current(); else nadieHabloRef.current(); },
+      } : {});
+      grabandoManos.current = auto;
       inicioVoz.current = Date.now();
       setSegVoz(0);
       setVoz('grabando');
     } catch (e: any) {
       toast.error(e?.message || 'No se pudo usar el micrófono.');
+      if (auto) setManos(false);
     }
   };
+  /** Se escuchó y no habló nadie: a la segunda seguida, Jarvis deja de insistir. */
+  const nadieHablo = () => {
+    grabacion.current?.cancelar(); grabacion.current = null; setVoz(null);
+    if (++vaciasSeguidas.current >= 2) { setManos(false); toast.info('No te escuché, así que salí del modo manos libres. Tocá el botón cuando quieras seguir.'); }
+  };
+  const nadieHabloRef = useRef(nadieHablo);
+  nadieHabloRef.current = nadieHablo;
   const cancelarVoz = () => { grabacion.current?.cancelar(); grabacion.current = null; setVoz(null); };
   const terminarVoz = async () => {
     const g = grabacion.current;
@@ -1076,7 +1107,10 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     setVoz('transcribiendo');
     try {
       const blob = await g.detener();
+      // Manos libres: sin voz de verdad no se manda nada (ni se avisa con un error).
+      if (manosRef.current && !g.hablo()) { nadieHabloRef.current(); return; }
       if (blob.size < 600) { toast.error('No se escuchó nada. Probá de nuevo más cerca del micrófono.'); return; }
+      vaciasSeguidas.current = 0;
       const audio = await aBase64(blob);
       // Un solo viaje: el audio va con el mensaje y el servidor lo
       // transcribe y responde de una vez.
@@ -1109,6 +1143,55 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   // Al salir del módulo, el micrófono se suelta.
   useEffect(() => () => { grabacion.current?.cancelar(); }, []);
 
+  // ------------------------- MANOS LIBRES -------------------------
+  // Escuchar → (pausa) → mandar → Jarvis contesta hablando → escuchar otra
+  // vez. Se sale tocando «Terminar», diciendo «gracias, Jarvis» / «eso es
+  // todo», al salir del chat, si falla algo, o si dos veces seguidas no
+  // habló nadie. Mientras Jarvis habla el micrófono está apagado (si no, se
+  // escucharía a sí mismo).
+  const hablandoTexto = estadoLector !== 'callado';
+  useEffect(() => {
+    if (!manos) return;
+    if (vista !== 'chat') { setManos(false); return; }
+    if (voz || enviando || hablandoTexto || agotado) return;
+    if (despedir.current) { despedir.current = false; setManos(false); return; }
+    const t = setTimeout(() => { void empezarVozRef.current(); }, 450);
+    return () => clearTimeout(t);
+  }, [manos, voz, enviando, hablandoTexto, vista, agotado]); // eslint-disable-line react-hooks/exhaustive-deps
+  // Al salir del modo: se corta lo que se estuviera grabando solo y el orbe se apaga.
+  useEffect(() => {
+    if (manos) return;
+    nivelVoz.apagar();
+    if (grabandoManos.current && grabacion.current) { grabacion.current.cancelar(); grabacion.current = null; setVoz(null); }
+    grabandoManos.current = false;
+  }, [manos]);
+  // La pantalla no se apaga mientras se conversa.
+  useEffect(() => {
+    if (!manos) return;
+    let vivo = true, candado: { release?: () => Promise<void> } | null = null;
+    (navigator as any).wakeLock?.request?.('screen').then((c: any) => { if (vivo) candado = c; else void c.release?.(); }).catch(() => {});
+    return () => { vivo = false; void candado?.release?.().catch?.(() => {}); };
+  }, [manos]);
+  const iniciarManos = () => {
+    if (!conVoz || manos || enviando) return;
+    vaciasSeguidas.current = 0; despedir.current = false;
+    lector.callar(); setMenu(null); setVista('chat'); setManos(true);
+    // Jarvis saluda por tu nombre; después te escucha.
+    if (puedeHablar()) {
+      setSaludando(true);
+      void lector.hablar(saludoManos(currentUser?.name, avisosSinLeer), 'saludo-manos').finally(() => setSaludando(false));
+    }
+  };
+  const terminarManos = () => { despedir.current = false; setManos(false); lector.callar(); };
+  /** Tocar el orbe: según lo que esté pasando, manda, interrumpe o cancela. */
+  const tocarOrbe = () => {
+    if (voz === 'grabando') void terminarVoz();
+    else if (enviando) detener();
+    else if (hablandoTexto) lector.callar();
+    else if (!voz) void empezarVozRef.current();
+  };
+  const faseManos: FaseManos = voz === 'grabando' ? 'escuchando' : (voz === 'transcribiendo' || enviando) ? 'pensando' : hablandoTexto ? (saludando ? 'saludando' : 'hablando') : 'espera';
+
   // Los menús se cierran al tocar afuera o con Escape.
   useEffect(() => {
     if (!menu) return;
@@ -1124,6 +1207,8 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const editarUltima = useCallback(() => { setTexto(ultimaPregunta); setEditando(true); setTimeout(() => cajaRef.current?.focus(), 30); }, [ultimaPregunta]);
   const enviarRef = useRef(enviar);
   enviarRef.current = enviar;
+  const empezarVozRef = useRef(empezarVoz);
+  empezarVozRef.current = empezarVoz;
 
   const alElegirArchivos = async (lista: FileList | null) => {
     if (!lista) return;
@@ -1384,6 +1469,13 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                       <Mic className="w-[18px] h-[18px]" />
                     </button>
                   )}
+                  {conVoz && !voz && (
+                    <button type="button" className="ai-ib" data-manos={manos || undefined} disabled={enviando || agotado}
+                      aria-label="Manos libres: conversar con Jarvis hablando" title="Manos libres: conversá con Jarvis hablando"
+                      onClick={iniciarManos}>
+                      <AudioLines className="w-[18px] h-[18px]" />
+                    </button>
+                  )}
                   {!jarvis && archivosPermitidos && !editando && (
                     <>
                       <button type="button" className="ai-ib" onClick={() => archivoRef.current?.click()} disabled={adjuntos.length >= 3} aria-label="Adjuntar foto o documento" title="Adjuntar foto o documento">
@@ -1484,6 +1576,14 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             </div>
           )}
         </div>
+      )}
+      {manos && jarvis && (
+        <React.Suspense fallback={null}>
+          <HudVoz fase={faseManos}
+            vos={[...mensajes].reverse().find(m => m.rol === 'user' && !m.pendiente)?.texto || ''}
+            jarvis={paraHablar([...mensajes].reverse().find(m => m.rol === 'assistant')?.texto || '').slice(0, 420)}
+            onToque={tocarOrbe} onTerminar={terminarManos} />
+        </React.Suspense>
       )}
     </div>
     </JarvisCtx.Provider>

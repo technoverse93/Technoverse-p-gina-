@@ -30,6 +30,9 @@
 // encendido después de mandar la nota, que es alarmante y con razón.
 // =====================================================================
 
+import { aVisual, rms8 } from './nivelVoz';
+import { crearDetector, type OpcionesSilencio } from './silencioVoz';
+
 /** Preferencias de contenedor, de mejor a peor soportado. */
 const FORMATOS = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4'];
 
@@ -41,6 +44,16 @@ export interface GrabacionEnCurso {
   detener: () => Promise<Blob>;
   /** Corta y descarta: no devuelve nada y suelta el micrófono igual. */
   cancelar: () => void;
+  /** ¿Se oyó voz de verdad? (solo con el detector de «manos libres»; si no, siempre sí). */
+  hablo: () => boolean;
+}
+
+/** Para «manos libres»: avisa el volumen y cuándo hubo silencio. */
+export interface OpcionesGrabacion extends OpcionesSilencio {
+  /** Volumen de 0 a 1, unas 20 veces por segundo. */
+  alNivel?: (n: number) => void;
+  /** `fin`: terminó de hablar. `nadie`: pasó la espera sin voz. Se avisa una sola vez. */
+  alPausa?: (por: 'fin' | 'nadie') => void;
 }
 
 /** ¿Este aparato puede grabar audio? Falso en navegadores muy viejos. */
@@ -71,7 +84,7 @@ function mejorFormato(): string | undefined {
  * Lanza con un mensaje legible si la persona deniega el permiso o si el
  * aparato no tiene micrófono — quien llama solo tiene que mostrarlo.
  */
-export async function grabarNotaDeVoz(): Promise<GrabacionEnCurso> {
+export async function grabarNotaDeVoz(opciones: OpcionesGrabacion = {}): Promise<GrabacionEnCurso> {
   if (!puedeGrabarVoz()) {
     throw new Error('Este navegador no puede grabar notas de voz.');
   }
@@ -92,7 +105,40 @@ export async function grabarNotaDeVoz(): Promise<GrabacionEnCurso> {
   grabador.ondataavailable = (e) => { if (e.data && e.data.size > 0) trozos.push(e.data); };
   grabador.start();
 
+  // Volumen y silencio (solo si se pidió): un analizador de audio sobre el
+  // mismo micrófono. Si el aparato no lo permite, se graba igual, sin esto.
+  const medir = !!(opciones.alNivel || opciones.alPausa);
+  const detector = opciones.alPausa ? crearDetector(opciones) : null;
+  let contexto: AudioContext | null = null;
+  let medidor: ReturnType<typeof setInterval> | null = null;
+  let avisado = false;
+  if (medir) {
+    try {
+      const Ctx = window.AudioContext || (window as any).webkitAudioContext;
+      contexto = new Ctx();
+      const fuente = contexto.createMediaStreamSource(stream);
+      const analizador = contexto.createAnalyser();
+      analizador.fftSize = 1024;
+      fuente.connect(analizador);
+      const datos = new Uint8Array(analizador.fftSize);
+      void contexto.resume().catch(() => {});
+      medidor = setInterval(() => {
+        analizador.getByteTimeDomainData(datos);
+        const r = rms8(datos);
+        opciones.alNivel?.(aVisual(r));
+        const v = detector?.procesar(r, Date.now());
+        if (!avisado && (v === 'fin' || v === 'nadie')) { avisado = true; opciones.alPausa?.(v); }
+      }, 50);
+    } catch { contexto = null; }
+  }
+  const pararMedidor = () => {
+    if (medidor) { clearInterval(medidor); medidor = null; }
+    if (contexto) { void contexto.close().catch(() => {}); contexto = null; }
+    if (opciones.alNivel) opciones.alNivel(0);
+  };
+
   const soltarMicrofono = () => {
+    pararMedidor();
     try { stream.getTracks().forEach(t => t.stop()); } catch { /* ya soltado */ }
   };
 
@@ -120,6 +166,7 @@ export async function grabarNotaDeVoz(): Promise<GrabacionEnCurso> {
           reject(new Error('No se pudo cerrar la grabación.'));
         }
       }),
+    hablo: () => (detector ? detector.hablo() : true),
     cancelar: () => {
       clearTimeout(reloj);
       grabador.onstop = () => soltarMicrofono();
