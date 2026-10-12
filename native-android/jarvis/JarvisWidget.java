@@ -15,11 +15,11 @@ import org.json.JSONArray;
 import org.json.JSONObject;
 
 /**
- * Mini-widget «Phill» de la pantalla de inicio, que se usa EN EL PROPIO
+ * Mini-widget «Javier» de la pantalla de inicio, que se usa EN EL PROPIO
  * RECUADRO (lo pidió el dueño: sin ventanas emergentes y sin huella; el
  * teléfono es solo suyo):
  *
- *  · Micrófono: el dictado del teléfono; la pregunta va a Phill con la
+ *  · Micrófono: el dictado del teléfono; la pregunta va a Javier con la
  *    sesión de la app y la respuesta sale aquí (y se lee en voz alta).
  *  · «Escribile…»: el chat se dibuja EXACTAMENTE encima del recuadro (mismo
  *    lugar, tamaño y diseño, sin oscurecer la pantalla) con el teclado
@@ -30,10 +30,10 @@ import org.json.JSONObject;
  *  · Tocar la respuesta o «Abrir conversación»: lo mismo que «Escribile…»,
  *    en el propio recuadro. Lo que haya que confirmar se confirma ahí
  *    mismo. NINGÚN toque abre otra ventana encima.
- *  · La marca «Phill»: la app (con su huella de siempre), a propósito.
+ *  · La marca «Javier»: la app (con su huella de siempre), a propósito.
  *
  * Todo eso lo hace JarvisRapido (un puente de Capacitor con la página
- * jarvis-rapido.html). Sin activar (Phill → Ajustes → Mini-widget), la
+ * jarvis-rapido.html). Sin activar (Javier → Ajustes → Mini-widget), la
  * hoja explica cómo.
  */
 public class JarvisWidget extends AppWidgetProvider {
@@ -148,7 +148,7 @@ public class JarvisWidget extends AppWidgetProvider {
         String estado = !activo ? "Sin activar" : accion ? "Acción por confirmar · tocá aquí" : p.getString(ESTADO, "");
         String ultima = p.getString("ultima_respuesta", null);
         String abajo = !activo
-            ? "Sin activar: tocá para abrir la app y activalo en Phill → Ajustes → Mini-widget."
+            ? "Sin activar: tocá para abrir la app y activalo en Javier → Ajustes → Mini-widget."
             : ultima != null ? ultima : "Hablale o escribile: la respuesta sale aquí.";
         for (int id : ids) {
             RemoteViews vista = new RemoteViews(ctx.getPackageName(), grande ? R.layout.widget_jarvis_grande : R.layout.widget_jarvis);
@@ -157,7 +157,7 @@ public class JarvisWidget extends AppWidgetProvider {
             vista.setOnClickPendingIntent(R.id.jarvis_marca, app(ctx, 14));
             vista.setOnClickPendingIntent(R.id.jarvis_tamano, tamano(ctx, 15));
             // Sin activar, el widget no abre nada propio: todo lleva a la app
-            // (Phill), donde se activa. Así nunca tapa la pantalla.
+            // (Javier), donde se activa. Así nunca tapa la pantalla.
             vista.setOnClickPendingIntent(R.id.jarvis_hablar, activo ? ventanita(ctx, "voz", 11) : app(ctx, 21));
             vista.setOnClickPendingIntent(R.id.jarvis_escribir, activo ? ventanita(ctx, "escribir", 12, id) : app(ctx, 22));
             if (grande) {

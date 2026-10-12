@@ -5,15 +5,15 @@ import android.content.Intent;
 import android.os.Bundle;
 
 /**
- * Phill como ASISTENTE DEL TELÉFONO: lo que se abre al mantener el botón de
+ * Javier como ASISTENTE DEL TELÉFONO: lo que se abre al mantener el botón de
  * inicio (o el de encendido, en los teléfonos que lo usan para el asistente),
  * como Google o Siri. Hay que elegirlo una vez en Android: Ajustes → Apps →
  * Apps predeterminadas → App de asistente digital → Technoverse.
  *
- * Es solo un trampolín sin pantalla: abre la ventanita de Phill en modo
+ * Es solo un trampolín sin pantalla: abre la ventanita de Javier en modo
  * «oye» (el panel chico de abajo, escuchando de una) y se va. No lee nada
  * del pedido que la abrió: solo la abre el sistema (acción ASSIST), y lo que
- * Phill puede hacer lo decide la ventanita (sesión del dueño, sin bloqueo).
+ * Javier puede hacer lo decide la ventanita (sesión del dueño, sin bloqueo).
  */
 public class PhillAsistente extends Activity {
     @Override

@@ -2,9 +2,9 @@
 // «OYE PHILL» — puente con el complemento nativo
 // =====================================================================
 // Un servicio del teléfono (native-android/oye/) espera el llamado «Oye
-// Phill» con un reconocedor de voz que corre EN el teléfono, sin internet, y
-// abre Phill en manos libres. Es opcional y empieza apagado: se prende en
-// Phill → Ajustes → Oye Phill (ver OyePhillAjustes.tsx), donde se baja el
+// Javier» con un reconocedor de voz que corre EN el teléfono, sin internet, y
+// abre Javier en manos libres. Es opcional y empieza apagado: se prende en
+// Javier → Ajustes → Oye Javier (ver OyePhillAjustes.tsx), donde se baja el
 // «oído» (~40 MB, una sola vez) y se dan los permisos.
 //
 // Todas las llamadas responden en vez de lanzar: si la APK es vieja (sin el
@@ -26,7 +26,7 @@ interface PluginOye {
   cancelarBajada(): Promise<Resp>;
   borrarModelo(): Promise<RespEstado>;
   vocabulario(o: { frases: string[] }): Promise<Resp & { sabe?: boolean; conocidas?: string[]; desconocidas?: string[] }>;
-  configurar(o: { frases?: string[]; sensibilidad?: number }): Promise<RespEstado>;
+  configurar(o: { frases?: string[]; sensibilidad?: number; burbuja?: boolean }): Promise<RespEstado>;
   iniciar(): Promise<RespEstado>;
   detener(): Promise<RespEstado>;
   pausar(o: { activo: boolean }): Promise<Resp>;
@@ -56,11 +56,11 @@ function escuchar(evento: string, fn: (d: any) => void): () => void {
 }
 
 export const oyePhill = {
-  /** ¿Se está dentro de la app del teléfono? (aunque sea una APK vieja, sin «Oye Phill») */
+  /** ¿Se está dentro de la app del teléfono? (aunque sea una APK vieja, sin «Oye Javier») */
   enApp(): boolean {
     return Capacitor.isNativePlatform();
   },
-  /** ¿Esta APK trae «Oye Phill»? (una vieja, o la web, no) */
+  /** ¿Esta APK trae «Oye Javier»? (una vieja, o la web, no) */
   disponible(): boolean {
     return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('OyePhill');
   },
@@ -87,7 +87,7 @@ export const oyePhill = {
     } catch { return { sabe: false, conocidas: [], desconocidas: [] }; }
   },
   /** Devuelve el estado nuevo, o null si no se pudo guardar (el que llama conserva el que tenía). */
-  async configurar(o: { frases?: string[]; sensibilidad?: number }): Promise<EstadoOye | null> {
+  async configurar(o: { frases?: string[]; sensibilidad?: number; burbuja?: boolean }): Promise<EstadoOye | null> {
     try { const r = await P.configurar(o); return r && r.ok !== false ? aEstado(r) : null; } catch { return null; }
   },
   async iniciar(): Promise<Resp & { estado?: EstadoOye }> {
@@ -106,7 +106,7 @@ export const oyePhill = {
 };
 
 /**
- * Al abrir la app: si «Oye Phill» estaba activado y el servicio no corre (se
+ * Al abrir la app: si «Oye Javier» estaba activado y el servicio no corre (se
  * reinició el teléfono o Android lo cerró), se vuelve a prender (la app está a
  * la vista, que es cuando Android lo permite). Solo para la cuenta del dueño:
  * con otra cuenta en el mismo teléfono, se apaga.
@@ -119,7 +119,7 @@ export async function restaurarOyePhill(rol?: string | null): Promise<void> {
   if (!e.servicio && e.modeloListo && e.permisoMic && e.vosk) await oyePhill.iniciar();
 }
 
-/** Al cerrar sesión (o si bloquean el aparato): «Oye Phill» se apaga y queda apagado hasta que se vuelva a prender. */
+/** Al cerrar sesión (o si bloquean el aparato): «Oye Javier» se apaga y queda apagado hasta que se vuelva a prender. */
 export async function detenerOyePhill(): Promise<void> {
   if (!oyePhill.disponible()) return;
   await oyePhill.detener();

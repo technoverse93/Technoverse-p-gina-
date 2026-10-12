@@ -1,7 +1,7 @@
 // =====================================================================
 // INVENTARIO — cambiar existencias o precio de un producto
 // =====================================================================
-// Lo usa Phill («subile 5 al cargador USB-C», «poné la funda A12 a
+// Lo usa Javier («subile 5 al cargador USB-C», «poné la funda A12 a
 // ₡4 500»). Mismo patrón que el conteo físico del módulo de Inventario:
 // se ajusta la ficha, queda el movimiento con su existencia resultante y
 // la bitácora general, y se guarda con `saveDB`.
@@ -43,14 +43,14 @@ export function editarProducto(productId: string, cambio: CambioProducto, quien:
   }
   if (typeof cambio.precio === 'number' && Number.isFinite(cambio.precio) && cambio.precio >= 0) p.price = Math.round(cambio.precio);
 
-  addAuditLog(quien, 'Inventario', 'Ajuste por Phill',
+  addAuditLog(quien, 'Inventario', 'Ajuste por Javier',
     `${p.name}: existencias ${antes.stock} → ${p.stock}, precio ₡${antes.precio} → ₡${p.price}. ${nota}`, db);
   void saveDB(db);
   return antes;
 }
 
 // ---------------------------------------------------------------------
-// Crear productos nuevos (Phill: «creá 3 productos de prueba»). Mismo
+// Crear productos nuevos (Javier: «creá 3 productos de prueba»). Mismo
 // patrón que el alta del módulo de Inventario: ficha, movimiento de
 // entrada, bitácora y `saveDB`. Deshacer no borra: los retira (sin
 // existencias y apagados), igual que un producto dado de baja.

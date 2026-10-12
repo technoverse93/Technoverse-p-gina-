@@ -22,6 +22,7 @@
 
 import { Capacitor } from '@capacitor/core';
 import * as propia from './vozPropia';
+import * as natural from './vozNube';
 import { crearFlujoHabla } from './flujoVoz';
 import { enOraciones, MAX_CARACTERES_AL_RESPONDER, paraHablar } from './textoHablado';
 
@@ -46,7 +47,7 @@ export function fijarModoLectura(m: ModoLectura): void {
 // `alEmpezar` avisa cuándo el audio realmente empieza a sonar (para saber cuándo cae el eco en el micrófono).
 type Motor = { decir: (texto: string, alEmpezar?: () => void) => Promise<void>; callar: () => void; preparar?: (texto: string) => void };
 
-/** La voz propia de Phill (neuronal, en el aparato). Si falla una vez en
+/** La voz propia de Javier (neuronal, en el aparato). Si falla una vez en
  *  esta sesión, se vuelve a la voz del teléfono sin cortar la lectura. */
 let propiaFallo = false;
 function motorPropio(): Motor | null {
@@ -62,6 +63,25 @@ function motorPropio(): Motor | null {
     },
     callar: () => propia.callar(),
     preparar: (texto: string) => { void propia.preparar(texto).catch(() => {}); },
+  };
+}
+
+/** La voz natural (neuronal de Google, por internet). Si falla dos veces en esta
+ *  sesión (sin internet, sin cupo), se deja y sigue la voz de antes sin cortar. */
+let fallasNatural = 0;
+function motorNatural(): Motor | null {
+  if (fallasNatural >= 2 || !natural.usarVozNatural()) return null;
+  return {
+    decir: async (texto: string, alEmpezar?: () => void) => {
+      try { await natural.decir(texto, alEmpezar); fallasNatural = 0; }
+      catch {
+        fallasNatural++;
+        const otro = motorPropio() || (await nativo()) || navegador();
+        if (otro) await otro.decir(texto, alEmpezar);
+      }
+    },
+    callar: () => propia.callar(),
+    preparar: (texto: string) => { void natural.preparar(texto).catch(() => {}); },
   };
 }
 
@@ -126,7 +146,7 @@ function navegador(): Motor | null {
 }
 
 async function motor(): Promise<Motor | null> {
-  return motorPropio() || (await nativo()) || navegador();
+  return motorNatural() || motorPropio() || (await nativo()) || navegador();
 }
 
 /** ¿Este aparato puede hablar? (para mostrar o no los controles) */

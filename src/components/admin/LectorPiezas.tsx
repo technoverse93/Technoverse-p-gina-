@@ -6,13 +6,14 @@
 //     Pausar/Seguir y Callar (siempre a mano, aunque la respuesta quede
 //     arriba fuera de vista).
 //   · AjusteVoz: cuándo lee solo (Nunca / Cuando hablo / Siempre) y cuánto
-//     espera Phill, en manos libres, antes de dar por terminado lo que decís.
+//     espera Javier, en manos libres, antes de dar por terminado lo que decís.
 // =====================================================================
 
 import { useEffect, useState, useSyncExternalStore } from 'react';
-import { Volume2, Pause, Play, Square, VolumeX, Download, Check, Timer, Mic, Captions } from 'lucide-react';
+import { Volume2, Pause, Play, Square, VolumeX, Download, Check, Timer, Mic, Captions, Sparkles } from 'lucide-react';
 import { lector, modoLectura, fijarModoLectura, puedeHablar, type ModoLectura } from '../../utils/lectorVoz';
 import * as propia from '../../utils/vozPropia';
+import { fijarVozNatural, usarVozNatural } from '../../utils/vozNube';
 import { fijarInterrumpir, fijarPausa, interrumpirActivo, PAUSAS, pausaElegida, type PausaVoz } from '../../utils/manosLibres';
 import { dictadoNativo } from '../../mobile/dictadoNativo';
 
@@ -73,7 +74,7 @@ export function AjusteVoz() {
       <PausaManos />
       <DictadoTelefono />
       <VozPropia />
-      {disponible && <button type="button" className="ai-chip ai-voz-prueba" onClick={() => void lector.hablar('Pura vida. Soy Phill, y así suena mi voz cuando te respondo hablando.', 'prueba')}><Volume2 className="w-4 h-4" />Probar la voz</button>}
+      {disponible && <button type="button" className="ai-chip ai-voz-prueba" onClick={() => void lector.hablar('Pura vida. Soy Javier, y así suena mi voz cuando te respondo hablando.', 'prueba')}><Volume2 className="w-4 h-4" />Probar la voz</button>}
     </div>
   );
 }
@@ -92,7 +93,7 @@ function DictadoTelefono() {
         <b>Dictado del teléfono</b>
         <span>{hay === false
           ? 'Este teléfono no trae reconocimiento de voz.'
-          : 'Al tocar el micrófono ves lo que decís mientras hablás. Usa el reconocimiento de voz de Android (puede usar internet). Si falla, Phill usa su micrófono de siempre. En manos libres no se usa.'}</span>
+          : 'Al tocar el micrófono ves lo que decís mientras hablás. Usa el reconocimiento de voz de Android (puede usar internet). Si falla, Javier usa su micrófono de siempre. En manos libres no se usa.'}</span>
       </span>
       <button type="button" role="switch" aria-checked={on} className="ai-sw" data-on={on || undefined} disabled={hay === false}
         onClick={() => { dictadoNativo.fijarPreferido(!on); setOn(!on); }} aria-label="Dictado del teléfono con texto en vivo" />
@@ -100,7 +101,7 @@ function DictadoTelefono() {
   );
 }
 
-/** Manos libres: cuánto silencio espera Phill antes de dar por terminado lo que decís. */
+/** Manos libres: cuánto silencio espera Javier antes de dar por terminado lo que decís. */
 function PausaManos() {
   const [pausa, setPausa] = useState<PausaVoz>(() => pausaElegida());
   const [interrumpir, setInterrumpir] = useState(() => interrumpirActivo());
@@ -108,9 +109,9 @@ function PausaManos() {
     <>
       <div className="ai-modu">
         <span className="ai-modu-ic"><Mic className="w-4 h-4" /></span>
-        <span className="ai-modu-t"><b>Interrumpirlo hablando</b><span>En manos libres, si le hablás encima, Phill se calla y te escucha. Funciona mejor con auriculares; si el altavoz lo hace interrumpirse solo, apagalo.</span></span>
+        <span className="ai-modu-t"><b>Interrumpirlo hablando</b><span>En manos libres, si le hablás encima, Javier se calla y te escucha. Funciona mejor con auriculares; si el altavoz lo hace interrumpirse solo, apagalo.</span></span>
         <button type="button" role="switch" aria-checked={interrumpir} className="ai-sw" data-on={interrumpir || undefined}
-          onClick={() => { fijarInterrumpir(!interrumpir); setInterrumpir(!interrumpir); }} aria-label="Interrumpir a Phill hablándole encima" />
+          onClick={() => { fijarInterrumpir(!interrumpir); setInterrumpir(!interrumpir); }} aria-label="Interrumpir a Javier hablándole encima" />
       </div>
       <div className="ai-modu">
         <span className="ai-modu-ic"><Timer className="w-4 h-4" /></span>
@@ -125,14 +126,25 @@ function PausaManos() {
   );
 }
 
-/** La voz propia de Phill: elegirla, bajarla una vez y usarla. */
+/** La voz propia de Javier: elegirla, bajarla una vez y usarla. */
 function VozPropia() {
   const [voz, setVoz] = useState(() => propia.vozElegida());
   const [motor, setMotor] = useState(() => propia.motorElegido());
   const [bajando, setBajando] = useState<number | null>(null);
   const [error, setError] = useState('');
   const [, refrescar] = useState(0);
-  if (!propia.soportada()) return null;
+  const [natural, setNatural] = useState(() => usarVozNatural());
+  const filaNatural = (
+    <div className="ai-modu">
+      <span className="ai-modu-ic"><Sparkles className="w-4 h-4" /></span>
+      <span className="ai-modu-t"><b>Voz natural</b><span>{natural
+        ? 'Javier habla con una voz neuronal de Google, como una persona (usa internet). Si no hay conexión, usa la de abajo.'
+        : 'Apagada: Javier usa la voz de abajo, sin internet.'}</span></span>
+      <button type="button" role="switch" aria-checked={natural} className="ai-sw" data-on={natural || undefined}
+        onClick={() => { fijarVozNatural(!natural); setNatural(!natural); }} aria-label="Voz natural de Javier" />
+    </div>
+  );
+  if (!propia.soportada()) return filaNatural;
   const lista = propia.vozBajada(voz);
   const bajar = async () => {
     setError(''); setBajando(0);
@@ -142,11 +154,12 @@ function VozPropia() {
   };
   return (
     <>
+      {filaNatural}
       <div className="ai-modu">
         <span className="ai-modu-ic"><Volume2 className="w-4 h-4" /></span>
-        <span className="ai-modu-t"><b>Voz de Phill</b><span>{motor === 'propia' && lista ? 'Su voz propia: la misma en todos tus aparatos, sin Google.' : 'La voz del teléfono. Bajá la voz propia de Phill (una sola vez).'}</span></span>
+        <span className="ai-modu-t"><b>{natural ? 'Voz de respaldo' : 'Voz de Javier'}</b><span>{motor === 'propia' && lista ? 'Su voz propia: la misma en todos tus aparatos, sin Google.' : 'La voz del teléfono. Bajá la voz propia de Javier (una sola vez).'}</span></span>
       </div>
-      <div className="ai-seg ai-seg-voz ai-seg-dos" role="radiogroup" aria-label="Qué voz usa Phill">
+      <div className="ai-seg ai-seg-voz ai-seg-dos" role="radiogroup" aria-label="Qué voz usa Javier">
         <button type="button" role="radio" aria-checked={motor === 'propia'} data-on={motor === 'propia' || undefined} onClick={() => { propia.fijarMotor('propia'); setMotor('propia'); }}>Propia</button>
         <button type="button" role="radio" aria-checked={motor === 'telefono'} data-on={motor === 'telefono' || undefined} onClick={() => { propia.fijarMotor('telefono'); setMotor('telefono'); }}>Del teléfono</button>
       </div>

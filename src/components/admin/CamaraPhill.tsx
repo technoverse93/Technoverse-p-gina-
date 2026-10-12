@@ -1,10 +1,10 @@
 // =====================================================================
-// «MIRÁ ESTO» — la cámara de Phill
+// «MIRÁ ESTO» — la cámara de Javier
 // =====================================================================
 // Una vista en vivo de la cámara trasera, dentro de la propia app (sin
-// saltar a otra pantalla): la foto sale directo al mensaje, que Phill
+// saltar a otra pantalla): la foto sale directo al mensaje, que Javier
 // analiza. Se abre con el botón de la cámara, desde el modo manos libres,
-// o sola cuando le decís «Phill, mirá esto» (entonces cuenta 3, 2, 1 y
+// o sola cuando le decís «Javier, mirá esto» (entonces cuenta 3, 2, 1 y
 // saca la foto; tocar el obturador la saca ya).
 // Si el aparato no deja usar la cámara en vivo, se cae a elegir una foto.
 // =====================================================================
@@ -25,7 +25,7 @@ async function fotograma(video: HTMLVideoElement): Promise<File> {
 }
 
 export default function CamaraPhill({ auto = false, motivo = '', onFoto, onCerrar }: {
-  /** Cuenta 3, 2, 1 y saca la foto sola (cuando Phill la abrió por vos). */
+  /** Cuenta 3, 2, 1 y saca la foto sola (cuando Javier la abrió por vos). */
   auto?: boolean;
   motivo?: string;
   onFoto: (f: File) => void;
@@ -62,7 +62,7 @@ export default function CamaraPhill({ auto = false, motivo = '', onFoto, onCerra
       } catch (e: any) {
         if (!vivo) return;
         setError(e?.name === 'NotAllowedError' || /Permission|denied/i.test(String(e?.message))
-          ? 'Phill necesita permiso para usar la cámara. Activalo en Ajustes del teléfono → Aplicaciones → Technoverse → Permisos → Cámara.'
+          ? 'Javier necesita permiso para usar la cámara. Activalo en Ajustes del teléfono → Aplicaciones → Technoverse → Permisos → Cámara.'
           : 'No pude abrir la cámara en este aparato. Podés elegir una foto.');
       }
     })();
@@ -78,7 +78,7 @@ export default function CamaraPhill({ auto = false, motivo = '', onFoto, onCerra
     catch { entregada.current = false; setError('No pude sacar la foto. Probá de nuevo.'); }
   }, [onFoto, soltar]);
 
-  // 3, 2, 1 y foto (solo cuando Phill abrió la cámara por vos).
+  // 3, 2, 1 y foto (solo cuando Javier abrió la cámara por vos).
   useEffect(() => {
     if (!auto || !lista) return;
     let n = 3; setCuenta(n);
@@ -89,7 +89,7 @@ export default function CamaraPhill({ auto = false, motivo = '', onFoto, onCerra
   const elegir = (l: FileList | null) => { const f = l?.[0]; if (f && !entregada.current) { entregada.current = true; soltar(); onFoto(f); } };
 
   return (
-    <div className="jv-cam" role="dialog" aria-label="Cámara de Phill">
+    <div className="jv-cam" role="dialog" aria-label="Cámara de Javier">
       <video ref={video} className="jv-cam-video" playsInline muted autoPlay />
       <div className="jv-cam-barra">
         <button type="button" className="jv-cam-btn" onClick={() => { soltar(); onCerrar(); }} aria-label="Cerrar la cámara"><X className="w-5 h-5" /></button>

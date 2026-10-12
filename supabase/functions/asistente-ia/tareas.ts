@@ -1,8 +1,8 @@
 // =====================================================================
-// TAREAS EN SEGUNDO PLANO — encargos que Phill hace solo
+// TAREAS EN SEGUNDO PLANO — encargos que Javier hace solo
 // =====================================================================
 // «Investigá los precios de los cargadores y decime a cuánto conviene
-// venderlos»: Phill lo deja como un ENCARGO (tabla jarvis_tareas, ver
+// venderlos»: Javier lo deja como un ENCARGO (tabla jarvis_tareas, ver
 // supabase/migracion_jarvis_tareas.sql), lo hace por su cuenta aunque la app
 // esté cerrada y avisa al terminar (notificación + el resultado en el chat).
 //

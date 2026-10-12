@@ -91,7 +91,7 @@ interface InventarioControlProps {
   onDataChanged: () => void;
   defaultSubTab?: 'productos' | 'movimientos' | 'reportes' | 'repuestos' | 'insumos';
   onTabChange?: (tab: 'productos' | 'movimientos' | 'reportes' | 'repuestos' | 'insumos') => void;
-  /** Abre otro módulo del panel (para «Crear con Phill» en las publicaciones de Instagram). */
+  /** Abre otro módulo del panel (para «Crear con Javier» en las publicaciones de Instagram). */
   onAbrirModulo?: (modulo: string) => void;
 }
 
@@ -1478,7 +1478,7 @@ if (!m) return null;
                       onClick={() => { void import('../utils/pauta/pedido').then(m => m.abrirEstudio({ productoId: req.productId, requestId: req.id, formato: 'retrato' }, onAbrirModulo)); }}
                       className="w-full px-3 py-2 rounded-lg text-[11px] font-bold bg-[var(--accent)] text-[var(--accent-ink)] hover:bg-[var(--accent-hover)] transition"
                     >
-                      Crear la imagen con Phill
+                      Crear la imagen con Javier
                     </button>
                   )}
 

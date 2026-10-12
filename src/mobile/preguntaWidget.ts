@@ -1,7 +1,7 @@
 // =====================================================================
 // PREGUNTA DESDE EL WIDGET, SIN VENTANA
 // =====================================================================
-// Lo dictado (o escrito en la barrita) va a Phill con la sesión de la app
+// Lo dictado (o escrito en la barrita) va a Javier con la sesión de la app
 // —la misma puerta que el panel, con el mismo carril privado— y la
 // respuesta vuelve al recuadro del widget. La conversación del widget se
 // sigue durante 30 minutos; «Abrir conversación» la abre completa.

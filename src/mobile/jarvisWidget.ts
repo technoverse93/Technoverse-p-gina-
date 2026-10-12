@@ -1,7 +1,7 @@
 // =====================================================================
 // PUENTE CON EL MINI-WIDGET NATIVO (native-android/jarvis/)
 // =====================================================================
-// El widget es Phill con la misma sesión de la app (lo pidió el dueño:
+// El widget es Javier con la misma sesión de la app (lo pidió el dueño:
 // «hacer todo como lo haría con mi sesión», sin huella; el teléfono es solo
 // suyo). Se usa EN EL PROPIO RECUADRO de la pantalla de inicio:
 //   · Micrófono  → dictado del teléfono; la respuesta aparece (y se lee)
@@ -10,20 +10,20 @@
 //                  widget (APK v4: el widget dice dónde está), sin oscurecer,
 //                  con el teclado abajo; la respuesta queda en el widget.
 //                  APK anterior: una barrita sobre el teclado.
-//   · «Abrir conversación» → Phill completo en una hoja (modo «hoja»),
+//   · «Abrir conversación» → Javier completo en una hoja (modo «hoja»),
 //                  para confirmar acciones, ver tablas o seguir hablando.
 // Todo corre en la página `jarvis-rapido.html` (src/rapido.tsx).
 //
-// Activarlo es encender una marca en el teléfono (Phill → Ajustes →
+// Activarlo es encender una marca en el teléfono (Javier → Ajustes →
 // Mini-widget). Solo existe en la APK con el widget nuevo (`version` 3).
 // =====================================================================
 
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
-/** La que entiende esta página: 3 = Phill con sesión, usable en el propio recuadro. */
+/** La que entiende esta página: 3 = Javier con sesión, usable en el propio recuadro. */
 export const VERSION_WIDGET = 3;
 
-/** «oye»: la abrió «Oye Phill» (el llamado por voz): Phill completo, ya en manos libres. */
+/** «oye»: la abrió «Oye Javier» (el llamado por voz): Javier completo, ya en manos libres. */
 export type ModoVentanita = 'hoja' | 'voz' | 'escribir' | 'oye';
 
 export interface PedidoVentanita {
@@ -40,7 +40,7 @@ export interface PedidoVentanita {
 interface PluginJarvisWidget {
   activar(): Promise<{ ok: boolean }>;
   desactivar(): Promise<{ ok: boolean }>;
-  estado(): Promise<{ activo: boolean; enVentanita?: boolean; version?: number; modo?: ModoVentanita; conversacion?: string; marco?: MarcoWidget; noche?: boolean; historial?: string }>;
+  estado(): Promise<{ activo: boolean; enVentanita?: boolean; version?: number; modo?: ModoVentanita; conversacion?: string; marco?: MarcoWidget; noche?: boolean; historial?: string; burbuja?: boolean }>;
   ponerEnInicio(): Promise<{ pedido: boolean }>;
   cerrar(): Promise<void>;
   abrirApp(o: { modulo?: string }): Promise<void>;
@@ -63,6 +63,8 @@ export type EstadoWidget = {
   activo: boolean; enVentanita: boolean; version: number; modo: ModoVentanita; conversacion: string | null;
   /** APK con versión 4: el recuadro del widget, su tema y su conversación. */
   marco: MarcoWidget | null; noche: boolean; historial: VueltaWidget[];
+  /** La abrió la burbuja de Javier (APK con versión 6): el chat queda abierto, no se cierra solo. */
+  burbuja?: boolean;
 };
 
 const nada = () => { /* fuera de la ventanita o APK vieja: no hay nada que hacer */ };
@@ -89,7 +91,7 @@ export const widgetNativo = {
       try { historial = JSON.parse(e.historial || '[]'); } catch { /* sin historial */ }
       const m = e.marco;
       const marco = m && m.ancho > 120 && m.alto > 80 ? m : null;
-      return { activo: !!e.activo, enVentanita: !!e.enVentanita, version: Number(e.version) || 1, modo: e.modo || 'hoja', conversacion: e.conversacion || null, marco, noche: !!e.noche, historial: Array.isArray(historial) ? historial : [] };
+      return { activo: !!e.activo, enVentanita: !!e.enVentanita, version: Number(e.version) || 1, modo: e.modo || 'hoja', conversacion: e.conversacion || null, marco, noche: !!e.noche, historial: Array.isArray(historial) ? historial : [], burbuja: !!e.burbuja };
     } catch {
       return vacio;
     }

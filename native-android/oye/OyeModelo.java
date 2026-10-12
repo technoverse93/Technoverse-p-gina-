@@ -20,8 +20,8 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 /**
- * El «oído» de Phill: el modelo de voz en español de Vosk (~40 MB) que corre en
- * el teléfono, sin internet, para reconocer «Oye Phill». No viene dentro de la
+ * El «oído» de Javier: el modelo de voz en español de Vosk (~40 MB) que corre en
+ * el teléfono, sin internet, para reconocer «Oye Javier». No viene dentro de la
  * APK (la haría el doble de pesada): se baja una sola vez desde Ajustes, con
  * porcentaje, y queda guardado en el teléfono. Si se corta la conexión, sigue
  * donde iba.
@@ -127,7 +127,7 @@ final class OyeModelo {
             c.setConnectTimeout(20_000);
             c.setReadTimeout(30_000);
             c.setInstanceFollowRedirects(true);
-            c.setRequestProperty("User-Agent", "Technoverse-Phill");
+            c.setRequestProperty("User-Agent", "Technoverse-Javier");
             if (ya > 0) c.setRequestProperty("Range", "bytes=" + ya + "-");
             int codigo = c.getResponseCode();
             if (codigo == 416) {

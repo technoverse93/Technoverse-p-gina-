@@ -4,9 +4,9 @@
 // Se abre UNA vez al empezar el modo y queda escuchando hasta terminarlo.
 // Eso permite lo que una grabadora que se prende y se apaga no puede:
 //   · No se pierden las primeras palabras: siempre se guardan los últimos
-//     ~0.9 s, así que si empezás a hablar justo cuando Phill termina (o un
+//     ~0.9 s, así que si empezás a hablar justo cuando Javier termina (o un
 //     instante antes de que el micrófono «arranque»), igual quedan.
-//   · Se puede interrumpir a Phill hablándole encima: mientras él habla el
+//   · Se puede interrumpir a Javier hablándole encima: mientras él habla el
 //     oído vigila (ver interrupcionVoz.ts) y, si de verdad hablás, te toma
 //     lo que decís desde un poco antes de que se callara.
 //   · El cancelador de eco ya está acomodado desde el principio (no cada
@@ -41,12 +41,12 @@ export interface OpcionesEscucha {
 }
 
 export interface OpcionesVigilancia {
-  /** Cuándo empezó a sonar la última oración de Phill (el eco da un golpe ahí). */
+  /** Cuándo empezó a sonar la última oración de Javier (el eco da un golpe ahí). */
   inicioOracion: () => number;
   silencioMs: number;
-  /** Se oyó algo fuerte y sostenido: que Phill se calle YA (puede ser falsa alarma). */
+  /** Se oyó algo fuerte y sostenido: que Javier se calle YA (puede ser falsa alarma). */
   alPausar: () => void;
-  /** No era nadie (una tos, el eco): que Phill siga. */
+  /** No era nadie (una tos, el eco): que Javier siga. */
   alFalsaAlarma: () => void;
   /** Hablás de verdad: entrega lo que dijiste (con lo de un instante antes) para seguir grabando. */
   alConfirmar: (g: GrabacionEnCurso) => void;
@@ -57,7 +57,7 @@ export interface OpcionesVigilancia {
 export interface Oido {
   /** Un turno de escucha (con lo previo): termina solo cuando hacés una pausa. */
   escuchar(op: OpcionesEscucha): GrabacionEnCurso;
-  /** Mientras Phill habla: avisa si le hablás encima. Devuelve cómo dejar de vigilar. */
+  /** Mientras Javier habla: avisa si le hablás encima. Devuelve cómo dejar de vigilar. */
   vigilar(op: OpcionesVigilancia): () => void;
   abierto(): boolean;
   /** Suelta el micrófono. */
@@ -105,7 +105,7 @@ export async function abrirOido(): Promise<Oido> {
   if (!puedeOir()) throw new Error('Este aparato no puede escuchar así.');
   let flujo: MediaStream;
   try {
-    // Con cancelación de eco: así Phill puede hablar mientras el micrófono sigue abierto.
+    // Con cancelación de eco: así Javier puede hablar mientras el micrófono sigue abierto.
     flujo = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true } });
   } catch {
     throw new Error('No se pudo usar el micrófono. Revisá el permiso del navegador e intentá de nuevo.');

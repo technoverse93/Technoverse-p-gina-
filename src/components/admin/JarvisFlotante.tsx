@@ -5,9 +5,9 @@
 // vive a la derecha). Abre la IA encima de lo que se esté haciendo, sin
 // cambiar de pestaña. Ya no existe un módulo «Asistente IA»: es esto.
 //
-//   · Superadmin  → «Phill» (acciones, voz, memoria, cerebro).
+//   · Superadmin  → «Javier» (acciones, voz, memoria, cerebro).
 //   · Resto del personal → «Asistencia de IA» (consultas y ayuda, sin la
-//     identidad ni las acciones de Phill).
+//     identidad ni las acciones de Javier).
 //
 // Usa la MISMA sesión del panel (con la huella de la APK): no hay un acceso
 // aparte ni sin autenticar. Al minimizar, la conversación queda montada y
@@ -73,7 +73,7 @@ export default function JarvisFlotante({ currentUser, onAbrirModulo, sinBoton, p
   pedido?: { n: number; voz: boolean } | null; pestana?: string;
 }) {
   const jarvis = esSuperadmin(currentUser?.role);
-  const nombre = jarvis ? 'Phill' : 'Asistencia de IA';
+  const nombre = jarvis ? 'Javier' : 'Asistencia de IA';
   const [abierto, setAbierto] = useState(false);
   const [grande, setGrande] = useState(false);
   // Se monta la primera vez que se abre y después solo se esconde: así la
@@ -89,7 +89,7 @@ export default function JarvisFlotante({ currentUser, onAbrirModulo, sinBoton, p
   }, []);
   // Una sola ventana flotante a la vez, y se minimiza al cambiar de pestaña.
   const minimizar = useCallback(() => setAbierto(false), []);
-  // Phill NO se cierra al cambiar de pestaña: el dueño lo usa mientras
+  // Javier NO se cierra al cambiar de pestaña: el dueño lo usa mientras
   // recorre el panel. Solo cede su lugar si se abre la burbuja del chat.
   useUnaSolaCapa('jarvis', abierto, minimizar);
   // Pedido del widget: se abre la ventana (y, si fue «Hablar», el micrófono).

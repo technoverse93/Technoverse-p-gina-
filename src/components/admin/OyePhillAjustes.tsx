@@ -1,7 +1,7 @@
 // =====================================================================
 // AJUSTES → «OYE PHILL»
 // =====================================================================
-// Llamar a Phill con la voz, aunque la app esté cerrada: decís «Oye Phill» y
+// Llamar a Javier con la voz, aunque la app esté cerrada: decís «Oye Javier» y
 // se abre en manos libres. El teléfono te escucha con un reconocedor que
 // corre en el propio aparato (sin internet): lo que oye mientras espera no
 // sale de ahí ni se guarda. Es opcional y empieza apagado.
@@ -13,7 +13,7 @@
 // =====================================================================
 
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { AudioLines, Check, CircleDot, Download, Pause, Play, Plus, RefreshCcw, Square, TriangleAlert, X } from 'lucide-react';
+import { AudioLines, Check, CircleDot, MessageCircle, Download, Pause, Play, Plus, RefreshCcw, Square, TriangleAlert, X } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { useConfirm } from '../ui/Overlays';
 import { oyePhill, type AjusteAndroid } from '../../mobile/oyePhill';
@@ -98,12 +98,12 @@ export default function OyePhillAjustes() {
   };
 
   const borrar = async () => {
-    const si = await confirm({ title: 'Borrar el oído de Phill', message: 'Se apaga «Oye Phill» y se libera el espacio (~50 MB). Podés volver a bajarlo cuando quieras.', confirmText: 'Borrar' });
+    const si = await confirm({ title: 'Borrar el oído de Javier', message: 'Se apaga «Oye Javier» y se libera el espacio (~50 MB). Podés volver a bajarlo cuando quieras.', confirmText: 'Borrar' });
     if (!si) return;
     setOcupado(true);
     if (probando) { setProbando(false); }
     setE(await oyePhill.borrarModelo());
-    await anotar('Oye Phill desactivado (oído borrado)');
+    await anotar('Oye Javier desactivado (oído borrado)');
     setOcupado(false);
   };
 
@@ -111,20 +111,20 @@ export default function OyePhillAjustes() {
     setOcupado(true); setAviso(null);
     const r = await oyePhill.iniciar();
     if (!r.ok) { setOcupado(false); setAviso({ tipo: 'error', texto: r.error || 'No se pudo activar.' }); await cargar(); return; }
-    await anotar('Oye Phill activado');
+    await anotar('Oye Javier activado');
     await cargar();
     setOcupado(false);
-    setAviso({ tipo: 'ok', texto: 'Listo. Salí de la app (con el teléfono desbloqueado) y decí «Oye Phill».' });
+    setAviso({ tipo: 'ok', texto: 'Listo. Salí de la app (con el teléfono desbloqueado) y decí «Oye Javier».' });
   };
 
   const apagar = async () => {
     setOcupado(true); setAviso(null);
     if (probando) { await oyePhill.probar(false); setProbando(false); }
     await oyePhill.detener();
-    await anotar('Oye Phill desactivado');
+    await anotar('Oye Javier desactivado');
     await cargar();
     setOcupado(false);
-    setAviso({ tipo: 'ok', texto: 'Apagado: Phill ya no te escucha.' });
+    setAviso({ tipo: 'ok', texto: 'Apagado: Javier ya no te escucha.' });
   };
 
   const reiniciar = async () => {
@@ -151,7 +151,7 @@ export default function OyePhillAjustes() {
   };
 
   /** Guarda y devuelve el estado que quedó (null si no se pudo: la pantalla sigue con lo que tenía). */
-  const guardar = async (cambio: { frases?: string[]; sensibilidad?: Sens }): Promise<EstadoOye | null> => {
+  const guardar = async (cambio: { frases?: string[]; sensibilidad?: Sens; burbuja?: boolean }): Promise<EstadoOye | null> => {
     const x = await oyePhill.configurar(cambio);
     if (x) setE(x);
     else setAviso({ tipo: 'error', texto: 'No se pudo guardar en el teléfono. Probá de nuevo; si sigue, cerrá y abrí la app.' });
@@ -161,7 +161,7 @@ export default function OyePhillAjustes() {
   const agregar = async (texto: string) => {
     setAviso(null);
     const f = limpiarFrase(texto);
-    if (!esFraseUtil(f)) { setAviso({ tipo: 'error', texto: `Usá de ${FRASE_MIN_PALABRAS} a ${FRASE_MAX_PALABRAS} palabras, por ejemplo «oye fil».` }); return; }
+    if (!esFraseUtil(f)) { setAviso({ tipo: 'error', texto: `Usá de ${FRASE_MIN_PALABRAS} a ${FRASE_MAX_PALABRAS} palabras, por ejemplo «oye javier».` }); return; }
     const actuales = e?.frases || [];
     const lista = frasesValidas([...actuales, f]);
     if (lista.length === actuales.length) { setAviso({ tipo: 'error', texto: actuales.length >= FRASES_MAX ? `Ya hay ${FRASES_MAX} formas: borrá alguna para agregar otra.` : 'Esa forma ya está.' }); return; }
@@ -171,7 +171,7 @@ export default function OyePhillAjustes() {
     if (!x.frases.some(g => limpiarFrase(g) === f)) { setAviso({ tipo: 'error', texto: `El teléfono no aceptó «${f}». Usá de ${FRASE_MIN_PALABRAS} a ${FRASE_MAX_PALABRAS} palabras de al menos dos letras.` }); return; }
     setNueva('');
     const v = await oyePhill.vocabulario([f]);
-    if (v.sabe && v.desconocidas.length) setAviso({ tipo: 'error', texto: `Guardado «${f}», pero el oído no conoce «${v.desconocidas.join('», «')}» y no la va a reconocer. Escribila como suena (por ejemplo «fil» en vez de «Phill») o usá «Probar» y tocá «Usar» en lo que oyó.` });
+    if (v.sabe && v.desconocidas.length) setAviso({ tipo: 'error', texto: `Guardado «${f}», pero el oído no conoce «${v.desconocidas.join('», «')}» y no la va a reconocer. Escribila como suena (sin tildes ni nombres raros) o usá «Probar» y tocá «Usar» en lo que oyó.` });
     else setAviso({ tipo: 'ok', texto: `Guardado: «${f}». Ya podés llamarlo así.` });
   };
 
@@ -197,18 +197,32 @@ export default function OyePhillAjustes() {
 
   return (
     <div className="ai-aj">
-      <h4>Oye Phill <small>llamalo con la voz · sin internet</small></h4>
+      <h4>Oye Javier <small>llamalo con la voz · sin internet</small></h4>
       <div className="ai-modu">
         <span className="ai-modu-ic"><AudioLines className="w-4 h-4" /></span>
         <span className="ai-modu-t">
           <b>{titulo}</b>
-          <span>Decí «Oye Phill» y se abre en manos libres, aunque la app esté cerrada. Te escucha dentro del teléfono, sin internet: lo que oye mientras espera no sale del aparato ni se guarda. Se abre con tu sesión, sin pedir la huella (como el mini-widget).</span>
+          <span>Decí «Oye Javier» y se abre en manos libres, aunque la app esté cerrada. Te escucha dentro del teléfono, sin internet: lo que oye mientras espera no sale del aparato ni se guarda. Se abre con tu sesión, sin pedir la huella (como el mini-widget).</span>
         </span>
         {nativo && !apkVieja && e && (
           <button type="button" role="switch" aria-checked={activo} className="ai-sw" data-on={activo || undefined}
-            disabled={ocupado || !!bajando || (!activo && !puede)} onClick={() => void (activo ? apagar() : activar())} aria-label="«Oye Phill» en este teléfono" />
+            disabled={ocupado || !!bajando || (!activo && !puede)} onClick={() => void (activo ? apagar() : activar())} aria-label="«Oye Javier» en este teléfono" />
         )}
       </div>
+
+      {nativo && e && e.version >= 3 && (
+        <div className="ai-modu">
+          <span className="ai-modu-ic"><MessageCircle className="w-4 h-4" /></span>
+          <span className="ai-modu-t">
+            <b>Burbuja de Javier</b>
+            <span>{e.overlay
+              ? 'Una burbujita que flota sobre lo que estés usando, sin bloquear nada. Tocala para escribirle; mantenela apretada (o decí «Oye Javier») para hablarle. Arrastrala a la ✕ de abajo para esconderla.'
+              : 'Para ver la burbuja, Android tiene que dejar a Javier «mostrarse sobre otras apps» (paso de arriba).'}</span>
+          </span>
+          <button type="button" role="switch" aria-checked={!!e.burbuja} className="ai-sw" data-on={e.burbuja || undefined}
+            disabled={!e.overlay} onClick={() => void guardar({ burbuja: !e.burbuja })} aria-label="Burbuja de Javier" />
+        </div>
+      )}
 
       {nativo && e && e.version >= 2 && (
         <div className="ai-modu">
@@ -216,8 +230,8 @@ export default function OyePhillAjustes() {
           <span className="ai-modu-t">
             <b>{e.asistente ? 'Con el botón del teléfono: listo' : 'Llamarlo con el botón del teléfono'}</b>
             <span>{e.asistente
-              ? 'Mantené apretado el botón de inicio (o el de encendido, si tu teléfono lo usa para el asistente) y Phill aparece abajo, escuchando, sin tapar la pantalla.'
-              : 'Como Google o Siri: elegí a Technoverse en «App de asistente digital». Después, mantené apretado el botón de inicio (o el de encendido) y Phill aparece abajo, escuchando.'}</span>
+              ? 'Mantené apretado el botón de inicio (o el de encendido, si tu teléfono lo usa para el asistente) y Javier aparece abajo, escuchando, sin tapar la pantalla.'
+              : 'Como Google o Siri: elegí a Technoverse en «App de asistente digital». Después, mantené apretado el botón de inicio (o el de encendido) y Javier aparece abajo, escuchando.'}</span>
           </span>
           <button type="button" className="ai-chip" onClick={() => void oyePhill.abrirAjuste('asistente')}>{e.asistente ? 'Cambiar' : 'Elegir'}</button>
         </div>
@@ -268,10 +282,10 @@ export default function OyePhillAjustes() {
             ))}
           </div>
           <form className="ai-oye-nueva" onSubmit={ev => { ev.preventDefault(); void agregar(nueva); }}>
-            <input value={nueva} onChange={ev => setNueva(ev.target.value)} placeholder="Otra forma de decirlo, p. ej. «oye fiel»" maxLength={40} aria-label="Agregar otra forma de llamar a Phill" enterKeyHint="done" />
+            <input value={nueva} onChange={ev => setNueva(ev.target.value)} placeholder="Otra forma de decirlo, p. ej. «hola javier»" maxLength={40} aria-label="Agregar otra forma de llamar a Javier" enterKeyHint="done" />
             <button type="submit" className="ai-chip" disabled={!nueva.trim()}><Plus className="w-4 h-4" />Agregar</button>
           </form>
-          <p className="ai-mw-nota">«Phill» suena «fil» en español: el oído a veces lo escucha distinto. Si no te responde, usá «Probar», decí «Oye Phill» y tocá «Usar» en lo que más se parezca.</p>
+          <p className="ai-mw-nota">«Javier» es una palabra que el oído conoce bien (antes, «Phill» casi no la entendía). Si igual no te responde, usá «Probar», decí «Oye Javier» y tocá «Usar» en lo que más se parezca.</p>
 
           <div className="ai-oye-sub">Qué tan exigente</div>
           <div className="ai-seg ai-seg-voz" role="radiogroup" aria-label="Qué tan exigente es el llamado">
@@ -297,7 +311,7 @@ export default function OyePhillAjustes() {
 
           {probando && (
             <div className="ai-oye-prueba" role="region" aria-label="Prueba del oído">
-              <span>Decí «Oye Phill» y mirá cómo te oye. Si se parece, tocá «Usar».</span>
+              <span>Decí «Oye Javier» y mirá cómo te oye. Si se parece, tocá «Usar».</span>
               <span className="ai-oye-nivel" aria-hidden="true"><i style={{ width: `${Math.round(nivel * 100)}%` }} /></span>
               <div className="ai-oye-lineas" aria-live="polite">
                 {parcial && <span className="ai-oye-linea" data-parcial>…<q>{lineaDePrueba(parcial).texto}</q></span>}
@@ -327,9 +341,9 @@ export default function OyePhillAjustes() {
       )}
 
       {(apkVieja || apkSinOye) && <p className="ai-mw-nota">Instalá la APK nueva (la de la última compilación) y volvé aquí para activarlo.</p>}
-      {!nativo && !apkSinOye && <p className="ai-mw-nota">Abrí Phill en la app del teléfono → Ajustes → Oye Phill.</p>}
+      {!nativo && !apkSinOye && <p className="ai-mw-nota">Abrí Javier en la app del teléfono → Ajustes → Oye Javier.</p>}
       {nativo && !apkVieja && (
-        <p className="ai-mw-nota">Escucha solo con el teléfono desbloqueado y la pantalla encendida; se calla mientras tenés Phill abierto, en llamadas y cuando lo pausás. Si perdés el teléfono, bloquearlo o cerrar sesión también lo apaga. Después de «Oye Phill», Phill funciona como siempre (ahí sí se usa internet).</p>
+        <p className="ai-mw-nota">Escucha solo con el teléfono desbloqueado y la pantalla encendida; se calla mientras tenés Javier abierto, en llamadas y cuando lo pausás. Si perdés el teléfono, bloquearlo o cerrar sesión también lo apaga. Después de «Oye Javier», Javier funciona como siempre (ahí sí se usa internet).</p>
       )}
       {aviso && <p className="ai-mw-aviso" data-tipo={aviso.tipo} role="status">{aviso.texto}</p>}
     </div>

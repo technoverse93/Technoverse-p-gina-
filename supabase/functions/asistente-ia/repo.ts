@@ -1,7 +1,7 @@
 // =====================================================================
-// PROPUESTAS DE CÓDIGO — Phill propone, vos aprobás
+// PROPUESTAS DE CÓDIGO — Javier propone, vos aprobás
 // =====================================================================
-// Phill puede leer el repositorio y PROPONER un cambio como Pull Request.
+// Javier puede leer el repositorio y PROPONER un cambio como Pull Request.
 // Nunca lo fusiona: queda en una rama «phill/…» (y en borrador, si el
 // repositorio lo permite) esperando que lo revises en GitHub.
 //
@@ -90,7 +90,7 @@ export interface CambioPropuesto {
 export interface Propuesta { titulo: string; descripcion: string; pedido?: string; cambios: CambioPropuesto[] }
 export type ResultadoPropuesta = { ok: true; url: string; numero: number; rama: string; archivos: string[]; borrador: boolean } | { ok: false; error: string };
 
-export const PIE_PR = '_Propuesto por Phill, el asistente del dueño. **Nadie lo fusionó**: revisalo con calma antes de aprobarlo (y mirá que compile)._';
+export const PIE_PR = '_Propuesto por Javier, el asistente del dueño. **Nadie lo fusionó**: revisalo con calma antes de aprobarlo (y mirá que compile)._';
 
 export function cuerpoPR(p: Propuesta, archivos: string[]): string {
   return [
@@ -213,7 +213,7 @@ export class ClienteRepo {
     }
     const arbol = await this.api('/git/trees', { method: 'POST', body: JSON.stringify({ base_tree: arbolBase, tree: entradas }) });
     if (!arbol.ok) return { ok: false, error: this.falla(arbol, 'armar el árbol') };
-    const commit = await this.api('/git/commits', { method: 'POST', body: JSON.stringify({ message: `${titulo}\n\nPropuesto por Phill.`, tree: String(arbol.json.sha), parents: [base] }) });
+    const commit = await this.api('/git/commits', { method: 'POST', body: JSON.stringify({ message: `${titulo}\n\nPropuesto por Javier.`, tree: String(arbol.json.sha), parents: [base] }) });
     if (!commit.ok) return { ok: false, error: this.falla(commit, 'crear el commit') };
     // La rama: SIEMPRE phill/… (si el nombre ya existe, otro intento con otro sufijo).
     let rama = '';

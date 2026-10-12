@@ -48,7 +48,7 @@ const GUARDA: Record<string, string> = {
   'dom:internet': 'Lo que buscó en internet y vale la pena recordar, con el nombre del sitio de donde salió.',
   'dom:dueno': 'Lo que le pediste recordar: cómo te gusta trabajar y que te hablen.',
 };
-const FUENTE: Record<string, string> = { vos: 'Lo dijiste vos', internet: 'Internet', inventario: 'Inventario de la tienda', taller: 'Órdenes del taller', jarvis: 'Lo dedujo Phill' };
+const FUENTE: Record<string, string> = { vos: 'Lo dijiste vos', internet: 'Internet', inventario: 'Inventario de la tienda', taller: 'Órdenes del taller', jarvis: 'Lo dedujo Javier' };
 const FIJOS = new Set(['raiz', 'dom:internet', 'dom:dueno', 'dom:negocio']);
 
 const sinTildes = (t: string) => t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase();
@@ -68,7 +68,7 @@ function textoLimpio(n: Fila): string {
 const conNombre = (f: Omit<Fila, 'nombre'>): Fila => ({ ...f, nombre: nombreHumano(f.etiqueta, f.tipo, f.url) });
 
 // Lo último que se bajó, en memoria: al abrir se ve AL INSTANTE y se
-// refresca por detrás. Phill lo precarga al abrirse.
+// refresca por detrás. Javier lo precarga al abrirse.
 let enMemoria: { filas: Fila[]; enlaces: Enlace[] } | null = null;
 let ordenado = false;
 let bajando: Promise<{ filas: Fila[]; enlaces: Enlace[] } | { error: 'sin_tablas' | 'red' }> | null = null;
@@ -97,7 +97,7 @@ function bajarCerebro() {
   })().finally(() => { bajando = null; });
   return bajando;
 }
-/** Phill lo llama al abrirse: código y datos listos antes de tocar el cerebro. */
+/** Javier lo llama al abrirse: código y datos listos antes de tocar el cerebro. */
 export function precargarCerebro(): void { if (!enMemoria) void bajarCerebro(); }
 
 /** Ordena todo desde el núcleo: ramas, temas y lo que cuelga de cada uno. */
@@ -201,7 +201,7 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
     return r;
   }, []);
   useEffect(() => { void cargar(); }, [cargar]);
-  // Al abrir, Phill ordena de UNA vez lo viejo de internet (las búsquedas
+  // Al abrir, Javier ordena de UNA vez lo viejo de internet (las búsquedas
   // repetidas caen en un solo tema con un punto por tienda) y se recarga.
   useEffect(() => {
     if (ordenado) return; ordenado = true;
@@ -334,7 +334,7 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
     window.setTimeout(() => { if (borrarRef.current?.ids === lista) void confirmarBorrado(); }, 5200);
   };
 
-  // «Enseñar»: Phill lo investiga y lo guarda solo (sin ir al chat).
+  // «Enseñar»: Javier lo investiga y lo guarda solo (sin ir al chat).
   const [aprendiendo, setAprendiendo] = useState<{ estado: 'no' | 'si' | 'ok' | 'error'; texto: string }>({ estado: 'no', texto: '' });
   const aprender = async (tema: string) => {
     const t = tema.trim(); if (t.length < 2 || aprendiendo.estado === 'si') return;
@@ -356,7 +356,7 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
         <div className="jv-cb-vacio">
           <span className="jv-cb-logo"><Brain className="w-6 h-6" aria-hidden /></span>
           <b>El cerebro todavía no está instalado</b>
-          <p>Falta correr «migracion_jarvis_cerebro.sql» en Supabase. Mientras tanto Phill responde normal, solo que no guarda lo que aprende.</p>
+          <p>Falta correr «migracion_jarvis_cerebro.sql» en Supabase. Mientras tanto Javier responde normal, solo que no guarda lo que aprende.</p>
           <button type="button" className="jv-btn" onClick={() => void cargar()}><RefreshCw className="w-4 h-4" />Volver a revisar</button>
         </div>
       </div>
@@ -405,7 +405,7 @@ export default function CerebroJarvis({ onPreguntar, onVolver }: { onPreguntar?:
       <div className="jv-cb-hud" ref={hudRef}>
         {onVolver && <button type="button" className="jv-vidrio jv-cb-ib" aria-label="Volver al chat" title="Volver al chat" onClick={onVolver}><ArrowLeft className="w-[18px] h-[18px]" /></button>}
         <div className="jv-cb-tit">
-          <b>Cerebro de Phill</b>
+          <b>Cerebro de Javier</b>
           <div className="jv-cb-ruta">
             {!foco ? <span>{arbol.ramas.length} ramas · {nTemas} temas · {nPuntos} puntos</span> : <>
               <button type="button" onClick={centrar}>Todo</button> ›{' '}
@@ -534,7 +534,7 @@ function VistaNucleo({ arbol, filas, nTemas, nPuntos, onRama, onElegir, aprendie
   return (
     <>
       <div className="jv-cb-kicker" style={{ color: 'var(--jv-tinta)' }}>Núcleo · Technoverse</div>
-      <p className="jv-cb-texto">Todo lo que Phill sabe para ayudarte, ordenado en ramas. Tocá una para ver qué guarda.</p>
+      <p className="jv-cb-texto">Todo lo que Javier sabe para ayudarte, ordenado en ramas. Tocá una para ver qué guarda.</p>
       <div className="jv-cb-cifras">{[[arbol.ramas.length, 'ramas'], [nTemas, 'temas'], [nPuntos, 'puntos']].map(([n, t]) => <div key={t}><b>{n}</b><span>{t}</span></div>)}</div>
       <label className="jv-cb-buscar">
         <Search className="w-4 h-4 shrink-0" aria-hidden />
@@ -628,9 +628,9 @@ function VistaTema({ n, arbol, marcado, onElegir, onMarcar, onVolver, onActualiz
       <Editable valor={n.etiqueta} etiqueta="Nombre" onGuardar={t => void onActualizar(n, esNota(n) ? { etiqueta: t, resumen: t } : { etiqueta: t }, 'Nombre cambiado.')}>
         {editar => <div className="jv-cb-titulo"><div className="jv-cb-h3" role="heading" aria-level={3}>{n.nombre}</div>{!fijo && <button type="button" className="jv-cb-lapiz" onClick={editar}>Renombrar</button>}</div>}
       </Editable>
-      <div className="jv-cb-meta">Usado {n.usos || 0} {n.usos === 1 ? 'vez' : 'veces'} · {sitio || FUENTE[n.fuente || ''] || 'Phill'} · desde {fecha(n.creado_en)}</div>
+      <div className="jv-cb-meta">Usado {n.usos || 0} {n.usos === 1 ? 'vez' : 'veces'} · {sitio || FUENTE[n.fuente || ''] || 'Javier'} · desde {fecha(n.creado_en)}</div>
       {!esNota(n) && (
-        <Editable valor={lo || n.resumen || ''} multi etiqueta="Lo que Phill sabe de esto" onGuardar={t => void onActualizar(n, { resumen: t, fuente: 'vos' }, 'Corregido. Phill usa esto desde ya.')}>
+        <Editable valor={lo || n.resumen || ''} multi etiqueta="Lo que Javier sabe de esto" onGuardar={t => void onActualizar(n, { resumen: t, fuente: 'vos' }, 'Corregido. Javier usa esto desde ya.')}>
           {editar => (
             <Bloque titulo="Lo que sé" accion={<button type="button" className="jv-cb-lapiz" onClick={editar}>Corregir</button>}>
               <p className="jv-cb-texto">{lo || 'Sin resumen todavía.'}</p>
@@ -665,7 +665,7 @@ function VistaTema({ n, arbol, marcado, onElegir, onMarcar, onVolver, onActualiz
       )}
       {confirmar ? (
         <div className="jv-cb-confirmar">
-          <span>¿Olvidar «{n.nombre}»{puntos.length ? ` y sus ${puntos.length} puntos` : ''}? Phill deja de usarlo.</span>
+          <span>¿Olvidar «{n.nombre}»{puntos.length ? ` y sus ${puntos.length} puntos` : ''}? Javier deja de usarlo.</span>
           <div className="jv-cb-botones"><button type="button" className="jv-btn" onClick={() => setConfirmar(false)}>Cancelar</button><button type="button" className="jv-btn" data-mal onClick={() => onOlvidar([n.id])}>Olvidar</button></div>
         </div>
       ) : (

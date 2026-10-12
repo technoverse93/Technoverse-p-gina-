@@ -36,7 +36,7 @@ import java.util.Locale;
 import java.util.Map;
 
 /**
- * El teléfono de Phill: alarmas, temporizadores, abrir apps, llamar, WhatsApp,
+ * El teléfono de Javier: alarmas, temporizadores, abrir apps, llamar, WhatsApp,
  * SMS, calendario, mapas, música, linterna, ajustes y enlaces. No es un paquete
  * npm: MainActivity lo registra a mano (como los demás de native-android/).
  *
@@ -436,6 +436,17 @@ public class TelefonoNativoPlugin extends Plugin {
         i.putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*");
         i.putExtra(SearchManager.QUERY, q);
         call.resolve(iniciar(i));
+    }
+
+    /** YouTube con la búsqueda hecha («entrá a YouTube y buscame…»). Sin la app, la web. */
+    @PluginMethod
+    public void youtube(PluginCall call) {
+        String q = texto(call, "consulta");
+        if (q.isEmpty()) { call.resolve(error("Falta qué buscar en YouTube.")); return; }
+        Intent i = new Intent(Intent.ACTION_SEARCH).setPackage("com.google.android.youtube").putExtra(SearchManager.QUERY, q);
+        JSObject r = iniciar(i);
+        if (!r.optBoolean("ok")) r = iniciar(new Intent(Intent.ACTION_VIEW, Uri.parse("https://www.youtube.com/results?search_query=" + Uri.encode(q))));
+        call.resolve(r);
     }
 
     // ----------------------- linterna, ajustes, enlaces -----------------------

@@ -1,7 +1,7 @@
 // =====================================================================
-// LA TARJETA DE UN ENCARGO — Phill trabajando por su cuenta
+// LA TARJETA DE UN ENCARGO — Javier trabajando por su cuenta
 // =====================================================================
-// «Investigá los precios y avisame»: Phill lo deja en marcha en el servidor
+// «Investigá los precios y avisame»: Javier lo deja en marcha en el servidor
 // (aunque cierres la app) y esta tarjeta muestra cómo va: en cola, en qué paso
 // está y, al terminar, que el resultado quedó abajo en el chat. Se puede
 // cancelar mientras sigue en curso. El avance llega en vivo (Realtime) y, por
@@ -30,7 +30,7 @@ export default function TarjetaTarea({ id, titulo }: { id: string; titulo: strin
       setF(prev => ({ ...(prev || { estado: 'pendiente', plan: [], error: null }), ...n }) as Fila);
       if (n.estado) {
         anterior.current = n.estado;
-        // Al terminar, el chat se refresca para mostrar el resultado que Phill dejó.
+        // Al terminar, el chat se refresca para mostrar el resultado que Javier dejó.
         if (n.estado === 'lista' && previo && previo !== 'lista') window.dispatchEvent(new Event(EVENTO_REFRESCAR_CHAT));
       }
     };

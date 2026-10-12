@@ -1,5 +1,5 @@
 // =====================================================================
-// LA TARJETA DEL TELÉFONO — lo que Phill hizo (o preparó) en tu celular
+// LA TARJETA DEL TELÉFONO — lo que Javier hizo (o preparó) en tu celular
 // =====================================================================
 // Cuando le pedís «poneme una alarma», «llamá a Laura» o «abrí Spotify», la
 // orden se ejecuta en el acto en el teléfono y esta tarjeta deja a la vista
@@ -8,12 +8,12 @@
 // conversación vieja no se vuelve a ejecutar nada solo: un botón la repite.
 // =====================================================================
 
-import { AlarmClock, AppWindow, CalendarPlus, Check, ExternalLink, Flashlight, Loader2, MapPin, MessageCircle, MessageSquare, Music, Phone, RotateCw, Settings, ShieldCheck, Smartphone, Timer, TriangleAlert, type LucideIcon } from 'lucide-react';
+import { AlarmClock, AppWindow, Play, CalendarPlus, Check, ExternalLink, Flashlight, Loader2, MapPin, MessageCircle, MessageSquare, Music, Phone, RotateCw, Settings, ShieldCheck, Smartphone, Timer, TriangleAlert, type LucideIcon } from 'lucide-react';
 import { useEstadoTelefono, type AccionTelefono, type PedidoTelefono } from '../../utils/telefono';
 
 const ICONOS: Record<AccionTelefono, LucideIcon> = {
   alarma: AlarmClock, temporizador: Timer, abrir_app: AppWindow, llamar: Phone, whatsapp: MessageCircle, sms: MessageSquare,
-  calendario: CalendarPlus, mapa: MapPin, musica: Music, linterna: Flashlight, ajustes: Settings, enlace: ExternalLink,
+  calendario: CalendarPlus, mapa: MapPin, musica: Music, linterna: Flashlight, ajustes: Settings, enlace: ExternalLink, youtube: Play,
 };
 
 /** Repetirlas no hace daño (una alarma o un temporizador duplicados, sí). */

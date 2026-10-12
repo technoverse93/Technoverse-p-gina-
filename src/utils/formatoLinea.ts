@@ -4,7 +4,7 @@
 // Parte el texto de una línea en trozos que el chat dibuja distinto. Solo
 // se vuelven enlace las direcciones http/https (nunca «javascript:» u otros):
 // «[texto](https://…)» o la dirección suelta, como la del Pull Request que
-// deja Phill. La puntuación del final («…/pull/7.») no forma parte del enlace.
+// deja Javier. La puntuación del final («…/pull/7.») no forma parte del enlace.
 // =====================================================================
 
 export type ParteLinea =

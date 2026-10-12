@@ -16,13 +16,13 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PantallaNativaPlugin.class);
-        // Puente del mini-widget de Phill (native-android/jarvis/).
+        // Puente del mini-widget de Javier (native-android/jarvis/).
         registerPlugin(JarvisWidgetPlugin.class);
         // Avisos push (Firebase) y respuesta desde la notificación (native-android/push/).
         registerPlugin(PushNativoPlugin.class);
-        // El teléfono de Phill: alarmas, llamadas, WhatsApp, calendario, mapas… (native-android/telefono/).
+        // El teléfono de Javier: alarmas, llamadas, WhatsApp, calendario, mapas… (native-android/telefono/).
         registerPlugin(TelefonoNativoPlugin.class);
-        // «Oye Phill» (el oído que espera el llamado) y el dictado del teléfono con texto en vivo (native-android/oye/).
+        // «Oye Javier» (el oído que espera el llamado) y el dictado del teléfono con texto en vivo (native-android/oye/).
         registerPlugin(OyePhillPlugin.class);
         registerPlugin(DictadoNativoPlugin.class);
         super.onCreate(savedInstanceState);
@@ -35,7 +35,7 @@ public class MainActivity extends BridgeActivity {
         if (vista != null) vista.getSettings().setTextZoom(100);
     }
 
-    // Mientras la app se ve, el micrófono lo usa ella: «Oye Phill» se calla y vuelve al salir.
+    // Mientras la app se ve, el micrófono lo usa ella: «Oye Javier» se calla y vuelve al salir.
     @Override
     public void onStart() {
         super.onStart();

@@ -20,7 +20,7 @@ import java.security.KeyStore;
  * Puente entre la web (src/mobile/jarvisWidget.ts) y el mini-widget.
  *
  * Vive en los DOS puentes: el de la app (MainActivity, para activarlo desde
- * Phill → Ajustes) y el de la ventanita (JarvisRapido, para cerrarla, abrir
+ * Javier → Ajustes) y el de la ventanita (JarvisRapido, para cerrarla, abrir
  * la app y dejar la última respuesta en el widget). No es un paquete npm,
  * así que cada actividad lo registra a mano antes de super.onCreate().
  *
@@ -29,7 +29,7 @@ import java.security.KeyStore;
  */
 @CapacitorPlugin(name = "JarvisWidget")
 public class JarvisWidgetPlugin extends Plugin {
-    /** La web la compara: 3 = Phill con sesión, usable en el propio recuadro. */
+    /** La web la compara: 3 = Javier con sesión, usable en el propio recuadro. */
     static final int VERSION = 6;
 
     private int pedidos = 0;
@@ -58,9 +58,9 @@ public class JarvisWidgetPlugin extends Plugin {
     public void estado(PluginCall call) {
         JSObject r = new JSObject();
         boolean activo = JarvisWidget.activo(getContext());
-        // «Oye Phill» abre esta misma ventanita: prenderlo en este teléfono es el permiso (el de la huella del widget no hace falta).
-        // Lo mismo si lo abrió el botón del asistente: elegir a Phill como asistente del teléfono es el permiso.
-        if (!activo && getActivity() instanceof JarvisRapido && "oye".equals(((JarvisRapido) getActivity()).modo())) {
+        // «Oye Javier» abre esta misma ventanita: prenderlo en este teléfono es el permiso (el de la huella del widget no hace falta).
+        // Lo mismo si lo abrió el botón del asistente: elegir a Javier como asistente del teléfono es el permiso.
+        if (!activo && getActivity() instanceof JarvisRapido && ("oye".equals(((JarvisRapido) getActivity()).modo()) || ((JarvisRapido) getActivity()).desdeBurbuja())) {
             JarvisRapido v = (JarvisRapido) getActivity();
             activo = v.comoAsistente() || OyePrefs.activo(getContext());
         }
@@ -71,6 +71,7 @@ public class JarvisWidgetPlugin extends Plugin {
             JarvisRapido v = (JarvisRapido) getActivity();
             r.put("modo", v.modo());
             r.put("noche", v.noche());
+            r.put("burbuja", v.desdeBurbuja());
             JSObject m = v.marcoCss();
             if (m != null) r.put("marco", m);
             r.put("historial", JarvisWidget.historial(getContext()).toString());
@@ -103,7 +104,7 @@ public class JarvisWidgetPlugin extends Plugin {
     }
 
     /**
-     * Abre la app (con su huella de siempre) en Phill o, si se indica, en un
+     * Abre la app (con su huella de siempre) en Javier o, si se indica, en un
      * módulo («Ir a Taller» desde la ventanita), y cierra la ventanita.
      */
     @PluginMethod

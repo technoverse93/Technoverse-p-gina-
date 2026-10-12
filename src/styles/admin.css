@@ -1666,7 +1666,7 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
    (el espejo de Supervisión, el riel de Ciberseguridad, tarjetas con
    desenfoque) se pintaba encima del menú. La regleta entera sube por
    encima del contenido; los modales (z 100) siguen por encima de ella.
-   Va en 75, por encima de las ventanas flotantes de Phill y del chat
+   Va en 75, por encima de las ventanas flotantes de Javier y del chat
    (z 70): con 60 sus menús («Actualizar», «Cerrar sesión») quedaban
    tapados por esas ventanas. No se pisan: las ventanas empiezan justo
    debajo de la regleta (--tv-borde-cab). */
@@ -1754,12 +1754,12 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
 /* =====================================================================
    JARVIS — piezas del Asistente IA del superadmin
    ---------------------------------------------------------------------
-   Persona (Phill / Arquitecto), velocidad, voz, tarjetas de acción con
+   Persona (Javier / Arquitecto), velocidad, voz, tarjetas de acción con
    confirmación, «abrir en el panel» y gráfico comparado. Todo sale de los
    tokens de la plataforma; solo se agregan los dos tonos del gráfico y el
    rojo del botón que cambia accesos.
    ===================================================================== */
-/* ---------- Cabecera: persona (Phill operador / Arquitecto) ---------- */
+/* ---------- Cabecera: persona (Javier operador / Arquitecto) ---------- */
 
 /* Menús emergentes (mismo aspecto que el menú de adjuntar del chat). */
 
@@ -1785,9 +1785,9 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
 /* Teléfono angosto: la velocidad queda como ícono; el nombre está en el
    menú y en el pie de cada respuesta. */
 
-/* ---------- Phill fase 2: memoria y valoraciones ---------- */
+/* ---------- Javier fase 2: memoria y valoraciones ---------- */
 
-/* ---------- Phill flotante (intercomunicador) ---------- */
+/* ---------- Javier flotante (intercomunicador) ---------- */
 
 /* =====================================================================
    NADA ENCIMA DE NADA (A12 y cualquier teléfono)
@@ -1796,12 +1796,12 @@ html.sin-vidrio .tv-lz-busca, html.sin-vidrio .tv-lz-frec-b { backdrop-filter: n
      actualización descargada…», solo en la APK) y se salía de la pantalla
      hacia la izquierda. Ahora tiene ancho y alto máximos, y si no cabe,
      se desplaza por dentro.
-   · Los botones flotantes (Phill abajo a la izquierda, chat abajo a la
+   · Los botones flotantes (Javier abajo a la izquierda, chat abajo a la
      derecha) dejaban el final de cada módulo debajo de ellos: el módulo
      reserva ese espacio al final para poder subir lo último a la vista.
    ===================================================================== */
 
-/* ---------- Cerebro de Phill (3D) ---------- */
+/* ---------- Cerebro de Javier (3D) ---------- */
 /* Colores de las neuronas: en claro, tonos profundos sobre un laboratorio
    luminoso; en oscuro, tonos encendidos sobre el espacio. */
 /* Resumen: cifras y curva de crecimiento */
@@ -1865,7 +1865,7 @@ html textarea { line-height: 1.45; }
 
 /* ---------- Cabecera del asistente en la ventana flotante ---------- */
 
-/* Acción que Phill hizo sola: una línea discreta, como un asistente. */
+/* Acción que Javier hizo sola: una línea discreta, como un asistente. */
 @keyframes ai-linea-in{from{opacity:0;transform:translateY(3px)}to{opacity:1;transform:none}}
 @media (max-width: 640px) {
   .tv-lz-frec-b { min-width: 0; overflow: hidden; }

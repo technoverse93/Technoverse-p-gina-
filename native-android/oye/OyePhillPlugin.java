@@ -31,8 +31,8 @@ import java.util.Set;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 /**
- * «Oye Phill»: el puente entre la web (src/mobile/oyePhill.ts) y el servicio que
- * escucha (OyePhillService). Desde Ajustes → Oye Phill se baja el «oído» (el
+ * «Oye Javier»: el puente entre la web (src/mobile/oyePhill.ts) y el servicio que
+ * escucha (OyePhillService). Desde Ajustes → Oye Javier se baja el «oído» (el
  * modelo de voz que corre en el teléfono), se dan los permisos, se enseña cómo
  * te oye y se prende o apaga. No es un paquete npm: MainActivity lo registra a mano.
  *
@@ -47,7 +47,7 @@ import java.util.concurrent.atomic.AtomicBoolean;
 )
 public class OyePhillPlugin extends Plugin {
     /** La web la compara con la que entiende. */
-    static final int VERSION = 2;
+    static final int VERSION = 3;
 
     private OyePhillService.Oyente mio;
     private Thread bajada;
@@ -106,7 +106,7 @@ public class OyePhillPlugin extends Plugin {
         return a;
     }
 
-    /** ¿Phill es la app de asistente del teléfono (botón de inicio / encendido)? */
+    /** ¿Javier es la app de asistente del teléfono (botón de inicio / encendido)? */
     private static boolean esAsistente(Context c) {
         try {
             if (Build.VERSION.SDK_INT >= 29) {
@@ -144,6 +144,7 @@ public class OyePhillPlugin extends Plugin {
         r.put("ultimaDecision", OyePhillService.ultimaDecision);
         r.put("sdk", Build.VERSION.SDK_INT);
         r.put("asistente", esAsistente(c));
+        r.put("burbuja", OyePrefs.burbuja(c));
         return r;
     }
 
@@ -281,6 +282,8 @@ public class OyePhillPlugin extends Plugin {
         }
         Integer sens = call.getInt("sensibilidad");
         if (sens != null) OyePrefs.fijarSensibilidad(c, sens.intValue());
+        Boolean burbuja = call.getBoolean("burbuja");
+        if (burbuja != null) OyePrefs.fijarBurbuja(c, burbuja.booleanValue());
         // Lo guardado ya quedó guardado: si avisarle al servicio falla (Android no deja
         // despertarlo en ese momento), lo toma la próxima vez que arranque.
         try {
@@ -299,7 +302,7 @@ public class OyePhillPlugin extends Plugin {
             return;
         }
         if (!OyeModelo.listo(OyeModelo.raiz(getContext()))) {
-            call.resolve(error("Primero bajá el oído de Phill."));
+            call.resolve(error("Primero bajá el oído de Javier."));
             return;
         }
         if (!tieneMicrofono()) {
@@ -341,13 +344,13 @@ public class OyePhillPlugin extends Plugin {
         call.resolve(ok());
     }
 
-    /** La prueba: el oído escucha libre y muestra lo que entiende, para enseñarle cómo decís «Oye Phill». */
+    /** La prueba: el oído escucha libre y muestra lo que entiende, para enseñarle cómo decís «Oye Javier». */
     @PluginMethod
     public void probar(PluginCall call) {
         boolean si = Boolean.TRUE.equals(call.getBoolean("activo", true));
         if (si) {
             if (!hayVosk() || !OyeModelo.listo(OyeModelo.raiz(getContext()))) {
-                call.resolve(error("Primero bajá el oído de Phill."));
+                call.resolve(error("Primero bajá el oído de Javier."));
                 return;
             }
             if (!tieneMicrofono()) {

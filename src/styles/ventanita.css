@@ -1,7 +1,7 @@
 /* =====================================================================
    VENTANITA DEL MINI-WIDGET (jarvis-rapido.html, src/rapido.tsx)
    =====================================================================
-   La hoja de Phill sobre la pantalla de inicio del teléfono. Reutiliza la
+   La hoja de Javier sobre la pantalla de inicio del teléfono. Reutiliza la
    hoja flotante del panel (.jv-hoja) y solo cambia lo que hace falta aquí:
    fondo transparente (se ve la pantalla de inicio, oscurecida por la
    ventana nativa), un toque fuera de la hoja la cierra, la cabecera tiene
@@ -115,11 +115,11 @@ html.tv-ventanita #root { height: 100%; }
 /* La escena del cerebro y su árbol, a la medida de la hoja (como en el panel). */
 
 /* ---------------------------------------------------------------------
-   LLAMADO («Oye Phill» o el botón del asistente del teléfono)
+   LLAMADO («Oye Javier» o el botón del asistente del teléfono)
    ---------------------------------------------------------------------
    Como el asistente de Google: un panel chico pegado abajo, sin tapar la
    pantalla (la ventana nativa ya no la oscurece), con el orbe a la
-   izquierda y lo último dicho al lado. Si Phill abre otra app, la ventanita
+   izquierda y lo último dicho al lado. Si Javier abre otra app, la ventanita
    se quita sola para que se vea. Tocar arriba (fuera del panel) lo cierra. */
 .jv-hoja.vj-hoja[data-oye] {
   top: auto;
@@ -136,7 +136,7 @@ html.tv-ventanita #root { height: 100%; }
 @media (min-width: 640px) {
   .jv-hoja.vj-hoja[data-oye] { left: 0; right: 0; width: min(520px, calc(100vw - 32px)); }
 }
-/* Con Phill listo, sin cabecera: el panel es solo el orbe y lo que se dice. */
+/* Con Javier listo, sin cabecera: el panel es solo el orbe y lo que se dice. */
 .vj-hoja[data-oye][data-listo] .vj-cab { display: none; }
 .vj-hoja[data-oye][data-listo] .jv-hoja-cuerpo { padding: 0; }
 
@@ -186,9 +186,7 @@ html.tv-ventanita #root { height: 100%; }
 /* Lo último dicho: si ya contestó, solo su respuesta. */
 .vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-vos:has(+ .jv-hud-jarvis) { display: none; }
 .vj-hoja[data-oye] .ai-root[data-jarvis] :is(.jv-hud-vos, .jv-hud-jarvis) small { display: none; }
-/* «Mirá esto» (la cámara) no entra en un panel tan chico: se usa desde la app. */
-/* `!important`: una regla global pone `display: inline-flex !important` a todo botón con ícono. */
-.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-cam { display: none !important; }
+/* «Mirá esto» (la cámara): al tocarlo, la ventana nativa se agranda para mostrarla y después vuelve. */
 /* Terminar: solo el ícono, arriba a la derecha. */
 .vj-hoja[data-oye] .ai-root[data-jarvis] :is(.jv-hud-x, .jv-hud-cam) {
   position: absolute;

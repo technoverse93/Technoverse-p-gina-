@@ -7,7 +7,7 @@ import java.util.Arrays;
 import java.util.List;
 
 /**
- * Lo que «Oye Phill» recuerda en este teléfono (si está prendido, sus frases y qué tan
+ * Lo que «Oye Javier» recuerda en este teléfono (si está prendido, sus frases y qué tan
  * exigente es). Vive aparte del motor de voz a propósito: las pantallas de la app (y el
  * widget) lo consultan, y una falla del motor (Vosk) nunca debe llegar hasta ellas.
  */
@@ -31,6 +31,28 @@ final class OyePrefs {
         prefs(c).edit().putBoolean(K_ACTIVO, si).apply();
     }
 
+    // ------------------------------ la burbuja de Javier ------------------------------
+    /** ¿Se muestra la burbuja mientras el oído está prendido? (sí, salvo que la escondan) */
+    static boolean burbuja(Context c) {
+        return prefs(c).getBoolean("burbuja", true);
+    }
+
+    static void fijarBurbuja(Context c, boolean si) {
+        prefs(c).edit().putBoolean("burbuja", si).apply();
+    }
+
+    static int burbujaX(Context c, int porDefecto) {
+        return prefs(c).getInt("burbuja_x", porDefecto);
+    }
+
+    static int burbujaY(Context c, int porDefecto) {
+        return prefs(c).getInt("burbuja_y", porDefecto);
+    }
+
+    static void guardarBurbuja(Context c, int x, int y) {
+        prefs(c).edit().putInt("burbuja_x", x).putInt("burbuja_y", y).apply();
+    }
+
     static int sensibilidad(Context c) {
         return Math.max(0, Math.min(2, prefs(c).getInt(K_SENS, OyeLogica.SENS_NORMAL)));
     }
@@ -43,6 +65,8 @@ final class OyePrefs {
         String guardadas = prefs(c).getString(K_FRASES, null);
         List<String> crudas = new ArrayList<>();
         if (guardadas != null) {
+            // Llamados de antes del cambio de nombre («oye fil»): se suman los de Javier adelante.
+            if (!guardadas.contains("javier")) crudas.addAll(Arrays.asList(OyeLogica.FRASES_INICIALES));
             for (String f : guardadas.split("\n")) crudas.add(f);
         } else {
             crudas.addAll(Arrays.asList(OyeLogica.FRASES_INICIALES));

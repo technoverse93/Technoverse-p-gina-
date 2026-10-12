@@ -1,7 +1,7 @@
 // =====================================================================
-// ESTUDIO DE PAUTA — Phill crea la publicidad
+// ESTUDIO DE PAUTA — Javier crea la publicidad
 // =====================================================================
-// Elegís un producto, un objetivo y un formato; Phill escribe los textos
+// Elegís un producto, un objetivo y un formato; Javier escribe los textos
 // con los datos reales, la IA gratis hace un fondo (opcional) y la app
 // dibuja la pieza con el logo y el precio exactos. Después:
 //   · se descarga o se comparte (WhatsApp, Instagram…);
@@ -110,7 +110,7 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
     }));
   }, []);
 
-  // ---- armar con Phill ----
+  // ---- armar con Javier ----
   const armar = useCallback(async (p: Product | null, opciones?: { objetivo?: ObjetivoId; formato?: FormatoId; extra?: string }) => {
     if (!p) { toast.error('Elegí un producto primero.'); return; }
     setArmando(true); setAviso('');
@@ -124,7 +124,7 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
     const c = r.copy;
     setPieza(x => ({ ...x, titular: c.titular, subtitulo: c.subtitulo, etiqueta: c.etiqueta, cta: c.cta, pie: c.pie, estilo: c.estilo, formato: opciones?.formato || x.formato }));
     setCaption(c.caption); setHashtags(c.hashtags.join(' ')); setFondoPrompt(c.fondo);
-    toast.success('Listo: Phill armó los textos. Revisalos y afiná lo que quieras.');
+    toast.success('Listo: Javier armó los textos. Revisalos y afiná lo que quieras.');
   }, [objetivo, instrucciones, pieza.formato, toast]);
 
   // ---- fondo con IA ----
@@ -146,7 +146,7 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
     toast.success(`Fondo listo (${r.proveedor === 'pollinations' ? 'Pollinations' : r.proveedor === 'cloudflare' ? 'Cloudflare' : r.proveedor === 'huggingface' ? 'Hugging Face' : 'Gemini'}${typeof r.quedan === 'number' ? ` · te quedan ${r.quedan} hoy` : ''}).`);
   }, [escena, fondoPrompt, pieza.formato, pieza.estilo, pieza.productoImg, producto, toast]);
 
-  // ---- lo que me dejaron el chat de Phill o Inventario ----
+  // ---- lo que me dejaron el chat de Javier o Inventario ----
   const aplicarPedido = useCallback((ped: PedidoPauta) => {
     const p = productos.find(x => x.id === ped.productoId) || null;
     if (p) aplicarProducto(p, { ...(ped.formato ? { formato: ped.formato } : {}), ...(ped.estilo ? { estilo: ped.estilo } : {}) });
@@ -317,13 +317,13 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
 
   return (
     <Card
-      title="Estudio de pauta con Phill"
+      title="Estudio de pauta con Javier"
       actions={hayPieza ? <Btn variant="ghost" icon={RefreshCw} onClick={nueva}>Pieza nueva</Btn> : undefined}
       className="ep-card"
     >
       <div id="estudio-pauta" className="ep">
         <p className="ep-intro">
-          Phill escribe los textos con los datos reales del producto, la IA gratis hace el fondo y la app dibuja la pieza con tu logo y el precio exacto.
+          Javier escribe los textos con los datos reales del producto, la IA gratis hace el fondo y la app dibuja la pieza con tu logo y el precio exacto.
           Después la descargás, la compartís, la usás de banner o la programás en Instagram.
         </p>
 
@@ -333,7 +333,7 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
             {pendientes.slice(0, 4).map(s => (
               <div key={s.id} className="ep-pend-f">
                 <span className="ep-pend-n">{s.productName}<small>{new Date(s.scheduledAt).toLocaleString('es-CR', { dateStyle: 'medium', timeStyle: 'short' })}</small></span>
-                <Btn variant="primary" icon={Wand2} onClick={() => aplicarPedido({ productoId: s.productId, requestId: s.id, formato: 'retrato' })}>Crear con Phill</Btn>
+                <Btn variant="primary" icon={Wand2} onClick={() => aplicarPedido({ productoId: s.productId, requestId: s.id, formato: 'retrato' })}>Crear con Javier</Btn>
               </div>
             ))}
           </div>
@@ -357,10 +357,10 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
               <div className="ep-seg ep-seg-env">{ORDEN_FORMATOS.map(f => <button key={f} type="button" data-on={pieza.formato === f || undefined} aria-pressed={pieza.formato === f} onClick={() => cambiar({ formato: f })}>{FORMATOS[f].corto}</button>)}</div>
               <span className="tv-hint">{fmt.nombre} · {fmt.ancho}×{fmt.alto} · {fmt.uso}</span>
             </div>
-            <Field label="Algo que Phill deba tener en cuenta (opcional)">
+            <Field label="Algo que Javier deba tener en cuenta (opcional)">
               <input type="text" className="tv-input" value={instrucciones} maxLength={200} placeholder="Ej: para el fin de semana, tono divertido, mencioná el taller" onChange={e => setInstrucciones(e.target.value)} />
             </Field>
-            <Btn variant="primary" icon={Sparkles} disabled={armando || !producto} onClick={() => void armar(producto)}>{armando ? 'Phill está escribiendo…' : hayPieza && pieza.titular ? 'Volver a armar con Phill' : 'Armar con Phill'}</Btn>
+            <Btn variant="primary" icon={Sparkles} disabled={armando || !producto} onClick={() => void armar(producto)}>{armando ? 'Javier está escribiendo…' : hayPieza && pieza.titular ? 'Volver a armar con Javier' : 'Armar con Javier'}</Btn>
             {aviso && <p className="ep-aviso" role="alert">{aviso}</p>}
           </div>
         </div>
@@ -373,7 +373,7 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
               <div className="ep-vista">
                 <div className="ep-lienzo" style={{ aspectRatio: `${fmt.ancho} / ${fmt.alto}`, maxWidth: `min(100%, calc(68vh * ${fmt.ancho / fmt.alto}))` }}>
                   <canvas ref={canvasRef} aria-label="Vista previa de la pieza" />
-                  {!hayPieza && <div className="ep-vacio"><Megaphone className="w-7 h-7" /><span>Elegí un producto y tocá «Armar con Phill»</span></div>}
+                  {!hayPieza && <div className="ep-vacio"><Megaphone className="w-7 h-7" /><span>Elegí un producto y tocá «Armar con Javier»</span></div>}
                   {(armando || generando) && <div className="ep-ocupado" role="status"><span className="ep-giro" />{generando ? 'Creando el fondo con IA…' : 'Escribiendo los textos…'}</div>}
                 </div>
               </div>
@@ -392,7 +392,7 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
                   <div className="ep-seg">{FONDOS.map(f => <button key={f.id} type="button" data-on={pieza.fondo === f.id || undefined} aria-pressed={pieza.fondo === f.id} disabled={f.id === 'producto' && !pieza.productoImg} onClick={() => cambiar({ fondo: f.id })}>{f.nombre}</button>)}</div>
                   {pieza.fondo === 'ia' && (
                     <div className="ep-ia">
-                      <textarea className="tv-input" rows={2} maxLength={240} value={fondoPrompt} placeholder="Escena del fondo, en inglés o español (sin textos). Phill la propone al armar." onChange={e => setFondoPrompt(e.target.value)} />
+                      <textarea className="tv-input" rows={2} maxLength={240} value={fondoPrompt} placeholder="Escena del fondo, en inglés o español (sin textos). Javier la propone al armar." onChange={e => setFondoPrompt(e.target.value)} />
                       <label className="ep-chk"><input type="checkbox" checked={escena} onChange={e => setEscena(e.target.checked)} disabled={!pieza.productoImg} /> Poner el producto dentro de la escena (experimental: revisá que el producto se vea igual)</label>
                       <Btn variant="default" icon={ImageIcon} disabled={generando} onClick={() => void generarFondo()}>{generando ? 'Creando…' : pieza.fondoImg ? 'Crear otro fondo' : 'Crear fondo con IA'}</Btn>
                     </div>
@@ -420,7 +420,7 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
         <div className="ep-paso">
           <span className="ep-num">3</span>
           <div className="ep-paso-c">
-            <Field label="Texto de la publicación" hint={`${caption.length} caracteres`}><textarea className="tv-input" rows={5} value={caption} placeholder="Phill lo escribe al armar la pieza." onChange={e => setCaption(e.target.value)} /></Field>
+            <Field label="Texto de la publicación" hint={`${caption.length} caracteres`}><textarea className="tv-input" rows={5} value={caption} placeholder="Javier lo escribe al armar la pieza." onChange={e => setCaption(e.target.value)} /></Field>
             <Field label="Hashtags"><input type="text" className="tv-input" value={hashtags} onChange={e => setHashtags(e.target.value)} placeholder="#CostaRica #Technoverse" /></Field>
             <Btn variant="default" icon={Copy} disabled={!caption.trim()} onClick={() => void copiarTexto()}>Copiar texto</Btn>
           </div>

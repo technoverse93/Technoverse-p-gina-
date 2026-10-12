@@ -6,8 +6,8 @@
 //   · qué IAs fallaron antes y por qué;
 //   · si el revisor la aprobó o la corrigió.
 // Todos los días a las 6:45 a. m. se prueba cada IA y cada herramienta con
-// un pedido mínimo. Si algo se cayó, Phill avisa, y el resumen de la
-// mañana lo menciona. El panel (Ajustes → Salud de Phill) lo resume todo.
+// un pedido mínimo. Si algo se cayó, Javier avisa, y el resumen de la
+// mañana lo menciona. El panel (Ajustes → Salud de Javier) lo resume todo.
 // Ver supabase/migracion_jarvis_salud.sql.
 // =====================================================================
 
@@ -52,7 +52,7 @@ export async function registrar(admin: Db, ev: Evento | Evento[]): Promise<void>
     if (!filas.length) return;
     const { error } = await admin.from('jarvis_eventos').insert(filas);
     if (error && !FALTA.test(error.message)) console.log(`salud: no se anotó: ${error.message}`);
-  } catch { /* la salud nunca frena a Phill */ }
+  } catch { /* la salud nunca frena a Javier */ }
 }
 
 export const eventoDePrueba = (p: Prueba): Evento => ({ tipo: 'prueba', componente: p.componente, modelo: p.modelo || null, ok: p.ok, ms: p.ms, detalle: p.detalle });
@@ -123,13 +123,13 @@ export async function informe(admin: Db): Promise<Record<string, unknown>> {
   return { ok: true, estado, hoy, ias: listaIas, herramientas, dias, problemas, ultimaPrueba: fechas[fechas.length - 1] || null };
 }
 
-/** Una línea para el resumen de la mañana («Salud de Phill: …»). */
+/** Una línea para el resumen de la mañana («Salud de Javier: …»). */
 export async function lineaSalud(admin: Db): Promise<string> {
   const r = await informe(admin).catch(() => null) as any;
   if (!r?.ok || r.falta) return '';
   const ias = (r.ias || []).filter((x: any) => x.prueba);
   const malas = [...ias.filter((x: any) => !x.prueba.ok).map((x: any) => x.nombre), ...(r.herramientas || []).filter((h: any) => !h.prueba.ok).map((h: any) => h.nombre)];
-  return `Salud de Phill: ${r.hoy.bien} respuesta${r.hoy.bien === 1 ? '' : 's'} en 24 h`
+  return `Salud de Javier: ${r.hoy.bien} respuesta${r.hoy.bien === 1 ? '' : 's'} en 24 h`
     + (r.hoy.sinServicio ? `, ${r.hoy.sinServicio} sin servicio` : '')
     + (ias.length ? `; en la prueba de hoy ${ias.length - ias.filter((x: any) => !x.prueba.ok).length} de ${ias.length} IAs respondieron` : '')
     + (malas.length ? `; fallan: ${malas.join(', ')}` : '; todo funciona') + '.';

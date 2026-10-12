@@ -48,15 +48,15 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * «Oye Phill»: Phill te escucha con el teléfono desbloqueado, aunque la app
+ * «Oye Javier»: Javier te escucha con el teléfono desbloqueado, aunque la app
  * esté cerrada, y se abre cuando lo llamás.
  *
  * Es un servicio en primer plano (Android lo pide para usar el micrófono con la
  * app cerrada: por eso muestra siempre una notificación y el puntito verde del
  * micrófono). Mientras espera el llamado reconoce la voz EN EL TELÉFONO, sin
  * internet (Vosk, el «oído» que se baja desde Ajustes): nada de lo que se
- * escucha sale del aparato ni se guarda. Solo cuando oye «Oye Phill» abre
- * Phill (la ventanita de siempre, JarvisRapido, en modo manos libres).
+ * escucha sale del aparato ni se guarda. Solo cuando oye «Oye Javier» abre
+ * Javier (la ventanita de siempre, JarvisRapido, en modo manos libres).
  *
  * Reglas para gastar poca batería y no estorbar:
  *  · Solo escucha con la pantalla encendida y el teléfono DESBLOQUEADO: con el
@@ -206,14 +206,20 @@ public class OyePhillService extends Service {
         return null;
     }
 
+    private BurbujaJavier burbuja;
+
     @Override
     public void onCreate() {
         super.onCreate();
         instancia = this;
+        burbuja = new BurbujaJavier(this);
         OyeVisibilidad.alCambiar = new Runnable() {
             @Override
             public void run() {
                 despertarBucle();
+                // Javier abierto (chat o escuchando): la burbuja se marca.
+                BurbujaJavier b = burbuja;
+                if (b != null) b.activo(OyeVisibilidad.hayAlgoVisible());
             }
         };
         OyeVisibilidad.alConfirmarApertura = new Runnable() {
@@ -264,6 +270,7 @@ public class OyePhillService extends Service {
             case ACC_CONFIG:
                 versionConfig++;
                 despertarBucle();
+                ponerBurbuja();
                 return START_STICKY;
             case ACC_PROBAR:
                 // Si Android pidió prenderlo en primer plano, hay que cumplirlo antes de cualquier otra cosa.
@@ -281,6 +288,7 @@ public class OyePhillService extends Service {
             default:
                 if (!ponerEnPrimerPlano()) return START_NOT_STICKY;
                 arrancarMotor();
+                ponerBurbuja();
                 return START_STICKY;
         }
     }
@@ -296,6 +304,9 @@ public class OyePhillService extends Service {
         }
         pantalla = null;
         quitarOrbe();
+        BurbujaJavier b = burbuja;
+        burbuja = null;
+        if (b != null) b.quitar();
         if (instancia == this) {
             instancia = null;
             OyeVisibilidad.alCambiar = null;
@@ -304,6 +315,16 @@ public class OyePhillService extends Service {
         // Si se apagó por una falla, el motivo se queda a la vista (la pantalla de Ajustes lo muestra).
         if (!"error".equals(estado)) publicar("apagado", "");
         super.onDestroy();
+    }
+
+    /** La burbuja de Javier: a la vista mientras el oído esté prendido (salvo que la hayan escondido). */
+    private void ponerBurbuja() {
+        principal.post(() -> {
+            BurbujaJavier b = burbuja;
+            if (b == null) return;
+            if (OyePrefs.activo(this) && OyePrefs.burbuja(this) && BurbujaJavier.puede(this)) b.mostrar();
+            else b.quitar();
+        });
     }
 
     private void apagar() {
@@ -331,7 +352,7 @@ public class OyePhillService extends Service {
             else startForeground(ID_NOTIF, n);
             return true;
         } catch (Throwable t) {
-            publicar("error", "Android no dejó prender el micrófono en segundo plano. Abrí la app y volvé a activar «Oye Phill».");
+            publicar("error", "Android no dejó prender el micrófono en segundo plano. Abrí la app y volvé a activar «Oye Javier».");
             stopSelf();
             return false;
         }
@@ -368,22 +389,22 @@ public class OyePhillService extends Service {
     private String textoParaEstado() {
         switch (estado) {
             case "escuchando":
-                return probando ? "Probando: decí «Oye Phill» y mirá lo que oye." : "Te escucho: decí «Oye Phill».";
+                return probando ? "Probando: decí «Oye Javier» y mirá lo que oye." : "Te escucho: decí «Oye Javier».";
             case "pausa":
                 switch (detalle) {
-                    case "app": return "En pausa: tenés Phill abierto.";
+                    case "app": return "En pausa: tenés Javier abierto.";
                     case "pantalla": return "En pausa: la pantalla está apagada.";
                     case "bloqueado": return "En pausa: el teléfono está bloqueado.";
                     case "llamada": return "En pausa: hay una llamada.";
                     case "pausa": return "En pausa porque lo pediste.";
                     case "ruido": return "Descansando: hay mucho ruido o música seguidos.";
-                    case "despertando": return "Abriendo Phill…";
+                    case "despertando": return "Abriendo Javier…";
                     default: return "En pausa.";
                 }
             case "error":
                 return "No pude escuchar: " + detalle;
             default:
-                return "Preparando el oído de Phill…";
+                return "Preparando el oído de Javier…";
         }
     }
 
@@ -403,12 +424,12 @@ public class OyePhillService extends Service {
         if (Build.VERSION.SDK_INT < 26) return;
         NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
         if (nm == null) return;
-        NotificationChannel c = new NotificationChannel(CANAL, "Oye Phill", NotificationManager.IMPORTANCE_LOW);
-        c.setDescription("Muestra que Phill te está escuchando.");
+        NotificationChannel c = new NotificationChannel(CANAL, "Oye Javier", NotificationManager.IMPORTANCE_LOW);
+        c.setDescription("Muestra que Javier te está escuchando.");
         c.setShowBadge(false);
         nm.createNotificationChannel(c);
-        NotificationChannel a = new NotificationChannel(CANAL_AVISO, "Oye Phill: llamado", NotificationManager.IMPORTANCE_HIGH);
-        a.setDescription("Cuando Phill te oyó pero Android no lo dejó abrirse solo.");
+        NotificationChannel a = new NotificationChannel(CANAL_AVISO, "Oye Javier: llamado", NotificationManager.IMPORTANCE_HIGH);
+        a.setDescription("Cuando Javier te oyó pero Android no lo dejó abrirse solo.");
         nm.createNotificationChannel(a);
     }
 
@@ -426,7 +447,7 @@ public class OyePhillService extends Service {
     private Notification construirNotificacion(String texto) {
         Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CANAL) : new Notification.Builder(this);
         b.setSmallIcon(android.R.drawable.ic_btn_speak_now)
-            .setContentTitle("Oye Phill")
+            .setContentTitle("Oye Javier")
             .setContentText(texto)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
@@ -594,7 +615,7 @@ public class OyePhillService extends Service {
             publicar("cargando", "");
             File raiz = OyeModelo.raiz(this);
             if (!OyeModelo.listo(raiz)) {
-                publicar("error", "Falta bajar el oído de Phill (Ajustes → Oye Phill).");
+                publicar("error", "Falta bajar el oído de Javier (Ajustes → Oye Javier).");
                 return;
             }
             LibVosk.setLogLevel(LogLevel.WARNINGS);
@@ -751,7 +772,7 @@ public class OyePhillService extends Service {
         }
     }
 
-    // ----------------------------- abrir Phill -----------------------------
+    // ----------------------------- abrir Javier -----------------------------
 
     private void despertar() {
         aperturaPendiente = true;
@@ -764,7 +785,8 @@ public class OyePhillService extends Service {
         principal.post(new Runnable() {
             @Override
             public void run() {
-                mostrarOrbe();
+                BurbujaJavier b = burbuja;
+                if (b == null || !b.visible()) mostrarOrbe();
                 abrirPhill();
                 if (o != null) o.alDespertar();
             }
@@ -778,9 +800,13 @@ public class OyePhillService extends Service {
     }
 
     private Intent intentoAbrir() {
-        return new Intent(this, JarvisRapido.class)
+        Intent i = new Intent(this, JarvisRapido.class)
             .putExtra(JarvisRapido.EXTRA_MODO, "oye")
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        // Con la burbuja a la vista, Javier contesta a su lado.
+        BurbujaJavier b = burbuja;
+        if (b != null && b.visible()) i.putExtra(JarvisRapido.EXTRA_BURBUJA, true).putExtra(JarvisRapido.EXTRA_ANCLA_Y, b.centroY());
+        return i;
     }
 
     private void abrirPhill() {
@@ -800,8 +826,8 @@ public class OyePhillService extends Service {
             PendingIntent toque = PendingIntent.getActivity(this, 7, intentoAbrir(), PendingIntent.FLAG_IMMUTABLE | PendingIntent.FLAG_UPDATE_CURRENT);
             Notification.Builder b = Build.VERSION.SDK_INT >= 26 ? new Notification.Builder(this, CANAL_AVISO) : new Notification.Builder(this);
             b.setSmallIcon(android.R.drawable.ic_btn_speak_now)
-                .setContentTitle("Phill te escuchó")
-                .setContentText("Tocá para hablar. (Para que se abra solo, activá «Mostrar sobre otras apps» en Ajustes → Oye Phill.)")
+                .setContentTitle("Javier te escuchó")
+                .setContentText("Tocá para hablar. (Para que se abra solo, activá «Mostrar sobre otras apps» en Ajustes → Oye Javier.)")
                 .setAutoCancel(true)
                 .setContentIntent(toque);
             if (Build.VERSION.SDK_INT < 26) b.setPriority(Notification.PRIORITY_HIGH);
@@ -819,7 +845,7 @@ public class OyePhillService extends Service {
         return Math.round(v * getResources().getDisplayMetrics().density);
     }
 
-    /** Una burbujita arriba («Phill te escucha…») mientras abre: también es la ventana visible que Android pide para abrir desde el fondo. */
+    /** Una burbujita arriba («Javier te escucha…») mientras abre: también es la ventana visible que Android pide para abrir desde el fondo. */
     private void mostrarOrbe() {
         try {
             if (orbe != null) return;
@@ -827,7 +853,7 @@ public class OyePhillService extends Service {
             WindowManager wm = (WindowManager) getSystemService(Context.WINDOW_SERVICE);
             if (wm == null) return;
             TextView v = new TextView(this);
-            v.setText("●  Phill te escucha…");
+            v.setText("●  Javier te escucha…");
             v.setTextColor(Color.WHITE);
             v.setTextSize(15);
             v.setPadding(dp(18), dp(10), dp(18), dp(10));

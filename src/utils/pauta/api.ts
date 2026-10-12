@@ -24,11 +24,11 @@ async function invocar<T>(cuerpo: Record<string, unknown>): Promise<Respuesta<T>
     if (error) {
       let detalle = '';
       try { const j = await (error as any).context?.json?.(); detalle = j?.error || ''; if (j?.intentos) return { ok: false, error: detalle || 'No se pudo.', intentos: j.intentos } as Respuesta<T>; } catch { /* sin cuerpo */ }
-      return { ok: false, error: detalle || 'No se pudo conectar con Phill. Revisá la conexión.' } as Respuesta<T>;
+      return { ok: false, error: detalle || 'No se pudo conectar con Javier. Revisá la conexión.' } as Respuesta<T>;
     }
     return (data || { ok: false, error: 'Respuesta vacía.' }) as Respuesta<T>;
   } catch (e) {
-    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo conectar con Phill.' } as Respuesta<T>;
+    return { ok: false, error: e instanceof Error ? e.message : 'No se pudo conectar con Javier.' } as Respuesta<T>;
   }
 }
 
