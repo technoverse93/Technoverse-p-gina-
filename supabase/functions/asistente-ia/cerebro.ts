@@ -82,6 +82,8 @@ const PRIVADO = /\b\d{8,12}\b|\d{4}[-\s]\d{4}|[^\s@]+@[^\s@]+\.[^\s@]+|\[[A-ZÉ]
 export function normalizar(t: string): string {
   return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9ñ]+/g, ' ').trim().replace(/\s+/g, ' ');
 }
+/** Una respuesta aprendida: es un «recuerdo» (la tabla no tiene otro tipo) con clave «resp:…». */
+const esRespuesta = (n: { clave?: unknown }) => String(n.clave || '').startsWith('resp:');
 const recortar = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t);
 const limpio = (t: unknown, n: number) => recortar(String(t ?? '').replace(/\s+/g, ' ').trim(), n);
 
@@ -514,21 +516,32 @@ export function crearCerebro(admin: Db, uid: string) {
     // ESTUDIO DEL CÓDIGO (pedido del dueño, 2026-10-12): Javier estudia su propio
     // repositorio archivo por archivo y lo guarda en la rama «Sistema Technoverse».
     // ------------------------------------------------------------------
-    /** Qué archivos ya estudió y con qué versión ({ ruta: huella }). */
-    async progresoEstudio(): Promise<Record<string, string>> {
+    /**
+     * Qué archivos ya estudió y con qué versión ({ ruta: huella }). La huella va en el enlace del
+     * primer dato de cada archivo (`…/archivo#v=huella`): la tabla solo acepta ciertos tipos de
+     * nota y resúmenes cortos, así que no hay una nota aparte con el avance (antes no se guardaba).
+     */
+    async progresoEstudio(rutas: string[]): Promise<Record<string, string>> {
       if (!vivo) return {};
-      const { data } = await admin.from('jarvis_nodos').select('resumen').eq('user_id', uid).eq('clave', 'sis:progreso').maybeSingle();
-      try { return JSON.parse(String(data?.resumen || '{}')) || {}; } catch { return {}; }
-    },
-    async guardarProgreso(p: Record<string, string>): Promise<void> {
-      const n = await asegurarNodo('sis:progreso', 'Estudio del código', 'interno');
-      if (n) await admin.from('jarvis_nodos').update({ resumen: JSON.stringify(p), actualizado_en: new Date().toISOString() }).eq('id', n.id);
+      const out: Record<string, string> = {};
+      const porClave = new Map(rutas.map(r => [`sis:${normalizar(r)}:0`, r]));
+      for (let desde = 0; ; desde += 1000) {
+        const { data, error } = await admin.from('jarvis_nodos').select('clave,url').eq('user_id', uid).eq('tipo', 'dato').like('clave', 'sis:%:0').range(desde, desde + 999);
+        if (error) { console.log(`estudio: ${error.message}`); break; }
+        for (const n of (data || []) as { clave: string; url: string | null }[]) {
+          const ruta = porClave.get(n.clave);
+          const h = String(n.url || '').match(/#v=([^&]+)$/);
+          if (ruta && h) out[ruta] = h[1];
+        }
+        if ((data || []).length < 1000) break;
+      }
+      return out;
     },
     /**
      * Lo aprendido de UN archivo: un tema (el área) en la rama del sistema y un dato por cosa
      * importante. Volver a estudiar el archivo REEMPLAZA lo anterior (lo viejo se borra).
      */
-    async aprenderDelCodigo(ruta: string, tema: string, hechos: string[], url: string): Promise<number> {
+    async aprenderDelCodigo(ruta: string, tema: string, hechos: string[], url: string, huella: string): Promise<number> {
       const rama = RAMAS.find(r => r.clave === 'sistema')!;
       const t = limpio(tema, 60) || ruta;
       const ramaN = await ramaFija(rama);
@@ -541,7 +554,8 @@ export function crearCerebro(admin: Db, uid: string) {
       for (const h of hechos.slice(0, 10)) {
         const dato = limpio(h, 600);
         if (dato.length < 15 || PRIVADO.test(dato)) continue;
-        const d = await asegurarNodo(`${base}${n}`, recortar(dato, 80), 'dato', { resumen: dato, fuente: 'código', url });
+        // El primero lleva la huella del archivo (así se sabe qué versión se estudió).
+        const d = await asegurarNodo(`${base}${n}`, recortar(dato, 80), 'dato', { resumen: dato, fuente: 'código', url: n === 0 ? `${url}#v=${huella}` : url });
         if (!d) continue;
         // Texto nuevo → vector nuevo (lo pone vectorizarPendientes).
         await admin.from('jarvis_nodos').update({ embedding: null }).eq('id', d.id).then(() => {}, () => {});
@@ -564,7 +578,7 @@ export function crearCerebro(admin: Db, uid: string) {
       if (!vivo || !(await hayVectores())) return null;
       const v = await vectores([limpio(pregunta, 400)]);
       if (!v) return null;
-      const mejor = (await semejantes(v[0], 6)).find(x => x.tipo === 'respuesta');
+      const mejor = (await semejantes(v[0], 6)).find(esRespuesta);
       if (!mejor || mejor.similitud < minimo) return null;
       const { data } = await admin.from('jarvis_nodos').select('resumen,actualizado_en,usos').eq('id', mejor.id).maybeSingle();
       if (!data?.resumen) return null;
@@ -575,7 +589,7 @@ export function crearCerebro(admin: Db, uid: string) {
     async aprenderRespuesta(pregunta: string, respuesta: string): Promise<boolean> {
       const p = limpio(pregunta, 300), r = String(respuesta || '').trim();
       if (!vivo || p.length < 8 || r.length < 20 || PRIVADO.test(p) || PRIVADO.test(r)) return false;
-      const n = await asegurarNodo(`resp:${normalizar(p).slice(0, 90)}`, recortar(p, 80), 'respuesta', { resumen: recortar(r, 1500), fuente: 'respuesta aprendida', usar: true });
+      const n = await asegurarNodo(`resp:${normalizar(p).slice(0, 90)}`, recortar(p, 80), 'recuerdo', { resumen: recortar(r, 1500), fuente: 'respuesta aprendida', usar: true });
       if (!n) return false;
       const d = await dominio('respuestas', 'Respuestas aprendidas');
       await enlazar(d?.id, n.id, 'incluye');
@@ -595,7 +609,7 @@ export function crearCerebro(admin: Db, uid: string) {
       if (exacta?.id) ids.add(exacta.id);
       if (await hayVectores()) {
         const v = await vectores([p]);
-        if (v) for (const x of await semejantes(v[0], 6)) if (x.tipo === 'respuesta' && x.similitud >= 0.93) ids.add(x.id);
+        if (v) for (const x of await semejantes(v[0], 6)) if (esRespuesta(x) && x.similitud >= 0.93) ids.add(x.id);
       }
       if (ids.size) await admin.from('jarvis_nodos').delete().in('id', [...ids]);
       return ids.size;
@@ -615,9 +629,9 @@ export function crearCerebro(admin: Db, uid: string) {
     /** Lo que se lleva el teléfono para contestar SIN INTERNET: respuestas aprendidas y datos. */
     async paraSinConexion(max = 600): Promise<{ tipo: string; tema: string; texto: string; fuente: string | null }[]> {
       if (!vivo) return [];
-      const { data } = await admin.from('jarvis_nodos').select('tipo,etiqueta,resumen,fuente').eq('user_id', uid)
-        .in('tipo', ['respuesta', 'dato', 'recuerdo']).not('resumen', 'is', null).order('usos', { ascending: false }).limit(max);
-      return ((data || []) as any[]).filter(n => !PRIVADO.test(String(n.resumen))).map(n => ({ tipo: n.tipo, tema: String(n.etiqueta || ''), texto: String(n.resumen || ''), fuente: n.fuente || null }));
+      const { data } = await admin.from('jarvis_nodos').select('tipo,clave,etiqueta,resumen,fuente').eq('user_id', uid)
+        .in('tipo', ['dato', 'recuerdo']).not('resumen', 'is', null).order('usos', { ascending: false }).limit(max);
+      return ((data || []) as any[]).filter(n => !PRIVADO.test(String(n.resumen))).map(n => ({ tipo: esRespuesta(n) ? 'respuesta' : n.tipo, tema: String(n.etiqueta || ''), texto: String(n.resumen || ''), fuente: n.fuente || null }));
     },
 
     /** Respuesta de la herramienta consultar_cerebro. */

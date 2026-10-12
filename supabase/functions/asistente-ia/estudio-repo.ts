@@ -32,6 +32,11 @@ function huella(texto: string): string {
   return `${(h >>> 0).toString(36)}:${texto.length}`;
 }
 
+/** Los archivos que estudia (las reglas de repo.ts dejan afuera workflows, claves y configuración). */
+export function archivosDeEstudio(): string[] {
+  return MAPA_CODIGO.map(e => e.ruta).filter(r => /\.(tsx?|java|sql|mjs|js|sh|yml)$/.test(r) && rutaPermitida(r).ok);
+}
+
 export interface ResultadoEstudio { estudiados: string[]; fallidos: string[]; total: number; hechos: number; pendientes: number }
 
 /**
@@ -43,10 +48,10 @@ export async function estudiarRepo(cerebro: Cerebro, pedir: PedirEstudio, op: { 
   const hasta = op.hastaMs ?? Date.now() + 100_000;
   const cfg = configLectura();
   const repo = new ClienteRepo(cfg);
-  const progreso = await cerebro.progresoEstudio();
-  // Solo lo que se puede leer (las reglas de repo.ts dejan afuera workflows, claves y configuración).
-  const archivos = MAPA_CODIGO.map(e => e.ruta).filter(r => /\.(tsx?|java|sql|mjs|js|sh|yml)$/.test(r) && rutaPermitida(r).ok);
-  const nuevos = archivos.filter(r => !progreso[r]);
+  const archivos = archivosDeEstudio();
+  const progreso = await cerebro.progresoEstudio(archivos);
+  // En orden al azar: si un archivo falla siempre (la IA no saca nada), no tranca a los demás.
+  const nuevos = archivos.filter(r => !progreso[r]).sort(() => Math.random() - 0.5);
   // Ya estudiados: se revisan rotando (los más viejos primero no se sabe; se toma una muestra al azar).
   const repaso = archivos.filter(r => progreso[r]).sort(() => Math.random() - 0.5).slice(0, 2);
   const cola = [...nuevos, ...repaso];
@@ -64,12 +69,12 @@ export async function estudiarRepo(cerebro: Cerebro, pedir: PedirEstudio, op: { 
     if (!hechos.length) { r.fallidos.push(ruta); continue; }
     const url = `https://github.com/${cfg.repo}/blob/${cfg.base}/${ruta}`;
     // Cada hecho dice de qué archivo es (así la respuesta puede citarlo).
-    const n = await cerebro.aprenderDelCodigo(ruta, String(j?.tema || entrada?.titulo || ruta), hechos.map(x => (x.includes(ruta) ? x : `${x} (${ruta})`)), url);
+    // La huella queda con lo aprendido: si la vuelta se corta, lo ya estudiado no se pierde.
+    const n = await cerebro.aprenderDelCodigo(ruta, String(j?.tema || entrada?.titulo || ruta), hechos.map(x => (x.includes(ruta) ? x : `${x} (${ruta})`)), url, h);
+    if (!n) { r.fallidos.push(ruta); continue; }
     progreso[ruta] = h;
     r.estudiados.push(ruta);
     r.hechos += n;
-    // Se guarda el avance después de cada archivo: si la vuelta se corta, no se pierde.
-    await cerebro.guardarProgreso(progreso);
   }
   r.pendientes = archivos.filter(x => !progreso[x]).length;
   // Los datos nuevos se vectorizan para poder recordarlos por significado.

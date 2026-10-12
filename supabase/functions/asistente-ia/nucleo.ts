@@ -82,7 +82,7 @@ import { eventoDePrueba, informe, nombreComponente, registrar, type Prueba } fro
 import { empujarAviso, empujarChat, enviarPrueba, responderDesdePush } from './push.ts';
 import { crearTarea, procesarTareas, purgarTareas, type MotorTareas, type PasoPlan, type ResultadoCrear, type Tarea } from './tareas.ts';
 import { MAPA_CODIGO } from './mapa-codigo.ts';
-import { estudiarRepo, type PedirEstudio } from './estudio-repo.ts';
+import { archivosDeEstudio, estudiarRepo, type PedirEstudio } from './estudio-repo.ts';
 import { ClienteRepo, configLectura, configRepo, correrHerramientaRepo, rutaPermitida, MAX_ARCHIVOS, MAX_PROPUESTAS_DIA, NOMBRES_REPO, type EstadoRepo, type ResultadoPropuesta } from './repo.ts';
 import { armarPromptImagen, ESTILOS_VALIDOS, FORMATOS_VALIDOS, generarCopy, generarImagen, type EstiloId, type FormatoId } from './estudio.ts';
 import { ACCIONES_TELEFONO, PANTALLAS_AJUSTES, prepararTelefono, SOLO_APK, type PedidoTelefono } from './telefono.ts';
@@ -2103,8 +2103,9 @@ export async function atender(req: Request): Promise<Response> {
         const r = await estudiarRepo(c, pedirEstudio, { max: Math.min(10, Number(cuerpo?.max) || 6), hastaMs: Date.now() + 110_000 });
         return responder({ ok: true, ...r });
       }
-      const p = await c.progresoEstudio();
-      return responder({ ok: true, estudiados: Object.keys(p).length, total: MAPA_CODIGO.filter(e => /\.(tsx?|java|sql|mjs|js|sh|yml)$/.test(e.ruta) && rutaPermitida(e.ruta).ok).length });
+      const archivos = archivosDeEstudio();
+      const p = await c.progresoEstudio(archivos);
+      return responder({ ok: true, estudiados: Object.keys(p).length, total: archivos.length });
     }
     if (accion === 'cerebro_offline') {
       if (!esSuper) return responder({ ok: false, error: 'Solo el superadmin.' }, 403);
