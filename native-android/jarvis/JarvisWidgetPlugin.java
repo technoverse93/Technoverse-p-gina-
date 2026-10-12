@@ -30,7 +30,7 @@ import java.security.KeyStore;
 @CapacitorPlugin(name = "JarvisWidget")
 public class JarvisWidgetPlugin extends Plugin {
     /** La web la compara: 3 = Phill con sesión, usable en el propio recuadro. */
-    static final int VERSION = 5;
+    static final int VERSION = 6;
 
     private int pedidos = 0;
 
@@ -142,6 +142,17 @@ public class JarvisWidgetPlugin extends Plugin {
     public void avisar(PluginCall call) {
         JarvisWidget.avisar(getContext(), recortar(call.getString("texto", ""), 60));
         call.resolve();
+    }
+
+    /** La página pasó a otro modo (p. ej. de la barrita a la conversación): la ventana cambia de tamaño. */
+    @PluginMethod
+    public void ajustar(PluginCall call) {
+        final String modo = call.getString("modo", "");
+        call.resolve();
+        if (getActivity() instanceof JarvisRapido) {
+            final JarvisRapido ventanita = (JarvisRapido) getActivity();
+            ventanita.runOnUiThread(() -> ventanita.cambiarModo(modo));
+        }
     }
 
     /** Mientras contesta en el widget, la ventanita deja pasar los toques. */

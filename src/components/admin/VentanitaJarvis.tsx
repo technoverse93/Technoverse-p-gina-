@@ -160,7 +160,9 @@ function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, extra, 
   }, []);
   useEffect(() => { if (listo && !estado) { const t = setTimeout(() => caja.current?.focus(), 60); return () => clearTimeout(t); } }, [listo, estado]);
   useEffect(() => { const l = lista.current; if (l) l.scrollTop = l.scrollHeight; }, [historial.length, estado, !!extra]);
-  const top = Math.max(8, Math.min(marco.y, alto - marco.alto - 8));
+  // En la APK nueva la ventana mide justo el recuadro (marco en 0,0): va tal cual. En una vieja (ventana
+  // a pantalla completa), si el teclado tapa el widget, el recuadro sube lo justo para quedar encima.
+  const top = marco.y + marco.alto <= alto ? marco.y : Math.max(8, alto - marco.alto - 8);
   const enviar = () => { const t = texto.trim(); if (!t || !listo || estado) return; setTexto(''); caja.current?.blur(); onEnviar(t); };
   return (
     <section className="vj-recuadro" data-tema={noche ? 'oscuro' : 'claro'} data-activo={!estado || undefined} role="dialog" aria-label="Phill"
@@ -373,7 +375,7 @@ export default function VentanitaJarvis() {
   // Escribir sobre el widget: TODO pasa en el recuadro, también los avisos
   // (nunca se abre la hoja ni la app desde la caja del widget).
   const enRecuadro = modo === 'voz' || (modo === 'escribir' && (!aviso || !!marco));
-  const verHoja = () => { void widgetNativo.avisar(''); setModo('hoja'); };
+  const verHoja = () => { void widgetNativo.avisar(''); void widgetNativo.ajustar('hoja'); setModo('hoja'); };
   // Por voz no hay ventana: si algo impide contestar (sin sesión, apagado,
   // bloqueo…), se dice en el propio widget.
   useEffect(() => {

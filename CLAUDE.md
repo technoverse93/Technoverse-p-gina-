@@ -26,3 +26,18 @@ confirmación antes de:
 
 Si el dueño quiere ampliar la autorización permanente a estos casos también,
 debe decirlo explícitamente.
+
+## Regla de producto: Phill y el widget fuera de la app NO tapan el teléfono
+
+Ordenado por el dueño (2026-10-12). Cuando Phill o el mini-widget se usan fuera
+de la app (widget, «Oye Phill», botón del asistente), está **prohibido** tapar
+el sistema y sus aplicaciones con una página o con algo oscuro:
+
+- Nunca oscurecer lo de atrás (sin `FLAG_DIM_BEHIND` ni `backgroundDimEnabled`).
+- La ventana nativa (`native-android/jarvis/JarvisRapido.java`) mide solo lo que
+  Phill dibuja y deja pasar los toques de afuera (`FLAG_NOT_TOUCH_MODAL`): se
+  tiene que poder seguir viendo y usando WhatsApp, YouTube o el escritorio.
+- Nada de hojas o pantallas de carga a pantalla completa en `jarvis-rapido.html`
+  ni en `VentanitaJarvis`; lo que se muestre va en un panel chico y traslúcido.
+
+Cualquier cambio a la ventanita tiene que respetar esto.
