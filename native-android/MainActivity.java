@@ -18,6 +18,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PantallaNativaPlugin.class);
         // Puente del mini-widget de Jarvis (native-android/jarvis/).
         registerPlugin(JarvisWidgetPlugin.class);
+        // Avisos push (Firebase) y respuesta desde la notificación (native-android/push/).
+        registerPlugin(PushNativoPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Tamaño de letra FIJO dentro de la app. Android aplica el «Tamaño de

@@ -72,6 +72,7 @@ import { ACCIONES, MODULOS_PANEL, NAVEGAR, pideToken, validarOpciones, type CtxA
 import { normalizarDictado, restaurarPrivados, separarPrivados } from './privados.ts';
 import { esCron, tareaCron } from './proactivo.ts';
 import { eventoDePrueba, informe, nombreComponente, registrar, type Prueba } from './salud.ts';
+import { empujarChat, enviarPrueba, responderDesdePush } from './push.ts';
 import { APRENDER, CONSULTAR_CEREBRO, crearCerebro, respuestaSinIA, type Cerebro, type Nota } from './cerebro.ts';
 import { FORMATO_REQUERIMIENTO, GLOSARIO_TICO, MAPA_SISTEMA, TONOS, type Tono } from './mapa.ts';
 
@@ -1378,7 +1379,16 @@ export async function atender(req: Request): Promise<Response> {
     };
     if (accion === 'cron') {
       if (!(await esCron(admin, req))) return responder({ ok: false, error: 'No autorizado.' }, 401);
+      // Un cliente escribió en el chat: avisar al personal (push al teléfono).
+      if (cuerpo?.tarea === 'push_chat') return responder(await empujarChat(admin, String(cuerpo?.datos?.mensaje || '')));
       return responder(await tareaCron(admin, String(cuerpo?.tarea || ''), redactar, undefined, () => probarSalud(admin)));
+    }
+
+    // RESPUESTA DESDE LA NOTIFICACIÓN: el teléfono no manda sesión sino la
+    // llave firmada que venía con el aviso (una conversación, una persona, 24 h).
+    if (accion === 'responder_push') {
+      const r = await responderDesdePush(admin, String(cuerpo?.llave || ''), cuerpo?.texto);
+      return responder(r, r.ok ? 200 : 400);
     }
 
     const { data: quien } = await admin.auth.getUser(jwt);
@@ -1460,6 +1470,12 @@ export async function atender(req: Request): Promise<Response> {
       if (!esSuper) return responder({ ok: false, error: 'Solo el superadmin.' }, 403);
       const tarea = ['resumen', 'vigilar'].includes(String(cuerpo?.tarea)) ? String(cuerpo.tarea) : 'resumen';
       return responder(await tareaCron(admin, tarea, redactar, uid));
+    }
+
+    // AVISOS AL TELÉFONO: «Probar» manda un chat de mentira a los teléfonos de quien lo pide.
+    if (accion === 'push_prueba') {
+      if (!['superadmin', 'admin', 'empleado'].includes(String(rol))) return responder({ ok: false, error: 'Solo el personal.' }, 403);
+      return responder({ ok: true, ...(await enviarPrueba(admin, uid)) });
     }
 
     // SALUD: el panel de Ajustes («Probar ahora» corre la prueba completa).

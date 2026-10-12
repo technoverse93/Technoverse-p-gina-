@@ -8,8 +8,9 @@
 // =====================================================================
 
 import { useEffect, useState } from 'react';
-import { HeartPulse, RefreshCw } from 'lucide-react';
+import { HeartPulse, RefreshCw, BellRing } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
+import { estadoPush, iniciarPush, TEXTO_ESTADO, type EstadoPush } from '../../mobile/pushNativo';
 
 type PruebaInfo = { ok: boolean; ms: number; detalle: string; modelo?: string | null; cuando: string };
 type Ia = { id: string; nombre: string; respondio: number; fallos: number; ms: number | null; ultimoError: string; ultimoErrorEn: string | null; prueba: PruebaInfo | null };
@@ -46,6 +47,24 @@ export default function SaludJarvis() {
     setInf(data as Informe);
   };
   useEffect(() => { void pedir(false); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Avisos al teléfono (push): si este teléfono está registrado y una prueba de punta a punta.
+  const [push, setPush] = useState<EstadoPush | null>(() => estadoPush() || null);
+  const [pushNota, setPushNota] = useState('');
+  const [pushOcupado, setPushOcupado] = useState(false);
+  const probarPush = async () => {
+    setPushOcupado(true); setPushNota('');
+    const e = await iniciarPush('superadmin', true); setPush(e);
+    if (e === 'activo') {
+      const { data, error: er } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'push_prueba' } });
+      setPushNota(er || !data?.ok ? 'No se pudo pedir la prueba al servidor.'
+        : data.sinConfig ? 'El servidor no tiene el secreto FCM_SERVICE_ACCOUNT (Supabase → Edge Functions → Secrets).'
+        : data.sinTelefonos ? 'El servidor todavía no tiene registrado este teléfono. Probá de nuevo en unos segundos.'
+        : data.enviados > 0 ? 'Enviado. En unos segundos te tiene que llegar un aviso con el botón «Responder».'
+        : 'Google rechazó el envío: revisá el secreto FCM_SERVICE_ACCOUNT y el registro (log) de la función.');
+    }
+    setPushOcupado(false);
+  };
 
   const hoy = inf?.hoy;
   const max = Math.max(1, ...(inf?.dias || []).map(d => d.bien + d.mal));
@@ -143,6 +162,19 @@ export default function SaludJarvis() {
           ))}
         </ul>
       )}
+
+      <h5 className="jv-salud-sub">Avisos al teléfono <small>chat y Jarvis, aunque la app esté cerrada</small></h5>
+      <ul className="jv-salud-lista">
+        <li>
+          <i className="jv-sd-luz" data-ok={push ? (push === 'activo' ? 'si' : 'no') : undefined} aria-label={push === 'activo' ? 'Activos' : 'Sin activar'} />
+          <span className="jv-sd-tx">
+            <b>{push === 'activo' ? 'Activos' : 'Sin activar'}</b>
+            <span className={push && push !== 'activo' ? 'jv-sd-error' : undefined}>{push ? TEXTO_ESTADO[push] : 'Se activan al abrir la app del teléfono con tu sesión.'}</span>
+            {pushNota && <span className="jv-sd-pie" role="status">{pushNota}</span>}
+          </span>
+          <span className="jv-sd-ms"><button type="button" className="ai-chip" disabled={pushOcupado} onClick={() => void probarPush()}><BellRing className="w-4 h-4" />{pushOcupado ? 'Probando…' : 'Enviar prueba'}</button></span>
+        </li>
+      </ul>
 
       <div className="jv-salud-pie">
         <button type="button" className="ai-chip" disabled={probando} onClick={() => void pedir(true)}>

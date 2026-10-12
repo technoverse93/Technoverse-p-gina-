@@ -20,13 +20,22 @@ import { isNative } from './platform';
 const CLAVE = 'tv_jarvis_pedido';
 const VIGENCIA_MS = 60_000;
 export const EVENTO_JARVIS = 'tv:jarvis';
-export type PedidoJarvis = { voz: boolean; en: number; modulo?: string };
+export type PedidoJarvis = { voz: boolean; en: number; modulo?: string; conv?: string };
+/** Tocar la notificación de un chat: qué conversación abrir (lo recoge la pestaña Chat). */
+export const CLAVE_ABRIR_CONV = 'tv_abrir_conv';
+export const EVENTO_ABRIR_CONV = 'tv:abrir-conv';
 
 export function manejar(url: string | undefined | null): void {
   if (!url || !/^technoverse:\/\/jarvis/i.test(url)) return;
   const modulo = /[?&]modulo=([a-z_]{2,40})(?:&|$)/.exec(url)?.[1];
+  const conv = /[?&]conv=([^&#]{1,120})/.exec(url)?.[1];
   const pedido: PedidoJarvis = { voz: /[?&]voz=1/.test(url), en: Date.now(), ...(modulo ? { modulo } : {}) };
   try { sessionStorage.setItem(CLAVE, JSON.stringify(pedido)); } catch { /* sin almacenamiento: va solo el evento */ }
+  if (conv) {
+    let id = conv; try { id = decodeURIComponent(conv); } catch { /* se usa tal cual */ }
+    try { sessionStorage.setItem(CLAVE_ABRIR_CONV, id); } catch { /* va solo el evento */ }
+    window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_CONV, { detail: id }));
+  }
   if (!window.location.pathname.startsWith('/admin')) {
     // En frío, el panel arranca directo en el módulo pedido (lee la dirección).
     window.history.pushState(null, '', modulo ? `/admin/${modulo}` : '/admin');

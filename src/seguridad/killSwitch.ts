@@ -218,6 +218,8 @@ async function revisarSesion(): Promise<void> {
     // La base todavía no tiene la función: no se insiste cada minuto.
     if (error?.code === 'PGRST202') { sinRevisionDeSesion = true; return; }
     if (error || data !== false) return;
+    // Cerraron esta sesión desde otro lado: el teléfono deja de recibir avisos de la cuenta.
+    await import('../mobile/pushNativo').then(m => m.cerrarPush()).catch(() => { /* sin push */ });
     await supabase.auth.signOut({ scope: 'local' });
     location.reload();
   } catch { /* sin red: nadie sale */ }

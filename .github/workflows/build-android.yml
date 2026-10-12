@@ -353,6 +353,79 @@ jobs:
           echo "--- AndroidManifest.xml (Jarvis) ---"
           grep -n "JarvisWidget\|JarvisRapido\|RECOGNIZE_SPEECH\|technoverse\|jarvis_atajos" android/app/src/main/AndroidManifest.xml
 
+      # AVISOS PUSH (Firebase) Y RESPUESTA DESDE LA NOTIFICACIÓN
+      # ---------------------------------------------------------------
+      # Antes el aviso de un mensaje nuevo era una notificación LOCAL: solo
+      # salía mientras la app estaba viva, y Android la duerme a los minutos.
+      # Ahora el servidor manda el aviso (Firebase Cloud Messaging) y el
+      # teléfono arma la notificación nativa, con «Responder» como WhatsApp.
+      # Como el resto de lo nativo, vive en `native-android/push/` y se copia
+      # aquí (android/ nace de cero en cada corrida):
+      #   · JarvisPushService: recibe el aviso aunque la app esté cerrada.
+      #   · NotifPush: arma las notificaciones (chat con respuesta, avisos).
+      #   · ResponderReceiver: manda lo escrito en «Responder» al servidor.
+      #   · PushNativoPlugin: el puente con la web (MainActivity lo registra).
+      # Falta una sola cosa que no se puede poner en el repositorio: el
+      # archivo google-services.json de Firebase. Va como secreto del
+      # repositorio (GOOGLE_SERVICES_JSON, el contenido completo del archivo).
+      # Sin él la APK compila igual, pero sin avisos push; con él, la
+      # plantilla de Capacitor aplica sola el plugin de Google.
+      - name: Instalar los avisos push (Firebase) y la respuesta desde la notificación
+        env:
+          GOOGLE_SERVICES_JSON: ${{ secrets.GOOGLE_SERVICES_JSON }}
+        run: |
+          PAQUETE=android/app/src/main/java/com/technoverse/admin
+          RES=android/app/src/main/res
+          cp native-android/push/*.java "$PAQUETE/"
+          mkdir -p "$RES/drawable"
+          cp native-android/push/res/drawable/* "$RES/drawable/"
+
+          python3 - <<'PY'
+          # --- Dependencia de Firebase Messaging en el módulo de la app ---
+          ruta = 'android/app/build.gradle'
+          texto = open(ruta, encoding='utf-8').read()
+          if 'firebase-messaging' not in texto:
+              marca = "implementation project(':capacitor-android')"
+              if marca not in texto:
+                  raise SystemExit('No se encontró la dependencia de capacitor-android en android/app/build.gradle.')
+              texto = texto.replace(marca, marca + "\n    implementation 'com.google.firebase:firebase-messaging:24.1.0'", 1)
+              open(ruta, 'w', encoding='utf-8').write(texto)
+              print('Dependencia de Firebase Messaging agregada a android/app/build.gradle.')
+          else:
+              print('Firebase Messaging ya estaba declarado; no se toca nada.')
+
+          # --- El servicio que recibe los avisos y el receptor de «Responder» ---
+          ruta = 'android/app/src/main/AndroidManifest.xml'
+          texto = open(ruta, encoding='utf-8').read()
+          if 'JarvisPushService' not in texto:
+              if '</application>' not in texto:
+                  raise SystemExit('No se encontró el cierre </application>.')
+              piezas = (
+                  '        <service android:name=".JarvisPushService" android:exported="false">\n'
+                  '            <intent-filter>\n'
+                  '                <action android:name="com.google.firebase.MESSAGING_EVENT" />\n'
+                  '            </intent-filter>\n'
+                  '        </service>\n'
+                  '        <receiver android:name=".ResponderReceiver" android:exported="false" />\n'
+                  '    </application>'
+              )
+              texto = texto.replace('</application>', piezas, 1)
+              open(ruta, 'w', encoding='utf-8').write(texto)
+              print('Servicio de avisos push y receptor de respuestas declarados en el manifiesto.')
+          else:
+              print('Los avisos push ya estaban declarados; no se toca nada.')
+          PY
+
+          if [ -n "$GOOGLE_SERVICES_JSON" ]; then
+            printf '%s' "$GOOGLE_SERVICES_JSON" > android/app/google-services.json
+            echo "google-services.json escrito: los avisos push quedan activos."
+          else
+            echo "::warning::Falta el secreto GOOGLE_SERVICES_JSON: la APK compila, pero sin avisos push hasta que se agregue."
+          fi
+          echo "--- AndroidManifest.xml (push) ---"
+          grep -n "JarvisPushService\|ResponderReceiver\|MESSAGING_EVENT\|POST_NOTIFICATIONS" android/app/src/main/AndroidManifest.xml || true
+          grep -n "firebase" android/app/build.gradle || true
+
       # Ícono del lanzador con el logo oficial de la tienda, en vez del
       # robot de Capacitor por defecto. Igual que el manifiesto de arriba:
       # android/ nace de cero en cada corrida, así que los mipmap/ que

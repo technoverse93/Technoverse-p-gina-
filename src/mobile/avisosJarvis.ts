@@ -13,6 +13,7 @@
 import { useEffect, useState } from 'react';
 import { Capacitor } from '@capacitor/core';
 import { supabase } from '../supabaseClient';
+import { pushActivo } from './pushNativo';
 
 export type AvisoJarvis = { id: string; tipo: string; titulo: string; cuerpo: string; nivel: string; destino: string | null; creado_en: string; leido_en: string | null };
 export const EVENTO_AVISO = 'jarvis-aviso';
@@ -27,6 +28,7 @@ function idNotif(uuid: string): number {
 }
 
 async function notificar(a: AvisoJarvis): Promise<void> {
+  if (pushActivo()) return; // el servidor ya lo mandó al teléfono (push)
   const titulo = a.tipo === 'resumen' ? 'Jarvis · resumen de la mañana' : `Jarvis · ${a.titulo}`;
   const cuerpo = a.tipo === 'resumen' ? a.cuerpo.slice(0, 180) : a.cuerpo;
   try {
@@ -46,6 +48,8 @@ async function programarResumen(): Promise<void> {
   if (!Capacitor.isNativePlatform()) return;
   try {
     const { LocalNotifications } = await import('@capacitor/local-notifications');
+    // Con push, el resumen llega del servidor a las 7:00: el aviso local de las 7:05 sobra.
+    if (pushActivo()) { await LocalNotifications.cancel({ notifications: [{ id: ID_RESUMEN }] }); return; }
     let p = await LocalNotifications.checkPermissions();
     if (p.display === 'prompt' || p.display === 'prompt-with-rationale') p = await LocalNotifications.requestPermissions();
     if (p.display !== 'granted') return;
