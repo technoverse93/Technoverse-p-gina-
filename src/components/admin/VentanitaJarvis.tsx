@@ -220,6 +220,11 @@ export default function VentanitaJarvis() {
   const [enBurbuja, setEnBurbuja] = useState(false);
   const enBurbujaRef = useRef(false);
   enBurbujaRef.current = enBurbuja;
+  // El CSS ajusta la tarjeta cuando la ventana mide solo lo que dibuja (ver ventanita.css).
+  useEffect(() => {
+    document.documentElement.toggleAttribute('data-burbuja', enBurbuja);
+    return () => document.documentElement.removeAttribute('data-burbuja');
+  }, [enBurbuja]);
   const [noche, setNoche] = useState(false);
   const [historial, setHistorial] = useState<VueltaWidget[]>([]);
   const [estadoRecuadro, setEstadoRecuadro] = useState('');
@@ -229,6 +234,8 @@ export default function VentanitaJarvis() {
       const m: ModoVentanita = p.modo || (p.voz ? 'voz' : 'hoja');
       setModo(m);
       if (m === 'escribir') void widgetNativo.estado().then(e => { if (e.version) { setMarco(e.marco); setNoche(e.noche); setEnBurbuja(!!e.burbuja); setHistorial(e.historial.slice(-12)); } });
+      // La misma ventana se reabre en otro modo (singleTop): ¿ahora viene de la burbuja?
+      else if (m !== 'voz') void widgetNativo.estado().then(e => { if (e.version) setEnBurbuja(!!e.burbuja); });
       if (m === 'voz' && p.texto) setPendiente(p.texto);
       if (m === 'hoja' && p.voz) setPedirVoz(p.n);
       if (m === 'oye') setPedirManos(p.n);

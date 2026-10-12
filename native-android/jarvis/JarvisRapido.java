@@ -62,9 +62,18 @@ public class JarvisRapido extends BridgeActivity {
     static final String EXTRA_ASISTENTE = "asistente";
     /** La abrió la burbuja de Javier: y (px, en pantalla) del centro de la burbuja, para abrirse a su lado. */
     static final String EXTRA_ANCLA_Y = "anclaY";
+    /** Lo mismo en horizontal: x (px) del centro de la burbuja, para abrirse del lado donde está. */
+    static final String EXTRA_ANCLA_X = "anclaX";
     static final String EXTRA_BURBUJA = "burbuja";
-    /** Alto del chat que sale de la burbuja (dp). */
-    static final int ALTO_CHAT_BURBUJA_DP = 380;
+    /**
+     * Medidas del panel que sale de la burbuja (dp). Es una tarjeta CHICA, no una hoja a lo ancho:
+     * lo que queda fuera de ella (YouTube, WhatsApp, el escritorio) se sigue viendo y usando.
+     */
+    static final int ANCHO_PANEL_BURBUJA_DP = 330;
+    static final int ALTO_CHAT_BURBUJA_DP = 320;
+    static final int ALTO_OYE_BURBUJA_DP = 190;
+    static final int ANCHO_HOJA_BURBUJA_DP = 360;
+    static final int ALTO_HOJA_BURBUJA_DP = 480;
     static final String PAGINA = "/jarvis-rapido.html";
 
     private boolean conPagina = false;
@@ -73,6 +82,7 @@ public class JarvisRapido extends BridgeActivity {
     private boolean comoAsistente = false;
     private boolean desdeBurbuja = false;
     private int anclaY = -1;
+    private int anclaX = -1;
     private ActivityResultLauncher<Intent> dictado;
     /** Dónde está el widget en la pantalla (px), si se abrió desde su caja. */
     private Rect marco = null;
@@ -204,21 +214,46 @@ public class JarvisRapido extends BridgeActivity {
     private void leerBurbuja(Intent intent) {
         desdeBurbuja = intent != null && intent.getBooleanExtra(EXTRA_BURBUJA, false);
         anclaY = desdeBurbuja ? intent.getIntExtra(EXTRA_ANCLA_Y, -1) : -1;
+        anclaX = desdeBurbuja ? intent.getIntExtra(EXTRA_ANCLA_X, -1) : -1;
     }
 
     boolean desdeBurbuja() {
         return desdeBurbuja;
     }
 
-    /** El chat de la burbuja: a lo ancho, debajo de la burbuja si está arriba, o encima si está abajo. */
+    /** El chat de la burbuja (ver recuadroBurbuja). */
     private Rect marcoJuntoALaBurbuja() {
+        return recuadroBurbuja("escribir");
+    }
+
+    /**
+     * El recuadro (px, en pantalla) del panel que sale de la burbuja: una tarjeta chica del lado donde
+     * está la burbuja, debajo de ella si está arriba o encima si está abajo. La ventana mide EXACTO
+     * esto, así que todo lo demás de la pantalla queda libre.
+     */
+    private Rect recuadroBurbuja(String m) {
         float d = getResources().getDisplayMetrics().density;
-        int ancho = getResources().getDisplayMetrics().widthPixels;
+        int anchoPantalla = getResources().getDisplayMetrics().widthPixels;
         int altoPantalla = getResources().getDisplayMetrics().heightPixels;
-        int alto = Math.min(Math.round(ALTO_CHAT_BURBUJA_DP * d), Math.round(altoPantalla * 0.6f));
-        int margen = Math.round(10 * d);
+        int margen = Math.round(8 * d);
+        int disponible = anchoPantalla - 2 * margen;
+        int ancho, alto;
+        if ("hoja".equals(m)) {
+            ancho = Math.min(disponible, Math.round(ANCHO_HOJA_BURBUJA_DP * d));
+            alto = Math.min(Math.round(ALTO_HOJA_BURBUJA_DP * d), Math.round(altoPantalla * 0.62f));
+        } else if ("oye".equals(m)) {
+            ancho = Math.min(disponible, Math.round(ANCHO_PANEL_BURBUJA_DP * d));
+            alto = Math.min(Math.round(ALTO_OYE_BURBUJA_DP * d), Math.round(altoPantalla * 0.4f));
+        } else {
+            ancho = Math.min(disponible, Math.round(ANCHO_PANEL_BURBUJA_DP * d));
+            alto = Math.min(Math.round(ALTO_CHAT_BURBUJA_DP * d), Math.round(altoPantalla * 0.55f));
+        }
+        int x = anclaX >= 0 && anclaX < anchoPantalla / 2 ? margen : anchoPantalla - ancho - margen;
         int y = posicionJuntoALaBurbuja(alto);
-        return new Rect(margen, y, ancho - margen, y + alto);
+        // El chat se escribe con el teclado abierto (ocupa abajo ~40 %): se queda en la parte de arriba
+        // para que el teclado no lo empuje ni lo tape.
+        if ("escribir".equals(m)) y = Math.max(Math.round(28 * d), Math.min(y, Math.round(altoPantalla * 0.6f) - alto));
+        return new Rect(x, y, x + ancho, y + alto);
     }
 
     /** Dónde va (y en px) una ventana de `alto` junto a la burbuja, sin salirse de la pantalla. */
@@ -296,6 +331,18 @@ public class JarvisRapido extends BridgeActivity {
             return;
         }
         ventana.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+        if (desdeBurbuja && anclaY >= 0) {
+            // Desde la burbuja, en cualquier modo: una tarjeta chica a su lado (nunca a lo ancho).
+            Rect r = recuadroBurbuja(modo);
+            if ("escribir".equals(modo)) marco = r;
+            ventana.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+            lp.x = r.left;
+            lp.y = r.top;
+            ventana.setAttributes(lp);
+            ventana.setGravity(Gravity.TOP | Gravity.START);
+            ventana.setLayout(r.width(), r.height());
+            return;
+        }
         if ("escribir".equals(modo) && marco != null) {
             int izq = Math.max(0, marco.left);
             int ancho = Math.min(marco.width(), anchoPantalla - izq);
@@ -305,16 +352,6 @@ public class JarvisRapido extends BridgeActivity {
             ventana.setAttributes(lp);
             ventana.setGravity(Gravity.TOP | Gravity.START);
             ventana.setLayout(ancho, marco.height());
-            return;
-        }
-        if ("oye".equals(modo) && desdeBurbuja && anclaY >= 0) {
-            // Llamado desde la burbuja: el panel sale a su lado (no siempre abajo).
-            int alto = Math.round(ALTO_LLAMADO_DP * d);
-            ventana.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
-            lp.y = posicionJuntoALaBurbuja(alto);
-            ventana.setAttributes(lp);
-            ventana.setGravity(Gravity.TOP);
-            ventana.setLayout(WindowManager.LayoutParams.MATCH_PARENT, alto);
             return;
         }
         ventana.clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
