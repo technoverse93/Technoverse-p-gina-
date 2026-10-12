@@ -297,6 +297,8 @@ public class OyePhillPlugin extends Plugin {
         try {
             OyePhillService.iniciar(getContext());
         } catch (Throwable t) {
+            // No arrancó: que no quede «activado» sin estar corriendo.
+            OyePrefs.fijarActivo(getContext(), false);
             call.resolve(error("Android no dejó prender el micrófono: abrí la app y probá de nuevo."));
             return;
         }
