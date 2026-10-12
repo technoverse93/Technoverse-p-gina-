@@ -35,6 +35,8 @@ async function anotar(accion: string): Promise<void> {
 export default function OyePhillAjustes() {
   const confirm = useConfirm();
   const nativo = oyePhill.disponible();
+  // Dentro de la app pero sin el complemento = una APK vieja (la web nueva llega sola, lo nativo hay que instalarlo).
+  const apkSinOye = !nativo && oyePhill.enApp();
   const [e, setE] = useState<EstadoOye | null>(null);
   const [ocupado, setOcupado] = useState(false);
   const [aviso, setAviso] = useState<{ tipo: 'ok' | 'error'; texto: string } | null>(null);
@@ -179,7 +181,8 @@ export default function OyePhillAjustes() {
     setProbando(true);
   };
 
-  const titulo = !nativo ? 'Se activa desde la app del teléfono'
+  const titulo = apkSinOye ? 'Hace falta la APK nueva'
+    : !nativo ? 'Se activa desde la app del teléfono'
     : apkVieja ? 'Hace falta la APK nueva'
       : activo ? 'Activado en este teléfono' : 'Apagado en este teléfono';
 
@@ -301,8 +304,8 @@ export default function OyePhillAjustes() {
         </>
       )}
 
-      {apkVieja && <p className="ai-mw-nota">Instalá la APK nueva (la de la última compilación) y volvé aquí para activarlo.</p>}
-      {!nativo && <p className="ai-mw-nota">Abrí Phill en la app del teléfono → Ajustes → Oye Phill.</p>}
+      {(apkVieja || apkSinOye) && <p className="ai-mw-nota">Instalá la APK nueva (la de la última compilación) y volvé aquí para activarlo.</p>}
+      {!nativo && !apkSinOye && <p className="ai-mw-nota">Abrí Phill en la app del teléfono → Ajustes → Oye Phill.</p>}
       {nativo && !apkVieja && (
         <p className="ai-mw-nota">Escucha solo con el teléfono desbloqueado y la pantalla encendida; se calla mientras tenés Phill abierto, en llamadas y cuando lo pausás. Si perdés el teléfono, bloquearlo o cerrar sesión también lo apaga. Después de «Oye Phill», Phill funciona como siempre (ahí sí se usa internet).</p>
       )}

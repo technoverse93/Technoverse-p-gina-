@@ -113,7 +113,7 @@ public class JarvisRapido extends BridgeActivity {
         creada = true;
         aplicarModo();
         // Si la abrió «Oye Phill», ya abrió: se quita el aviso de «tocá para hablar».
-        OyePhillService.aperturaConfirmada();
+        OyeVisibilidad.aperturaConfirmada();
         if ("voz".equals(modo)) dictar();
     }
 
@@ -121,12 +121,12 @@ public class JarvisRapido extends BridgeActivity {
     @Override
     public void onStart() {
         super.onStart();
-        OyePhillService.visible(this, true);
+        OyeVisibilidad.visible(this, true);
     }
 
     @Override
     public void onStop() {
-        OyePhillService.visible(this, false);
+        OyeVisibilidad.visible(this, false);
         super.onStop();
     }
 
@@ -140,7 +140,7 @@ public class JarvisRapido extends BridgeActivity {
         modo = modoDe(intent);
         marco = marcoDe(intent);
         aplicarModo();
-        OyePhillService.aperturaConfirmada();
+        OyeVisibilidad.aperturaConfirmada();
         if ("voz".equals(modo)) dictar();
     }
 

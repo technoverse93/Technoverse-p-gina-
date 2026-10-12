@@ -39,12 +39,12 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onStart() {
         super.onStart();
-        OyePhillService.visible(this, true);
+        OyeVisibilidad.visible(this, true);
     }
 
     @Override
     public void onStop() {
-        OyePhillService.visible(this, false);
+        OyeVisibilidad.visible(this, false);
         super.onStop();
     }
 }

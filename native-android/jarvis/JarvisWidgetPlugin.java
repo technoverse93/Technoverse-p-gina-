@@ -59,7 +59,7 @@ public class JarvisWidgetPlugin extends Plugin {
         JSObject r = new JSObject();
         boolean activo = JarvisWidget.activo(getContext());
         // «Oye Phill» abre esta misma ventanita: prenderlo en este teléfono es el permiso (el de la huella del widget no hace falta).
-        if (!activo && getActivity() instanceof JarvisRapido && "oye".equals(((JarvisRapido) getActivity()).modo())) activo = OyePhillService.activo(getContext());
+        if (!activo && getActivity() instanceof JarvisRapido && "oye".equals(((JarvisRapido) getActivity()).modo())) activo = OyePrefs.activo(getContext());
         r.put("activo", activo);
         r.put("enVentanita", getActivity() instanceof JarvisRapido);
         r.put("version", VERSION);

@@ -10,7 +10,6 @@ import android.content.BroadcastReceiver;
 import android.content.Context;
 import android.content.Intent;
 import android.content.IntentFilter;
-import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.pm.ServiceInfo;
 import android.graphics.Color;
@@ -47,7 +46,6 @@ import java.util.Arrays;
 import java.util.Collections;
 import java.util.List;
 import java.util.Set;
-import java.util.concurrent.ConcurrentHashMap;
 
 /**
  * «Oye Phill»: Phill te escucha con el teléfono desbloqueado, aunque la app
@@ -72,11 +70,6 @@ import java.util.concurrent.ConcurrentHashMap;
  * micrófono desde el arranque): al abrir la app se reanuda si estaba activado.
  */
 public class OyePhillService extends Service {
-    static final String PREFS = "oye_phill";
-    static final String K_ACTIVO = "activo";
-    static final String K_FRASES = "frases";
-    static final String K_SENS = "sens";
-
     static final String ACC_INICIAR = "com.technoverse.admin.oye.INICIAR";
     static final String ACC_DETENER = "com.technoverse.admin.oye.DETENER";
     static final String ACC_PAUSAR = "com.technoverse.admin.oye.PAUSAR";
@@ -117,7 +110,6 @@ public class OyePhillService extends Service {
     static volatile String ultimoOido = "";
     static volatile String ultimaDecision = "";
 
-    private static final Set<Object> visibles = Collections.newSetFromMap(new ConcurrentHashMap<Object, Boolean>());
     private static final Object cerrojo = new Object();
 
     private final Handler principal = new Handler(Looper.getMainLooper());
@@ -135,61 +127,21 @@ public class OyePhillService extends Service {
     private View orbe;
     private BroadcastReceiver pantalla;
 
-    // ----------------------------- preferencias y atajos -----------------------------
-
-    static SharedPreferences prefs(Context c) {
-        return c.getSharedPreferences(PREFS, Context.MODE_PRIVATE);
-    }
-
-    static boolean activo(Context c) {
-        return prefs(c).getBoolean(K_ACTIVO, false);
-    }
-
-    static int sensibilidad(Context c) {
-        return Math.max(0, Math.min(2, prefs(c).getInt(K_SENS, OyeLogica.SENS_NORMAL)));
-    }
-
-    static List<String> frases(Context c) {
-        String guardadas = prefs(c).getString(K_FRASES, null);
-        List<String> crudas = new ArrayList<>();
-        if (guardadas != null) {
-            for (String f : guardadas.split("\n")) crudas.add(f);
-        } else {
-            crudas.addAll(Arrays.asList(OyeLogica.FRASES_INICIALES));
-        }
-        return OyeLogica.frasesValidas(crudas);
-    }
-
-    static void guardarFrases(Context c, List<String> frases) {
-        StringBuilder b = new StringBuilder();
-        for (String f : OyeLogica.frasesValidas(frases)) b.append(b.length() > 0 ? "\n" : "").append(f);
-        prefs(c).edit().putString(K_FRASES, b.toString()).apply();
-    }
+    // ----------------------------- atajos -----------------------------
 
     static boolean enEjecucion() {
         return instancia != null;
     }
 
-    /** La app o la ventanita se ven (o dejaron de verse): mientras se ven usan ellas el micrófono. */
-    static void visible(Object quien, boolean si) {
-        if (si) visibles.add(quien);
-        else visibles.remove(quien);
-        despertarBucle();
-    }
-
     /** La ventanita ya abrió: se quita el aviso de «tocá para hablar» y la burbuja. */
-    static void aperturaConfirmada() {
-        OyePhillService s = instancia;
-        if (s == null) return;
-        s.aperturaPendiente = false;
-        s.esperaApertura = 0;
-        s.principal.post(new Runnable() {
+    private void alConfirmarApertura() {
+        aperturaPendiente = false;
+        esperaApertura = 0;
+        principal.post(new Runnable() {
             @Override
             public void run() {
-                OyePhillService t = instancia;
-                if (t == null) return;
-                t.quitarOrbe();
-                NotificationManager nm = (NotificationManager) t.getSystemService(Context.NOTIFICATION_SERVICE);
+                quitarOrbe();
+                NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
                 if (nm != null) nm.cancel(ID_AVISO);
             }
         });
@@ -203,13 +155,13 @@ public class OyePhillService extends Service {
 
     /** Prende el servicio (hay que llamarlo con la app a la vista: Android no deja prender el micrófono desde el fondo). */
     static void iniciar(Context c) {
-        prefs(c).edit().putBoolean(K_ACTIVO, true).apply();
+        OyePrefs.fijarActivo(c, true);
         probando = false;
         enviar(c, ACC_INICIAR, true, null);
     }
 
     static void detener(Context c) {
-        prefs(c).edit().putBoolean(K_ACTIVO, false).apply();
+        OyePrefs.fijarActivo(c, false);
         probando = false;
         if (instancia != null) enviar(c, ACC_DETENER, false, null);
         else {
@@ -258,6 +210,19 @@ public class OyePhillService extends Service {
     public void onCreate() {
         super.onCreate();
         instancia = this;
+        OyeVisibilidad.alCambiar = new Runnable() {
+            @Override
+            public void run() {
+                despertarBucle();
+            }
+        };
+        OyeVisibilidad.alConfirmarApertura = new Runnable() {
+            @Override
+            public void run() {
+                OyePhillService s = instancia;
+                if (s != null) s.alConfirmarApertura();
+            }
+        };
         crearCanales();
         pantalla = new BroadcastReceiver() {
             @Override
@@ -277,7 +242,7 @@ public class OyePhillService extends Service {
     public int onStartCommand(Intent intent, int flags, int startId) {
         String accion = intent != null ? intent.getAction() : ACC_INICIAR;
         // Si Android lo reinicia solo (intent nulo), sigue únicamente si estaba activado.
-        if (intent == null && !activo(this)) {
+        if (intent == null && !OyePrefs.activo(this)) {
             stopSelf();
             return START_NOT_STICKY;
         }
@@ -306,7 +271,7 @@ public class OyePhillService extends Service {
                 probando = intent != null && intent.getBooleanExtra("activo", false);
                 versionConfig++;
                 // Si el servicio nació solo para la prueba y se terminó la prueba, se apaga.
-                if (!probando && !activo(this)) {
+                if (!probando && !OyePrefs.activo(this)) {
                     apagar();
                     return START_NOT_STICKY;
                 }
@@ -331,8 +296,13 @@ public class OyePhillService extends Service {
         }
         pantalla = null;
         quitarOrbe();
-        if (instancia == this) instancia = null;
-        publicar("apagado", "");
+        if (instancia == this) {
+            instancia = null;
+            OyeVisibilidad.alCambiar = null;
+            OyeVisibilidad.alConfirmarApertura = null;
+        }
+        // Si se apagó por una falla, el motivo se queda a la vista (la pantalla de Ajustes lo muestra).
+        if (!"error".equals(estado)) publicar("apagado", "");
         super.onDestroy();
     }
 
@@ -491,7 +461,7 @@ public class OyePhillService extends Service {
             int modo = am.getMode();
             enLlamada = modo == AudioManager.MODE_IN_CALL || modo == AudioManager.MODE_IN_COMMUNICATION || modo == AudioManager.MODE_RINGTONE;
         }
-        return OyeLogica.motivoPausa(SystemClock.elapsedRealtime(), pausaHasta, descansoHasta, encendida, probando, !visibles.isEmpty(), esperaApertura, bloqueado, enLlamada);
+        return OyeLogica.motivoPausa(SystemClock.elapsedRealtime(), pausaHasta, descansoHasta, encendida, probando, OyeVisibilidad.hayAlgoVisible(), esperaApertura, bloqueado, enLlamada);
     }
 
     private static void dormir(long ms) {
@@ -551,7 +521,7 @@ public class OyePhillService extends Service {
 
     /** Las frases del llamado que el oído conoce (descarta las que traen palabras que no existen en su vocabulario). */
     private List<String> frasesQueEntiende(File raiz) {
-        List<String> todas = frases(this);
+        List<String> todas = OyePrefs.frases(this);
         Set<String> conocidas = OyeModelo.conocidas(raiz, OyeLogica.palabrasDe(todas));
         if (conocidas == null) return todas;
         List<String> buenas = new ArrayList<>();
@@ -631,10 +601,10 @@ public class OyePhillService extends Service {
             modelo = new Model(OyeModelo.carpeta(raiz).getAbsolutePath());
             while (!parar) {
                 // La prueba solo vale con la app a la vista: si salís, se termina (no se queda decodificando a escondidas).
-                if (probando && visibles.isEmpty()) {
+                if (probando && !OyeVisibilidad.hayAlgoVisible()) {
                     probando = false;
                     versionConfig++;
-                    if (!activo(this)) {
+                    if (!OyePrefs.activo(this)) {
                         principal.post(new Runnable() {
                             @Override
                             public void run() {
@@ -770,7 +740,7 @@ public class OyePhillService extends Service {
             avisarOido(texto, true, false, "");
             return;
         }
-        OyeLogica.Decision d = OyeLogica.evaluar(texto, frases(this), sensibilidad(this), duracionMs);
+        OyeLogica.Decision d = OyeLogica.evaluar(texto, OyePrefs.frases(this), OyePrefs.sensibilidad(this), duracionMs);
         ultimoOido = texto;
         ultimaDecision = d.despierta ? "despertó" : d.motivo;
         avisarOido(texto, true, d.despierta, d.motivo);
@@ -833,8 +803,7 @@ public class OyePhillService extends Service {
                 .setContentTitle("Phill te escuchó")
                 .setContentText("Tocá para hablar. (Para que se abra solo, activá «Mostrar sobre otras apps» en Ajustes → Oye Phill.)")
                 .setAutoCancel(true)
-                .setContentIntent(toque)
-                .setCategory(Notification.CATEGORY_CALL);
+                .setContentIntent(toque);
             if (Build.VERSION.SDK_INT < 26) b.setPriority(Notification.PRIORITY_HIGH);
             NotificationManager nm = (NotificationManager) getSystemService(Context.NOTIFICATION_SERVICE);
             if (nm != null) nm.notify(ID_AVISO, b.build());

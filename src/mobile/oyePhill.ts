@@ -56,6 +56,10 @@ function escuchar(evento: string, fn: (d: any) => void): () => void {
 }
 
 export const oyePhill = {
+  /** ¿Se está dentro de la app del teléfono? (aunque sea una APK vieja, sin «Oye Phill») */
+  enApp(): boolean {
+    return Capacitor.isNativePlatform();
+  },
   /** ¿Esta APK trae «Oye Phill»? (una vieja, o la web, no) */
   disponible(): boolean {
     return Capacitor.isNativePlatform() && Capacitor.isPluginAvailable('OyePhill');

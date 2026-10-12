@@ -68,7 +68,8 @@ public class OyePhillPlugin extends Plugin {
 
     private static boolean hayVosk() {
         try {
-            Class.forName("org.vosk.Model");
+            // Sin inicializar la clase: solo mirar si está, sin cargar la librería nativa.
+            Class.forName("org.vosk.Model", false, OyePhillPlugin.class.getClassLoader());
             return true;
         } catch (Throwable t) {
             return false;
@@ -117,13 +118,13 @@ public class OyePhillPlugin extends Plugin {
         r.put("notificaciones", notificacionesActivas(c));
         r.put("overlay", Build.VERSION.SDK_INT < 23 || Settings.canDrawOverlays(c));
         r.put("bateriaLibre", bateriaLibre(c));
-        r.put("activo", OyePhillService.activo(c));
+        r.put("activo", OyePrefs.activo(c));
         r.put("servicio", OyePhillService.enEjecucion());
         r.put("motor", OyePhillService.estado);
         r.put("detalle", OyePhillService.detalle);
         r.put("probando", OyePhillService.probando);
-        r.put("sensibilidad", OyePhillService.sensibilidad(c));
-        r.put("frases", lista(OyePhillService.frases(c)));
+        r.put("sensibilidad", OyePrefs.sensibilidad(c));
+        r.put("frases", lista(OyePrefs.frases(c)));
         r.put("ultimoOido", OyePhillService.ultimoOido);
         r.put("ultimaDecision", OyePhillService.ultimaDecision);
         r.put("sdk", Build.VERSION.SDK_INT);
@@ -260,10 +261,10 @@ public class OyePhillPlugin extends Plugin {
         if (crudas != null) {
             List<String> frases = new ArrayList<>();
             for (int i = 0; i < crudas.length(); i++) frases.add(crudas.optString(i));
-            OyePhillService.guardarFrases(c, frases);
+            OyePrefs.guardarFrases(c, frases);
         }
         Integer sens = call.getInt("sensibilidad");
-        if (sens != null) OyePhillService.prefs(c).edit().putInt(OyePhillService.K_SENS, Math.max(0, Math.min(2, sens.intValue()))).apply();
+        if (sens != null) OyePrefs.fijarSensibilidad(c, sens.intValue());
         OyePhillService.reconfigurar(c);
         call.resolve(estadoJs());
     }
