@@ -2350,6 +2350,10 @@ export async function atender(req: Request): Promise<Response> {
     // MODO PROGRAMADOR: lo responde un modelo especialista en código.
     const esCodigo = ES_CODIGO.test(texto);
     if (esCodigo) extra += `\n\nMODO PROGRAMADOR: este mensaje es de programación. Respondé como un ingeniero de software senior: entendé bien qué se necesita, dá el código COMPLETO y funcional (nada de «…resto igual»), en bloques \`\`\`lenguaje, con una explicación corta de qué hace y cómo usarlo, y avisá de errores o riesgos (seguridad, rendimiento). Si falta un dato clave, asumí lo razonable y decilo. Si te piden revisar código, señalá los errores con la línea y la corrección.`;
+    // La respuesta de memoria se busca YA, mientras se arma el contexto (antes esperaba a que todo
+    // terminara y sumaba su tiempo al de la pregunta). Se usa más abajo si corresponde.
+    const memoriaP = cerebro && modo === 'jarvis' && !adjuntos.length && cuerpo?.buscar !== true && puedeDeMemoria(texto, false)
+      ? cerebro.respuestaGuardada(texto).catch(() => null) : null;
     const conMemoria = /record|acord|olvid|anot|prefer|siempre|nunca|de ahora en adelante|guard[aá]|no (me )?(digas|hables|uses)|llamame|forma de/i.test(texto);
     if (modo !== 'normal') {
       const [{ data: recuerdos }, { data: buenas }, { data: malas }, { data: agenda }, fichaDueno] = await Promise.all([
@@ -2562,7 +2566,7 @@ export async function atender(req: Request): Promise<Response> {
       // 0) SU CEREBRO PRIMERO: si ya contestó bien esta misma pregunta (por significado) y no es algo
       //    que cambia con el día, lo dice de memoria: sin IAs ni internet.
       if (cerebro && puedeDeMemoria(texto, esOrdenMsg) && !adjuntos.length && cuerpo?.buscar !== true) {
-        const memo = await cerebro.respuestaGuardada(texto).catch(() => null);
+        const memo = memoriaP ? await memoriaP : await cerebro.respuestaGuardada(texto).catch(() => null);
         if (memo) {
           const t0 = Date.now();
           const sis = nuevo(true);
