@@ -23,7 +23,8 @@ import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor
 /** La que entiende esta página: 3 = Phill con sesión, usable en el propio recuadro. */
 export const VERSION_WIDGET = 3;
 
-export type ModoVentanita = 'hoja' | 'voz' | 'escribir';
+/** «oye»: la abrió «Oye Phill» (el llamado por voz): Phill completo, ya en manos libres. */
+export type ModoVentanita = 'hoja' | 'voz' | 'escribir' | 'oye';
 
 export interface PedidoVentanita {
   /** Cómo se abrió: hoja completa, pregunta por voz o barrita para escribir. */

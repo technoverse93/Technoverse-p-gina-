@@ -236,6 +236,18 @@ export default function AdminPanel({
     return () => { clearTimeout(t); document.removeEventListener('visibilitychange', alVolver); };
   }, [currentUser?.role]);
 
+  // «OYE PHILL»: si estaba activado en este teléfono y el servicio no corre (se reinició el
+  // teléfono o Android lo cerró), se vuelve a prender al abrir la app. Con otra cuenta que
+  // no sea la del dueño, se apaga. Sin el complemento (web o APK vieja) no hace nada.
+  useEffect(() => {
+    if (!esStaff(currentUser?.role)) return;
+    const arrancar = () => { void import('../mobile/oyePhill').then(m => m.restaurarOyePhill(currentUser?.role)).catch(() => { /* sin Oye Phill */ }); };
+    const t = setTimeout(arrancar, 3500);
+    const alVolver = () => { if (document.visibilityState === 'visible') arrancar(); };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => { clearTimeout(t); document.removeEventListener('visibilitychange', alVolver); };
+  }, [currentUser?.role]);
+
   // Mirando la pestaña Chat: el teléfono no repite el aviso de lo que ya ves.
   useEffect(() => {
     if (!esStaff(currentUser?.role)) return;
@@ -715,6 +727,8 @@ export default function AdminPanel({
     // Este teléfono deja de recibir los avisos de la cuenta (volverá a
     // recibirlos cuando se entre otra vez).
     await import('../mobile/pushNativo').then(m => m.cerrarPush()).catch(() => { /* sin push */ });
+    // «Oye Phill» también se apaga: otra persona no puede llamar a Phill del dueño en este teléfono.
+    await import('../mobile/oyePhill').then(m => m.detenerOyePhill()).catch(() => { /* sin Oye Phill */ });
     await cerrarSesionConservandoBiometria();
     onLogout();
   }, [currentUser, onLogout]);

@@ -22,6 +22,9 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(PushNativoPlugin.class);
         // El teléfono de Phill: alarmas, llamadas, WhatsApp, calendario, mapas… (native-android/telefono/).
         registerPlugin(TelefonoNativoPlugin.class);
+        // «Oye Phill» (el oído que espera el llamado) y el dictado del teléfono con texto en vivo (native-android/oye/).
+        registerPlugin(OyePhillPlugin.class);
+        registerPlugin(DictadoNativoPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Tamaño de letra FIJO dentro de la app. Android aplica el «Tamaño de
@@ -30,5 +33,18 @@ public class MainActivity extends BridgeActivity {
         // tarjetas. El diseño ya tiene un piso de 12 px para que todo se lea.
         WebView vista = getBridge() != null ? getBridge().getWebView() : null;
         if (vista != null) vista.getSettings().setTextZoom(100);
+    }
+
+    // Mientras la app se ve, el micrófono lo usa ella: «Oye Phill» se calla y vuelve al salir.
+    @Override
+    public void onStart() {
+        super.onStart();
+        OyeVisibilidad.visible(this, true);
+    }
+
+    @Override
+    public void onStop() {
+        OyeVisibilidad.visible(this, false);
+        super.onStop();
     }
 }

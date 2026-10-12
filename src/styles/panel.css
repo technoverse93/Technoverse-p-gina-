@@ -786,6 +786,41 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 .ai-voz-op span{flex:1;min-width:0;font-size:12px;opacity:.75}
 .ai-voz-op[data-on]{border-color:var(--accent);box-shadow:inset 0 0 0 1px var(--accent)}
 .ai-voz-error{margin:0;font-size:12px;color:#c0392b}
+/* «Oye Phill» (Ajustes) */
+.ai-oye-estado{margin:0;padding:0 14px 8px;display:flex;align-items:center;gap:6px;font-size:12.5px;line-height:1.4;color:var(--text-secondary)}
+.ai-oye-estado[data-tono="ok"]{color:var(--accent)}
+.ai-oye-estado[data-tono="error"]{color:var(--jv-peligro,#c0392b)}
+.ai-oye-estado svg{flex:none}
+.ai-oye-pasos{display:grid;margin:0 0 6px}
+.ai-oye-paso{display:grid;grid-template-columns:24px minmax(0,1fr) auto;gap:10px;align-items:center;padding:9px 14px}
+.ai-oye-paso+.ai-oye-paso{border-top:1px solid var(--border-color)}
+.ai-oye-paso-ic{width:24px;height:24px;border-radius:50%;display:grid;place-items:center;background:var(--bg-sunken);color:#fff}
+.ai-oye-paso-ic i{width:8px;height:8px;border-radius:50%;background:var(--border-color)}
+.ai-oye-paso[data-hecho] .ai-oye-paso-ic{background:var(--accent)}
+.ai-oye-paso-t{display:grid;gap:2px;min-width:0}
+.ai-oye-paso-t b{font-size:13px;font-weight:600}
+.ai-oye-paso-t b em{font-style:normal;font-weight:500;font-size:12px;color:var(--text-secondary)}
+.ai-oye-paso-t>span{font-size:12px;line-height:1.4;color:var(--text-secondary)}
+.ai-oye-paso .ai-chip[data-primario]{background:var(--accent);color:#fff;border-color:transparent}
+.ai-oye-barra{display:block;height:6px;border-radius:999px;background:var(--bg-sunken);overflow:hidden;margin:4px 0 2px}
+.ai-oye-barra i{display:block;height:100%;background:var(--accent);transition:width .2s}
+.ai-oye-sub{padding:6px 14px 4px;font-size:12px;font-weight:600;letter-spacing:.02em;color:var(--text-secondary);text-transform:uppercase}
+.ai-oye-frases{display:flex;flex-wrap:wrap;gap:6px;padding:2px 14px 8px}
+.ai-oye-frase{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:4px 5px 4px 12px;border-radius:999px;background:var(--bg-sunken);font-size:12.5px;font-weight:600}
+.ai-oye-frase button{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:var(--text-secondary)}
+.ai-oye-frase button:disabled{opacity:.35}
+.ai-oye-nueva{display:flex;gap:6px;padding:0 14px 8px}
+.ai-oye-nueva input{flex:1;min-width:0;height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-primary);font-size:13px}
+.ai-oye-prueba{margin:0 14px 12px;padding:10px 12px;border-radius:12px;background:var(--bg-sunken);display:grid;gap:8px;font-size:12.5px;color:var(--text-secondary)}
+.ai-oye-nivel{display:block;height:8px;border-radius:999px;background:var(--border-color);overflow:hidden}
+.ai-oye-nivel i{display:block;height:100%;background:var(--accent);transition:width .08s}
+.ai-oye-lineas{display:grid;gap:6px;color:var(--text-primary);font-size:13px}
+.ai-oye-linea{display:flex;align-items:center;gap:8px;min-width:0}
+.ai-oye-linea q{flex:1;min-width:0;overflow-wrap:anywhere;quotes:"«" "»"}
+.ai-oye-linea[data-parcial]{opacity:.6}
+.ai-oye-linea .ai-chip{flex:none;height:30px}
+.ai-oye-vacio{color:var(--text-secondary)}
+.ai-escucha .ai-vivo{flex:1;min-width:0;overflow-wrap:anywhere;display:-webkit-box;-webkit-line-clamp:3;-webkit-box-orient:vertical;overflow:hidden;color:var(--text-primary)}
 .ai-acc-solo{display:flex;align-items:center;gap:8px;margin:0;padding:8px 14px 12px;font-size:13px;color:var(--text-secondary)}
 @media (max-width: 420px) {
 /* Teléfono: todo un punto más chico y más junto (el dueño lo veía grande). */

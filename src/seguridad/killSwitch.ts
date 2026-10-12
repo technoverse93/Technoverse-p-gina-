@@ -139,6 +139,8 @@ async function revisar(): Promise<void> {
     if (fila) {
       bloqueado = true;
       mostrarPantalla(fila.motivo ?? null, fila.hasta ?? null);
+      // Un aparato bloqueado no escucha: «Oye Phill» se apaga (hay que volver a prenderlo a mano).
+      void import('../mobile/oyePhill').then(m => m.detenerOyePhill()).catch(() => { /* sin Oye Phill */ });
     } else if (bloqueado) {
       // Liberado: la pantalla se retira sola, sin recargar.
       bloqueado = false;
@@ -220,6 +222,7 @@ async function revisarSesion(): Promise<void> {
     if (error || data !== false) return;
     // Cerraron esta sesión desde otro lado: el teléfono deja de recibir avisos de la cuenta.
     await import('../mobile/pushNativo').then(m => m.cerrarPush()).catch(() => { /* sin push */ });
+    await import('../mobile/oyePhill').then(m => m.detenerOyePhill()).catch(() => { /* sin Oye Phill */ });
     await supabase.auth.signOut({ scope: 'local' });
     location.reload();
   } catch { /* sin red: nadie sale */ }
