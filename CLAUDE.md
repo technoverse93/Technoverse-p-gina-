@@ -40,6 +40,12 @@ el sistema y sus aplicaciones con una página o con algo oscuro:
 - Nada de hojas o pantallas de carga a pantalla completa en `jarvis-rapido.html`
   ni en `VentanitaJarvis`; lo que se muestre va en un panel chico y traslúcido.
 
+- Tocar FUERA de la tarjeta la guarda (`JarvisRapido.dispatchTouchEvent` con
+  `FLAG_WATCH_OUTSIDE_TOUCH` → `guardar()`): con una ventana de otra tarea
+  delante, la app de atrás pierde el foco del teclado y el dueño no podía
+  escribir en WhatsApp hasta cerrar a Javier. El toque igual llega a la app de
+  atrás (la ventana no es modal) y la burbuja vuelve para reabrirla.
+
 Cualquier cambio a la ventanita tiene que respetar esto.
 
 ## Mapa del código de Javier

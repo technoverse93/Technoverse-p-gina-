@@ -161,6 +161,12 @@ function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, extra, 
     return () => { vv?.removeEventListener('resize', medir); window.removeEventListener('resize', medir); };
   }, []);
   useEffect(() => { if (listo && !estado) { const t = setTimeout(() => caja.current?.focus(), 60); return () => clearTimeout(t); } }, [listo, estado]);
+  // Reabierta desde la burbuja después de guardarla: vuelve el cursor a la caja.
+  useEffect(() => {
+    const volvio = () => { if (document.visibilityState === 'visible' && listo && !estado) setTimeout(() => caja.current?.focus(), 120); };
+    document.addEventListener('visibilitychange', volvio);
+    return () => document.removeEventListener('visibilitychange', volvio);
+  }, [listo, estado]);
   useEffect(() => { const l = lista.current; if (l) l.scrollTop = l.scrollHeight; }, [historial.length, estado, !!extra]);
   // En la APK nueva la ventana mide justo el recuadro (marco en 0,0): va tal cual. En una vieja (ventana
   // a pantalla completa), si el teclado tapa el widget, el recuadro sube lo justo para quedar encima.
