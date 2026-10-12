@@ -141,7 +141,9 @@ async function trabajar(admin: Db, t: Tarea, motor: MotorTareas, hasta: number, 
     if (actual?.estado === 'cancelada') return 'cancelada';
     const contexto = plan.filter(p => p.estado === 'hecho' && p.resultado).map(p => `PASO ${p.n} («${p.objetivo.slice(0, 120)}»):\n${String(p.resultado).slice(0, 1500)}`).join('\n\n').slice(-7000);
     const ini = reloj();
-    const r = await motor.correrPaso(paso.objetivo, contexto, Math.max(10_000, Math.min(75_000, hasta - reloj() - 5_000)), t.instruccion).catch(() => null);
+    // Un encargo de código (leer, preparar y proponer) necesita más aire que una consulta.
+    const tope = /^\[CODIGO\]/.test(t.instruccion) ? 92_000 : 75_000;
+    const r = await motor.correrPaso(paso.objetivo, contexto, Math.max(10_000, Math.min(tope, hasta - reloj() - 5_000)), t.instruccion).catch(() => null);
     paso.ms = reloj() - ini;
     if (r && r.trim().length >= 10) { paso.estado = 'hecho'; paso.resultado = r.trim().slice(0, 4000); }
     else { paso.estado = 'fallo'; paso.resultado = 'No pude completar este paso.'; }

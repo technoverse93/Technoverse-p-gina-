@@ -23,6 +23,10 @@
 //                    (transcribir) por defecto «whisper-large-v3-turbo».
 //   CEREBRAS_MODEL / OPENROUTER_MODEL  modelos de esos respaldos.
 //   TAVILY_API_KEY   (app.tavily.com, 1.000 búsquedas gratis al mes) — opcional
+//   GITHUB_TOKEN    (github.com → Settings → Developer settings → Fine-grained tokens: SOLO este
+//                    repositorio, con «Contents» y «Pull requests» en lectura y escritura) — opcional:
+//                    sin él Phill no puede proponer cambios de código. GITHUB_REPO (por defecto
+//                    technoverse93/Technoverse-p-gina-) y GITHUB_BASE (por defecto main) son opcionales.
 //
 // CAPACIDADES (fase 3, como ChatGPT o Claude, todo gratis):
 //   · Internet en tiempo real con Tavily (herramienta `buscar_web`).
@@ -58,6 +62,9 @@
 //     el superadmin confirma la tarjeta (accion: 'confirmar').
 //   · Si en una respuesta se leyó internet, un enlace o un archivo, esa
 //     respuesta ya no puede preparar acciones (lo leído no da órdenes).
+//   · Propuestas de código (repo.ts): «poneme el botón dorado» → un encargo en segundo
+//     plano que lee el repositorio y abre un Pull Request en borrador desde una rama
+//     «phill/…». NUNCA lo fusiona ni toca main: lo revisa y aprueba el dueño.
 //   · Voz: accion 'transcribir' convierte el audio en texto.
 //
 // SEGURIDAD: la identidad sale del JWT de quien llama (no del cuerpo), el
@@ -74,6 +81,7 @@ import { esCron, tareaCron } from './proactivo.ts';
 import { eventoDePrueba, informe, nombreComponente, registrar, type Prueba } from './salud.ts';
 import { empujarAviso, empujarChat, enviarPrueba, responderDesdePush } from './push.ts';
 import { crearTarea, procesarTareas, purgarTareas, type MotorTareas, type PasoPlan, type ResultadoCrear, type Tarea } from './tareas.ts';
+import { ClienteRepo, configRepo, correrHerramientaRepo, MAX_ARCHIVOS, MAX_PROPUESTAS_DIA, NOMBRES_REPO, type EstadoRepo, type ResultadoPropuesta } from './repo.ts';
 import { armarPromptImagen, ESTILOS_VALIDOS, FORMATOS_VALIDOS, generarCopy, generarImagen, type EstiloId, type FormatoId } from './estudio.ts';
 import { ACCIONES_TELEFONO, PANTALLAS_AJUSTES, prepararTelefono, SOLO_APK, type PedidoTelefono } from './telefono.ts';
 import { APRENDER, CONSULTAR_CEREBRO, crearCerebro, respuestaSinIA, type Cerebro, type Nota } from './cerebro.ts';
@@ -181,6 +189,10 @@ type Sistema = {
   telefonos?: Map<string, PedidoTelefono>;
   /** Deja un encargo para hacer en segundo plano (solo si la respuesta llega en vivo a la app). */
   encargar?: (titulo: string, instruccion: string) => Promise<ResultadoCrear>;
+  /** Solo en un encargo de código: el repositorio (leer, buscar y PROPONER; nunca fusionar) y lo ya propuesto. */
+  repo?: EstadoRepo;
+  /** Cuántas vueltas de consultas se permiten (por defecto 4; un encargo de código necesita más). */
+  rondasMax?: number;
   /** Tokens gastados en ESTE mensaje por todas las IAs (también los
    *  intentos que fallaron a medias y la revisión): lo que se cobra. */
   gasto: { in: number; out: number };
@@ -261,6 +273,43 @@ const ENCARGAR = {
     instruccion: { type: 'string', description: 'Qué hay que hacer, completo y claro, con todo lo que pidió el dueño (productos, plazos, a qué comparar, qué decisión quiere tomar).' },
     titulo: { type: 'string', description: 'Nombre corto del encargo, de 3 a 6 palabras.' },
   }, required: ['instruccion'] },
+};
+
+const PROPONER_CODIGO = {
+  nombre: 'proponer_codigo',
+  descripcion: 'Cuando el dueño pide CAMBIAR o AGREGAR algo en la app o en la página (un color, un texto, un botón, un campo, una pantalla, un arreglo), lo hacés vos solo en segundo plano: leés el código del proyecto, preparás el cambio y abrís un PULL REQUEST en GitHub para que él lo revise. NUNCA se fusiona solo: el dueño lo aprueba. Le avisás cuando esté listo. No sirve para cambios de datos del negocio (eso son tus acciones) ni para preguntas sobre el código (esas las respondés vos).',
+  parametros: { type: 'object', properties: {
+    pedido: { type: 'string', description: 'Lo que hay que cambiar, completo y claro, con todo lo que dijo el dueño (dónde, cómo debe verse o funcionar, ejemplos).' },
+    titulo: { type: 'string', description: 'Nombre corto del cambio, de 3 a 8 palabras.' },
+  }, required: ['pedido'] },
+};
+const REPO_LEER = {
+  nombre: NOMBRES_REPO.leer,
+  descripcion: 'Lee un archivo del repositorio (rama principal), por tramos de líneas. Devuelve el texto TAL CUAL (para copiarlo exacto en los reemplazos) y cuántas líneas tiene en total. Sin desde/hasta trae las primeras ~200 líneas.',
+  parametros: { type: 'object', properties: { ruta: { type: 'string', description: 'Ruta del archivo, como src/components/Boton.tsx.' }, desde: { type: 'number', description: 'Primera línea (1 por defecto).' }, hasta: { type: 'number', description: 'Última línea (máximo 300 líneas por lectura).' } }, required: ['ruta'] },
+};
+const REPO_LISTAR = {
+  nombre: NOMBRES_REPO.listar,
+  descripcion: 'Lista los archivos y carpetas de una carpeta del repositorio (vacío = la raíz).',
+  parametros: { type: 'object', properties: { ruta: { type: 'string', description: 'Carpeta, como src/components.' } } },
+};
+const REPO_BUSCAR = {
+  nombre: NOMBRES_REPO.buscar,
+  descripcion: 'Busca un texto en el código del repositorio (un nombre de función, un texto de la pantalla, una clase). Devuelve los archivos donde aparece con un fragmento.',
+  parametros: { type: 'object', properties: { texto: { type: 'string', description: 'Lo que se busca.' } }, required: ['texto'] },
+};
+const PROPONER_CAMBIO = {
+  nombre: NOMBRES_REPO.proponer,
+  descripcion: `Abre el Pull Request con los cambios (rama phill/…, nunca main; el dueño lo revisa y lo aprueba). Hasta ${MAX_ARCHIVOS} archivos. Para un archivo que YA existe mandá \`reemplazos\`: cada \`buscar\` es un trozo EXACTO del archivo (copiado de repo_leer, con su indentación) que aparece UNA sola vez, y \`poner\` lo que queda en su lugar. Para un archivo NUEVO mandá \`contenido\` completo. Si algo no coincide, te devuelve el error: corregilo y volvé a llamar.`,
+  parametros: { type: 'object', properties: {
+    titulo: { type: 'string', description: 'Título del Pull Request (claro, en español).' },
+    descripcion: { type: 'string', description: 'Qué cambia y por qué, en pocas líneas, para quien lo revise.' },
+    cambios: { type: 'array', items: { type: 'object', properties: {
+      ruta: { type: 'string' },
+      reemplazos: { type: 'array', items: { type: 'object', properties: { buscar: { type: 'string' }, poner: { type: 'string' } }, required: ['buscar', 'poner'] } },
+      contenido: { type: 'string', description: 'Solo para un archivo nuevo.' },
+    }, required: ['ruta'] } },
+  }, required: ['titulo', 'descripcion', 'cambios'] },
 };
 
 const MIRAR = {
@@ -400,7 +449,8 @@ function declaraciones(sis: Sistema) {
   if (sis.cerebro && sis.telefono && !sis.leyoAfuera) lista.push(TELEFONO);
   if (sis.cerebro && sis.telefono) lista.push(MIRAR);
   // Un encargo creado después de leer algo de afuera podría traer órdenes escondidas: tampoco.
-  if (sis.cerebro && sis.encargar && !sis.leyoAfuera) lista.push(ENCARGAR);
+  if (sis.cerebro && sis.encargar && !sis.leyoAfuera) lista.push(ENCARGAR, PROPONER_CODIGO);
+  if (sis.repo) lista.push(REPO_LEER, REPO_LISTAR, REPO_BUSCAR, PROPONER_CAMBIO);
   return lista;
 }
 
@@ -537,9 +587,27 @@ async function correrHerramienta(nombre: string, args: Record<string, unknown>, 
       nota: 'La tarjeta con la pieza ya diseñada quedó en pantalla, con botón para abrirla en el Estudio. No repitas todo el texto: decí en una frase qué armaste y qué podés cambiar.',
     };
   }
+  // El agente de código (solo dentro de un encargo de código): lee el repositorio y PROPONE; nunca fusiona.
+  if (sis.repo && (Object.values(NOMBRES_REPO) as string[]).includes(nombre)) return await correrHerramientaRepo(nombre, args, sis.repo);
+  if (nombre === PROPONER_CODIGO.nombre && sis.cerebro && sis.encargar && !sis.leyoAfuera) {
+    if (!configRepo()) return { error: 'Para proponer cambios de código necesito acceso al repositorio de GitHub y todavía no lo tengo: el dueño tiene que crear un token de GitHub (solo para este repositorio, con permisos de «Contents» y «Pull requests») y guardarlo en Supabase → Edge Functions → Secrets con el nombre GITHUB_TOKEN. Decíselo claro y corto.' };
+    const pedido = String(args?.pedido ?? '').replace(/\s+/g, ' ').trim().slice(0, 2000);
+    if (pedido.length < 20) return { error: 'Falta decir bien qué hay que cambiar: pasá el pedido completo, con todo lo que dijo el dueño.' };
+    // Tope de propuestas por día (se cuentan los encargos de código de las últimas 24 h).
+    const { count } = await sis.ctx.db.from('jarvis_tareas').select('id', { count: 'exact', head: true }).like('instruccion', '[CODIGO]%').gte('creada_en', new Date(Date.now() - 86_400_000).toISOString()).neq('estado', 'cancelada');
+    if ((count || 0) >= MAX_PROPUESTAS_DIA) return { error: `Hoy ya abrí ${MAX_PROPUESTAS_DIA} propuestas de código (es el tope por día). Que el dueño revise las abiertas y mañana seguimos.` };
+    const titulo = String(args?.titulo ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
+    const nombreEncargo = titulo.length >= 3 ? titulo : `Cambio: ${pedido.slice(0, 60)}`;
+    const r = await sis.encargar(nombreEncargo, `[CODIGO] ${pedido}`);
+    if (!r.ok) return { error: r.error };
+    const c: Consulta = { tipo: 'tarea', modulo: 'Encargo', desc: nombreEncargo, filas: 'pendiente', detalle: '', tarea: { id: r.id, titulo: nombreEncargo } };
+    sis.consultas.push(c); sis.emitir('tarea', c);
+    return { hecho: true, nota: 'Quedó en marcha: lo hacés vos solo en segundo plano (leés el código, preparás el cambio y abrís un Pull Request que el dueño revisa; NUNCA se fusiona solo). Le avisás con una notificación cuando esté. Decile en UNA frase corta que ya empezaste. NO inventes resultados ni digas cuánto va a tardar.' };
+  }
   if (nombre === ENCARGAR.nombre && sis.cerebro && sis.encargar && !sis.leyoAfuera) {
     const titulo = String(args?.titulo ?? '').replace(/\s+/g, ' ').trim().slice(0, 80);
-    const instruccion = String(args?.instruccion ?? '').replace(/\s+/g, ' ').trim().slice(0, 2000);
+    // Un encargo de código solo nace de proponer_codigo (con su tope diario): acá se descarta esa marca.
+    const instruccion = String(args?.instruccion ?? '').replace(/\s+/g, ' ').trim().replace(/^(\[CODIGO\]\s*)+/i, '').slice(0, 2000);
     if (instruccion.length < 20) return { error: 'Falta decir bien qué hay que hacer: pasá la instrucción completa, con todo lo que pidió el dueño.' };
     const nombreEncargo = titulo.length >= 3 ? titulo : instruccion.slice(0, 60);
     const r = await sis.encargar(nombreEncargo, instruccion);
@@ -671,7 +739,7 @@ async function* leerSSE(cuerpo: ReadableStream<Uint8Array>): AsyncGenerator<any>
 async function preguntarGemini(historial: Turno[], modelo: string, sis: Sistema): Promise<Resultado> {
   const clave = Deno.env.get('GEMINI_API_KEY');
   if (!clave) throw new CupoAgotado('Falta GEMINI_API_KEY en los secretos');
-  const conHerramientas = sis.herramientas.length > 0;
+  const conHerramientas = sis.herramientas.length > 0 || !!sis.repo;
   const contents: any[] = historial.map(t => ({ role: t.rol === 'assistant' ? 'model' : 'user', parts: [{ text: t.texto }] }));
   // Las fotos y PDF van en el último turno de la persona.
   if (sis.adjuntos.length && contents.length) contents[contents.length - 1].parts.push(...sis.adjuntos.map(a => ({ inlineData: a })));
@@ -981,7 +1049,7 @@ async function cerrarConDatos(mensajes: any[], sis: Sistema, excluir: string): P
 
 async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compatible): Promise<Resultado> {
   const web = sis.herramientas.some(h => h.modulo === 'internet');
-  let conHerramientas = sis.herramientas.length > 0;
+  let conHerramientas = sis.herramientas.length > 0 || !!sis.repo;
   let achique = 0; // 0 completo · 1 corto · 2 corto y sin herramientas
   const armar = () => {
     // Siempre eficiente: lo viejo de la conversación va resumido (los últimos
@@ -1000,7 +1068,7 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
   let tokensIn = 0, tokensOut = 0, conUso = true, paralelo = true, esfuerzo = true, empezo = false, modeloReal = prov.modelo;
   // Tope de vueltas de consultas (Cerebras llegó a hacer 7 seguidas y se
   // topó con su límite por minuto) y consultas repetidas = a responder.
-  const maxRondas = Math.min(sis.rondas, 4);
+  const maxRondas = Math.min(sis.rondas, sis.rondasMax ?? 4);
   const firmas = new Set<string>();
   let sinMasConsultas = false, salidaMax = 0, reintentoHerr = false;
   // Si ya consultó datos y esta IA se cae, otra termina con esos datos.
@@ -1425,15 +1493,63 @@ const PROMPT_PLAN = `Sos Phill, el asistente del dueño de Technoverse Costa Ric
 const PROMPT_INFORME = `Sos Phill. Redactá el INFORME FINAL de un encargo que hiciste en segundo plano para el dueño de Technoverse Costa Rica: español de Costa Rica con voseo, claro y concreto. Empezá por la conclusión o la recomendación; después el detalle con las cifras y las fuentes que aparezcan en lo averiguado (nombres de tiendas, enlaces). Si algún paso no pudo hacerse, decilo en una línea. Podés usar listas cortas o una tabla markdown si ayudan. No inventes ningún dato que no esté en lo averiguado. Máximo unas 350 palabras. Respondé SOLO un JSON: {"texto": "…markdown…"}`;
 const REGLAS_SEGUNDO_PLANO = `\n\nESTÁS TRABAJANDO EN SEGUNDO PLANO en un encargo del dueño: él NO está leyendo esto ahora y no podés preguntarle nada. Hacé SOLO el paso que te toca, con tus consultas de solo lectura (inventario, ventas, taller, internet…). Toda cifra sale de una consulta; si un dato no se pudo conseguir, decilo claro en vez de inventarlo. Respondé con lo averiguado, concreto y corto (unas 250 palabras como máximo), con cifras y fuentes (tiendas o enlaces) si buscaste en internet. No saludes ni hagas preguntas.`;
 
+const MARCA_CODIGO = /^\[CODIGO\]\s*/;
+/** La línea que SOLO agrega el sistema cuando el Pull Request de verdad se abrió (la IA no la escribe). */
+const MARCA_PR = '🔀 **Pull Request';
+const PROMPT_CODIGO = `\n\nESTÁS EN UN ENCARGO DE CÓDIGO. Sos un ingeniero de software del proyecto de Technoverse (React 19 + Vite + Tailwind v4 + Capacitor + Supabase, TypeScript sin «strict»). El dueño pidió un cambio y tu trabajo es PROPONERLO como Pull Request (se abre en borrador y NUNCA se fusiona solo: él lo revisa). Hacelo así: (1) ubicá los archivos con repo_buscar y repo_listar; (2) leelos con repo_leer, por tramos (pedí varios a la vez); (3) mirá cómo está hecho el código vecino y seguí su estilo; (4) preparás el cambio MÍNIMO y exacto: cada reemplazo lleva en «buscar» un trozo EXACTO copiado de repo_leer (con su indentación) que aparezca UNA sola vez, y en «poner» lo que queda; (5) llamás a proponer_cambio con un título claro, una descripción corta (qué cambia y por qué) y los cambios. Reglas: textos de la pantalla y comentarios en español con voseo; no agregues librerías; no toques secretos, workflows ni configuración sensible (te lo va a rechazar); no inventes archivos, funciones ni props: si no lo encontraste, buscalo mejor. Si el pedido es ambiguo, enorme o no estás seguro de poder hacerlo bien, NO abras el Pull Request: explicá en pocas líneas qué falta o qué parte sí se puede hacer. Al terminar, contestá con un resumen corto (qué archivos y qué cambió). No saludes.`;
+
+/** Corre el historial por la cadena de IAs (la principal, los respaldos, Gemini) hasta que una conteste. */
+async function correrConCadena(historial: Turno[], sis: Sistema, etiqueta: string): Promise<string | null> {
+  const vistos = new Set<string>();
+  const candidatos: Compatible[] = [];
+  for (const p of [...await proveedoresPrincipales().catch(() => [] as Compatible[]), ...proveedoresRespaldo()]) {
+    const k = claveProv(p);
+    if (!vistos.has(k) && disponibleModelo(k)) { vistos.add(k); candidatos.push(p); }
+  }
+  for (const p of candidatos.slice(0, 4)) {
+    if (sis.limite - Date.now() < 8000) break;
+    try { const r = await preguntarCompatible(historial, sis, p); if (r.texto.trim()) return r.texto; }
+    catch (e) { console.log(`${etiqueta} ${p.id}: ${e instanceof Error ? e.message : e}`); }
+  }
+  for (const m of [GEMINI_RESPALDO, GEMINI_MODEL]) {
+    if (sis.limite - Date.now() < 8000 || !disponibleModelo(m)) continue;
+    try { const r = await preguntarGemini(historial, m, sis); if (r.texto.trim()) return r.texto; }
+    catch (e) { console.log(`${etiqueta} gemini ${m}: ${e instanceof Error ? e.message : e}`); }
+  }
+  return null;
+}
+
 function crearMotorTareas(admin: any): MotorTareas {
   const gasto = { in: 0, out: 0 };
   return {
     async planificar(instruccion) {
+      // Un encargo de código es un solo paso largo (leer, preparar y proponer), sin plan de la IA.
+      if (MARCA_CODIGO.test(instruccion)) return { pasos: [instruccion.replace(MARCA_CODIGO, '').trim()] };
       const r = await pedirJSON(PROMPT_PLAN, instruccion, { hasta: Date.now() + 25000, gasto, rapido: true, etiqueta: 'plan', valido: j => Array.isArray(j?.pasos) && j.pasos.length >= 1 }).catch(() => null);
       return r ? { titulo: typeof r.j.titulo === 'string' ? r.j.titulo : undefined, pasos: r.j.pasos.map((x: unknown) => String(x ?? '')) } : null;
     },
 
     async correrPaso(objetivo, contexto, limiteMs, instruccion = '') {
+      if (MARCA_CODIGO.test(instruccion)) {
+        const cfg = configRepo();
+        if (!cfg) return 'No pude abrir la propuesta: falta el secreto GITHUB_TOKEN en Supabase (un token de GitHub solo para este repositorio, con permisos de «Contents» y «Pull requests»).';
+        const fuentes: { titulo: string; url: string }[] = [];
+        const repo: EstadoRepo = { cliente: new ClienteRepo(cfg), propuesta: null };
+        const sis: Sistema = {
+          ctx: { db: admin, esSuper: true, hoy: diaCR(), fuentes }, herramientas: [], consultas: [], usados: {}, hechas: new Map(),
+          emitir: () => {}, esSuper: true, limite: Date.now() + limiteMs,
+          caps: { enlaces: false, codigo: false, archivos: false }, forzarWeb: false, adjuntos: [], fuentes,
+          modo: 'jarvis', pensar: 'medium', intento: 45000,
+          acciones: false, leyoAfuera: false, ctxAcc: null,
+          guardarPropuesta: async () => { throw new Error('Esto es un encargo de código: no hay acciones.'); }, propuestas: new Map(),
+          extra: PROMPT_CODIGO, rondas: 12, rondasMax: 12, memoria: null, cerebro: null, gasto, conMemoria: false, telefono: null, repo,
+        };
+        const texto = await correrConCadena([{ rol: 'user', texto: `PEDIDO DEL DUEÑO:\n${objetivo}` }], sis, 'codigo');
+        const pr = repo.propuesta?.ok ? repo.propuesta : null;
+        if (!texto && !pr) return null;
+        // El resumen de la IA se acota para que la línea del Pull Request (lo importante) nunca quede cortada.
+        return `${(texto || 'Propuesta abierta.').split(MARCA_PR).join('Pull Request').trim().slice(0, 3000)}${pr ? `\n\n${MARCA_PR}${pr.borrador ? ' (borrador)' : ''}:** ${pr.url}\nRama: \`${pr.rama}\`. Nadie lo fusionó: revisalo y, si te gusta, aprobalo vos.` : ''}`;
+      }
       const { data: aj } = await admin.from('ia_ajustes').select('modulos').eq('id', 1).maybeSingle();
       const mods = (aj?.modulos || {}) as Record<string, boolean>;
       const fuentes: { titulo: string; url: string }[] = [];
@@ -1449,32 +1565,20 @@ function crearMotorTareas(admin: any): MotorTareas {
         extra: REGLAS_SEGUNDO_PLANO, rondas: 6, memoria: null, cerebro: null, gasto, conMemoria: false, telefono: null,
       };
       const historial: Turno[] = [{ rol: 'user', texto: `${instruccion ? `ENCARGO COMPLETO DEL DUEÑO (para que sepas el contexto):\n${instruccion}\n\n` : ''}LO YA AVERIGUADO EN PASOS ANTERIORES:\n${contexto || '(nada todavía)'}\n\nTU PASO AHORA:\n${objetivo}` }];
-      const vistos = new Set<string>();
-      const candidatos: Compatible[] = [];
-      for (const p of [...await proveedoresPrincipales().catch(() => [] as Compatible[]), ...proveedoresRespaldo()]) {
-        const k = claveProv(p);
-        if (!vistos.has(k) && disponibleModelo(k)) { vistos.add(k); candidatos.push(p); }
-      }
-      for (const p of candidatos.slice(0, 4)) {
-        if (sis.limite - Date.now() < 8000) break;
-        try { const r = await preguntarCompatible(historial, sis, p); if (r.texto.trim()) return r.texto; }
-        catch (e) { console.log(`tarea paso ${p.id}: ${e instanceof Error ? e.message : e}`); }
-      }
-      for (const m of [GEMINI_RESPALDO, GEMINI_MODEL]) {
-        if (sis.limite - Date.now() < 8000 || !disponibleModelo(m)) continue;
-        try { const r = await preguntarGemini(historial, m, sis); if (r.texto.trim()) return r.texto; }
-        catch (e) { console.log(`tarea paso gemini ${m}: ${e instanceof Error ? e.message : e}`); }
-      }
-      return null;
+      return await correrConCadena(historial, sis, 'tarea paso');
     },
 
     async redactar(instruccion, pasos) {
+      // Un encargo de código ya trae su resumen (y el enlace del Pull Request): no se reescribe.
+      if (MARCA_CODIGO.test(instruccion)) return pasos.find((p: PasoPlan) => p.estado === 'hecho')?.resultado || null;
       const datos = `ENCARGO: ${instruccion}\n\nLO AVERIGUADO:\n${pasos.map((p: PasoPlan) => `PASO ${p.n} — ${p.objetivo}\n${p.estado === 'hecho' ? p.resultado : '(No se pudo completar este paso.)'}`).join('\n\n')}`.slice(0, 20000);
       const r = await pedirJSON(PROMPT_INFORME, datos, { hasta: Date.now() + 28000, gasto, rapido: false, etiqueta: 'informe', valido: j => typeof j?.texto === 'string' && j.texto.trim().length > 40 }).catch(() => null);
       return r ? String(r.j.texto) : null;
     },
 
-    async terminado(t: Tarea, texto: string, ok: boolean) {
+    async terminado(t: Tarea, texto: string, okEntrada: boolean) {
+      // Un encargo de código que no abrió ningún Pull Request no es un éxito (aunque haya contestado algo).
+      const ok = okEntrada && (!MARCA_CODIGO.test(t.instruccion) || texto.includes(MARCA_PR));
       const ahora = new Date().toISOString();
       // El resultado queda en el chat (en la conversación donde se pidió, o en la más reciente).
       try {
@@ -1485,7 +1589,7 @@ function crearMotorTareas(admin: any): MotorTareas {
         if (conv) {
           await admin.from('ia_mensajes').insert({
             id: crypto.randomUUID(), conversacion_id: conv, user_id: t.user_id, rol: 'assistant',
-            texto: ok ? `✅ Terminé el encargo «${t.titulo}».\n\n${texto}` : `⚠️ ${texto}`,
+            texto: ok ? `${MARCA_CODIGO.test(t.instruccion) ? '🔀 Armé una propuesta de código' : '✅ Terminé el encargo'} «${t.titulo}».\n\n${texto}` : `⚠️ ${okEntrada ? `«${t.titulo}»: no abrí ningún Pull Request.\n\n` : ''}${texto}`,
             creado_en: ahora, fuentes: [], tokens_in: 0, tokens_out: 0, proveedor: null, modelo: null, busco: false,
             // La tarjeta del encargo ya está en la respuesta donde se pidió (y se actualiza sola): acá va solo el texto.
             consultas: [],
@@ -1496,7 +1600,7 @@ function crearMotorTareas(admin: any): MotorTareas {
       } catch (e) { console.log(`tarea ${t.id}: no se pudo dejar el resultado en el chat: ${e instanceof Error ? e.message : e}`); }
       // El aviso (campanita) y la notificación en el teléfono.
       const resumen = texto.replace(/[*_#>`|]/g, '').replace(/\s+/g, ' ').trim().slice(0, 280);
-      const aviso = { tipo: 'tarea', titulo: ok ? `Phill terminó: ${t.titulo}` : `Phill no pudo terminar: ${t.titulo}`, cuerpo: resumen, nivel: ok ? 'info' : 'atencion' };
+      const aviso = { tipo: 'tarea', titulo: ok ? (MARCA_CODIGO.test(t.instruccion) ? `Phill propuso un cambio: ${t.titulo}` : `Phill terminó: ${t.titulo}`) : `Phill no pudo terminar: ${t.titulo}`, cuerpo: resumen, nivel: ok ? 'info' : 'atencion' };
       try {
         const { error } = await admin.from('jarvis_avisos').insert({ user_id: t.user_id, clave: `tarea:${t.id}`, ...aviso });
         if (!error) await empujarAviso(admin, t.user_id, aviso);
@@ -2145,7 +2249,7 @@ export async function atender(req: Request): Promise<Response> {
 
     // Control del teléfono: solo cuando la respuesta llega en vivo a la app (el widget y el modo sin
     // eventos no pueden ejecutarlo, y Phill no debe decir «listo» sin que pase nada).
-    if (esSuper && modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget') extra += `\n\nTENÉS LA HERRAMIENTA «telefono» para hacer cosas en el celular del dueño${cuerpo?.nativa === true ? '' : ' (ahora está en el navegador: solo llamar, escribir, calendario, mapa y enlaces, con un botón; alarmas, temporizador, abrir apps, música, linterna y ajustes solo se pueden desde la app del teléfono)'}: alarmas, temporizadores, abrir apps, llamar, WhatsApp, mensajes de texto, calendario, mapa, música, linterna, ajustes y enlaces. Si dice «mirá esto», «fijate en esto» o algo parecido, usá la herramienta «mirar» para abrirle la cámara. Para trabajos de VARIOS pasos que tardan (investigar precios en internet, revisar varios módulos y armar un informe, el cierre del día, qué comprar esta semana) usá «encargar_tarea»: lo hacés vos solo en segundo plano y le avisás cuando termine (en segundo plano solo se consulta, no se cambia nada); lo rápido respondelo vos ahora. Cuando pida algo así («poneme una alarma», «llamá a…», «escribile a… que…», «abrí…», «llevame a…»), usala EN ESA MISMA RESPUESTA, sin pedir permiso: la orden ya es la confirmación. Para llamar o escribir pasá el nombre del contacto, nunca un número. Si falta un dato, preguntá una sola cosa. Después, en una frase y en pasado: «Listo, puse la alarma a las 6:30».`;
+    if (esSuper && modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget') extra += `\n\nTENÉS LA HERRAMIENTA «telefono» para hacer cosas en el celular del dueño${cuerpo?.nativa === true ? '' : ' (ahora está en el navegador: solo llamar, escribir, calendario, mapa y enlaces, con un botón; alarmas, temporizador, abrir apps, música, linterna y ajustes solo se pueden desde la app del teléfono)'}: alarmas, temporizadores, abrir apps, llamar, WhatsApp, mensajes de texto, calendario, mapa, música, linterna, ajustes y enlaces. Si dice «mirá esto», «fijate en esto» o algo parecido, usá la herramienta «mirar» para abrirle la cámara. Para trabajos de VARIOS pasos que tardan (investigar precios en internet, revisar varios módulos y armar un informe, el cierre del día, qué comprar esta semana) usá «encargar_tarea»: lo hacés vos solo en segundo plano y le avisás cuando termine (en segundo plano solo se consulta, no se cambia nada); lo rápido respondelo vos ahora. Si pide CAMBIAR o AGREGAR algo en la app o en la página (un color, un texto, un botón, un campo, un arreglo), usá «proponer_codigo»: lo hacés vos solo en segundo plano y abrís un Pull Request que él revisa (nunca se fusiona solo). Cuando pida algo así («poneme una alarma», «llamá a…», «escribile a… que…», «abrí…», «llevame a…»), usala EN ESA MISMA RESPUESTA, sin pedir permiso: la orden ya es la confirmación. Para llamar o escribir pasá el nombre del contacto, nunca un número. Si falta un dato, preguntá una sola cosa. Después, en una frase y en pasado: «Listo, puse la alarma a las 6:30».`;
 
     // El panel va a DECIR la respuesta en voz alta (manos libres, o «cuando hablo»):
     // más corta y sin formato, para que suene como una persona y empiece rápido.

@@ -50,6 +50,7 @@ import { grabarNotaDeVoz, puedeGrabarVoz } from '../../utils/grabadorVoz';
 import type { GrabacionEnCurso } from '../../utils/grabadorVoz';
 import { aparatoActual } from '../../seguridad/killSwitch';
 import { separarPrivados, restaurarPrivados } from '../../utils/privados';
+import { partirLinea } from '../../utils/formatoLinea';
 import { Orbe, Pensando, IconoConstelacion, areaDe, saludo } from './JarvisVisual';
 
 /** Abre un módulo del panel en su pestaña (lo da AdminPanel). */
@@ -410,13 +411,13 @@ function Formato({ texto }: { texto: string }) {
   );
 }
 function Linea({ t }: { t: string }) {
-  const partes = t.split(/(\*\*[^*]+\*\*|`[^`]+`)/g);
   return (
     <>
-      {partes.map((p, i) =>
-        p.startsWith('**') && p.endsWith('**') && p.length > 4 ? <strong key={i}>{p.slice(2, -2)}</strong>
-          : p.startsWith('`') && p.endsWith('`') && p.length > 2 ? <code key={i}>{p.slice(1, -1)}</code>
-            : <React.Fragment key={i}>{p}</React.Fragment>)}
+      {partirLinea(t).map((p, i) =>
+        p.tipo === 'negrita' ? <strong key={i}>{p.texto}</strong>
+          : p.tipo === 'codigo' ? <code key={i}>{p.texto}</code>
+            : p.tipo === 'enlace' ? <React.Fragment key={i}><a href={p.url} target="_blank" rel="noopener noreferrer">{p.texto}</a>{p.cola}</React.Fragment>
+              : <React.Fragment key={i}>{p.texto}</React.Fragment>)}
     </>
   );
 }
