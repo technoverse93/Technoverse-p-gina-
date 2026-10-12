@@ -931,7 +931,10 @@ async function modelosCompatibles(p: Compatible): Promise<string[]> {
   const pedido = p.modelo;
   if (!lista.length) return [pedido];
   const orden = [...lista].sort((a, b) => rangoAbierto(a) - rangoAbierto(b)).filter(n => rangoAbierto(n) < 999);
-  return [...new Set([...(lista.includes(pedido) ? [pedido] : []), ...orden])].slice(0, 3);
+  const elegidos = [...new Set([...(lista.includes(pedido) ? [pedido] : []), ...orden])];
+  // Si el modelo pedido ya no está (OpenRouter lo pasó a pago: «unavailable for free») y ninguno de los
+  // conocidos aparece, se usan los que el proveedor SÍ ofrece, en vez de insistir con el que da 404.
+  return (elegidos.length ? elegidos : lista).slice(0, 3);
 }
 /** Modelos especialistas en programar de un proveedor (Qwen3-Coder, etc.),
  *  del más grande al más chico. Salen del mismo catálogo /models. */
@@ -1428,8 +1431,12 @@ async function probarSalud(admin: any): Promise<Prueba[]> {
   for (const p of cadena) {
     pruebas.push(medir(`ia:${p.id}`, async () => {
       const ms = p.id === 'groq' && p.clave ? await modelosGroq(p.clave) : await modelosCompatibles(p).catch(() => [p.modelo]);
-      return chat(p, ms.find(x => !PIENSA.test(x)) || ms[0] || p.modelo, 20000);
-    }));
+      // Para medir si el proveedor responde, un modelo que NO piensa (Kimi K3 en NVIDIA gratis tiene fila
+      // y piensa largo: daba «no respondió a tiempo» aunque el proveedor funcionara).
+      const catalogo = [...(catalogos.get(p.id)?.lista || [])].sort((a, b) => rangoAbierto(a) - rangoAbierto(b));
+      const rapido = ms.find(x => !PIENSA.test(x)) || catalogo.find(x => rangoAbierto(x) < 999 && !PIENSA.test(x)) || ms[0] || p.modelo;
+      return chat(p, rapido, 25000);
+    }, 27000));
   }
   // La principal (Kimi K3): piensa, así que tiene más margen.
   pruebas.push(medir('ia:principal', async () => {
@@ -1441,10 +1448,17 @@ async function probarSalud(admin: any): Promise<Prueba[]> {
   const claveG = Deno.env.get('GEMINI_API_KEY');
   if (claveG) {
     pruebas.push(medir('ia:gemini', async () => {
-      const r = await conTope(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': claveG },
+      const pedir = (m: string) => conTope(`https://generativelanguage.googleapis.com/v1beta/models/${m}:generateContent`, { method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': claveG },
         body: JSON.stringify({ contents: [{ role: 'user', parts: [{ text: 'Respondé solo con la palabra: listo' }] }], generationConfig: { temperature: 0, maxOutputTokens: 200 } }) }, 20000);
-      if (!r.ok) throw new Error(`${r.status} ${(await r.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 110)}`.trim());
-      return { modelo: GEMINI_MODEL };
+      const r = await pedir(GEMINI_MODEL);
+      if (r.ok) return { modelo: GEMINI_MODEL };
+      // 503 «high demand» / 429: Google está saturado con ese modelo. Phill en ese caso usa el de respaldo:
+      // si ese responde, Gemini funciona (no es una falla de la app).
+      if (r.status === 503 || r.status === 429) {
+        const r2 = await pedir(GEMINI_RESPALDO);
+        if (r2.ok) return { modelo: GEMINI_RESPALDO, detalle: `el principal está saturado en Google (${r.status}); responde el de respaldo` };
+      }
+      throw new Error(`${r.status} ${(await r.text().catch(() => '')).replace(/\s+/g, ' ').slice(0, 110)}`.trim());
     }));
     pruebas.push(medir('vectores', async () => {
       const modelo = Deno.env.get('GEMINI_EMBED_MODEL') || 'gemini-embedding-001';

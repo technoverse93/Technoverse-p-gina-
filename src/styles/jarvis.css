@@ -56,7 +56,11 @@
 /* ---------- Orbe: la constelación-logo de Phill ---------- */
 .jv-orbe { flex: none; display: block; overflow: visible; }
 .jv-orbe .f { fill: none; stroke: var(--jv-acento); stroke-width: 1.1; opacity: .45; }
-.jv-orbe .p { fill: none; stroke: var(--jv-oro); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 3 140; animation: jv-senal 2.8s linear infinite; }
+/* La señal da dos vueltas al aparecer y se queda quieta: animada sin fin (botón flotante, cabecera)
+   repintaba la pantalla 60 veces por segundo con la app quieta y el teléfono iba lento. Solo sigue
+   girando en el orbe de manos libres, mientras Phill escucha o habla. */
+.jv-orbe .p { fill: none; stroke: var(--jv-oro); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 3 140; animation: jv-senal 2.8s linear 2; }
+.jv-hud-orbe .jv-orbe .p { animation-iteration-count: infinite; }
 .jv-orbe .p.b { animation-delay: -1.4s; stroke: var(--jv-acento); }
 .jv-orbe circle { fill: var(--jv-acento); }
 .jv-orbe circle.c { fill: var(--jv-tinta); }

@@ -150,7 +150,13 @@ export default function OyePhillAjustes() {
     await oyePhill.abrirAjuste(cual);
   };
 
-  const guardar = async (cambio: { frases?: string[]; sensibilidad?: Sens }) => { setE(await oyePhill.configurar(cambio)); };
+  /** Guarda y devuelve el estado que quedó (null si no se pudo: la pantalla sigue con lo que tenía). */
+  const guardar = async (cambio: { frases?: string[]; sensibilidad?: Sens }): Promise<EstadoOye | null> => {
+    const x = await oyePhill.configurar(cambio);
+    if (x) setE(x);
+    else setAviso({ tipo: 'error', texto: 'No se pudo guardar en el teléfono. Probá de nuevo; si sigue, cerrá y abrí la app.' });
+    return x;
+  };
 
   const agregar = async (texto: string) => {
     setAviso(null);
@@ -159,11 +165,14 @@ export default function OyePhillAjustes() {
     const actuales = e?.frases || [];
     const lista = frasesValidas([...actuales, f]);
     if (lista.length === actuales.length) { setAviso({ tipo: 'error', texto: actuales.length >= FRASES_MAX ? `Ya hay ${FRASES_MAX} formas: borrá alguna para agregar otra.` : 'Esa forma ya está.' }); return; }
-    await guardar({ frases: lista });
+    const x = await guardar({ frases: lista });
+    if (!x) return;
+    // Lo que el teléfono dice que quedó guardado (no lo que se mandó).
+    if (!x.frases.some(g => limpiarFrase(g) === f)) { setAviso({ tipo: 'error', texto: `El teléfono no aceptó «${f}». Usá de ${FRASE_MIN_PALABRAS} a ${FRASE_MAX_PALABRAS} palabras de al menos dos letras.` }); return; }
     setNueva('');
     const v = await oyePhill.vocabulario([f]);
-    if (v.sabe && v.desconocidas.length) setAviso({ tipo: 'error', texto: `Al oído no le suena «${v.desconocidas.join('», «')}»: esa forma no se va a usar. Probá con «Probar» y agregá lo que entiende.` });
-    else setAviso({ tipo: 'ok', texto: `Agregado: «${f}».` });
+    if (v.sabe && v.desconocidas.length) setAviso({ tipo: 'error', texto: `Guardado «${f}», pero el oído no conoce «${v.desconocidas.join('», «')}» y no la va a reconocer. Escribila como suena (por ejemplo «fil» en vez de «Phill») o usá «Probar» y tocá «Usar» en lo que oyó.` });
+    else setAviso({ tipo: 'ok', texto: `Guardado: «${f}». Ya podés llamarlo así.` });
   };
 
   const quitar = async (f: string) => {

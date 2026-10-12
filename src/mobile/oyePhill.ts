@@ -86,8 +86,9 @@ export const oyePhill = {
       return { sabe: !!r.sabe, conocidas: r.conocidas || [], desconocidas: r.desconocidas || [] };
     } catch { return { sabe: false, conocidas: [], desconocidas: [] }; }
   },
-  async configurar(o: { frases?: string[]; sensibilidad?: number }): Promise<EstadoOye> {
-    try { return aEstado(await P.configurar(o)); } catch { return ESTADO_VACIO; }
+  /** Devuelve el estado nuevo, o null si no se pudo guardar (el que llama conserva el que tenía). */
+  async configurar(o: { frases?: string[]; sensibilidad?: number }): Promise<EstadoOye | null> {
+    try { const r = await P.configurar(o); return r && r.ok !== false ? aEstado(r) : null; } catch { return null; }
   },
   async iniciar(): Promise<Resp & { estado?: EstadoOye }> {
     try { const r = await P.iniciar(); return { ok: !!r.ok, error: r.error, estado: aEstado(r) }; } catch { return mal('No se pudo activar.'); }

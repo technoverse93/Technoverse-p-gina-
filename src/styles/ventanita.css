@@ -126,7 +126,9 @@ html.tv-ventanita #root { height: 100%; }
   left: 10px;
   right: 10px;
   bottom: calc(10px + env(safe-area-inset-bottom, 0px));
-  height: min(176px, 40dvh);
+  /* En la APK nueva la ventana mide solo esta franja de abajo (~260 dp): el panel
+     la llena; en una APK vieja (ventana a pantalla completa) queda de 176 px. */
+  height: min(176px, calc(100dvh - 24px - env(safe-area-inset-bottom, 0px)));
   border-radius: 26px;
   box-shadow: 0 14px 44px rgba(0, 0, 0, .34);
 }
@@ -184,7 +186,10 @@ html.tv-ventanita #root { height: 100%; }
 /* Lo último dicho: si ya contestó, solo su respuesta. */
 .vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-vos:has(+ .jv-hud-jarvis) { display: none; }
 .vj-hoja[data-oye] .ai-root[data-jarvis] :is(.jv-hud-vos, .jv-hud-jarvis) small { display: none; }
-/* Terminar y «Mirá esto»: solo el ícono, arriba a la derecha. */
+/* «Mirá esto» (la cámara) no entra en un panel tan chico: se usa desde la app. */
+/* `!important`: una regla global pone `display: inline-flex !important` a todo botón con ícono. */
+.vj-hoja[data-oye] .ai-root[data-jarvis] .jv-hud-cam { display: none !important; }
+/* Terminar: solo el ícono, arriba a la derecha. */
 .vj-hoja[data-oye] .ai-root[data-jarvis] :is(.jv-hud-x, .jv-hud-cam) {
   position: absolute;
   top: 10px;
