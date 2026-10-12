@@ -1961,6 +1961,10 @@ export async function atender(req: Request): Promise<Response> {
     // siguen igual que en la app.
     if (cuerpo?.desde === 'widget') extra += `\n\nESTÁS EN EL MINI-WIDGET DEL TELÉFONO (un recuadro chico en la pantalla de inicio, que muchas veces se escucha en voz alta): respondé corto y directo, de 1 a 4 frases, sin tablas ni títulos. Las cifras, completas. Si preparás una acción que pide confirmación, decí en una frase qué preparaste: el dueño la confirma tocando «Abrir conversación» en el widget.`;
 
+    // El panel va a DECIR la respuesta en voz alta (manos libres, o «cuando hablo»):
+    // más corta y sin formato, para que suene como una persona y empiece rápido.
+    if (esSuper && cuerpo?.hablado === true && cuerpo?.desde !== 'widget') extra += `\n\nTU RESPUESTA SE VA A DECIR EN VOZ ALTA (el dueño te escucha, no te lee): hablá como una persona, en frases cortas y naturales, de 1 a 4 oraciones. Empezá directo por lo que pidió, sin saludar ni repetir la pregunta. Nada de tablas, viñetas, títulos, negritas, enlaces ni emojis. Las cifras, completas y como se dicen («182 mil colones», «6 ventas»). Si hay mucho detalle, decí lo principal y que el resto queda en pantalla. Si preparaste una acción o una tarjeta, decí en una frase qué preparaste.`;
+
     // ---------------------------------------------------------------
     // Conversación con la IA. `emitir` manda eventos en vivo si el panel
     // los pidió; si no, no hace nada y al final se responde con JSON.
@@ -2312,7 +2316,7 @@ export async function atender(req: Request): Promise<Response> {
       ].join('\n').slice(0, 14000) || '(no se consultaron datos: es conversación o conocimiento general)';
       let actual = r.texto, cambios: string[] = [], quien = '';
       const gastoRev = { in: 0, out: 0 };
-      emitir('estado', { texto: 'Revisando la respuesta…' });
+      emitir('estado', { texto: 'Revisando la respuesta…', respuestaLista: true });
       for (let vuelta = 0; vuelta < 2 && Date.now() < hasta - 3000; vuelta++) {
         const v = await llamarRevisor(`PREGUNTA:\n${texto}\n\nDATOS:\n${datos}\n\nRESPUESTA:\n${actual}`, String(r.proveedor), hasta, gastoRev, String(r.modelo || '')).catch(() => null);
         if (!v || v.veredicto === 'ok') { if (v) quien = v.quien; break; }
@@ -2333,7 +2337,7 @@ export async function atender(req: Request): Promise<Response> {
       if (quien) {
         const corregida = actual !== r.texto;
         const marca: Consulta = { tipo: 'revision', modulo: 'Revisión', desc: quien, filas: corregida ? 'corregida' : 'aprobada', detalle: `${cambios.length ? cambios.join(' · ').slice(0, 300) : corregida ? 'Respuesta corregida' : 'Sin cambios'} · ${(gastoRev.in + gastoRev.out).toLocaleString('es-CR')} tokens` };
-        if (corregida) { emitir('reinicio', {}); emitir('texto', { delta: actual }); }
+        if (corregida) { emitir('reinicio', { correccion: true }); emitir('texto', { delta: actual }); }
         emitir('consulta', marca);
         salida.res = { ...salida.res, texto: actual, consultas: [...r.consultas, marca] };
         salida.sis.consultas.push(marca);

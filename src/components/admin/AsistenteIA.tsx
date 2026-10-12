@@ -31,7 +31,7 @@ import type { FaseManos } from './HudVoz';
 import type { PiezaChat } from './PiezaPauta';
 import { lector, modoLectura, paraHablar, puedeHablar } from '../../utils/lectorVoz';
 import { nivelVoz } from '../../utils/nivelVoz';
-import { esDespedida, saludoManos } from '../../utils/manosLibres';
+import { ESPERA_RELLENO_MS, esDespedida, fraseRelleno, PAUSAS_MS, pausaElegida, saludoManos } from '../../utils/manosLibres';
 const MiniWidgetAjustes = React.lazy(() => import('./MiniWidgetAjustes'));
 import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../../supabaseClient';
 import { cabeceraClientInfo } from '../../utils/dispositivo';
@@ -963,6 +963,14 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     const nuevoId = () => (crypto as any).randomUUID?.() || 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, c => { const r = Math.random() * 16 | 0; return (c === 'x' ? r : (r & 0x3) | 0x8).toString(16); });
     const idPregunta = nuevoId(), idRespuesta = nuevoId();
     pedidoActual.current = { idPregunta, idRespuesta };
+    // ¿Se va a decir la respuesta? Si sí, se habla MIENTRAS llega (oración por
+    // oración) en vez de esperar a que termine de escribirse.
+    const lectura = modoLectura();
+    const hablarla = manosRef.current || lectura === 'siempre' || (lectura === 'voz' && !!(opciones.audio || opciones.porVoz));
+    const flujo = hablarla ? lector.abrirFlujo(idRespuesta) : null;
+    // En manos libres, si todavía no salió nada a los ~2.6 s (está consultando), una frase corta llena el silencio.
+    let relleno: ReturnType<typeof setTimeout> | 0 = flujo && manosRef.current ? setTimeout(() => flujo.decir(fraseRelleno()), ESPERA_RELLENO_MS) : 0;
+    const sinRelleno = () => { if (relleno) { clearTimeout(relleno); relleno = 0; } };
     let convDelPedido: string | null = activa;
     const recuperar = () => {
       // La conexión se cortó: el servidor igual termina y guarda. Se busca
@@ -993,7 +1001,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
         {
           accion: 'enviar', texto: opciones.audio ? '' : t, conversacionId: activa, idPregunta, idRespuesta, buscar: buscar && busquedaPermitida, regenerar, adjuntos: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
           // Phill: el aparato propio va para que nunca proponga bloquearse a sí mismo.
-          ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, privados: sep.privados, ...(opciones.audio ? { audio: opciones.audio.datos, tipoAudio: opciones.audio.tipo } : {}), yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
+          ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, hablado: hablarla || undefined, privados: sep.privados, ...(opciones.audio ? { audio: opciones.audio.datos, tipoAudio: opciones.audio.tipo } : {}), yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
         },
         (evento, d) => {
           if (evento === 'inicio') {
@@ -1004,11 +1012,11 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             if (d.privados && typeof d.privados === 'object') privadosRef.current = { ...privadosRef.current, ...d.privados };
             return;
           }
-          if (evento === 'texto') { borrador.texto += d.delta || ''; borrador.estado = undefined; }
-          else if (evento === 'estado') borrador.estado = d.texto;
+          if (evento === 'texto') { borrador.texto += d.delta || ''; borrador.estado = undefined; sinRelleno(); flujo?.agregar(d.delta || ''); }
+          else if (evento === 'estado') { borrador.estado = d.texto; if (d.respuestaLista) flujo?.completo(); }
           else if (evento === 'consulta') borrador.consultas = [...(borrador.consultas || []), d];
           else if (evento === 'modelo') borrador.modelo = d.modelo;
-          else if (evento === 'reinicio') { borrador.texto = ''; borrador.consultas = []; borrador.estado = 'Cambiando a otro modelo…'; }
+          else if (evento === 'reinicio') { borrador.texto = ''; borrador.consultas = []; borrador.estado = d.correccion ? 'Corrigiendo la respuesta…' : 'Cambiando a otro modelo…'; flujo?.reiniciar(!!d.correccion); }
           else if (evento === 'propuesta') {
             // La tarjeta se pinta ya con lo que llegó; después se relee de la base.
             tarjetasVivas.set(d.id, { id: d.id, estado: d.estado, vence_en: d.venceEn, tarjeta: d.tarjeta });
@@ -1023,10 +1031,12 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
       );
       if (programado) cancelAnimationFrame(programado);
       if (!res && !control.signal.aborted && recuperar()) {
+        flujo?.cerrar(); // se cortó la conexión: se dice lo que ya había llegado
         setMensajes(prev => prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false } : m)));
         return;
       }
       if (!res?.ok) {
+        flujo?.cancelar();
         if (res?.cupo) setCupo(res.cupo);
         setMensajes(prev => prev.filter(m => !m.pendiente && m.id !== BORRADOR));
         setTexto(crudo);
@@ -1036,11 +1046,8 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
       }
       setMensajes(prev => [...prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false, ...(res.pregunta ? { texto: res.pregunta } : {}) } : m)), { id: `a-${Date.now()}`, ...res.mensaje }]);
       setCupo(res.cupo);
-      // Respuesta hablada: siempre, o cuando la pregunta fue por voz.
-      const lectura = modoLectura();
-      if (res.mensaje?.texto && (manosRef.current || lectura === 'siempre' || (lectura === 'voz' && (opciones.audio || opciones.porVoz)))) {
-        void lector.hablar(res.mensaje.texto, res.mensaje.id || `a-${Date.now()}`);
-      }
+      // Respuesta hablada: lo que faltaba por decir (o todo, si nunca llegó en vivo).
+      flujo?.cerrar(res.mensaje?.texto);
       if (manosRef.current && esDespedida(opciones.audio ? (res.pregunta || '') : crudo)) despedir.current = true;
       if (onRespuesta && res.mensaje?.texto) {
         // Con los datos reales en vez de las marcas del carril privado: es la pantalla del dueño.
@@ -1053,19 +1060,24 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     } catch (e: any) {
       if (programado) cancelAnimationFrame(programado);
       if (control.signal.aborted) {
+        flujo?.cancelar();
         // Detenido: la conversación vuelve a como estaba y el texto a la caja.
         setMensajes(antes);
         setTexto(manosRef.current && opciones.audio ? '' : t);
         setAviso({ tipo: 'respaldo', texto: 'Respuesta detenida.' });
       } else if (recuperar()) {
+        flujo?.cerrar();
         setMensajes(prev => prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false } : m)));
       } else {
+        flujo?.cancelar();
         setMensajes(prev => prev.filter(m => !m.pendiente && m.id !== BORRADOR));
         setTexto(crudo);
         setAviso({ tipo: 'error', texto: 'No se pudo enviar. Revisa la conexión e intenta de nuevo.' });
         if (manosRef.current) setManos(false);
       }
     } finally {
+      sinRelleno();
+      flujo?.cerrar(); // red de seguridad: un flujo abierto dejaría al lector «hablando» para siempre
       cortar.current = null;
       setEnviando(false);
     }
@@ -1091,7 +1103,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
       // En manos libres la grabación avisa el volumen (para el orbe) y se
       // corta sola cuando hacés una pausa después de hablar.
       grabacion.current = await grabarNotaDeVoz(auto ? {
-        alNivel: n => nivelVoz.fijar(n, 'mic'), silencioMs: 1500, esperaMs: 9000,
+        alNivel: n => nivelVoz.fijar(n, 'mic'), silencioMs: PAUSAS_MS[pausaElegida()], esperaMs: 9000,
         alPausa: por => { if (por === 'fin') void terminarVozRef.current(); else nadieHabloRef.current(); },
       } : {});
       grabandoManos.current = auto;
@@ -1167,7 +1179,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     if (vista !== 'chat') { setManos(false); return; }
     if (voz || enviando || hablandoTexto || agotado) return;
     if (despedir.current) { despedir.current = false; setManos(false); return; }
-    const t = setTimeout(() => { void empezarVozRef.current(); }, 450);
+    const t = setTimeout(() => { void empezarVozRef.current(); }, 220);
     return () => clearTimeout(t);
   }, [manos, voz, enviando, hablandoTexto, vista, agotado]); // eslint-disable-line react-hooks/exhaustive-deps
   // Al salir del modo: se corta lo que se estuviera grabando solo y el orbe se apaga.
