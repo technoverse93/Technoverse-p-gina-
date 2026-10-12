@@ -10,24 +10,24 @@
     <title>Phill</title>
 
     <!-- Ventanita del mini-widget de Phill (src/rapido.tsx). El fondo es
-         transparente: detrás se ve la pantalla de inicio del teléfono. La
-         hoja de abajo se pinta YA, antes de que llegue el código, para que
-         el toque al widget tenga respuesta inmediata. -->
+         transparente: detrás sigue a la vista lo que había (la pantalla de
+         inicio, YouTube…). Mientras llega el código se pinta YA una pastillita
+         abajo, para que el llamado tenga respuesta inmediata SIN tapar nada
+         (antes era una hoja grande que cubría casi toda la pantalla). -->
     <style>
       html.tv-ventanita, html.tv-ventanita body { background: transparent !important; background-image: none !important; margin: 0; }
-      .vj-pre { position: fixed; left: 8px; right: 8px; top: calc(clamp(10px, 9vh, 72px) + env(safe-area-inset-top, 0px)); bottom: calc(8px + env(safe-area-inset-bottom, 0px)); border-radius: 22px; background: #fff; box-shadow: 0 24px 60px rgba(0, 0, 0, .3); display: grid; grid-template-rows: 46px 1fr; overflow: hidden; font-family: system-ui, sans-serif; }
-      .vj-pre-cab { display: flex; align-items: center; padding: 0 14px; font-size: 14px; font-weight: 600; color: #0f2a2e; background: #EAF2F3; border-bottom: 1px solid #D6E3E4; }
-      .vj-pre-puntos { display: flex; gap: 8px; align-items: center; justify-content: center; }
+      .vj-pre { position: fixed; left: 50%; transform: translateX(-50%); bottom: calc(14px + env(safe-area-inset-bottom, 0px)); height: 48px; padding: 0 20px; border-radius: 999px; background: rgba(234, 242, 243, .94); box-shadow: 0 10px 30px rgba(0, 0, 0, .28); display: flex; align-items: center; gap: 14px; font-family: system-ui, sans-serif; }
+      .vj-pre-cab { font-size: 14px; font-weight: 600; color: #0f2a2e; }
+      .vj-pre-puntos { display: flex; gap: 7px; align-items: center; }
       .vj-pre-puntos i { width: 8px; height: 8px; border-radius: 50%; background: #0C6C78; animation: vj-pre 1.1s ease-in-out infinite; }
       .vj-pre-puntos i:nth-child(2) { animation-delay: .15s; }
       .vj-pre-puntos i:nth-child(3) { animation-delay: .3s; }
       @keyframes vj-pre { 0%, 100% { opacity: .3; } 50% { opacity: 1; } }
       @media (prefers-color-scheme: dark) {
-        .vj-pre { background: #161B19; }
-        .vj-pre-cab { background: #1D2421; color: #E7EFEC; border-bottom-color: #26302C; }
+        .vj-pre { background: rgba(22, 27, 25, .94); }
+        .vj-pre-cab { color: #E7EFEC; }
         .vj-pre-puntos i { background: #4FD1C5; }
       }
-      @media (min-width: 640px) { .vj-pre { left: 0; right: 0; margin: 0 auto; width: min(520px, calc(100vw - 32px)); } }
       @media (prefers-reduced-motion: reduce) { .vj-pre-puntos i { animation: none; } }
     </style>
   </head>
