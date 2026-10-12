@@ -9,6 +9,7 @@ import android.graphics.Color;
 import android.graphics.drawable.ColorDrawable;
 import android.os.Bundle;
 import android.speech.RecognizerIntent;
+import android.view.Gravity;
 import android.view.View;
 import android.view.Window;
 import android.view.WindowManager;
@@ -214,18 +215,30 @@ public class JarvisRapido extends BridgeActivity {
         return (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK) == Configuration.UI_MODE_NIGHT_YES;
     }
 
-    /** Cuánto se oscurece y si la ventana recibe toques, según el modo. */
+    /** Alto de la ventana al llamarlo («oye»): el panel de abajo y su margen (dp). */
+    static final int ALTO_LLAMADO_DP = 260;
+
+    /**
+     * Tamaño de la ventana y si recibe toques, según el modo. NUNCA se oscurece lo de
+     * atrás (lo pidió el dueño: se tiene que seguir viendo y usando lo que había,
+     * WhatsApp, YouTube o el escritorio).
+     *  · «oye»: la ventana mide solo el panel de abajo y deja pasar los toques de
+     *    afuera (FLAG_NOT_TOUCH_MODAL): arriba se sigue usando la app que estaba.
+     *  · los demás: a pantalla completa y transparente (tocar afuera de la hoja la cierra).
+     */
     private void aplicarModo() {
         Window ventana = getWindow();
-        ventana.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
-        if ("voz".equals(modo) || "oye".equals(modo) || ("escribir".equals(modo) && marco != null)) {
-            // Por voz no se ve nada; al llamarlo, un panel chico abajo; al escribir
-            // sobre el widget, el chat ocupa su recuadro. En los tres, lo de atrás
-            // queda tal cual (sin oscurecer), para ver lo que Phill hace.
-            ventana.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        ventana.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
+            | WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        if ("oye".equals(modo)) {
+            float d = getResources().getDisplayMetrics().density;
+            ventana.setGravity(Gravity.BOTTOM);
+            ventana.setLayout(WindowManager.LayoutParams.MATCH_PARENT, Math.round(ALTO_LLAMADO_DP * d));
+            ventana.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
         } else {
-            ventana.addFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-            ventana.setDimAmount("escribir".equals(modo) ? 0.3f : 0.5f);
+            ventana.setGravity(Gravity.FILL);
+            ventana.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
+            ventana.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
         }
     }
 
@@ -233,6 +246,7 @@ public class JarvisRapido extends BridgeActivity {
     void soltar() {
         Window ventana = getWindow();
         ventana.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
+        if ("oye".equals(modo)) return; // al llamarlo, el panel sigue tocable (Terminar, tocar el orbe)
         ventana.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
     }
 

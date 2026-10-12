@@ -281,7 +281,13 @@ public class OyePhillPlugin extends Plugin {
         }
         Integer sens = call.getInt("sensibilidad");
         if (sens != null) OyePrefs.fijarSensibilidad(c, sens.intValue());
-        OyePhillService.reconfigurar(c);
+        // Lo guardado ya quedó guardado: si avisarle al servicio falla (Android no deja
+        // despertarlo en ese momento), lo toma la próxima vez que arranque.
+        try {
+            OyePhillService.reconfigurar(c);
+        } catch (Throwable t) {
+            /* el servicio relee las frases al arrancar */
+        }
         call.resolve(estadoJs());
     }
 
