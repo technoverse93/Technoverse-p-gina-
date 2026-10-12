@@ -1783,7 +1783,7 @@ export async function atender(req: Request): Promise<Response> {
       if (audio.length > 8_000_000 || !/^audio\//.test(tipoAudio)) return responder({ ok: false, error: 'Audio no válido o demasiado largo.' }, 400);
       const dicho = await transcribir(audio, tipoAudio);
       if (dicho === null) return responder({ ok: false, error: 'Google no pudo transcribir ahora (servicio saturado). Probá de nuevo en un momento o escribilo.' }, 503);
-      if (!dicho.trim()) return responder({ ok: false, error: 'No escuché ninguna voz en la grabación. Hablá más cerca del micrófono y probá de nuevo.' }, 422);
+      if (!dicho.trim()) return responder({ ok: false, codigo: 'sin_voz', error: 'No escuché ninguna voz en la grabación. Hablá más cerca del micrófono y probá de nuevo.' }, 422);
       texto = dicho.trim().slice(0, MAX_TEXTO);
       transcrito = true;
     }
