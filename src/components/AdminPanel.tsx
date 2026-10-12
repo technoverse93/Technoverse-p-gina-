@@ -1082,8 +1082,10 @@ export default function AdminPanel({
 
   if (!isAuthenticated || !currentUser || currentUser.role === 'Cliente') {
     return (
-      <div className="min-h-dvh bg-[var(--bg-base)] flex items-center justify-center">
-        <div className="animate-pulse text-[var(--text-secondary)] text-sm font-mono">Redireccionando al portal unificado...</div>
+      // Mientras se confirma la sesión (o se pide la huella) solo se ve un
+      // fondo liso con un indicador: nada de la tienda ni textos de paso.
+      <div className="min-h-dvh bg-[var(--bg-base,#0F1217)] flex items-center justify-center" role="status" aria-label="Entrando al panel">
+        <div className="w-8 h-8 rounded-full border-2 border-current border-t-transparent animate-spin opacity-60 text-[var(--text-secondary)]" />
       </div>
     );
   }
