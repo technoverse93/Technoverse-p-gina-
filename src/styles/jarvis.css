@@ -293,6 +293,27 @@ span.jv-tit:hover { background: transparent; }
 .ai-root[data-jarvis] .jv-gira { animation: jv-gira 1s linear infinite; }
 @keyframes jv-gira { to { transform: rotate(360deg); } }
 
+/* ---------- Manos libres (HUD del orbe) ---------- */
+.ai-root[data-jarvis] .jv-hud { position: absolute; inset: 0; z-index: 30; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 18px; padding: 56px 20px 28px; overflow: hidden auto;
+  background: radial-gradient(120% 80% at 50% 38%, var(--jv-cielo-1), var(--jv-cielo-2)); animation: jv-entra .22s ease-out; }
+.ai-root[data-jarvis] .jv-hud-x { position: absolute; top: calc(12px + env(safe-area-inset-top, 0px)); right: 14px; }
+.ai-root[data-jarvis] .jv-hud-orbe { --nivel: 0; --k: var(--jv-acento); position: relative; width: 168px; height: 168px; flex: none; display: grid; place-items: center; padding: 0; border: 0; border-radius: 50%; background: transparent; color: inherit; cursor: pointer; -webkit-tap-highlight-color: transparent; }
+.ai-root[data-jarvis] .jv-hud[data-fase="pensando"] .jv-hud-orbe, .ai-root[data-jarvis] .jv-hud[data-fase="espera"] .jv-hud-orbe { --k: var(--jv-oro); }
+.ai-root[data-jarvis] .jv-hud-orbe .jv-orbe { position: relative; transform: scale(calc(1 + var(--nivel) * .3)); transition: transform 70ms linear;
+  filter: drop-shadow(0 0 calc(4px + var(--nivel) * 24px) color-mix(in srgb, var(--k) 60%, transparent)); }
+.ai-root[data-jarvis] .jv-hud-aro { position: absolute; inset: 14px; border-radius: 50%; border: 1.5px solid var(--k); opacity: calc(.14 + var(--nivel) * .6); transform: scale(calc(.82 + var(--nivel) * .42)); transition: transform 70ms linear, opacity 70ms linear; }
+.ai-root[data-jarvis] .jv-hud-aro.dos { inset: 0; opacity: calc(.06 + var(--nivel) * .35); transform: scale(calc(.9 + var(--nivel) * .3)); }
+.ai-root[data-jarvis] .jv-hud[data-fase="pensando"] .jv-hud-aro { animation: jv-hud-pulso 1.5s ease-in-out infinite; }
+.ai-root[data-jarvis] .jv-hud[data-fase="pensando"] .jv-hud-aro.dos { animation-delay: -.75s; }
+@keyframes jv-hud-pulso { 0%, 100% { opacity: .15; transform: scale(.86); } 50% { opacity: .55; transform: scale(1.08); } }
+.ai-root[data-jarvis] .jv-hud-tx { width: 100%; max-width: 440px; min-width: 0; display: flex; flex-direction: column; align-items: center; gap: 6px; text-align: center; }
+.ai-root[data-jarvis] .jv-hud-estado { font: 600 13px var(--jv-f-astro); letter-spacing: .2em; text-transform: uppercase; color: var(--jv-tinta); }
+.ai-root[data-jarvis] .jv-hud-ayuda { font: 400 12px/1.4 var(--jv-f-ui); color: var(--jv-tenue); min-height: 1.4em; }
+.ai-root[data-jarvis] .jv-hud-vos, .ai-root[data-jarvis] .jv-hud-jarvis { align-self: stretch; margin: 6px 0 0; padding: 10px 12px; background: var(--jv-sup); border: 1px solid var(--jv-linea); border-radius: 14px; font: 400 13.5px/1.5 var(--jv-f-ui); color: var(--jv-tinta2); text-align: left; overflow-wrap: anywhere; max-height: 28dvh; overflow-y: auto; }
+.ai-root[data-jarvis] .jv-hud-jarvis { color: var(--jv-tinta); }
+.ai-root[data-jarvis] .jv-hud-vos small, .ai-root[data-jarvis] .jv-hud-jarvis small { display: block; margin-bottom: 2px; font: 600 10px var(--jv-f-astro); letter-spacing: .18em; text-transform: uppercase; color: var(--jv-tenue); }
+.ai-root[data-jarvis] .ai-ib[data-manos] { color: var(--jv-acento); }
+
 /* ---------- Cerebro a pantalla completa ---------- */
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ch { display: none; }
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ajustes { padding: 0; overflow: hidden; animation: none; }
@@ -300,7 +321,7 @@ span.jv-tit:hover { background: transparent; }
 @media (prefers-reduced-motion: reduce) {
   .jv-orbe .p, .jv-pensando .s { animation: none; }
   .ai-root[data-jarvis] .ai-msgs, .ai-root[data-jarvis] .ai-ajustes, .ai-root[data-jarvis] .ai-ia, .ai-root[data-jarvis] .ai-yo-g,
-  .ai-root[data-jarvis] .ai-acc, .ai-root[data-jarvis] .ai-cajon, .ai-root[data-jarvis] .jv-gira { animation: none; }
+  .ai-root[data-jarvis] .ai-acc, .ai-root[data-jarvis] .ai-cajon, .ai-root[data-jarvis] .jv-gira, .ai-root[data-jarvis] .jv-hud, .ai-root[data-jarvis] .jv-hud-aro { animation: none; }
 }
 
 /* Ajustes finos (prioridad sobre las reglas del panel con #admin-panel-root). */
