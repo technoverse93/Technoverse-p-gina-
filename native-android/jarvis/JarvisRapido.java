@@ -217,29 +217,69 @@ public class JarvisRapido extends BridgeActivity {
 
     /** Alto de la ventana al llamarlo («oye»): el panel de abajo y su margen (dp). */
     static final int ALTO_LLAMADO_DP = 260;
+    /** Alto de la barrita para escribir (sin el recuadro del widget), en dp. */
+    static final int ALTO_BARRA_DP = 140;
+    /** La conversación completa del widget («hoja»): como mucho esta parte de la pantalla, abajo. */
+    static final float PARTE_HOJA = 0.58f;
 
     /**
-     * Tamaño de la ventana y si recibe toques, según el modo. NUNCA se oscurece lo de
-     * atrás (lo pidió el dueño: se tiene que seguir viendo y usando lo que había,
-     * WhatsApp, YouTube o el escritorio).
-     *  · «oye»: la ventana mide solo el panel de abajo y deja pasar los toques de
-     *    afuera (FLAG_NOT_TOUCH_MODAL): arriba se sigue usando la app que estaba.
-     *  · los demás: a pantalla completa y transparente (tocar afuera de la hoja la cierra).
+     * REGLA DEL DUEÑO (2026-10-12): fuera de la app, Phill y el widget NUNCA tapan el
+     * teléfono con una página ni con algo oscuro. Se tiene que seguir viendo y usando lo
+     * que había (WhatsApp, YouTube, el escritorio). Por eso la ventana nunca oscurece y
+     * mide SOLO lo que Phill dibuja; los toques de afuera pasan a la app de atrás
+     * (FLAG_NOT_TOUCH_MODAL):
+     *  · «voz»: no se dibuja nada; la ventana no recibe toques (solo el cartel del dictado).
+     *  · «oye»: el panel de abajo (ALTO_LLAMADO_DP).
+     *  · «escribir» sobre el widget: exactamente el recuadro del widget.
+     *  · «escribir» sin recuadro: la barrita de abajo (ALTO_BARRA_DP).
+     *  · «hoja»: la mitad de abajo, como mucho (PARTE_HOJA).
+     * Con el teclado, la ventana sube sola (ADJUST_PAN) en vez de achicarse.
      */
     private void aplicarModo() {
         Window ventana = getWindow();
         ventana.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE
             | WindowManager.LayoutParams.FLAG_DIM_BEHIND);
-        if ("oye".equals(modo)) {
-            float d = getResources().getDisplayMetrics().density;
-            ventana.setGravity(Gravity.BOTTOM);
-            ventana.setLayout(WindowManager.LayoutParams.MATCH_PARENT, Math.round(ALTO_LLAMADO_DP * d));
-            ventana.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
-        } else {
+        ventana.setSoftInputMode(WindowManager.LayoutParams.SOFT_INPUT_ADJUST_PAN | WindowManager.LayoutParams.SOFT_INPUT_STATE_HIDDEN);
+        float d = getResources().getDisplayMetrics().density;
+        int anchoPantalla = getResources().getDisplayMetrics().widthPixels;
+        int altoPantalla = getResources().getDisplayMetrics().heightPixels;
+        WindowManager.LayoutParams lp = ventana.getAttributes();
+        lp.x = 0;
+        lp.y = 0;
+        if ("voz".equals(modo)) {
+            ventana.setAttributes(lp);
             ventana.setGravity(Gravity.FILL);
             ventana.setLayout(WindowManager.LayoutParams.MATCH_PARENT, WindowManager.LayoutParams.MATCH_PARENT);
-            ventana.clearFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+            ventana.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE | WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE);
+            return;
         }
+        ventana.addFlags(WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL);
+        if ("escribir".equals(modo) && marco != null) {
+            int izq = Math.max(0, marco.left);
+            int ancho = Math.min(marco.width(), anchoPantalla - izq);
+            ventana.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+            lp.x = izq;
+            lp.y = Math.max(0, marco.top);
+            ventana.setAttributes(lp);
+            ventana.setGravity(Gravity.TOP | Gravity.START);
+            ventana.setLayout(ancho, marco.height());
+            return;
+        }
+        ventana.clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+        int alto;
+        if ("oye".equals(modo)) alto = Math.round(ALTO_LLAMADO_DP * d);
+        else if ("escribir".equals(modo)) alto = Math.round(ALTO_BARRA_DP * d);
+        else alto = Math.round(altoPantalla * PARTE_HOJA);
+        ventana.setAttributes(lp);
+        ventana.setGravity(Gravity.BOTTOM);
+        ventana.setLayout(WindowManager.LayoutParams.MATCH_PARENT, alto);
+    }
+
+    /** La página cambió de modo (la barrita pasó a la conversación completa): la ventana se ajusta. */
+    void cambiarModo(String nuevo) {
+        if (!"voz".equals(nuevo) && !"escribir".equals(nuevo) && !"hoja".equals(nuevo) && !"oye".equals(nuevo)) return;
+        modo = nuevo;
+        aplicarModo();
     }
 
     /** Deja de tapar: los toques pasan a la pantalla de inicio mientras Phill contesta. */

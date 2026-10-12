@@ -49,6 +49,8 @@ interface PluginJarvisWidget {
   avisar(o: { texto: string }): Promise<void>;
   /** La ventanita deja de tapar: los toques pasan a la pantalla de inicio. */
   soltar(): Promise<void>;
+  /** La ventana se ajusta al modo nuevo (desde la versión 6 del puente). */
+  ajustar(o: { modo: ModoVentanita }): Promise<void>;
   addListener(evento: 'pedido', fn: (p: PedidoVentanita) => void): Promise<PluginListenerHandle>;
 }
 
@@ -108,5 +110,6 @@ export const widgetNativo = {
     }).catch(nada),
   avisar: (texto: string) => Plugin.avisar({ texto }).catch(nada),
   soltar: () => Plugin.soltar().catch(nada),
+  ajustar: (modo: ModoVentanita) => Plugin.ajustar({ modo }).catch(nada),
   alPedir: (fn: (p: PedidoVentanita) => void) => Plugin.addListener('pedido', fn),
 };
