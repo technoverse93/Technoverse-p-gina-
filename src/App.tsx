@@ -372,6 +372,11 @@ function AppInner() {
   }, []);
 
   const [autoOpenLogin, setAutoOpenLogin] = useState(false);
+  // La persona eligió «Entrar con contraseña» desde el candado de arranque: se deja ver la tienda con el
+  // acceso. Antes ese botón no podía quitar el candado (cerrar sesión con la huella activada solo vuelve a
+  // echar la llave), así que la tienda y el acceso quedaban TAPADOS y la pantalla parecía negra o blanca.
+  // La sesión guardada no se toca: sigue cerrada con llave y la huella la abre cuando se quiera.
+  const [candadoOmitido, setCandadoOmitido] = useState(false);
 
   const isAuthenticated = !!currentUser;
 
@@ -388,6 +393,7 @@ function AppInner() {
   }, [currentUser]);
 
   const handleLogin = (user: User) => {
+    setCandadoOmitido(false);
     setCurrentUser(user);
     window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: user } }));
     setAutoOpenLogin(false);
@@ -692,7 +698,7 @@ function AppInner() {
   // Ya no es exclusivo de la APK: en la web el bloqueo por inactividad
   // también deja el cerrojo puesto, y recargar la página no debe saltárselo.
   const arranqueFrioBloqueado =
-    sesionVerificada && !currentUser && sesionBloqueada();
+    sesionVerificada && !currentUser && sesionBloqueada() && !(candadoOmitido && currentView === 'store');
 
   // Sin ningún método para abrir el cerrojo (sin lector, sin PIN/patrón):
   //   · APK  → se suelta el cerrojo. Encerrar a la persona sin salida —lo
@@ -775,6 +781,8 @@ function AppInner() {
           onFalloTotal={() => {
             setRequiereReautenticacionRapida(false);
             handleLogout();
+            // `handleLogout` echa la llave; sin esto el candado de arranque aparecería enseguida y taparía el acceso.
+            setCandadoOmitido(true);
             setAutoOpenLogin(true);
           }}
           onSinMetodo={alNoHaberMetodo}
@@ -792,24 +800,25 @@ function AppInner() {
           `sesionBloqueada`, lo que ocurra). */}
       {arranqueFrioBloqueado && (
         <ReautenticacionRapidaOverlay
+          variante="arranque"
           email={(() => { try { return localStorage.getItem(CLAVE_ULTIMO_CORREO) || ''; } catch { return ''; } })()}
           onDesbloqueado={async ({ userId }) => {
             const perfil = await cargarPerfilCompleto(userId);
-            if (perfil) {
-              setCurrentUser(perfil);
-              marcarBloqueo(false);
-            } else {
-              // La huella se aprobó pero el perfil no se pudo leer (red
-              // caída justo en ese instante, por ejemplo). No se deja a la
-              // persona en un candado que ya aprobó pero no abre nada: se
-              // cae al mismo cierre real que un fallo de huella, y desde
-              // ahí puede entrar con su contraseña.
-              handleLogout();
-              setAutoOpenLogin(true);
+            if (!perfil) {
+              // La huella se aprobó pero el perfil no se pudo leer (red caída justo en ese instante, por ejemplo).
+              // NO se cierra la sesión ni se deja el candado a medias: la llave se vuelve a echar y el candado
+              // avisa para que se toque la huella otra vez (con la sesión viva no hace falta internet).
+              marcarBloqueo(true);
+              throw new Error('perfil-no-leido');
             }
+            setCurrentUser(perfil);
+            marcarBloqueo(false);
           }}
           onFalloTotal={() => {
-            handleLogout();
+            // «Entrar con contraseña»: se deja ver la tienda con el acceso abierto (ver `candadoOmitido`).
+            setCandadoOmitido(true);
+            try { window.history.replaceState(null, '', '/'); } catch { /* el estado alcanza */ }
+            setCurrentView('store');
             setAutoOpenLogin(true);
           }}
           onSinMetodo={async () => {

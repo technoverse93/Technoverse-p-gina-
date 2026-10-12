@@ -6,7 +6,8 @@ import {
   capacidadesDeDesbloqueo, entrarConBiometria, entrarConDesbloqueoLocal,
   CapacidadesDesbloqueo,
 } from '../../utils/biometria';
-import { esperaRestanteMs, longitudPinLocal } from '../../utils/desbloqueoLocal';
+import { esperaRestanteMs, longitudPinLocal, metodoDesbloqueoLocal } from '../../utils/desbloqueoLocal';
+import { esAplicacionNativa } from '../../utils/biometriaNativa';
 import TecladoPin from './TecladoPin';
 import PatronLock from './PatronLock';
 
@@ -18,14 +19,24 @@ interface Props {
    * antes—, pero el de ARRANQUE EN FRÍO (App.tsx) la necesita para poblar
    * `currentUser` desde cero.
    */
-  onDesbloqueado: (resultado: { userId?: string; email?: string }) => void;
-  /** Mismo efecto que "Cerrar sesión": cierre real y vuelta a la tienda pública. */
+  onDesbloqueado: (resultado: { userId?: string; email?: string }) => void | Promise<void>;
+  /**
+   * La persona no quiere (o no puede) abrir el cerrojo con la huella y pide entrar con su contraseña.
+   * La pantalla de arriba tiene que dejar ver el acceso: ver `candadoOmitido` en App.tsx.
+   */
   onFalloTotal: () => void;
   /**
    * Este aparato no tiene NINGÚN método para abrir el cerrojo: ni lector
    * biométrico disponible ni PIN/patrón configurado. Ver el bloque de abajo.
    */
   onSinMetodo: () => void;
+  /**
+   * «arranque»: la app se acaba de abrir y no hay nada que mostrar debajo (el candado es la pantalla).
+   * Antes se difuminaba lo que hubiera detrás: con el panel todavía sin mostrar eso era un fondo liso,
+   * negro o blanco según el tema, con un icono casi invisible («se queda en pantalla negra o blanca»).
+   * «sobre-pantalla»: se vuelve del segundo plano y se difumina lo que ya estaba en pantalla.
+   */
+  variante?: 'sobre-pantalla' | 'arranque';
 }
 
 type Modo = 'cargando' | 'biometria' | 'pin' | 'patron';
@@ -70,15 +81,30 @@ type Modo = 'cargando' | 'biometria' | 'pin' | 'patron';
  * pequeños para cambiar de método o cerrar sesión. Los avisos de error
  * son de una línea; una cancelación no muestra nada.
  */
-export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, onFalloTotal, onSinMetodo }: Props) {
+/** Lo que tarda como máximo cada paso que depende del teléfono: pasado esto, el candado no se queda esperando. */
+const LIMITE_CAPACIDADES_MS = 3500;
+const LIMITE_DIALOGO_HUELLA_MS = 45_000;
+
+/** Devuelve `valor` si `promesa` no responde (o falla) a tiempo. */
+function conLimite<T>(promesa: Promise<T>, ms: number, valor: T): Promise<T> {
+  return new Promise<T>(resolver => {
+    const t = setTimeout(() => resolver(valor), ms);
+    promesa.then(v => { clearTimeout(t); resolver(v); }, () => { clearTimeout(t); resolver(valor); });
+  });
+}
+
+export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, onFalloTotal, onSinMetodo, variante = 'sobre-pantalla' }: Props) {
   const [capacidades, setCapacidades] = useState<CapacidadesDesbloqueo | null>(null);
   const [modo, setModo] = useState<Modo>('cargando');
   const [fallo, setFallo] = useState<string | null>(null);
   const [verificando, setVerificando] = useState(false);
+  // Ya se aprobó el dedo y se está terminando de entrar (leer el perfil puede tardar con mala red).
+  const [entrando, setEntrando] = useState(false);
   const [pin, setPin] = useState('');
   const [esperaSeg, setEsperaSeg] = useState(0);
   const enCurso = useRef(false);
   const vigente = useRef(true);
+  const arranque = variante === 'arranque';
 
   useEffect(() => {
     vigente.current = true;
@@ -93,20 +119,40 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
     return () => clearInterval(id);
   }, [modo]);
 
+  /** Termina de entrar con lo que acaba de abrir el cerrojo, mostrando «Entrando…» mientras tanto. */
+  const terminarDeEntrar = async (resultado: { userId?: string; email?: string }) => {
+    setEntrando(true);
+    try {
+      await onDesbloqueado(resultado);
+    } catch {
+      if (vigente.current) setFallo('No se pudo abrir su sesión. Revise la conexión y toque para reintentar');
+    } finally {
+      if (vigente.current) setEntrando(false);
+    }
+  };
+
   const pedirHuella = async () => {
     if (enCurso.current) return;
     enCurso.current = true;
     setVerificando(true);
     setFallo(null);
     try {
-      const resultado = await entrarConBiometria(email);
+      // Si el diálogo del sistema nunca se dibuja ni responde, no se deja el botón apagado para siempre.
+      const resultado = await Promise.race([
+        entrarConBiometria(email),
+        new Promise<null>(r => setTimeout(() => r(null), LIMITE_DIALOGO_HUELLA_MS)),
+      ]);
       if (!vigente.current) return;
-      if (resultado.ok) {
-        onDesbloqueado({ userId: resultado.userId, email: resultado.email });
+      if (resultado === null) {
+        setFallo('No se confirmó la huella. Toque para reintentar');
+      } else if (resultado.ok) {
+        await terminarDeEntrar({ userId: resultado.userId, email: resultado.email });
       } else if (!resultado.cancelado) {
         setFallo(avisoCorto(resultado.mensaje));
       }
       // Cancelado: no se regaña. Los botones de abajo siguen ahí.
+    } catch {
+      if (vigente.current) setFallo('No se pudo verificar. Toque para reintentar');
     } finally {
       enCurso.current = false;
       if (vigente.current) setVerificando(false);
@@ -116,7 +162,14 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
   // Decide el método al montarse.
   useEffect(() => {
     (async () => {
-      const c = await capacidadesDeDesbloqueo();
+      // Si el teléfono no contesta si hay huella, el candado no se queda vacío para siempre: como el candado
+      // existe porque la huella estaba activada, se da por buena y se intenta (si no, se verá el error).
+      const alterno: CapacidadesDesbloqueo = {
+        biometria: esAplicacionNativa(),
+        metodoLocal: metodoDesbloqueoLocal(),
+        hayAlguno: true,
+      };
+      const c = await conLimite(capacidadesDeDesbloqueo(), LIMITE_CAPACIDADES_MS, alterno);
       if (!vigente.current) return;
       setCapacidades(c);
       if (!c.hayAlguno) { onSinMetodo(); return; }
@@ -134,12 +187,14 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
       const resultado = await entrarConDesbloqueoLocal(secreto, email);
       if (!vigente.current) return;
       if (resultado.ok) {
-        onDesbloqueado({ userId: resultado.userId, email: resultado.email });
+        await terminarDeEntrar({ userId: resultado.userId, email: resultado.email });
         return;
       }
       setFallo(avisoCorto(resultado.mensaje, 'Incorrecto'));
       setPin('');
       setEsperaSeg(Math.ceil(esperaRestanteMs() / 1000));
+    } catch {
+      if (vigente.current) setFallo('No se pudo verificar. Intente de nuevo');
     } finally {
       if (vigente.current) setVerificando(false);
     }
@@ -151,6 +206,14 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
 
   const enlace = 'text-[12.5px] font-semibold text-white/75 hover:text-white underline-offset-4 hover:underline disabled:opacity-50 px-2 py-1';
 
+  const mensaje = entrando
+    ? 'Entrando…'
+    : conEspera
+      ? `Espere ${esperaSeg} s`
+      : fallo || (modo === 'biometria'
+        ? (verificando ? 'Confirme con su huella' : arranque ? 'Toque la huella para entrar' : 'Confirme con su huella')
+        : modo === 'pin' ? 'Ingrese su PIN' : 'Dibuje su patrón');
+
   return createPortal(
     <div
       className="fixed inset-0 flex flex-col items-center justify-center gap-5 px-6 motion-safe:animate-in motion-safe:fade-in motion-safe:duration-150"
@@ -159,23 +222,41 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
       aria-modal="true"
       aria-label="Desbloquear"
     >
-      {/* Solo se difumina lo que hay detrás: nada se desmonta. */}
-      <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-xl" aria-hidden="true" />
+      {arranque
+        // La app recién abierta: pantalla propia, con colores fijos (se lee igual con el tema claro o el oscuro).
+        ? <div className="absolute inset-0" style={{ background: 'linear-gradient(180deg, #0B1530 0%, #0F1217 60%)' }} aria-hidden="true" />
+        // Solo se difumina lo que hay detrás: nada se desmonta.
+        : <div className="absolute inset-0 bg-slate-950/45 backdrop-blur-xl" aria-hidden="true" />}
+
+      {arranque && (
+        <div className="relative flex flex-col items-center gap-1.5 text-center">
+          <img src="/logo.png" alt="" width={72} height={72} className="w-[72px] h-[72px] rounded-2xl shadow-lg shadow-black/40" />
+          <div className="mt-2 text-[20px] font-bold text-[#E9ECF1] leading-tight">Technoverse</div>
+          <div className="text-[12.5px] text-[#8B93A1]">Panel de administración</div>
+          {email && <div className="max-w-[260px] truncate text-[12px] text-[#8B93A1]/80">{email}</div>}
+        </div>
+      )}
 
       <div className="relative flex flex-col items-center gap-4 w-full max-w-[300px]">
-        {modo === 'biometria' && (
+        {(modo === 'cargando' || entrando) && (
+          <div className="w-9 h-9 rounded-full border-2 border-white/70 border-t-transparent animate-spin" role="status" aria-label="Cargando" />
+        )}
+
+        {modo === 'biometria' && !entrando && (
           <button
             type="button"
             onClick={pedirHuella}
             disabled={verificando}
             aria-label="Confirmar con la huella"
-            className="w-20 h-20 rounded-full flex items-center justify-center bg-white/10 ring-1 ring-white/25 text-white transition active:scale-95"
+            className={arranque
+              ? 'w-24 h-24 rounded-full flex items-center justify-center bg-[#FB923C] text-[#1a1206] shadow-lg shadow-orange-500/25 transition active:scale-95 disabled:opacity-90'
+              : 'w-20 h-20 rounded-full flex items-center justify-center bg-white/10 ring-1 ring-white/25 text-white transition active:scale-95'}
           >
-            <Fingerprint className={`w-10 h-10 ${verificando ? 'animate-pulse' : ''}`} />
+            <Fingerprint className={`${arranque ? 'w-12 h-12' : 'w-10 h-10'} ${verificando ? 'animate-pulse' : ''}`} />
           </button>
         )}
 
-        {modo === 'pin' && (
+        {modo === 'pin' && !entrando && (
           <div className="w-full rounded-2xl bg-[var(--bg-surface)] shadow-2xl p-4">
             <TecladoPin
               valor={pin}
@@ -188,22 +269,22 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
           </div>
         )}
 
-        {modo === 'patron' && (
+        {modo === 'patron' && !entrando && (
           <div className="w-full rounded-2xl bg-[var(--bg-surface)] shadow-2xl p-3">
             <PatronLock onCompleto={probarSecreto} disabled={verificando || conEspera} error={!!fallo} />
           </div>
         )}
 
         {modo !== 'cargando' && (
-          <p className="min-h-[18px] text-center text-[13px] font-semibold text-white/90" role={fallo ? 'alert' : undefined}>
-            {conEspera
-              ? `Espere ${esperaSeg} s`
-              : fallo || (modo === 'biometria' ? 'Confirme con su huella' : modo === 'pin' ? 'Ingrese su PIN' : 'Dibuje su patrón')}
+          <p className="min-h-[18px] text-center text-[13.5px] font-semibold text-white/90" role={fallo ? 'alert' : undefined}>
+            {mensaje}
           </p>
         )}
+        {modo === 'cargando' && arranque && <p className="text-center text-[13px] text-white/70">Preparando el acceso…</p>}
       </div>
 
-      {modo !== 'cargando' && (
+      {/* Mientras carga el candado también se ofrece la salida: nunca queda una pantalla sin nada que tocar. */}
+      {!entrando && (
         <div className="relative flex flex-wrap items-center justify-center gap-x-3">
           {modo === 'biometria' && localDisponible && (
             <button type="button" className={enlace} onClick={() => { setFallo(null); setModo(localDisponible); }}>
@@ -213,7 +294,7 @@ export default function ReautenticacionRapidaOverlay({ email, onDesbloqueado, on
           {(modo === 'pin' || modo === 'patron') && capacidades?.biometria && (
             <button type="button" className={enlace} onClick={usarHuella}>Usar huella</button>
           )}
-          <button type="button" className={enlace} onClick={onFalloTotal}>Cerrar sesión</button>
+          <button type="button" className={enlace} onClick={onFalloTotal}>{arranque ? 'Entrar con contraseña' : 'Cerrar sesión'}</button>
         </div>
       )}
     </div>,
