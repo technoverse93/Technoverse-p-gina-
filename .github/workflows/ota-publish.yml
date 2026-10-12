@@ -53,7 +53,8 @@ jobs:
       # El mapa del código que usa Javier (sistema_buscar): si quedó viejo solo avisa, no frena.
       - name: Revisar el mapa del código de Javier
         continue-on-error: true
-        run: node scripts/mapa-codigo.mjs --verificar || echo "::warning::El mapa del código de Javier quedó viejo: correr «npm run mapa» y subir el resultado."
+        run: |
+          node scripts/mapa-codigo.mjs --verificar || echo "::warning::El mapa del código de Javier quedó viejo: correr «npm run mapa» y subir el resultado."
 
       - name: Build web app
         run: npm run build
