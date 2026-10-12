@@ -1095,19 +1095,6 @@ export default function AdminPanel({
     addAuditLog(currentUser?.email || 'admin', 'Sistema', 'Exportar CSV', `Exportado archivo: ${fileName}.csv`);
   };
 
-  if (!isAuthenticated || !currentUser || currentUser.role === 'Cliente') {
-    return (
-      // Mientras se confirma la sesión (o se pide la huella) solo se ve un
-      // fondo liso con un indicador: nada de la tienda ni textos de paso.
-      <div className="min-h-dvh bg-[var(--bg-base,#0F1217)] flex items-center justify-center" role="status" aria-label="Entrando al panel">
-        <div className="w-8 h-8 rounded-full border-2 border-current border-t-transparent animate-spin opacity-60 text-[var(--text-secondary)]" />
-      </div>
-    );
-  }
-
-  // Nivel de gestión: superadmin o admin (lo que 'Dueño' daba antes).
-  const isOwner = esGestion(currentUser?.role);
-
   /**
   /**
    * Abre un módulo en una pestaña —o salta a la suya si ya estaba
@@ -1164,6 +1151,31 @@ export default function AdminPanel({
   }, [pestanas.elegirDesdeNueva]);
 
   const esSupremo = useMemo(() => esAdminSupremo(currentUser?.email), [currentUser]);
+
+  // ---------------------------------------------------------------------
+  // SALIDA TEMPRANA: SIEMPRE DESPUÉS DE TODOS LOS HOOKS
+  // ---------------------------------------------------------------------
+  // Esta pantalla de espera estaba ANTES de seis hooks (irAModulo, el pedido
+  // de Phill, etc.). La APK arranca directo en el panel (App.tsx) y el panel
+  // se monta mientras todavía se está leyendo la sesión: primero se pintaba
+  // la espera (menos hooks) y, al llegar el perfil, el panel completo (más
+  // hooks). React no lo tolera —«Rendered more hooks than during the previous
+  // render», error #310—, desmonta TODA la app y queda la pantalla oscura:
+  // «sale cargando y luego en total oscuro». Dependía de qué llegaba primero
+  // (el código del panel o el perfil), por eso fallaba solo algunas veces.
+  // Un hook jamás va debajo de un `return`.
+  if (!isAuthenticated || !currentUser || currentUser.role === 'Cliente') {
+    return (
+      // Mientras se confirma la sesión (o se pide la huella) solo se ve un
+      // fondo liso con un indicador: nada de la tienda ni textos de paso.
+      <div className="min-h-dvh bg-[var(--bg-base,#0F1217)] flex items-center justify-center" role="status" aria-label="Entrando al panel">
+        <div className="w-8 h-8 rounded-full border-2 border-current border-t-transparent animate-spin opacity-60 text-[var(--text-secondary)]" />
+      </div>
+    );
+  }
+
+  // Nivel de gestión: superadmin o admin (lo que 'Dueño' daba antes).
+  const isOwner = esGestion(currentUser?.role);
 
   /**
    * El contenido de UNA pestaña.

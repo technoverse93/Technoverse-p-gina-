@@ -1,6 +1,8 @@
 import {StrictMode} from 'react';
 import {createRoot} from 'react-dom/client';
 import App from './App.tsx';
+import ErrorBoundaryRaiz from './components/ErrorBoundaryRaiz';
+import { instalarRegistroDeErrores } from './utils/erroresPantalla';
 import './index.css';
 // Clases `tv-` que comparten la tienda y el panel. Va DESPUÉS de
 // index.css para que sus reglas puedan afinar las de la marca. Lo que es
@@ -14,6 +16,9 @@ import { iniciarTema } from './utils/tema';
 // producía un destello blanco de un cuadro. Aplicándolo aquí, el primer
 // pintado ya sale con el tema correcto.
 iniciarTema();
+
+// Deja rastro de los errores sueltos (para verlos después en la bitácora).
+instalarRegistroDeErrores();
 
 // Auto-recuperación de "chunk viejo": cada deploy a Cloudflare genera assets
 // con hash nuevo (ej. jspdf.es.min-XXXXX.js) y solo sirve los del último
@@ -29,17 +34,24 @@ iniciarTema();
 // el index.html y los hashes de assets actuales. El guard en sessionStorage
 // evita un bucle de recargas si el fallo persiste por otra causa.
 window.addEventListener('vite:preloadError', (event) => {
-  event.preventDefault();
   const key = 'technoverse_chunk_reload_at';
-  const lastReload = Number(sessionStorage.getItem(key) || '0');
+  let lastReload = 0;
+  try { lastReload = Number(sessionStorage.getItem(key) || '0'); } catch { /* sin almacenamiento */ }
   if (Date.now() - lastReload > 10000) {
-    sessionStorage.setItem(key, String(Date.now()));
+    event.preventDefault();
+    try { sessionStorage.setItem(key, String(Date.now())); } catch { /* sin almacenamiento */ }
     window.location.reload();
   }
+  // Si ya se recargó hace poco NO se calla el error (antes se hacía siempre con
+  // `preventDefault`): el `import()` terminaba valiendo «undefined», React se
+  // quejaba de un componente inválido y toda la app quedaba en pantalla
+  // oscura. Así el error llega al borde de errores, que muestra qué hacer.
 });
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>
-    <App />
+    <ErrorBoundaryRaiz>
+      <App />
+    </ErrorBoundaryRaiz>
   </StrictMode>,
 );

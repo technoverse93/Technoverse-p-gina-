@@ -4,6 +4,7 @@ import { ModoEdicionProvider } from './cms/ModoEdicion';
 import { User } from './types';
 import { initKeyboard } from './mobile/keyboard';
 import { initOtaUpdater } from './mobile/otaUpdater';
+import { enviarErroresPendientes } from './utils/erroresPantalla';
 import { OverlayProvider, useToast } from './components/ui/Overlays';
 import { conexionBloqueada, detalleDeBloqueo, conTope } from './utils/adminLogin';
 import { registrarVisita, leerDatosDelAparato } from './utils/huella';
@@ -155,6 +156,9 @@ function AppInner() {
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   useEffect(() => {
+    // Avisa a la página (public/arranque.js) de que la app armó su primera pantalla:
+    // si esto no llega, ella muestra cómo recuperarse en vez de dejar la pantalla oscura.
+    (window as any).__tvListo = true;
     initKeyboard();
     // Fuera del render inicial y sin bloquearlo: revisa/aplica la
     // actualización OTA en segundo plano. No hace nada en la web.
@@ -373,6 +377,15 @@ function AppInner() {
 
   // Se recuerda si quien entró es del personal (ver `vistaInicial`).
   useEffect(() => { if (currentUser) guardarPersonal(esStaff(currentUser.role)); }, [currentUser]);
+
+  // Si la pantalla se rompió antes en este aparato, el rastro (solo el mensaje y el sitio) pasa a la
+  // bitácora del sistema cuando entra alguien del personal, para poder verlo y arreglarlo.
+  useEffect(() => {
+    if (!currentUser || !esStaff(currentUser.role)) return;
+    const correo = currentUser.email;
+    const t = setTimeout(() => { void enviarErroresPendientes(correo); }, 8000);
+    return () => clearTimeout(t);
+  }, [currentUser]);
 
   const handleLogin = (user: User) => {
     setCurrentUser(user);

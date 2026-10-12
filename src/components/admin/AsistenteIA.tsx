@@ -494,6 +494,9 @@ function TarjetaConsulta({ c }: { c: Consulta }) {
  *  historial, que en un teléfono de gama de entrada se notaba. */
 const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar, onValorar }: { m: Mensaje; onCopiar: (t: string) => void; onRegenerar?: () => void; onEditar?: () => void; onValorar?: (id: string, v: number | null, nota?: string) => void }) {
   const [nota, setNota] = useState<string | null>(null);
+  // Los hooks van SIEMPRE antes de cualquier `return` (los dos contextos de abajo estaban después).
+  const ejecutarTel = React.useContext(TelefonoCtx);
+  const jv = React.useContext(JarvisCtx);
   if (m.rol === 'user') {
     const adj = m.vistas || (m.fuentes || []).filter(f => f.url?.startsWith('adjunto:')).map(f => ({ nombre: f.titulo, tipo: f.url.slice(8) }));
     return (
@@ -528,10 +531,8 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
   const piezas = (m.consultas || []).filter(c => c.tipo === 'pieza' && c.pieza);
   const telefonos = (m.consultas || []).filter(c => c.tipo === 'telefono' && c.telefono);
   const tareas = (m.consultas || []).filter(c => c.tipo === 'tarea' && c.tarea);
-  const ejecutarTel = React.useContext(TelefonoCtx);
   const perfil = PERFILES.find(p => p.id === m.perfil);
   const esRequerimiento = m.persona === 'arquitecto' && /REQUERIMIENTO:/.test(m.texto);
-  const jv = React.useContext(JarvisCtx);
   return (
     <div className="ai-ia" aria-live={enVivo ? 'polite' : undefined}>
       {!!lecturas.length && <div className="ai-herrs">{lecturas.map((c, i) => <React.Fragment key={i}><TarjetaConsulta c={c} /></React.Fragment>)}</div>}
