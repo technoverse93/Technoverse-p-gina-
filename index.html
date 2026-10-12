@@ -42,9 +42,22 @@
     <meta name="twitter:title" content="Technoverse Costa Rica — Tienda de Tecnología y Reparaciones" />
     <meta name="twitter:description" content="Tienda de tecnología y taller de reparaciones con garantía legal en Costa Rica." />
     <meta name="twitter:image" content="https://technoverse-cr.technoversecr.workers.dev/logo.png" />
+    <!-- Indicador de carga ESTÁTICO: se ve desde el primer instante, antes de que cargue el
+         JavaScript (en un teléfono modesto eso puede tardar unos segundos, y hasta ahora se veía
+         una pantalla oscura vacía). React lo reemplaza en cuanto arma la primera pantalla; si la
+         app no llega a arrancar, public/arranque.js lo convierte en un aviso con qué hacer. -->
+    <style>
+      #tv-arranque { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; color: #8b93a1; }
+      #tv-arranque .tv-arranque-rueda { width: 32px; height: 32px; border-radius: 9999px; border: 2px solid currentColor; border-top-color: transparent; opacity: .6; animation: tv-arranque-giro .9s linear infinite; }
+      @keyframes tv-arranque-giro { to { transform: rotate(360deg); } }
+      @media (prefers-reduced-motion: reduce) { #tv-arranque .tv-arranque-rueda { animation-duration: 2.4s; } }
+    </style>
   </head>
   <body>
-    <div id="root"></div>
+    <div id="root">
+      <div id="tv-arranque" role="status" aria-label="Cargando"><div class="tv-arranque-rueda"></div></div>
+    </div>
+    <script src="/arranque.js"></script>
     <script type="module" src="/src/main.tsx"></script>
   </body>
 </html>

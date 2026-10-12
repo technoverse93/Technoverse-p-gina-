@@ -37,6 +37,11 @@ jobs:
       - name: Install dependencies
         run: npm install
 
+      # Un hook de React fuera de orden deja la pantalla oscura en el teléfono (ver
+      # scripts/verificar-hooks.sh): si falla, no se arma la APK.
+      - name: Verificar el orden de los hooks de React
+        run: bash scripts/verificar-hooks.sh
+
       - name: Build web app
         run: npm run build
 
