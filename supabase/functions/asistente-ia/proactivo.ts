@@ -17,6 +17,7 @@
 
 import { crearCerebro } from './cerebro.ts';
 import { avisosDePrueba, eventoDePrueba, lineaSalud, registrar, type Prueba } from './salud.ts';
+import { empujarAviso } from './push.ts';
 
 type Db = any;
 type Aviso = { tipo: string; clave: string; titulo: string; cuerpo: string; nivel?: 'info' | 'atencion' | 'urgente'; destino?: string };
@@ -41,7 +42,7 @@ async function guardar(admin: Db, uid: string, avisos: Aviso[]): Promise<number>
   let nuevos = 0;
   for (const a of avisos) {
     const { error } = await admin.from('jarvis_avisos').insert({ user_id: uid, tipo: a.tipo, clave: a.clave.slice(0, 200), titulo: a.titulo.slice(0, 120), cuerpo: a.cuerpo.slice(0, 2000), nivel: a.nivel || 'info', destino: a.destino || null });
-    if (!error) nuevos++; // la clave repetida (ya avisado) choca y no se duplica
+    if (!error) { nuevos++; await empujarAviso(admin, uid, a); } // la clave repetida (ya avisado) choca y no se duplica; lo nuevo también llega al teléfono
   }
   return nuevos;
 }

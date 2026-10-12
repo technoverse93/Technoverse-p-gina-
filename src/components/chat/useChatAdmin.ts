@@ -22,6 +22,8 @@ import { esSuperadmin } from '../../utils/roles';
 import { supabase } from '../../supabaseClient';
 import { useToast, useConfirm } from '../ui/Overlays';
 import { pedirPermisoNotificaciones, notificarMensajeChat } from '../../mobile/notificaciones';
+import { limpiarNotificacion } from '../../mobile/pushNativo';
+import { CLAVE_ABRIR_CONV, EVENTO_ABRIR_CONV } from '../../mobile/jarvisAtajo';
 
 export type ChatStatusFilter = 'nuevo' | 'pendiente' | 'todos' | 'resueltos';
 export type ResolvedRange = '1d' | '7d' | '30d';
@@ -103,6 +105,18 @@ export function useChatAdmin(currentUser: User | null, onDataChanged?: () => voi
   }, []);
 
   const selectedConv = conversations.find(c => c.id === selectedConvId) || null;
+
+  // Tocaste la notificación de un chat: se abre esa conversación (y su
+  // notificación se quita, como en WhatsApp). Solo lo hace la pestaña Chat.
+  useEffect(() => {
+    if (!avisar) return;
+    const abrir = (id: string) => { setSelectedConvId(id); limpiarNotificacion(id); };
+    try { const pendiente = sessionStorage.getItem(CLAVE_ABRIR_CONV); if (pendiente) { sessionStorage.removeItem(CLAVE_ABRIR_CONV); abrir(pendiente); } } catch { /* sin almacenamiento */ }
+    const alPedir = (e: Event) => { const id = (e as CustomEvent<string>).detail; if (id) { try { sessionStorage.removeItem(CLAVE_ABRIR_CONV); } catch { /* nada */ } abrir(id); } };
+    window.addEventListener(EVENTO_ABRIR_CONV, alPedir);
+    return () => window.removeEventListener(EVENTO_ABRIR_CONV, alPedir);
+  }, [avisar]);
+  useEffect(() => { if (avisar && selectedConvId) limpiarNotificacion(selectedConvId); }, [avisar, selectedConvId]);
 
   const filteredConversations = useMemo(() => {
     if (statusFilter === 'resueltos') {

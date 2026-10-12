@@ -16,6 +16,7 @@
 // =====================================================================
 
 import { Capacitor } from '@capacitor/core';
+import { pushActivo } from './pushNativo';
 
 /** Evento local: "abrí el chat" (lo escucha LiveChat al tocar la notificación). */
 export const EVENTO_ABRIR_CHAT = 'technoverse_abrir_chat';
@@ -77,6 +78,9 @@ export async function pedirPermisoNotificaciones(): Promise<void> {
  */
 export async function notificarMensajeChat(titulo: string, cuerpo: string): Promise<void> {
   if (estaEnPrimerPlano()) return;
+  // Con los avisos push del servidor ya funcionando, el teléfono avisa solo:
+  // este aviso local sería un duplicado.
+  if (pushActivo()) return;
 
   try {
     if (Capacitor.isNativePlatform()) {

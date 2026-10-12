@@ -222,6 +222,27 @@ export default function AdminPanel({
     return () => clearTimeout(t);
   }, [currentUser?.email]);
 
+  // AVISOS PUSH: este teléfono se registra para que el servidor le avise de
+  // los mensajes del chat (con «Responder» en la propia notificación) y de
+  // lo que vigila Jarvis, aunque la app esté cerrada. Se reintenta al volver
+  // a la app (token renovado, permiso dado en Ajustes del teléfono).
+  useEffect(() => {
+    if (!esStaff(currentUser?.role)) return;
+    const arrancar = () => { void import('../mobile/pushNativo').then(m => m.iniciarPush(currentUser?.role)).catch(() => { /* sin push */ }); };
+    const t = setTimeout(arrancar, 2500);
+    const alVolver = () => { if (document.visibilityState === 'visible') arrancar(); };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => { clearTimeout(t); document.removeEventListener('visibilitychange', alVolver); };
+  }, [currentUser?.role]);
+
+  // Mirando la pestaña Chat: el teléfono no repite el aviso de lo que ya ves.
+  useEffect(() => {
+    if (!esStaff(currentUser?.role)) return;
+    const avisar = (abierto: boolean) => { void import('../mobile/pushNativo').then(m => m.avisarChatAbierto(abierto)).catch(() => { /* sin push */ }); };
+    avisar(activeTab === 'chat');
+    return () => avisar(false);
+  }, [activeTab, currentUser?.role]);
+
   useEffect(() => {
     if (activeTab !== 'facturacion') return;
     let vigente = true;
@@ -690,6 +711,9 @@ export default function AdminPanel({
     // En la APK se cierra con alcance local: `signOut()` a secas revoca en
     // el servidor TODOS los pases de la cuenta, incluido el que guarda la
     // huella, y por eso cerrar sesión mataba la biometría.
+    // Este teléfono deja de recibir los avisos de la cuenta (volverá a
+    // recibirlos cuando se entre otra vez).
+    await import('../mobile/pushNativo').then(m => m.cerrarPush()).catch(() => { /* sin push */ });
     await cerrarSesionConservandoBiometria();
     onLogout();
   }, [currentUser, onLogout]);
