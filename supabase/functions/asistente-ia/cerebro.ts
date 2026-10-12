@@ -48,8 +48,10 @@ export const RAMAS: { clave: string; nombre: string; guarda: string; pistas: Reg
   { clave: 'reparaciones', nombre: 'Reparaciones y técnica', guarda: 'Fallas, repuestos, procedimientos, herramientas y trucos del taller.', pistas: /repar|taller|falla|pantalla|bater[ií]a|placa|tarjeta|microsold|soldad|herramient|repuesto|desbloque|unlock|chimera|octoplus|\\bbox\\b|\\btool\\b|frp|imei|flasheo|firmware|diagn[oó]stic|t[eé]cnic/i },
   { clave: 'proveedores', nombre: 'Proveedores y compras', guarda: 'Quién vende qué, costos de compra, tiempos de entrega y contactos de negocio.', pistas: /proveedor|mayorista|distribuid|compra|importa|pedido|costo|cotiza/i },
   { clave: 'ventas', nombre: 'Ventas y finanzas', guarda: 'Márgenes, metas, cómo se cobra y se factura, impuestos y números del negocio.', pistas: /venta|finanz|margen|ganancia|factur|cobr|iva|impuesto|hacienda|meta|ingreso|gasto|pago|sinpe|precio de venta/i },
-  { clave: 'trabajo', nombre: 'Cómo trabajamos', guarda: 'Políticas, garantías, horarios y reglas de cómo funciona Technoverse.', pistas: /pol[ií]tica|garant[ií]a|horario|regla|procedimiento|cliente|atenci[oó]n|devoluci|negocio|tienda|empleado|personal|turno/i },
+  { clave: 'trabajo', nombre: 'Cómo trabajamos', guarda: 'Reglas, garantías, horarios y políticas de Technoverse que el DUEÑO enseñó (nunca de internet).', pistas: /pol[ií]tica|garant[ií]a|horario|regla|procedimiento|atenci[oó]n|devoluci|nuestro negocio|tiend/i },
   { clave: 'tecnologia', nombre: 'Tecnología y mercado', guarda: 'Tendencias, lanzamientos, inteligencia artificial y lo que pasa en el mercado.', pistas: /tecnolog|\bia\b|inteligencia artificial|lanzamiento|tendencia|mercado|software|\bapp|sistema operativo|android|\bios\b|internet|5g|api\b|open source|acceso|groq|openrouter|siliconflow|gemini|kimi|llm|modelo de lenguaje|\\bnube\\b|cloud/i },
+  { clave: 'ciberseguridad', nombre: 'Ciberseguridad', guarda: 'Cómo se ataca y se defiende un sistema: conceptos, buenas prácticas y lo que se aprende del propio sistema.', pistas: /seguridad inform|ciberseg|phishing|ataque|vulnerab|contrase[ñn]a|autentic|cifrad|firewall|malware|owasp|inyecci[oó]n|\bjwt\b|\bwaf\b|fuerza bruta/i },
+  { clave: 'programacion', nombre: 'Programación', guarda: 'Lenguajes y herramientas (Python, SQL, TypeScript, git…): conceptos, patrones y soluciones.', pistas: /python|programaci[oó]n|javascript|typescript|\bsql\b|algoritmo|framework|librer[ií]a|\bgit\b|\bapi\b|\breact\b|postgres/i },
   // El propio sistema: lo que Javier estudió del código (repositorio). Solo cae aquí lo que viene de
   // estudiar el código (aprenderDelCodigo), por eso las pistas son estrechas.
   { clave: 'sistema', nombre: 'Sistema Technoverse (el código)', guarda: 'Cómo está hecha la app: panel, tienda, APK, Javier y el servidor, archivo por archivo.', pistas: /c[oó]digo fuente|repositorio|\bsrc\/|supabase\/functions|native-android|\.tsx?\b|\.java\b/i },
@@ -70,6 +72,22 @@ export function ramaCanonica(propuesta: string, tema = '', resto = ''): (typeof 
   }
   return pts ? mejor : RAMAS.find(r => r.clave === 'trabajo')!;
 }
+/** Lo mismo, pero si el hecho no cae claramente en ninguna rama devuelve null (no se aprende): antes
+ *  todo lo que no encajaba iba a «Cómo trabajamos» y el cerebro se llenaba de cosas sueltas. */
+export function ramaClara(propuesta: string, tema = '', resto = ''): (typeof RAMAS)[number] | null {
+  const exacta = RAMAS.find(r => normalizar(propuesta) === normalizar(r.nombre) || normalizar(propuesta) === r.clave);
+  if (exacta) return exacta;
+  const contar = (t: string, re: RegExp) => (t.match(new RegExp(re.source, 'gi')) || []).length;
+  let mejor: (typeof RAMAS)[number] | null = null, pts = 0;
+  for (const r of RAMAS) {
+    const n = contar(tema, r.pistas) * 3 + contar(resto, r.pistas) + contar(propuesta, r.pistas);
+    if (n > pts) { pts = n; mejor = r; }
+  }
+  return mejor;
+}
+/** Lo que caduca solo: precios, existencias, ofertas. Nunca es conocimiento duradero. */
+export const CADUCA = /₡|¢|US\$|\$\s?\d|\bUSD\b|\bSKU\b\s*[:#]?\s*\d|precio (de|es|especial|habitual|de lista|de venta|estimado)|\bcuesta|\ben stock\b|unidades? (en|disponibles)|descuento|\boferta|promoci[oó]n|\bcuotas?\b|\ben existencia/i;
+
 /** Lo que NO es conocimiento: lo que alguien pidió, lo que no se sabe,
  *  reglas obvias o frases sobre Javier mismo. Antes se guardaba y era basura. */
 // Incluye lo que caduca en horas (visitas, sesiones, «ayer», «hoy»): guardado como dato servía de «verdad»
@@ -514,7 +532,7 @@ export function crearCerebro(admin: Db, uid: string) {
       ].filter(Boolean).join('\n\n').slice(0, 14000);
       if (!datos.trim()) return false;
       const t = await redactar(
-        `Sos el cerebro de Javier. Escribí la FICHA del dueño de Technoverse Costa Rica para que Javier lo conozca de verdad: cómo se llama y cómo prefiere que le hablen, cómo trabaja (horarios, rutinas, cómo decide), qué le importa del negocio ahora (metas, preocupaciones, proyectos), sus preferencias concretas y lo que tiene pendiente. Solo lo que surja de los datos; nada inventado, nada de clientes. Máximo 900 caracteres, frases cortas separadas por « · ». Devolvé SOLO JSON: {"texto":"…"}`,
+        `Sos el cerebro de Javier. Escribí la FICHA del dueño de Technoverse Costa Rica para que Javier lo conozca de verdad: cómo se llama (solo si lo DIJO claro al presentarse; NUNCA tomes como su nombre una palabra parecida a Jarvis, Javier o Phill: es el dictado confundiendo el nombre del asistente) y cómo prefiere que le hablen, cómo trabaja (horarios, rutinas, cómo decide), qué le importa del negocio ahora (metas, preocupaciones, proyectos), sus preferencias concretas y lo que tiene pendiente. Solo lo que surja de los datos; nada inventado, nada de clientes. Máximo 900 caracteres, frases cortas separadas por « · ». Devolvé SOLO JSON: {"texto":"…"}`,
         datos,
       ).catch(() => null);
       if (!t || t.length < 40 || PRIVADO.test(t)) return false;
@@ -579,6 +597,76 @@ export function crearCerebro(admin: Db, uid: string) {
       const sobran = (viejos || []).filter((v: any) => Number(String(v.clave).slice(base.length)) >= n).map((v: any) => v.id);
       if (sobran.length) await admin.from('jarvis_nodos').delete().in('id', sobran);
       return n;
+    },
+
+    // ------------------------------------------------------------------
+    // AUTOESTUDIO (pedido del dueño, 2026-10-12): Javier decide qué estudiar, lo busca, lo resume
+    // en lecciones y lo guarda en su rama. Lo que no sabe al contestar queda como «hueco» y se
+    // estudia después, para que la próxima vez conteste su cerebro y no una IA de afuera.
+    // ------------------------------------------------------------------
+    normalizar,
+    /** La rama que corresponde a un tema y su lección (null si no encaja en ninguna). */
+    ramaDe(tema: string, texto: string): string | null { return ramaClara('', tema, texto)?.clave ?? null; },
+    /** Cuándo estudió cada tema ({ clave del tema: fecha ISO }). */
+    async estudiosHechos(): Promise<Record<string, string>> {
+      if (!vivo) return {};
+      const { data } = await admin.from('jarvis_nodos').select('clave,actualizado_en').eq('user_id', uid).eq('tipo', 'tema').like('clave', 'est:%').limit(1000);
+      return Object.fromEntries(((data || []) as any[]).map(n => [String(n.clave), String(n.actualizado_en)]));
+    },
+    /** Guarda una lección: el tema (con la lección de resumen) en su rama y un dato por hecho. */
+    async registrarLeccion(ramaClave: string, tema: string, leccion: string, hechos: string[], fuentes: { titulo?: string; url: string }[]): Promise<number> {
+      const rama = RAMAS.find(r => r.clave === ramaClave);
+      const t = limpio(tema, 70);
+      if (!vivo || !rama || t.length < 3) return 0;
+      const ramaN = await ramaFija(rama);
+      if (!ramaN) return 0;
+      const base = `est:${normalizar(t).slice(0, 70)}`;
+      const url = fuentes.find(f => /^https?:\/\//.test(f.url))?.url;
+      const temaN = await asegurarNodo(base, t, 'tema', { resumen: limpio(leccion, 1400), fuente: 'estudio', url });
+      if (!temaN) return 0;
+      await admin.from('jarvis_nodos').update({ resumen: limpio(leccion, 1400), fuente: 'estudio', url: url || null, actualizado_en: new Date().toISOString(), embedding: null }).eq('id', temaN.id);
+      await enlazar(ramaN.id, temaN.id, 'incluye');
+      let n = 0;
+      for (const h of hechos.slice(0, 8)) {
+        const dato = limpio(h, 320);
+        if (dato.length < 25 || PRIVADO.test(dato) || BASURA.test(dato) || CADUCA.test(dato)) continue;
+        // ¿Ya sabía esto mismo dicho de otra forma? Se refuerza en vez de duplicar.
+        if (await hayVectores()) {
+          const v = await vectores([dato]);
+          const igual = v ? (await semejantes(v[0], 3)).find(x => x.tipo === 'dato' && x.similitud >= 0.92) : null;
+          if (igual) { await admin.from('jarvis_nodos').update({ usos: (igual.usos || 0) + 1, ultimo_uso: new Date().toISOString() }).eq('id', igual.id); await enlazar(temaN.id, igual.id, 'detalle'); continue; }
+        }
+        const d = await asegurarNodo(`${base}:${n}`, recortar(dato, 80), 'dato', { resumen: dato, fuente: 'estudio', url });
+        if (!d) continue;
+        await admin.from('jarvis_nodos').update({ resumen: dato, etiqueta: recortar(dato, 80), embedding: null }).eq('id', d.id);
+        await enlazar(temaN.id, d.id, 'detalle');
+        n++;
+      }
+      // Lo que sobró de un estudio anterior más largo, se borra (la lección nueva reemplaza a la vieja).
+      const { data: viejos } = await admin.from('jarvis_nodos').select('id,clave').eq('user_id', uid).like('clave', `${base}:%`);
+      const sobran = ((viejos || []) as any[]).filter(v => Number(String(v.clave).slice(base.length + 1)) >= n).map(v => v.id);
+      if (sobran.length) await admin.from('jarvis_nodos').delete().in('id', sobran);
+      enFondo(vectorizarPendientes(10));
+      return n;
+    },
+    /** Una pregunta que su cerebro no supo contestar: queda anotada para estudiarla. */
+    async anotarHueco(pregunta: string): Promise<void> {
+      const p = limpio(pregunta, 160);
+      if (!vivo || p.length < 15 || PRIVADO.test(p) || BASURA.test(p)) return;
+      const clave = `hueco:${normalizar(p).slice(0, 90)}`;
+      const { data: ya } = await admin.from('jarvis_nodos').select('id,usos').eq('user_id', uid).eq('clave', clave).maybeSingle();
+      if (ya) { await admin.from('jarvis_nodos').update({ usos: (ya.usos || 0) + 1, ultimo_uso: new Date().toISOString() }).eq('id', ya.id); return; }
+      const { count } = await admin.from('jarvis_nodos').select('id', { count: 'exact', head: true }).eq('user_id', uid).like('clave', 'hueco:%');
+      if ((count || 0) >= 60) return;
+      await admin.from('jarvis_nodos').insert({ user_id: uid, clave, etiqueta: recortar(p, 80), tipo: 'tema', resumen: p, fuente: 'pendiente', usos: 1 });
+    },
+    async huecos(max = 3): Promise<{ clave: string; pregunta: string }[]> {
+      if (!vivo) return [];
+      const { data } = await admin.from('jarvis_nodos').select('clave,resumen').eq('user_id', uid).like('clave', 'hueco:%').order('usos', { ascending: false }).limit(max);
+      return ((data || []) as any[]).map(n => ({ clave: String(n.clave), pregunta: String(n.resumen || '') }));
+    },
+    async cerrarHueco(clave: string): Promise<void> {
+      if (vivo) await admin.from('jarvis_nodos').delete().eq('user_id', uid).eq('clave', clave);
     },
 
     // ------------------------------------------------------------------
@@ -668,7 +756,7 @@ export function crearCerebro(admin: Db, uid: string) {
       if (!vivo) return { ramas: [], temas: [] };
       const [r, t] = await Promise.all([
         admin.from('jarvis_nodos').select('etiqueta').eq('user_id', uid).like('clave', 'dom:rama:%').limit(40),
-        admin.from('jarvis_nodos').select('etiqueta').eq('user_id', uid).eq('tipo', 'tema').not('clave', 'like', 'web:%').order('usos', { ascending: false }).limit(60),
+        admin.from('jarvis_nodos').select('etiqueta').eq('user_id', uid).eq('tipo', 'tema').not('clave', 'like', 'web:%').not('clave', 'like', 'sis:%').not('clave', 'like', 'est:%').order('usos', { ascending: false }).limit(60),
       ]);
       return { ramas: (r.data || []).map((x: any) => x.etiqueta), temas: (t.data || []).map((x: any) => x.etiqueta) };
     },
@@ -685,7 +773,17 @@ export function crearCerebro(admin: Db, uid: string) {
         // Una preferencia del dueño («prefiere…», «no le gusta…») va a «Sobre vos».
         const preferencia = /\b(prefiere|le gusta|no le gusta|quiere que|odia|le molesta|le parece)\b/i.test(dato);
         if (!preferencia && !/\d|[A-ZÁÉÍÓÚÑ][a-záéíóúñ]+\s+[A-Z0-9]|\b(siempre|nunca|cuesta|vale|incluye|dura|funciona|sirve|es compatible|se cobra|se usa|abre|cierra|atiende)\b/.test(dato)) continue;
-        const r = ramaCanonica(limpio(h?.rama, 60), tema, dato);
+        // PUERTA DE CALIDAD (pedido del dueño: «que las cosas tengan sentido»). Solo entra lo DURADERO y
+        // ÚTIL: lo pasajero (precios, existencias, ofertas) y lo de poca utilidad se descartan. Lo que
+        // viene de afuera con precios caduca en días: no es conocimiento.
+        const duracion = String((h as any)?.duracion ?? 'permanente').toLowerCase();
+        const util = Number((h as any)?.util ?? 7);
+        if (duracion !== 'permanente' || !(util >= 6)) continue;
+        if (origen.fuente !== 'vos' && CADUCA.test(dato)) continue;
+        const r = preferencia ? ramaClara('Sobre vos', tema, dato) ?? RAMAS[0] : ramaClara(limpio(h?.rama, 60), tema, dato);
+        if (!r) continue; // no encaja en ninguna rama: es ruido
+        // Mundo y actualidad / mercado solo si el dueño lo enseñó a propósito, no de lo que buscó de paso.
+        if ((r.clave === 'mundo' || r.clave === 'tecnologia') && origen.fuente === 'internet') continue;
         const url = typeof h?.url === 'string' && /^https?:\/\//.test(h.url) ? h.url : origen.url;
         try {
           const ramaN = preferencia ? await dominio('dueno', 'Sobre vos') : await ramaFija(r);
@@ -862,7 +960,9 @@ export function crearCerebro(admin: Db, uid: string) {
       // Lo que es basura (aunque todavía no se haya ordenado el cerebro) no se
       // recuerda: antes «Precio no disponible…» volvía en cada respuesta y
       // Javier repetía su propio error.
-      const sirve = (n: Nodo) => !(BASURA.test(n.etiqueta) || BASURA.test(n.resumen || '') || SITIO_BASURA.test(`${n.etiqueta} ${n.url || ''}`));
+      // Precios y existencias de internet o de consultas viejas caducan: no se recuerdan como si fueran verdad.
+      const caducado = (n: Nodo) => n.tipo === 'dato' && (n.fuente === 'internet' || n.fuente === 'conversación') && CADUCA.test(`${n.etiqueta} ${n.resumen || ''}`);
+      const sirve = (n: Nodo) => n.fuente !== 'pendiente' && !caducado(n) && !(BASURA.test(n.etiqueta) || BASURA.test(n.resumen || '') || SITIO_BASURA.test(`${n.etiqueta} ${n.url || ''}`));
       const directos = ((nodos || []) as Nodo[]).filter(sirve)
         .filter(n => n.tipo !== 'recuerdo' && n.resumen && nombre(n).length >= 3 && msg.includes(` ${nombre(n)} `))
         .filter(n => !(esOrden && n.fuente === 'internet'))
