@@ -51,6 +51,7 @@ import { grabarNotaDeVoz, puedeGrabarVoz } from '../../utils/grabadorVoz';
 import type { GrabacionEnCurso } from '../../utils/grabadorVoz';
 import { aparatoActual } from '../../seguridad/killSwitch';
 import { separarPrivados, restaurarPrivados } from '../../utils/privados';
+import { actualizarCopia, estadoCopia, responderSinConexion } from '../../utils/cerebroOffline';
 import { partirLinea } from '../../utils/formatoLinea';
 import { dictadoNativo } from '../../mobile/dictadoNativo';
 import { Orbe, Pensando, IconoConstelacion, areaDe, saludo } from './JarvisVisual';
@@ -845,6 +846,8 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
   // El superadmin ES Javier desde el primer cuadro: antes, hasta que llegaba
   // el cupo del servidor se veía un instante el aspecto de «Asistencia de IA».
   const jarvis = soySuper && (cupo ? !!cupo.perfiles : true);
+  // El teléfono se lleva una copia del cerebro para contestar sin internet (cada ~6 h, en silencio).
+  useEffect(() => { if (jarvis) void actualizarCopia(); }, [jarvis]);
   const avisosSinLeer = useAvisosSinLeer(jarvis);
   const conVoz = jarvis && puedeGrabarVoz();
   // El cerebro (código y datos) se baja mientras el teléfono está libre, para
@@ -1025,6 +1028,18 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
     // Si la pregunta fue por voz, se dice corto (unas dos oraciones): el detalle queda escrito.
     const porVozEsta = manosRef.current || !!(opciones.audio || opciones.porVoz);
     const flujo = hablarla ? lector.abrirFlujo(idRespuesta, porVozEsta ? { maxCaracteres: MAX_CARACTERES_AL_RESPONDER } : {}) : null;
+    // SIN INTERNET: Javier contesta con su cerebro (la copia que se llevó el teléfono), sin IAs.
+    const deMemoria = (): boolean => {
+      if (!jarvis || opciones.audio) return false;
+      const local = responderSinConexion(t);
+      const textoLocal = local || 'Sin conexión, y eso todavía no lo tengo en mi cerebro. Cuando vuelva internet lo averiguo.';
+      setMensajes(prev => [...prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false } : m)),
+        { id: `a-${Date.now()}`, rol: 'assistant', texto: textoLocal, proveedor: 'cerebro', modelo: 'cerebro (sin conexión)' }]);
+      flujo?.cerrar(textoLocal.replace(/\n\n_[^_]+_$/, ''));
+      setEnviando(false);
+      return true;
+    };
+    if (typeof navigator !== 'undefined' && navigator.onLine === false && deMemoria()) return;
     // En manos libres, si todavía no salió nada a los ~2.6 s (está consultando), una frase corta llena el silencio.
     let relleno: ReturnType<typeof setTimeout> | 0 = flujo && manosRef.current ? setTimeout(() => flujo.decir(fraseRelleno()), ESPERA_RELLENO_MS) : 0;
     const sinRelleno = () => { if (relleno) { clearTimeout(relleno); relleno = 0; } };
@@ -1141,6 +1156,9 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
       } else if (recuperar()) {
         flujo?.cerrar();
         setMensajes(prev => prev.filter(m => m.id !== BORRADOR).map(m => (m.pendiente ? { ...m, pendiente: false } : m)));
+      } else if (jarvis && !opciones.audio && responderSinConexion(t)) {
+        // Se cayó la conexión y el cerebro sabe algo de eso: contesta de memoria.
+        deMemoria();
       } else {
         flujo?.cancelar();
         setMensajes(prev => prev.filter(m => !m.pendiente && m.id !== BORRADOR));
@@ -1939,6 +1957,7 @@ function AjustesIA({ onCambio, cupo, jarvis = false }: { onCambio: () => void; c
           </div>
         ))}
       </div>}
+      {cupo?.perfiles && <div data-orden="3"><CerebroPropio /></div>}
       {cupo?.perfiles && <div data-orden="3"><MemoriaJarvis /></div>}
       <div className="ai-aj" data-orden="5">
         <H area="dis">Datos del sistema <small>solo lectura · sin datos de clientes</small></H>
@@ -2013,6 +2032,56 @@ function AjustesIA({ onCambio, cupo, jarvis = false }: { onCambio: () => void; c
 }
 
 /** Lo que Javier recuerda del dueño: se ve, se agrega y se borra aquí. */
+/**
+ * CEREBRO PROPIO: Javier estudia su propio código (de a poco, solo, cada 15 min) y se lleva una
+ * copia de lo que sabe al teléfono para contestar sin internet. Aquí se ve el avance y se puede
+ * apurar el estudio.
+ */
+function CerebroPropio() {
+  const [estudio, setEstudio] = useState<{ estudiados: number; total: number } | null>(null);
+  const [estudiando, setEstudiando] = useState(false);
+  const [nota, setNota] = useState('');
+  const [copia, setCopia] = useState(() => estadoCopia());
+  const leerEstado = useCallback(async () => {
+    const { data } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'estudio_estado' } });
+    if (data?.ok) setEstudio({ estudiados: Number(data.estudiados) || 0, total: Number(data.total) || 0 });
+  }, []);
+  useEffect(() => { void leerEstado(); }, [leerEstado]);
+  const estudiar = async () => {
+    setEstudiando(true); setNota('Estudiando… (hasta 2 minutos por tanda)');
+    const { data, error } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'estudiar', max: 8 } });
+    setEstudiando(false);
+    if (error || !data?.ok) { setNota('No se pudo estudiar ahora. Probá en un rato.'); return; }
+    setNota(data.estudiados?.length ? `Aprendió ${data.hechos} cosa${data.hechos === 1 ? '' : 's'} de ${data.estudiados.length} archivo${data.estudiados.length === 1 ? '' : 's'}.` : 'Nada nuevo para estudiar en esta tanda.');
+    void leerEstado();
+  };
+  const llevar = async () => { setNota('Llevando el cerebro al teléfono…'); const ok = await actualizarCopia(true); setCopia(estadoCopia()); setNota(ok ? 'Listo: el teléfono tiene la copia más nueva.' : 'No se pudo bajar ahora.'); };
+  const pct = estudio && estudio.total ? Math.round((estudio.estudiados / estudio.total) * 100) : 0;
+  return (
+    <div className="ai-aj">
+      <h4><i className="jv-pt" data-area="neg" aria-hidden="true" />Cerebro propio <small>aprende solo · funciona sin internet</small></h4>
+      <div className="ai-modu">
+        <span className="ai-modu-ic"><Brain className="w-4 h-4" /></span>
+        <span className="ai-modu-t">
+          <b>Estudio de su propio código{estudio ? ` · ${estudio.estudiados} de ${estudio.total} archivos (${pct} %)` : ''}</b>
+          <span>Javier lee todo el sistema archivo por archivo y lo guarda en su cerebro (rama «Sistema Technoverse»). Sigue solo cada 15 minutos; si un archivo cambia, lo vuelve a estudiar.</span>
+        </span>
+        <button type="button" className="ai-chip" disabled={estudiando} onClick={() => void estudiar()}>{estudiando ? 'Estudiando…' : 'Estudiar ahora'}</button>
+      </div>
+      <div className="ai-modu">
+        <span className="ai-modu-ic"><Download className="w-4 h-4" /></span>
+        <span className="ai-modu-t">
+          <b>Sin internet: {copia.notas} cosa{copia.notas === 1 ? '' : 's'} que sabe</b>
+          <span>{copia.bajado ? `Copia del ${new Date(copia.bajado).toLocaleString('es-CR', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}. ` : ''}Sin conexión contesta con lo que ya aprendió, buscó y corrigió (no piensa nada nuevo hasta que vuelva internet).</span>
+        </span>
+        <button type="button" className="ai-chip" onClick={() => void llevar()}>Actualizar</button>
+      </div>
+      <p className="ai-mw-nota">Lo que contesta bien y no cambia con el día lo guarda y la próxima vez lo dice de memoria, sin IAs. Si una respuesta está mal (👎 o «eso es falso»), se borra y queda la corrección.</p>
+      {nota && <p className="ai-prov" role="status" style={{ margin: '0 14px 12px' }}>{nota}</p>}
+    </div>
+  );
+}
+
 function MemoriaJarvis() {
   const toast = useToast();
   const [items, setItems] = useState<{ id: string; texto: string; tipo: string }[] | null>(null);
