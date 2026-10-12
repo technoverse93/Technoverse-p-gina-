@@ -5,6 +5,8 @@
 //   todo»): Phill contesta y sale del modo, sin que toqués nada.
 // · El saludo con que Phill abre la conversación (instantáneo, sin gastar
 //   IA): hora del día, tu nombre y los avisos que tenés sin ver.
+// · Qué tan rápido da por terminado lo que decís (la pausa de silencio) y
+//   la frase corta con que Phill llena la espera si está consultando algo.
 // Lógica pura: se prueba sin micrófono.
 // =====================================================================
 
@@ -26,3 +28,24 @@ export function saludoManos(nombre?: string | null, avisos = 0, ahora = new Date
   partes.push('Te escucho.');
   return partes.join(' ');
 }
+
+// ------------------------- ritmo de la conversación -------------------------
+/** Cuánto silencio, después de hablar, cuenta como «terminé». */
+export type PausaVoz = 'corta' | 'normal' | 'larga';
+export const PAUSAS_MS: Record<PausaVoz, number> = { corta: 900, normal: 1200, larga: 1800 };
+export const PAUSAS: { id: PausaVoz; nombre: string; ayuda: string }[] = [
+  { id: 'corta', nombre: 'Corta', ayuda: 'Contesta casi al instante; si hacés pausas para pensar, te puede cortar.' },
+  { id: 'normal', nombre: 'Normal', ayuda: 'Espera un segundo y poquito antes de contestar.' },
+  { id: 'larga', nombre: 'Larga', ayuda: 'Te deja pensar con calma antes de contestar.' },
+];
+const CLAVE_PAUSA = 'tv_voz_pausa';
+export function pausaElegida(): PausaVoz {
+  try { const v = localStorage.getItem(CLAVE_PAUSA); return v === 'corta' || v === 'larga' ? v : 'normal'; } catch { return 'normal'; }
+}
+export function fijarPausa(p: PausaVoz): void { try { localStorage.setItem(CLAVE_PAUSA, p); } catch { /* sin almacenamiento */ } }
+
+/** Cuánto espera Phill, consultando, antes de decir algo corto para que no haya silencio muerto. */
+export const ESPERA_RELLENO_MS = 2600;
+const RELLENOS = ['Un momento.', 'Lo reviso.', 'Ya lo miro.', 'Dame un segundo.'];
+let turnoRelleno = 0;
+export function fraseRelleno(): string { return RELLENOS[turnoRelleno++ % RELLENOS.length]; }

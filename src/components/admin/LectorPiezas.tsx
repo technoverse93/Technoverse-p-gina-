@@ -5,13 +5,15 @@
 //   · BarraLectura: mientras habla, una barra sobre la caja de escribir con
 //     Pausar/Seguir y Callar (siempre a mano, aunque la respuesta quede
 //     arriba fuera de vista).
-//   · AjusteVoz: cuándo lee solo (Nunca / Cuando hablo / Siempre).
+//   · AjusteVoz: cuándo lee solo (Nunca / Cuando hablo / Siempre) y cuánto
+//     espera Phill, en manos libres, antes de dar por terminado lo que decís.
 // =====================================================================
 
 import { useState, useSyncExternalStore } from 'react';
-import { Volume2, Pause, Play, Square, VolumeX, Download, Check } from 'lucide-react';
+import { Volume2, Pause, Play, Square, VolumeX, Download, Check, Timer } from 'lucide-react';
 import { lector, modoLectura, fijarModoLectura, puedeHablar, type ModoLectura } from '../../utils/lectorVoz';
 import * as propia from '../../utils/vozPropia';
+import { fijarPausa, PAUSAS, pausaElegida, type PausaVoz } from '../../utils/manosLibres';
 
 export function useLector() {
   return useSyncExternalStore(lector.suscribir, lector.obtener, lector.obtener);
@@ -67,9 +69,28 @@ export function AjusteVoz() {
           <button key={o.id} type="button" role="radio" aria-checked={modo === o.id} data-on={modo === o.id || undefined} disabled={!disponible} onClick={() => cambiar(o.id)}>{o.nombre}</button>
         ))}
       </div>
+      <PausaManos />
       <VozPropia />
       {disponible && <button type="button" className="ai-chip ai-voz-prueba" onClick={() => void lector.hablar('Pura vida. Soy Phill, y así suena mi voz cuando te respondo hablando.', 'prueba')}><Volume2 className="w-4 h-4" />Probar la voz</button>}
     </div>
+  );
+}
+
+/** Manos libres: cuánto silencio espera Phill antes de dar por terminado lo que decís. */
+function PausaManos() {
+  const [pausa, setPausa] = useState<PausaVoz>(() => pausaElegida());
+  return (
+    <>
+      <div className="ai-modu">
+        <span className="ai-modu-ic"><Timer className="w-4 h-4" /></span>
+        <span className="ai-modu-t"><b>Pausa para contestar</b><span>{PAUSAS.find(p => p.id === pausa)?.ayuda}</span></span>
+      </div>
+      <div className="ai-seg ai-seg-voz" role="radiogroup" aria-label="Cuánto esperar antes de contestar en manos libres">
+        {PAUSAS.map(p => (
+          <button key={p.id} type="button" role="radio" aria-checked={pausa === p.id} data-on={pausa === p.id || undefined} onClick={() => { fijarPausa(p.id); setPausa(p.id); }}>{p.nombre}</button>
+        ))}
+      </div>
+    </>
   );
 }
 

@@ -14,16 +14,23 @@
 //
 // Cuándo lee solo: preferencia de este aparato (Ajustes → Voz):
 //   'nunca' · 'voz' (por defecto: cuando le preguntaste hablando) · 'siempre'.
+//
+// HABLA MIENTRAS LA RESPUESTA LLEGA (`abrirFlujo`): en vez de esperar a que
+// termine de escribirse, va diciendo cada oración apenas se completa (ver
+// flujoVoz.ts). La primera sale a los ~1–2 s en lugar de al final.
 // =====================================================================
 
 import { Capacitor } from '@capacitor/core';
 import * as propia from './vozPropia';
+import { crearFlujoHabla } from './flujoVoz';
+import { enOraciones, paraHablar } from './textoHablado';
+
+export { paraHablar };
 
 export type ModoLectura = 'nunca' | 'voz' | 'siempre';
 export type EstadoLector = { estado: 'callado' | 'hablando' | 'pausado'; id: string | null };
 
 const CLAVE_MODO = 'tv_voz_respuestas';
-const MAX_CARACTERES = 1800;
 
 export function modoLectura(): ModoLectura {
   try {
@@ -33,52 +40,6 @@ export function modoLectura(): ModoLectura {
 }
 export function fijarModoLectura(m: ModoLectura): void {
   try { localStorage.setItem(CLAVE_MODO, m); } catch { /* sin almacenamiento: queda el de siempre */ }
-}
-
-/** El texto tal como se dice: sin formato, sin enlaces, con «colones». */
-export function paraHablar(md: string): string {
-  let t = String(md || '');
-  let tabla = false, codigo = false;
-  t = t.replace(/```[\s\S]*?```/g, () => { codigo = true; return ' '; });
-  t = t.split('\n').filter(l => { if (/^\s*\|.*\|\s*$/.test(l)) { tabla = true; return false; } return true; }).join('\n');
-  t = t
-    .replace(/\[([^\]]+)\]\((?:[^)]+)\)/g, '$1')               // [texto](enlace) → texto
-    .replace(/https?:\/\/\S+/g, ' ')                           // enlaces sueltos
-    .replace(/\[[A-ZÉ]+·\d+\]/g, ' ')                          // marcas del carril privado
-    .replace(/^#{1,6}\s*/gm, '')                               // títulos
-    .replace(/^\s*>\s?/gm, '')                                 // citas
-    .replace(/^\s*[-*•]\s+/gm, '')                             // viñetas
-    .replace(/^\s*(\d+)[.)]\s+/gm, '$1. ')                     // listas numeradas
-    .replace(/[*_~`]+/g, '')                                   // negritas, cursivas, código
-    .replace(/₡\s?([\d.,\s]*\d)/g, (_m, n: string) => `${n.replace(/\s+/g, ' ').trim()} colones`)
-    .replace(/\p{Extended_Pictographic}/gu, '')
-    .replace(/[ \t]+/g, ' ')
-    .replace(/\n{2,}/g, '\n')
-    .trim();
-  if (t.length > MAX_CARACTERES) {
-    const corte = t.lastIndexOf('.', MAX_CARACTERES);
-    t = `${t.slice(0, corte > 400 ? corte + 1 : MAX_CARACTERES)} El resto lo tenés en pantalla.`;
-  }
-  if (tabla) t += ' Te dejé una tabla en pantalla.';
-  if (codigo) t += ' Te dejé un bloque de código en pantalla.';
-  return t;
-}
-
-/** Oraciones de hasta ~220 caracteres (las largas se parten en las comas). */
-function enOraciones(t: string): string[] {
-  const base = t.split(/(?<=[.!?…:;])\s+|\n+/).map(x => x.trim()).filter(Boolean);
-  const out: string[] = [];
-  for (const o of base) {
-    if (o.length <= 220) { out.push(o); continue; }
-    let resto = o;
-    while (resto.length > 220) {
-      const c = resto.lastIndexOf(',', 220);
-      const i = c > 60 ? c + 1 : 220;
-      out.push(resto.slice(0, i).trim()); resto = resto.slice(i).trim();
-    }
-    if (resto) out.push(resto);
-  }
-  return out;
 }
 
 // ------------------------- motores -------------------------
@@ -180,34 +141,79 @@ let generacion = 0;
 // Cortes pendientes: el motor de Android no avisa cuando se lo detiene, así
 // que cada oración espera «terminó» o «la cortaron», lo que llegue primero.
 let cortes: (() => void)[] = [];
+// Flujo abierto (habla mientras llega la respuesta): mientras esté abierto, el
+// lector espera oraciones nuevas en vez de terminar al agotar las que tiene.
+let contadorFlujos = 0;
+let flujoVigente = 0;      // id del flujo abierto (0: ninguno)
+let flujoAbierto = false;  // todavía pueden llegar oraciones
+let despertar: (() => void) | null = null;
+let motorActual: Motor | null = null;
+let sonando = -1;          // oración que está sonando (-1: ninguna)
+/** Cuánto sin texto nuevo antes de decir la última oración que esperaba un espacio. */
+const ESPERA_QUIETO_MS = 650;
 
 function fijar(e: EstadoLector) {
   actual = e;
   for (const f of oyentes) f();
 }
+function despertarLector() { const d = despertar; despertar = null; d?.(); }
 function cortar() {
   generacion++;
+  sonando = -1;
   for (const c of cortes) c();
   cortes = [];
+  despertarLector();
+}
+/** Suma una oración a la cola (y la va generando si la actual todavía suena). */
+function empujar(s: string) {
+  frases.push(s);
+  if (motorActual?.preparar && sonando >= 0 && frases.length - 1 === sonando + 1) motorActual.preparar(s);
+  despertarLector();
 }
 
 async function leerDesde(desde: number, gen: number, id: string) {
   const m = await motor();
+  if (gen !== generacion) return;
   if (!m) { fijar({ estado: 'callado', id: null }); return; }
+  motorActual = m;
   let fallas = 0;
-  for (let i = desde; i < frases.length; i++) {
+  for (let i = desde; ; i++) {
     if (gen !== generacion) return;
-    indice = i;
+    // En un flujo abierto, la oración que sigue puede estar por llegar.
+    while (i >= frases.length && flujoAbierto && gen === generacion) await new Promise<void>(ok => { despertar = ok; });
+    if (gen !== generacion) return;
+    if (i >= frases.length) break;
+    indice = i; sonando = i;
     const cortada = new Promise<void>(ok => { cortes.push(ok); });
     // La siguiente oración se va generando mientras suena esta.
     if (m.preparar && frases[i + 1]) m.preparar(frases[i + 1]);
     const dicha = m.decir(frases[i]).then(() => true, () => false);
     const ok = await Promise.race([dicha, cortada.then(() => true)]);
     if (gen !== generacion) return;
+    sonando = -1;
     // Si el motor no puede hablar (sin voces instaladas), no se insiste.
     if (!ok && ++fallas >= 2) break;
   }
+  sonando = -1;
   if (gen === generacion && actual.id === id) fijar({ estado: 'callado', id: null });
+}
+
+/** Lo que usa quien recibe la respuesta en vivo (ver `lector.abrirFlujo`). */
+export interface FlujoLector {
+  /** Suma texto nuevo de la respuesta (markdown tal como llega). */
+  agregar(delta: string): void;
+  /** Dice una frase suelta ya (por ejemplo «Un momento.» mientras piensa). Solo si todavía no habló. */
+  decir(frase: string): void;
+  /** El texto de la respuesta ya está completo (aunque falte la revisión): se dice hasta lo último. */
+  completo(): void;
+  /** El texto se borró y empieza otro (otro modelo, o una corrección: avisa «Perdón, corrijo»). */
+  reiniciar(correccion?: boolean): void;
+  /** Terminó: dice lo que faltaba. Si nunca llegó texto en vivo, dice `textoFinal` completo. */
+  cerrar(textoFinal?: string): void;
+  /** No se dice más (falló o la cortaron) y se calla lo que sonaba. */
+  cancelar(): void;
+  /** ¿Ya salió algo a hablar? */
+  empezo(): boolean;
 }
 
 export const lector = {
@@ -224,6 +230,63 @@ export const lector = {
     const gen = generacion;
     fijar({ estado: 'hablando', id });
     await leerDesde(0, gen, id);
+  },
+
+  /**
+   * Empieza a hablar MIENTRAS la respuesta todavía llega: cada oración se dice
+   * apenas se completa. Corta lo que se estuviera leyendo.
+   */
+  abrirFlujo(id: string): FlujoLector {
+    lector.callar();
+    const mio = ++contadorFlujos;
+    flujoVigente = mio; flujoAbierto = true;
+    frases = []; indice = 0;
+    const f = crearFlujoHabla();
+    let empezado = false, recibido = 0;
+    let quieto: ReturnType<typeof setTimeout> | 0 = 0;
+    const vigente = () => flujoVigente === mio;
+    const sinQuieto = () => { if (quieto) { clearTimeout(quieto); quieto = 0; } };
+    const poner = (oraciones: string[]) => {
+      if (!vigente() || !oraciones.length) return;
+      for (const o of oraciones) empujar(o);
+      if (!empezado) {
+        empezado = true;
+        fijar({ estado: 'hablando', id });
+        void leerDesde(0, generacion, id);
+      }
+    };
+    return {
+      agregar(delta) {
+        if (!vigente() || !delta) return;
+        recibido += delta.length;
+        poner(f.agregar(delta));
+        // Si el texto se queda quieto (la revisión, o una pausa del modelo), la última
+        // oración, que esperaba un espacio después del punto, no se queda sin decir.
+        sinQuieto();
+        quieto = setTimeout(() => { quieto = 0; if (vigente()) poner(f.vaciar(false)); }, ESPERA_QUIETO_MS);
+      },
+      completo() { sinQuieto(); if (vigente()) poner(f.vaciar(true)); },
+      decir(frase) { if (vigente() && !empezado) poner([frase]); },
+      reiniciar(correccion = false) {
+        if (!vigente()) return;
+        sinQuieto();
+        // Lo que no se dijo todavía se descarta; lo que ya suena, termina.
+        frases.length = Math.min(frases.length, indice + 1);
+        f.reiniciar(); recibido = 0;
+        if (correccion && empezado) poner(['Perdón, corrijo.']);
+      },
+      cerrar(textoFinal) {
+        sinQuieto();
+        if (!vigente()) return;
+        if (!recibido && textoFinal) { recibido += textoFinal.length; poner(f.agregar(textoFinal)); }
+        poner(f.cerrar());
+        flujoAbierto = false;
+        despertarLector();
+        if (!empezado) flujoVigente = 0;
+      },
+      cancelar() { sinQuieto(); if (vigente()) lector.callar(); },
+      empezo: () => empezado,
+    };
   },
 
   /** Pausa en la oración en curso. */
@@ -243,12 +306,13 @@ export const lector = {
     void leerDesde(indice, gen, id);
   },
 
-  /** Silencio total. */
+  /** Silencio total (también cierra un flujo abierto). */
   callar(): void {
-    if (actual.estado === 'callado' && !frases.length) return;
+    flujoVigente = 0; flujoAbierto = false;
+    if (actual.estado === 'callado' && !frases.length) { despertarLector(); return; }
     cortar();
     void motor().then(m => m?.callar());
-    frases = []; indice = 0;
+    frases = []; indice = 0; sonando = -1;
     fijar({ estado: 'callado', id: null });
   },
 };
