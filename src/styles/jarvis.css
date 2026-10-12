@@ -1,14 +1,14 @@
 /* =====================================================================
    JARVIS · SISTEMA VISUAL (diseño aprobado, claro y oscuro)
    =====================================================================
-   El cerebro marca el estilo de todo Jarvis: cielo de fondo con estrellas
+   El cerebro marca el estilo de todo Phill: cielo de fondo con estrellas
    tenues, cada área con su color de constelación, fibras curvas, señales
    que viajan y versalitas para los rótulos. Claro = observatorio de día;
-   oscuro = cielo nocturno. Solo aplica a Jarvis (superadmin): el resto
+   oscuro = cielo nocturno. Solo aplica a Phill (superadmin): el resto
    del personal sigue con «Asistencia de IA» como siempre.
 
    Todo color sale de los tokens --jv-*; además se reasignan los del panel
-   (--bg-surface, --accent…) dentro de Jarvis, así cada pieza existente
+   (--bg-surface, --accent…) dentro de Phill, así cada pieza existente
    (tarjetas, menús, tablas) toma la paleta sin tocarla una por una.
    Movimiento: solo opacidad y posición (0,2 s), lo que el Galaxy A12
    resuelve sin trabarse; «reducir movimiento» lo apaga.
@@ -35,7 +35,7 @@
   --jv-a-neg: #7FD8CF; --jv-a-dis: #8FB4FF; --jv-a-tal: #F0B37E; --jv-a-int: #C3A3FF; --jv-a-vos: #F49BB6;
   --jv-sombra: 0 10px 30px -16px rgba(0, 0, 0, .8);
 }
-/* Los tokens del panel, reasignados dentro de Jarvis. */
+/* Los tokens del panel, reasignados dentro de Phill. */
 .ai-root[data-jarvis], .jv-hoja[data-jarvis] {
   --bg-base: var(--jv-fondo); --bg-surface: var(--jv-sup); --bg-sunken: var(--jv-hundido); --tile: var(--jv-tile);
   --text-primary: var(--jv-tinta); --text-secondary: var(--jv-tinta2); --text-muted: var(--jv-tenue);
@@ -53,7 +53,7 @@
 .jv-hoja[data-jarvis] .jv-hoja-cab span { color: var(--jv-tinta); font-family: var(--jv-f-ui); }
 .jv-fab[data-jarvis] { background: var(--jv-sup); color: var(--jv-acento); border: 1px solid var(--jv-linea); box-shadow: var(--jv-sombra), 0 0 0 4px rgba(var(--jv-acento-rgb), .1); }
 
-/* ---------- Orbe: la constelación-logo de Jarvis ---------- */
+/* ---------- Orbe: la constelación-logo de Phill ---------- */
 .jv-orbe { flex: none; display: block; overflow: visible; }
 .jv-orbe .f { fill: none; stroke: var(--jv-acento); stroke-width: 1.1; opacity: .45; }
 .jv-orbe .p { fill: none; stroke: var(--jv-oro); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 3 140; animation: jv-senal 2.8s linear infinite; }
@@ -137,7 +137,7 @@ span.jv-tit:hover { background: transparent; }
 .jv-pensando circle { fill: var(--jv-acento); }
 @keyframes jv-senal2 { to { stroke-dashoffset: -64; } }
 /* Debajo de cada respuesta: velocidad, tokens y tiempo, en letra chica. */
-/* Quién respondió y quién revisó, debajo de cada respuesta de Jarvis. */
+/* Quién respondió y quién revisó, debajo de cada respuesta de Phill. */
 .jv-quien { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 2px; }
 .jv-quien > span { display: inline-flex; align-items: center; gap: 6px; min-width: 0; padding: 3px 9px; border-radius: 999px; border: 1px solid var(--jv-linea); background: var(--jv-hundido); font: 400 11px var(--jv-f-ui); color: var(--jv-tinta2); }
 .jv-quien b { font-weight: 600; color: var(--jv-tinta); overflow-wrap: anywhere; }
@@ -227,7 +227,7 @@ span.jv-tit:hover { background: transparent; }
 .ai-root[data-jarvis] .ai-sw::after { transition: left .2s cubic-bezier(.2, .8, .2, 1); }
 .ai-root[data-jarvis] .ai-seg button[data-on] { background: var(--jv-acento); color: var(--jv-tinta-ac); box-shadow: none; }
 
-/* ---------- Avisos de Jarvis (la campana) ---------- */
+/* ---------- Avisos de Phill (la campana) ---------- */
 .ai-root[data-jarvis] .jv-campana { position: relative; }
 .ai-root[data-jarvis] .jv-campana-n { position: absolute; top: -3px; right: -3px; min-width: 17px; height: 17px; padding: 0 4px; border-radius: 999px; background: var(--jv-oro); color: var(--jv-fondo); font: 700 10px/17px var(--jv-f-ui); text-align: center; pointer-events: none; }
 .ai-root[data-jarvis] .jv-aviso { display: grid; grid-template-columns: 32px minmax(0, 1fr); gap: 10px; padding: 12px; background: var(--jv-sup); border: 1px solid var(--jv-linea); border-radius: 14px; margin-top: 8px; }
@@ -246,7 +246,7 @@ span.jv-tit:hover { background: transparent; }
 .ai-root[data-jarvis] .jv-aviso-vacio { margin: 4px 2px 0; font: 400 13px/1.5 var(--jv-f-ui); color: var(--jv-tinta2); display: flex; flex-direction: column; align-items: flex-start; gap: 8px; }
 .ai-root[data-jarvis] .jv-avisos-todos { justify-self: start; margin: 2px 0 2px; }
 
-/* ---------- Salud de Jarvis (Ajustes) ---------- */
+/* ---------- Salud de Phill (Ajustes) ---------- */
 .ai-root[data-jarvis] .jv-salud { gap: 8px; --jv-mal: #E5484D; }
 .ai-root[data-jarvis] .jv-salud-estado { --k: var(--jv-a-neg); display: grid; grid-template-columns: 40px minmax(0, 1fr); gap: 12px; align-items: center; padding: 12px; background: var(--jv-sup); border: 1px solid color-mix(in srgb, var(--k) 40%, var(--jv-linea)); border-radius: 14px; }
 .ai-root[data-jarvis] .jv-salud-estado[data-estado="atencion"] { --k: var(--jv-oro); }
@@ -334,7 +334,7 @@ span.jv-tit:hover { background: transparent; }
 #admin-panel-root .ai-root[data-jarvis] .ai-hi > button:first-child { justify-content: stretch !important; justify-items: stretch; align-items: start !important; text-align: left; width: 100%; min-height: 0 !important; }
 .jv-hi-m { width: 100%; }
 
-/* Jarvis es un solo hilo: el día se marca con un separador discreto. */
+/* Phill es un solo hilo: el día se marca con un separador discreto. */
 .jv-dia { display: flex; align-items: center; gap: 10px; margin: 4px 0; color: var(--jv-tenue); font: 600 10.5px var(--jv-f-astro); letter-spacing: .18em; }
 .jv-dia::before, .jv-dia::after { content: ""; flex: 1; height: 1px; background: var(--jv-linea); }
 /* Sin lista de conversaciones, la cabecera arranca con el orbe. */
@@ -342,7 +342,7 @@ span.jv-tit:hover { background: transparent; }
 
 /* =====================================================================
    CEREBRO 3D (diseño aprobado). La escena es siempre de noche (estética);
-   la cabecera, el zoom y la hoja siguen el tema claro u oscuro de Jarvis.
+   la cabecera, el zoom y la hoja siguen el tema claro u oscuro de Phill.
    Todo va bajo :is(#admin-panel-root, body) .jv-cerebro para ganarle a las reglas generales de botones y cajas
    del panel sin usar !important. Los botones se reinician a mano: con
    `all: unset` el panel los dejaba de 0 px de alto.

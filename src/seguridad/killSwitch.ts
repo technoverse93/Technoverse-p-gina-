@@ -202,7 +202,7 @@ export async function avisarCambioDeBloqueos(): Promise<void> {
 }
 
 /**
- * ¿Me cerraron la sesión? Jarvis puede cerrar las sesiones de una persona
+ * ¿Me cerraron la sesión? Phill puede cerrar las sesiones de una persona
  * (borra sus sesiones en el servidor); el token que ya tiene seguiría
  * sirviendo hasta vencer, así que cada panel pregunta por la suya y, si ya
  * no existe, sale. Mismo criterio que arriba: el aviso no dice a quién, y
@@ -225,7 +225,7 @@ async function revisarSesion(): Promise<void> {
   } catch { /* sin red: nadie sale */ }
 }
 
-/** Avisa a todos que revisen si su sesión sigue viva. Lo usa Jarvis. */
+/** Avisa a todos que revisen si su sesión sigue viva. Lo usa Phill. */
 export async function avisarCierreDeSesion(): Promise<void> {
   try {
     const c = canal || supabase.channel('system_bans');

@@ -6,7 +6,7 @@
 //   · vigilar (cada 15 min): chats sin responder, existencias en el mínimo,
 //     equipos listos que nadie retira, ingresos fallidos o desde un aparato
 //     nuevo, y un día de ventas muy por debajo de lo normal.
-//   · resumen (7:00 a. m.): el resumen de la mañana, con la voz de Jarvis.
+//   · resumen (7:00 a. m.): el resumen de la mañana, con la voz de Phill.
 //   · repaso (2:30 a. m.): ordena el cerebro solo y le pone vector a todo.
 //   · pruebas (6:45 a. m.): prueba cada IA y herramienta (ver salud.ts).
 // Cada aviso queda en `jarvis_avisos` (una sola vez: clave única) y la app
@@ -138,7 +138,7 @@ async function resumen(admin: Db, uid: string, nombre: string, redactar: Redacta
   ].filter(Boolean).join('\n');
   const fecha = new Date().toLocaleDateString('es-CR', { timeZone: 'America/Costa_Rica', weekday: 'long', day: 'numeric', month: 'long' });
   const texto = await redactar(
-    `Sos Jarvis, el asistente personal del dueño de Technoverse Costa Rica (tienda y taller de celulares). Escribí su RESUMEN DE LA MAÑANA para escucharlo en voz alta: saludo corto con su nombre, lo más importante primero, cifras exactas de los datos, y cerrá con UNA recomendación concreta para hoy. Tu propia salud (la línea «Salud de Jarvis») mencionala solo si algo falla, en una frase. 4 a 7 frases, voseo costarricense cálido, sin listas ni títulos, sin inventar nada que no esté en los datos. Devolvé SOLO JSON: {"texto":"…"}`,
+    `Sos Phill, el asistente personal del dueño de Technoverse Costa Rica (tienda y taller de celulares). Escribí su RESUMEN DE LA MAÑANA para escucharlo en voz alta: saludo corto con su nombre, lo más importante primero, cifras exactas de los datos, y cerrá con UNA recomendación concreta para hoy. Tu propia salud (la línea «Salud de Phill») mencionala solo si algo falla, en una frase. 4 a 7 frases, voseo costarricense cálido, sin listas ni títulos, sin inventar nada que no esté en los datos. Devolvé SOLO JSON: {"texto":"…"}`,
     `Nombre del dueño: ${nombre}\nHoy es ${fecha}.\n\nDATOS:\n${datos}`,
   ).catch(() => null);
   const plano = `Buenos días${nombre ? `, ${nombre}` : ''}. Ayer cerramos en ${colon(total)} con ${ventas.length} venta${ventas.length === 1 ? '' : 's'}. ${(agenda.data || []).length ? `Hoy tenés ${(agenda.data || []).length} pendiente${(agenda.data || []).length === 1 ? '' : 's'} en la agenda. ` : ''}${bajos.length ? `${bajos.length} producto${bajos.length === 1 ? ' está' : 's están'} en el mínimo. ` : ''}${(chats.data || []).length ? `Hay ${(chats.data || []).length} chat${(chats.data || []).length === 1 ? '' : 's'} esperando respuesta. ` : ''}Que tengás un buen día.`;

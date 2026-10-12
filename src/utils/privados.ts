@@ -2,7 +2,7 @@
 // CARRIL PRIVADO DE JARVIS (lo usan AsistenteIA y el mini-widget)
 // =====================================================================
 /**
- * Carril privado de Jarvis: cédulas, correos y teléfonos que escriba el
+ * Carril privado de Phill: cédulas, correos y teléfonos que escriba el
  * superadmin se sacan del texto ANTES de mandarlo. La IA (Google) solo ve
  * marcas como [CÉDULA·1]; los datos van aparte y solo los usan las tarjetas.
  */

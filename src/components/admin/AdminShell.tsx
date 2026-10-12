@@ -219,7 +219,7 @@ export default function AdminShell({
    */
   const carpetasDeNav = moduloActivo.carpetas;
 
-  // Las ventanas flotantes (chat, Jarvis) empiezan debajo de esta barra.
+  // Las ventanas flotantes (chat, Phill) empiezan debajo de esta barra.
   const cabeceraRef = useRef<HTMLElement>(null);
   useEffect(() => medirBordeCabecera(cabeceraRef.current), []);
 

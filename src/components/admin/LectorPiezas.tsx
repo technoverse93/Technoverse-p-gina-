@@ -68,12 +68,12 @@ export function AjusteVoz() {
         ))}
       </div>
       <VozPropia />
-      {disponible && <button type="button" className="ai-chip ai-voz-prueba" onClick={() => void lector.hablar('Pura vida. Soy Jarvis, y así suena mi voz cuando te respondo hablando.', 'prueba')}><Volume2 className="w-4 h-4" />Probar la voz</button>}
+      {disponible && <button type="button" className="ai-chip ai-voz-prueba" onClick={() => void lector.hablar('Pura vida. Soy Phill, y así suena mi voz cuando te respondo hablando.', 'prueba')}><Volume2 className="w-4 h-4" />Probar la voz</button>}
     </div>
   );
 }
 
-/** La voz propia de Jarvis: elegirla, bajarla una vez y usarla. */
+/** La voz propia de Phill: elegirla, bajarla una vez y usarla. */
 function VozPropia() {
   const [voz, setVoz] = useState(() => propia.vozElegida());
   const [motor, setMotor] = useState(() => propia.motorElegido());
@@ -92,9 +92,9 @@ function VozPropia() {
     <>
       <div className="ai-modu">
         <span className="ai-modu-ic"><Volume2 className="w-4 h-4" /></span>
-        <span className="ai-modu-t"><b>Voz de Jarvis</b><span>{motor === 'propia' && lista ? 'Su voz propia: la misma en todos tus aparatos, sin Google.' : 'La voz del teléfono. Bajá la voz propia de Jarvis (una sola vez).'}</span></span>
+        <span className="ai-modu-t"><b>Voz de Phill</b><span>{motor === 'propia' && lista ? 'Su voz propia: la misma en todos tus aparatos, sin Google.' : 'La voz del teléfono. Bajá la voz propia de Phill (una sola vez).'}</span></span>
       </div>
-      <div className="ai-seg ai-seg-voz ai-seg-dos" role="radiogroup" aria-label="Qué voz usa Jarvis">
+      <div className="ai-seg ai-seg-voz ai-seg-dos" role="radiogroup" aria-label="Qué voz usa Phill">
         <button type="button" role="radio" aria-checked={motor === 'propia'} data-on={motor === 'propia' || undefined} onClick={() => { propia.fijarMotor('propia'); setMotor('propia'); }}>Propia</button>
         <button type="button" role="radio" aria-checked={motor === 'telefono'} data-on={motor === 'telefono' || undefined} onClick={() => { propia.fijarMotor('telefono'); setMotor('telefono'); }}>Del teléfono</button>
       </div>

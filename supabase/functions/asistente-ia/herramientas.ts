@@ -30,7 +30,7 @@ export type Consulta = {
   filas: string;        // «4 productos», «23 facturas»
   detalle: string;      // lo que leyó la IA, resumido (se ve al abrir la tarjeta)
   sinPermiso?: boolean;
-  /** Marcas de Jarvis dentro de la respuesta: tarjeta de acción o botón para abrir un módulo. */
+  /** Marcas de Phill dentro de la respuesta: tarjeta de acción o botón para abrir un módulo. */
   tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision';
   id?: string;
   destino?: string;
@@ -813,7 +813,7 @@ const MAX_TEXTO = 9000;
  * PRECIOS de una página de tienda. Casi nunca están en el texto visible al
  * principio: las tiendas (Magento como Tienda Monge, Shopify, WooCommerce…)
  * los ponen en datos estructurados (JSON-LD), metaetiquetas o atributos.
- * Antes solo se leían si venían entre comillas y Jarvis decía «precio no
+ * Antes solo se leían si venían entre comillas y Phill decía «precio no
  * disponible» con el precio en la página.
  */
 function preciosDe(html: string): string[] {

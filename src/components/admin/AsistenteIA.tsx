@@ -47,7 +47,7 @@ import { Orbe, Pensando, IconoConstelacion, areaDe, saludo } from './JarvisVisua
 /** Abre un módulo del panel en su pestaña (lo da AdminPanel). */
 const AbrirModuloCtx = React.createContext<((m: string) => void) | undefined>(undefined);
 const VerCerebroCtx = React.createContext<(() => void) | undefined>(undefined);
-/** Jarvis (superadmin) usa el diseño de constelaciones; el resto del personal, el de siempre. */
+/** Phill (superadmin) usa el diseño de constelaciones; el resto del personal, el de siempre. */
 const JarvisCtx = React.createContext(false);
 
 interface Conversacion { id: string; titulo: string; actualizado_en: string }
@@ -55,7 +55,7 @@ interface Conversacion { id: string; titulo: string; actualizado_en: string }
 interface Panel { columnas: string[]; filas: (string | number | null)[][]; puntos?: ({ lat: number; lon: number; etiqueta: string } | null)[] }
 interface Consulta {
   modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean; panel?: Panel;
-  /** Jarvis: «accion» es una propuesta (tarjeta con confirmar); «navegar», un botón para abrir un módulo. */
+  /** Phill: «accion» es una propuesta (tarjeta con confirmar); «navegar», un botón para abrir un módulo. */
   tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision'; id?: string; destino?: string; grafico?: Grafico;
 }
 type Perfil = 'rapido' | 'equilibrado' | 'profundo';
@@ -70,15 +70,15 @@ interface Mensaje {
   estado?: string;
   /** Vistas previas de las fotos que se mandaron en esta sesión. */
   vistas?: { nombre: string; tipo: string; url?: string }[];
-  /** Jarvis: velocidad, modo y cuánto tardó la respuesta. */
+  /** Phill: velocidad, modo y cuánto tardó la respuesta. */
   perfil?: Perfil | null; persona?: string | null; ms?: number | null;
   /** 👍 = 1, 👎 = -1. */
   valoracion?: number | null;
-  /** Jarvis subió la velocidad porque la pregunta pedía análisis. */
+  /** Phill subió la velocidad porque la pregunta pedía análisis. */
   escalado?: boolean;
   /** Segundos de la nota de voz, si el mensaje se dictó (solo en vivo). */
   porVoz?: number;
-  /** Cuándo se dijo (para los separadores de día de Jarvis). */
+  /** Cuándo se dijo (para los separadores de día de Phill). */
   creado_en?: string;
 }
 interface Adjunto { nombre: string; tipo: string; datos: string; vista?: string }
@@ -92,7 +92,7 @@ interface Cupo {
   modulos?: string[]; consultasHoy?: number;
   busquedaWeb?: boolean; busquedasMes?: number; cupoBusquedas?: number;
   capacidades?: { enlaces: boolean; codigo: boolean; archivos: boolean };
-  /** Solo superadmin: qué velocidades tienen cupo y si Jarvis puede preparar acciones. */
+  /** Solo superadmin: qué velocidades tienen cupo y si Phill puede preparar acciones. */
   perfiles?: Record<Perfil, boolean>; acciones?: boolean;
 }
 type Modulos = Record<'inventario' | 'facturacion' | 'taller' | 'errores' | 'seguridad' | 'finanzas' | 'internet' | 'enlaces' | 'archivos' | 'codigo' | 'acciones' | 'revisar' | 'aprender' | 'chat_directo' | 'taller_directo' | 'inventario_directo', boolean>;
@@ -114,16 +114,16 @@ const CAPACIDADES: { id: keyof Modulos; nombre: string; desc: string; icono: Luc
   { id: 'archivos', nombre: 'Fotos y PDF', desc: 'Hasta 3 por mensaje', icono: Paperclip },
   { id: 'codigo', nombre: 'Cálculos con código', desc: 'Resultados exactos', icono: Code2 },
   { id: 'revisar', nombre: 'Revisión por otra IA', desc: 'Otra IA revisa cada respuesta y la corrige si hace falta', icono: ShieldCheck },
-  { id: 'aprender', nombre: 'Aprender solo', desc: 'Jarvis guarda en su cerebro lo útil de cada conversación', icono: Brain },
+  { id: 'aprender', nombre: 'Aprender solo', desc: 'Phill guarda en su cerebro lo útil de cada conversación', icono: Brain },
 ];
-/** Velocidades de Jarvis (tiempos medidos con la clave gratis). */
+/** Velocidades de Phill (tiempos medidos con la clave gratis). */
 const PERFILES: { id: Perfil; nombre: string; desc: string; modelo: string; t: string; icono: LucideIcon }[] = [
   { id: 'rapido', nombre: 'Rápido', desc: 'Órdenes y datos directos. Las cuentas las hacen las consultas del sistema.', modelo: 'Flash-Lite · sin razonar', t: '~0,5 s', icono: Zap },
   { id: 'equilibrado', nombre: 'Equilibrado', desc: 'Análisis con varios datos y comparaciones.', modelo: 'Flash-Lite · razona', t: '~2 s', icono: Scale },
   { id: 'profundo', nombre: 'Profundo', desc: 'Decisiones, auditorías y modo Arquitecto.', modelo: 'Flash 3.8 · razona a fondo', t: '3–15 s', icono: Brain },
 ];
 const PERSONAS: { id: Persona; nombre: string; desc: string; icono: LucideIcon }[] = [
-  { id: 'jarvis', nombre: 'Jarvis', desc: 'Consulta y opera el panel. Antes de cambiar algo te muestra una tarjeta y espera tu confirmación.', icono: Sparkles },
+  { id: 'jarvis', nombre: 'Phill', desc: 'Consulta y opera el panel. Antes de cambiar algo te muestra una tarjeta y espera tu confirmación.', icono: Sparkles },
   { id: 'arquitecto', nombre: 'Arquitecto', desc: 'Evalúa ideas y cambios futuros y te deja el requerimiento listo para programar. No ejecuta nada.', icono: Lightbulb },
 ];
 const ONDA = Array.from({ length: 22 }, (_, n) => `-${((n * 0.137) % 1).toFixed(2)}s`);
@@ -177,7 +177,7 @@ const PROV_DE: Record<string, string> = Object.fromEntries(Object.entries({ groq
  * JARVIS PROPIO: baja sus conversaciones (respuestas finales, ya revisadas,
  * sin las que no te gustaron y con los datos personales tapados) en el
  * formato que se usa para entrenar un modelo abierto: con eso se ajusta
- * «Jarvis-1», un modelo que es tuyo y corre donde quieras.
+ * «Phill-1», un modelo que es tuyo y corre donde quieras.
  */
 function EntrenarJarvis() {
   const [estado, setEstado] = useState<'' | 'armando' | 'listo' | 'error'>('');
@@ -194,14 +194,14 @@ function EntrenarJarvis() {
       else { const url = URL.createObjectURL(archivo); const a = document.createElement('a'); a.href = url; a.download = nombre; a.click(); setTimeout(() => URL.revokeObjectURL(url), 4000); }
     } catch { /* cancelado */ }
     setEstado('listo');
-    setInfo(`${data.ejemplos} ejemplos (${data.aprobadas} con 👍). Mientras más conversás y valorás respuestas, mejor sale Jarvis-1.`);
+    setInfo(`${data.ejemplos} ejemplos (${data.aprobadas} con 👍). Mientras más conversás y valorás respuestas, mejor sale Phill-1.`);
   };
   return (
     <div className="ai-aj">
-      <h4>Entrenar a Jarvis <small>su modelo propio</small></h4>
+      <h4>Entrenar a Phill <small>su modelo propio</small></h4>
       <div className="ai-modu">
         <span className="ai-modu-ic"><Brain className="w-4 h-4" /></span>
-        <span className="ai-modu-t"><b>Datos de entrenamiento</b><span>Tus conversaciones con Jarvis (ya revisadas, sin datos personales) listas para ajustar un modelo abierto y que Jarvis-1 sea tuyo.</span></span>
+        <span className="ai-modu-t"><b>Datos de entrenamiento</b><span>Tus conversaciones con Phill (ya revisadas, sin datos personales) listas para ajustar un modelo abierto y que Phill-1 sea tuyo.</span></span>
       </div>
       <button type="button" className="ai-chip ai-voz-prueba" disabled={estado === 'armando'} onClick={() => void bajar()}>
         <Download className="w-4 h-4" />{estado === 'armando' ? 'Armando…' : 'Bajar datos (JSONL)'}
@@ -238,7 +238,7 @@ function nombreModelo(m?: string | null, proveedor?: string | null): string {
 // al cerrar la app; nunca en localStorage, porque son conversaciones
 // privadas en un teléfono que puede ser compartido).
 const COLUMNAS_BASE = 'id,rol,texto,fuentes,consultas,tokens_in,tokens_out,proveedor,modelo,busco';
-// perfil/persona/ms llegaron con Jarvis; si la base todavía no los tiene,
+// perfil/persona/ms llegaron con Phill; si la base todavía no los tiene,
 // se cae a las columnas de siempre en vez de no mostrar nada.
 let COLUMNAS_MSG = `${COLUMNAS_BASE},perfil,persona,ms,valoracion,creado_en`;
 const CLAVE_CACHE = 'tv_ia_cache';
@@ -276,7 +276,7 @@ function quitarDeCache(id: string) {
 function leerMensajes(id: string): Promise<Mensaje[] | null> {
   const ya = enVuelo.get(id);
   if (ya) return ya;
-  // El hilo de Jarvis es uno solo y crece siempre: se traen los últimos 120.
+  // El hilo de Phill es uno solo y crece siempre: se traen los últimos 120.
   const leer = () => supabase.from('ia_mensajes').select(COLUMNAS_MSG).eq('conversacion_id', id).order('creado_en', { ascending: false }).limit(120);
   const p = Promise.resolve(leer()).then(async r => {
     if (r.error && COLUMNAS_MSG !== COLUMNAS_BASE && /column|columna/i.test(r.error.message)) { COLUMNAS_MSG = COLUMNAS_BASE; return await leer(); }
@@ -293,7 +293,7 @@ function leerMensajes(id: string): Promise<Mensaje[] | null> {
 
 const CLAVE_ACTIVA = 'tv_ia_conversacion';
 // También en localStorage (solo el id, no los mensajes): al abrir la app en
-// frío, Jarvis ya sabe cuál es su hilo y no muestra el saludo vacío un
+// frío, Phill ya sabe cuál es su hilo y no muestra el saludo vacío un
 // instante antes de saltar a la conversación.
 const leerActiva = () => { try { const k = `${CLAVE_ACTIVA}:${dueñoCache}`; return sessionStorage.getItem(k) || localStorage.getItem(k); } catch { return null; } };
 const guardarActiva = (id: string | null) => {
@@ -496,7 +496,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
     );
   }
   const enVivo = m.id === BORRADOR;
-  // Lecturas arriba (como siempre); lo de Jarvis —gráficos, abrir un
+  // Lecturas arriba (como siempre); lo de Phill —gráficos, abrir un
   // módulo y acciones por confirmar— después del texto, que lo explica.
   const lecturas = (m.consultas || []).filter(c => !c.tipo);
   const memorias = (m.consultas || []).filter(c => c.tipo === 'memoria');
@@ -562,7 +562,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
       </div>}
       {nota !== null && (
         <form className="ai-nota-val" onSubmit={e => { e.preventDefault(); onValorar!(m.id, -1, nota.trim() || undefined); setNota(null); }}>
-          <input className="glass-input rounded-lg px-3 py-2 text-[13px]" value={nota} onChange={e => setNota(e.target.value)} maxLength={200} placeholder="¿Qué no te gustó? Jarvis lo evita en adelante" aria-label="Qué no te gustó" autoFocus />
+          <input className="glass-input rounded-lg px-3 py-2 text-[13px]" value={nota} onChange={e => setNota(e.target.value)} maxLength={200} placeholder="¿Qué no te gustó? Phill lo evita en adelante" aria-label="Qué no te gustó" autoFocus />
           <button type="submit" className="ai-chip">Enviar</button>
           <button type="button" className="ai-chip" onClick={() => setNota(null)}>Omitir</button>
         </form>
@@ -630,7 +630,7 @@ const ListaMensajes = React.memo(function ListaMensajes({ mensajes, onCopiar, on
   // Regenerar y editar solo aplican al último intercambio (como en Claude).
   const ultIA = mensajes.length - 1, ultYo = mensajes[ultIA]?.rol === 'assistant' ? ultIA - 1 : -1;
   const jv = React.useContext(JarvisCtx);
-  // Jarvis es un solo hilo: el día se marca cuando cambia (Hoy, Ayer, 3 de octubre).
+  // Phill es un solo hilo: el día se marca cuando cambia (Hoy, Ayer, 3 de octubre).
   const dia = (m: Mensaje) => diaDe(m.creado_en || new Date().toISOString());
   return <>{mensajes.map((m, i) => (
     <React.Fragment key={m.id}>
@@ -734,7 +734,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const [activa, setActivaEstado] = useState<string | null>(() => conversacionInicial || leerActiva());
   const setActiva = useCallback((id: string | null) => { guardarActiva(id); setActivaEstado(id); }, []);
   const [mensajes, setMensajes] = useState<Mensaje[]>([]);
-  // El cupo se recuerda en esta sesión: al abrir, Jarvis aparece de una con
+  // El cupo se recuerda en esta sesión: al abrir, Phill aparece de una con
   // sus controles y se actualiza por detrás (antes esperaba al servidor).
   const claveCupo = `tv_ia_cupo:${currentUser?.id || 'anon'}`;
   const [cupo, setCupoEstado] = useState<Cupo | null>(() => { try { return JSON.parse(sessionStorage.getItem(claveCupo) || 'null'); } catch { return null; } });
@@ -755,7 +755,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const [cajon, setCajon] = useState<null | 'historial' | 'cupo'>(null);
   const finRef = useRef<HTMLDivElement>(null);
   const cajaRef = useRef<HTMLTextAreaElement>(null);
-  // Jarvis (solo superadmin): con quién habla, a qué velocidad y la voz.
+  // Phill (solo superadmin): con quién habla, a qué velocidad y la voz.
   const [persona, setPersonaEstado] = useState<Persona>(() => leerPref<Persona>('tv_jarvis_persona', 'jarvis', ['jarvis', 'arquitecto']));
   const [perfil, setPerfilEstado] = useState<Perfil>(() => leerPref<Perfil>('tv_jarvis_perfil', 'rapido', ['rapido', 'equilibrado', 'profundo']));
   const setPersona = (p: Persona) => { setPersonaEstado(p); guardarPref('tv_jarvis_persona', p); };
@@ -774,9 +774,9 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const despedir = useRef(false);     // lo último que dijiste fue una despedida
   const grabandoManos = useRef(false);
   const { estado: estadoLector } = useLector();
-  // Jarvis se enciende solo cuando el servidor ya lo tiene (la función
+  // Phill se enciende solo cuando el servidor ya lo tiene (la función
   // nueva informa las velocidades en el cupo); antes, todo queda como siempre.
-  // El superadmin ES Jarvis desde el primer cuadro: antes, hasta que llegaba
+  // El superadmin ES Phill desde el primer cuadro: antes, hasta que llegaba
   // el cupo del servidor se veía un instante el aspecto de «Asistencia de IA».
   const jarvis = soySuper && (cupo ? !!cupo.perfiles : true);
   const avisosSinLeer = useAvisosSinLeer(jarvis);
@@ -802,7 +802,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     setMensajes(prev => prev.map(m => (m.id === id ? { ...m, valoracion: v } : m)));
     void supabase.functions.invoke('asistente-ia', { body: { accion: 'valorar', id, valor: v, nota } }).then(({ data }) => {
       if (!data?.ok) toast.error('No se pudo guardar la valoración.');
-      else if (v === -1 && nota) toast.success('Anotado: Jarvis lo va a evitar.');
+      else if (v === -1 && nota) toast.success('Anotado: Phill lo va a evitar.');
     });
   }, [toast]);
   // La conversación que acaba de crear el primer envío ya está en pantalla;
@@ -822,7 +822,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     if (data?.ok) setCupo(data.cupo);
   }, [setCupo]);
   useEffect(() => { void cargarConvs(); void cargarCupo(); }, [cargarConvs, cargarCupo]);
-  // Jarvis no tiene lista de conversaciones: siempre está en su hilo, que es
+  // Phill no tiene lista de conversaciones: siempre está en su hilo, que es
   // el más reciente (el servidor sigue ese mismo, también desde el widget).
   // (Solo si no hay hilo abierto o el abierto ya no está: así una respuesta
   // recién creada no se cambia por la lista vieja.)
@@ -854,7 +854,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   }, [activa, mensajes, cargandoConv]);
 
   // La conversación queda PEGADA AL FONDO (la última respuesta a la vista)
-  // al abrir Jarvis, al volver del cerebro o los ajustes y mientras crece
+  // al abrir Phill, al volver del cerebro o los ajustes y mientras crece
   // (tarjetas, tablas y gráficos que terminan de cargar después). Si la
   // persona sube a leer algo, se respeta hasta que vuelva a bajar.
   const msgsRef = useRef<HTMLDivElement>(null);
@@ -907,7 +907,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
 
   const enviar = async (contenido?: string, opciones: { regenerar?: boolean; porVoz?: number; audio?: { datos: string; tipo: string } } = {}) => {
     const crudo = opciones.audio ? '' : (contenido ?? texto).trim();
-    // Jarvis: los datos personales se quedan en este aparato (ver separarPrivados).
+    // Phill: los datos personales se quedan en este aparato (ver separarPrivados).
     const sep = jarvis ? separarPrivados(crudo, privadosRef.current) : { texto: crudo, privados: {} };
     if (jarvis) privadosRef.current = sep.privados;
     // Por voz, el texto lo pone el servidor al transcribir (un solo viaje).
@@ -980,7 +980,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
       const res = await enviarEnVivo(
         {
           accion: 'enviar', texto: opciones.audio ? '' : t, conversacionId: activa, idPregunta, idRespuesta, buscar: buscar && busquedaPermitida, regenerar, adjuntos: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
-          // Jarvis: el aparato propio va para que nunca proponga bloquearse a sí mismo.
+          // Phill: el aparato propio va para que nunca proponga bloquearse a sí mismo.
           ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, privados: sep.privados, ...(opciones.audio ? { audio: opciones.audio.datos, tipoAudio: opciones.audio.tipo } : {}), yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
         },
         (evento, d) => {
@@ -1000,7 +1000,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
           else if (evento === 'propuesta') {
             // La tarjeta se pinta ya con lo que llegó; después se relee de la base.
             tarjetasVivas.set(d.id, { id: d.id, estado: d.estado, vence_en: d.venceEn, tarjeta: d.tarjeta });
-            borrador.consultas = [...(borrador.consultas || []), { tipo: 'accion', id: d.id, modulo: d.tarjeta?.modulo || 'Jarvis', desc: d.tarjeta?.titulo || 'Acción', filas: 'propuesta', detalle: '' }];
+            borrador.consultas = [...(borrador.consultas || []), { tipo: 'accion', id: d.id, modulo: d.tarjeta?.modulo || 'Phill', desc: d.tarjeta?.titulo || 'Acción', filas: 'propuesta', detalle: '' }];
           }
           else if (evento === 'navegar' || evento === 'memoria') borrador.consultas = [...(borrador.consultas || []), d];
           else if (evento === 'cerebro') borrador.consultas = [...(borrador.consultas || []).filter(c => !(c.tipo === 'cerebro' && c.filas === d.filas)), d];
@@ -1091,7 +1091,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
       if (auto) setManos(false);
     }
   };
-  /** Se escuchó y no habló nadie: a la segunda seguida, Jarvis deja de insistir. */
+  /** Se escuchó y no habló nadie: a la segunda seguida, Phill deja de insistir. */
   const nadieHablo = () => {
     grabacion.current?.cancelar(); grabacion.current = null; setVoz(null);
     if (++vaciasSeguidas.current >= 2) { setManos(false); toast.info('No te escuché, así que salí del modo manos libres. Tocá el botón cuando quieras seguir.'); }
@@ -1133,7 +1133,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     }, 250);
     return () => clearInterval(t);
   }, [voz]);
-  // «Hablar» desde el widget: se empieza a escuchar en cuanto Jarvis está listo.
+  // «Hablar» desde el widget: se empieza a escuchar en cuanto Phill está listo.
   const vozAtendida = useRef(0);
   useEffect(() => {
     if (!pedirVoz || pedirVoz === vozAtendida.current || !conVoz || voz || enviando) return;
@@ -1144,10 +1144,10 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   useEffect(() => () => { grabacion.current?.cancelar(); }, []);
 
   // ------------------------- MANOS LIBRES -------------------------
-  // Escuchar → (pausa) → mandar → Jarvis contesta hablando → escuchar otra
-  // vez. Se sale tocando «Terminar», diciendo «gracias, Jarvis» / «eso es
+  // Escuchar → (pausa) → mandar → Phill contesta hablando → escuchar otra
+  // vez. Se sale tocando «Terminar», diciendo «gracias, Phill» / «eso es
   // todo», al salir del chat, si falla algo, o si dos veces seguidas no
-  // habló nadie. Mientras Jarvis habla el micrófono está apagado (si no, se
+  // habló nadie. Mientras Phill habla el micrófono está apagado (si no, se
   // escucharía a sí mismo).
   const hablandoTexto = estadoLector !== 'callado';
   useEffect(() => {
@@ -1176,7 +1176,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     if (!conVoz || manos || enviando) return;
     vaciasSeguidas.current = 0; despedir.current = false;
     lector.callar(); setMenu(null); setVista('chat'); setManos(true);
-    // Jarvis saluda por tu nombre; después te escucha.
+    // Phill saluda por tu nombre; después te escucha.
     if (puedeHablar()) {
       setSaludando(true);
       void lector.hablar(saludoManos(currentUser?.name, avisosSinLeer), 'saludo-manos').finally(() => setSaludando(false));
@@ -1237,7 +1237,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     try { await navigator.clipboard.writeText(t); toast.success('Copiado.'); } catch { toast.error('No se pudo copiar.'); }
   }, [toast]);
 
-  // Jarvis: cada conversación muestra los puntos de las áreas que tocó
+  // Phill: cada conversación muestra los puntos de las áreas que tocó
   // (de lo que ya está en caché; las demás, sin puntos) y la hora.
   const areasDe = (id: string): string[] => {
     const ms = cache.get(id);
@@ -1319,29 +1319,29 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             <>
               <button type="button" className="ai-menu ai-atras" aria-label="Volver al chat" title="Volver al chat" onClick={() => setVista('chat')}><ArrowLeft className="w-5 h-5" /></button>
               {jarvis && vista === 'ajustes'
-                ? <span className="jv-tit"><span><b>Ajustes de Jarvis</b><small>Se aplican al instante</small></span></span>
-                : <b className="ai-titulo">{vista === 'cerebro' ? 'Cerebro de Jarvis' : vista === 'avisos' ? 'Avisos de Jarvis' : 'Ajustes del asistente'}</b>}
+                ? <span className="jv-tit"><span><b>Ajustes de Phill</b><small>Se aplican al instante</small></span></span>
+                : <b className="ai-titulo">{vista === 'cerebro' ? 'Cerebro de Phill' : vista === 'avisos' ? 'Avisos de Phill' : 'Ajustes del asistente'}</b>}
             </>
           ) : (
             <>
-              {/* Jarvis es un solo asistente: sin lista de conversaciones. */}
+              {/* Phill es un solo asistente: sin lista de conversaciones. */}
               {!jarvis && <button type="button" className="ai-menu" aria-label="Conversaciones" onClick={() => setCajon('historial')}><Menu className="w-5 h-5" /></button>}
               {jarvis ? (
                 <button type="button" className="jv-tit" data-menu-btn
-                  aria-haspopup="menu" aria-expanded={menu === 'persona'} aria-label={`Modo: ${persona === 'arquitecto' ? 'Arquitecto' : 'Jarvis'}. Cambiar`}
+                  aria-haspopup="menu" aria-expanded={menu === 'persona'} aria-label={`Modo: ${persona === 'arquitecto' ? 'Arquitecto' : 'Phill'}. Cambiar`}
                   onClick={() => setMenu(m => (m === 'persona' ? null : 'persona'))}>
                   <Orbe tam={30} />
-                  <span><b>{persona === 'arquitecto' ? 'Arquitecto' : 'Jarvis'}<ChevronDown className="w-3.5 h-3.5" aria-hidden="true" /></b><small>{enviando ? 'Trabajando…' : `En línea · ${perfilActual.nombre}`}</small></span>
+                  <span><b>{persona === 'arquitecto' ? 'Arquitecto' : 'Phill'}<ChevronDown className="w-3.5 h-3.5" aria-hidden="true" /></b><small>{enviando ? 'Trabajando…' : `En línea · ${perfilActual.nombre}`}</small></span>
                 </button>
               ) : jarvis ? (
                 <button type="button" className="ai-modelo ai-persona" data-p={persona === 'arquitecto' ? 'arquitecto' : 'operador'} data-menu-btn
-                  aria-haspopup="menu" aria-expanded={menu === 'persona'} aria-label={`Modo: ${persona === 'arquitecto' ? 'Arquitecto' : 'Jarvis'}`}
+                  aria-haspopup="menu" aria-expanded={menu === 'persona'} aria-label={`Modo: ${persona === 'arquitecto' ? 'Arquitecto' : 'Phill'}`}
                   onClick={() => setMenu(m => (m === 'persona' ? null : 'persona'))}>
                   <span className="ai-dot">{persona === 'arquitecto' ? <Lightbulb className="w-3.5 h-3.5" /> : <Sparkles className="w-3.5 h-3.5" />}</span>
-                  <span className="ai-mn">{persona === 'arquitecto' ? 'Arquitecto' : 'Jarvis'}</span>
+                  <span className="ai-mn">{persona === 'arquitecto' ? 'Arquitecto' : 'Phill'}</span>
                   <span className="ai-chev"><ChevronDown className="w-4 h-4" /></span>
                 </button>
-              ) : <span className="ai-modelo" title={`Responde: ${nombreModelo(ultimoModelo)}`}><span className="ai-dot"><MessageCircleQuestion className="w-3.5 h-3.5" /></span><span className="ai-mn">{soySuper ? 'Jarvis' : 'Asistencia de IA'}</span></span>}
+              ) : <span className="ai-modelo" title={`Responde: ${nombreModelo(ultimoModelo)}`}><span className="ai-dot"><MessageCircleQuestion className="w-3.5 h-3.5" /></span><span className="ai-mn">{soySuper ? 'Phill' : 'Asistencia de IA'}</span></span>}
             </>
           )}
           <span className="ai-sp" />
@@ -1350,12 +1350,12 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             {cupo?.disponibles === null || !cupo ? <><b>{cupo?.usados ?? 0}</b><span className="ai-lbl"> hoy</span></> : <><b>{cupo.disponibles}</b><span className="ai-lbl"> disponibles</span></>}
           </button>
           {jarvis && vista === 'chat' && (
-            <button type="button" className="ai-chip ai-ajustes-btn jv-campana" onClick={() => setVista('avisos')} aria-label={avisosSinLeer ? `Avisos de Jarvis (${avisosSinLeer} sin ver)` : 'Avisos de Jarvis'} title="Avisos de Jarvis">
+            <button type="button" className="ai-chip ai-ajustes-btn jv-campana" onClick={() => setVista('avisos')} aria-label={avisosSinLeer ? `Avisos de Phill (${avisosSinLeer} sin ver)` : 'Avisos de Phill'} title="Avisos de Phill">
               <Bell className="w-[18px] h-[18px]" />{avisosSinLeer > 0 && <span className="jv-campana-n" aria-hidden>{avisosSinLeer > 9 ? '9+' : avisosSinLeer}</span>}<span className="ai-lbl">Avisos</span>
             </button>
           )}
           {jarvis && vista === 'chat' && (
-            <button type="button" className="ai-chip ai-ajustes-btn" onClick={() => setVista('cerebro')} aria-label="Cerebro de Jarvis" title="Cerebro de Jarvis"><IconoConstelacion /><span className="ai-lbl">Cerebro</span></button>
+            <button type="button" className="ai-chip ai-ajustes-btn" onClick={() => setVista('cerebro')} aria-label="Cerebro de Phill" title="Cerebro de Phill"><IconoConstelacion /><span className="ai-lbl">Cerebro</span></button>
           )}
           {soySuper && vista === 'chat' && (
             <button type="button" className="ai-chip ai-ajustes-btn" onClick={() => setVista('ajustes')} aria-label="Ajustes" title="Ajustes">{jarvis ? <SlidersHorizontal className="w-[18px] h-[18px]" /> : <Settings className="w-[18px] h-[18px]" />}<span className="ai-lbl">Ajustes</span></button>
@@ -1426,7 +1426,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                   value={texto}
                   onChange={e => setTexto(e.target.value)}
                   onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey && window.matchMedia('(pointer: fine)').matches) { e.preventDefault(); void enviar(); } }}
-                  placeholder={agotado ? 'Cupo agotado hasta la medianoche' : jarvis ? (persona === 'arquitecto' ? 'Contale la idea al Arquitecto…' : 'Pedile algo a Jarvis…') : 'Preguntá lo que necesités…'}
+                  placeholder={agotado ? 'Cupo agotado hasta la medianoche' : jarvis ? (persona === 'arquitecto' ? 'Contale la idea al Arquitecto…' : 'Pedile algo a Phill…') : 'Preguntá lo que necesités…'}
                   disabled={agotado}
                   rows={1}
                   aria-label="Mensaje para el asistente"
@@ -1471,7 +1471,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                   )}
                   {conVoz && !voz && (
                     <button type="button" className="ai-ib" data-manos={manos || undefined} disabled={enviando || agotado}
-                      aria-label="Manos libres: conversar con Jarvis hablando" title="Manos libres: conversá con Jarvis hablando"
+                      aria-label="Manos libres: conversar con Phill hablando" title="Manos libres: conversá con Phill hablando"
                       onClick={iniciarManos}>
                       <AudioLines className="w-[18px] h-[18px]" />
                     </button>
@@ -1513,10 +1513,10 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                 </div>
               </div>
               <p className="ai-nota">{jarvis && persona === 'jarvis'
-                ? 'Jarvis hace lo que le pedís; cobros, bloqueos y cierres de sesión los confirmás vos. No puede tocar el código del sistema.'
+                ? 'Phill hace lo que le pedís; cobros, bloqueos y cierres de sesión los confirmás vos. No puede tocar el código del sistema.'
                 : 'No escribás ni adjuntés cédulas ni documentos de clientes. La IA puede equivocarse: verificá lo importante.'}</p>
               {jarvis && menu === 'vel' && (
-                <div className="ai-pop tv-chat-pop ai-vel-menu" role="menu" aria-label="Velocidad de Jarvis">
+                <div className="ai-pop tv-chat-pop ai-vel-menu" role="menu" aria-label="Velocidad de Phill">
                   <div className="ai-pop-t">Velocidad</div>
                   {PERFILES.map(p => (
                     <button key={p.id} type="button" className="ai-pop-op" role="menuitemradio" aria-checked={perfil === p.id} onClick={() => { setPerfil(p.id); setMenu(null); }}>
@@ -1546,7 +1546,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
           </>
         )}
         {jarvis && menu === 'persona' && vista === 'chat' && (
-          <div className="ai-pop tv-chat-pop ai-persona-menu" role="menu" aria-label="Modo de Jarvis">
+          <div className="ai-pop tv-chat-pop ai-persona-menu" role="menu" aria-label="Modo de Phill">
             <div className="ai-pop-t">Con quién hablás</div>
             {PERSONAS.map(p => (
               <button key={p.id} type="button" className="ai-pop-op" role="menuitemradio" aria-checked={persona === p.id} onClick={() => { setPersona(p.id); setMenu(null); }}>
@@ -1621,12 +1621,12 @@ function AjustesIA({ onCambio, cupo, jarvis = false }: { onCambio: () => void; c
   const tope = aj.limite_diario;
   const modulos: Modulos = { inventario: true, facturacion: true, taller: true, errores: true, seguridad: true, finanzas: true, internet: true, enlaces: true, archivos: true, codigo: true, acciones: true, revisar: true, aprender: true, chat_directo: true, taller_directo: true, inventario_directo: true, ...(aj.modulos || {}) };
   const maxConsultas = Math.max(1, ...consultasHoy.map(c => c.consultas));
-  // Jarvis: los grupos van como constelaciones (punto de color y versalitas)
+  // Phill: los grupos van como constelaciones (punto de color y versalitas)
   // y en el orden del diseño: lo que hace solo, voz y tono, memoria, uso.
   const H = ({ area, children }: { area: string; children: React.ReactNode }) => <h4><i className="jv-pt" data-area={area} aria-hidden="true" />{children}</h4>;
   return (
     <div className="ai-ajustes">
-      {jarvis && cupo?.perfiles && <div data-orden="0"><React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando la salud de Jarvis"><i /><i /></div>}><SaludJarvis /></React.Suspense></div>}
+      {jarvis && cupo?.perfiles && <div data-orden="0"><React.Suspense fallback={<div className="ai-esqueleto" aria-label="Cargando la salud de Phill"><i /><i /></div>}><SaludJarvis /></React.Suspense></div>}
       <div className="ai-aj" data-orden="4">
         <H area="int">Capacidades <small>gratis</small></H>
         {CAPACIDADES.map(m => (
@@ -1645,7 +1645,7 @@ function AjustesIA({ onCambio, cupo, jarvis = false }: { onCambio: () => void; c
           <div className="ai-aj">
             <H area="vos">Voz y tono</H>
             <div className="ai-campo" data-tono>
-              <span>Tono de Jarvis</span>
+              <span>Tono de Phill</span>
               <span className="ai-seg">
                 {([['formal', 'Formal'], ['tico_moderado', 'Tico moderado'], ['tico_suelto', 'Tico suelto']] as const).map(([v, l]) => (
                   <button key={v} type="button" data-on={(aj.tono || 'tico_moderado') === v || undefined} onClick={() => void guardar({ tono: v })}>{l}</button>
@@ -1664,7 +1664,7 @@ function AjustesIA({ onCambio, cupo, jarvis = false }: { onCambio: () => void; c
           <span className="ai-modu-ic"><Bot className="w-4 h-4" /></span>
           <span className="ai-modu-t"><b>Acciones con confirmación</b><span>Prepara bloqueos, desbloqueos y cierres de sesión; nada se ejecuta sin tu «Confirmar». Nunca toca el código.</span></span>
           <button type="button" role="switch" aria-checked={modulos.acciones} className="ai-sw" data-on={modulos.acciones || undefined}
-            onClick={() => void guardar({ modulos: { ...modulos, acciones: !modulos.acciones } })} aria-label="Acciones de Jarvis" />
+            onClick={() => void guardar({ modulos: { ...modulos, acciones: !modulos.acciones } })} aria-label="Acciones de Phill" />
         </div>
         {([['chat_directo', 'Responder chats sin preguntar', 'Si hay un solo chat que coincide, lo envía de una (se puede borrar por 10 min).'],
           ['taller_directo', 'Mover órdenes del taller sin preguntar', 'Si hay una sola orden, la mueve de una; entregar o cancelar siempre se confirma.'],
@@ -1750,7 +1750,7 @@ function AjustesIA({ onCambio, cupo, jarvis = false }: { onCambio: () => void; c
   );
 }
 
-/** Lo que Jarvis recuerda del dueño: se ve, se agrega y se borra aquí. */
+/** Lo que Phill recuerda del dueño: se ve, se agrega y se borra aquí. */
 function MemoriaJarvis() {
   const toast = useToast();
   const [items, setItems] = useState<{ id: string; texto: string; tipo: string }[] | null>(null);
@@ -1792,7 +1792,7 @@ function MemoriaJarvis() {
             </div>
           ))}
           <form className="ai-campo" onSubmit={e => { e.preventDefault(); void agregar(); }}>
-            <input className="glass-input rounded-lg px-3 py-2 text-[13px]" style={{ flex: 1, minWidth: 0 }} value={nuevo} onChange={e => setNuevo(e.target.value)} maxLength={300} placeholder="Ej.: los resúmenes en tres líneas" aria-label="Algo para que Jarvis recuerde" />
+            <input className="glass-input rounded-lg px-3 py-2 text-[13px]" style={{ flex: 1, minWidth: 0 }} value={nuevo} onChange={e => setNuevo(e.target.value)} maxLength={300} placeholder="Ej.: los resúmenes en tres líneas" aria-label="Algo para que Phill recuerde" />
             <button type="submit" className="ai-chip" disabled={nuevo.trim().length < 3}>Agregar</button>
           </form>
         </>

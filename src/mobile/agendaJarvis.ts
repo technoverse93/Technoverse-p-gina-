@@ -1,12 +1,12 @@
 // =====================================================================
 // AGENDA DE JARVIS — los recordatorios suenan en el teléfono
 // =====================================================================
-// Jarvis anota los recordatorios en `jarvis_agenda` (servidor). Aquí se
-// programan como notificaciones del teléfono (APK): cada vez que Jarvis
+// Phill anota los recordatorios en `jarvis_agenda` (servidor). Aquí se
+// programan como notificaciones del teléfono (APK): cada vez que Phill
 // agenda, cierra o deshace algo, y al abrir el panel. Se reprograma todo
 // lo pendiente a futuro y se cancela lo que ya no está, así nunca suena
-// algo hecho ni falta algo nuevo. Tocar el aviso abre Jarvis.
-// En la web no hay nada que programar: la agenda vive en Jarvis.
+// algo hecho ni falta algo nuevo. Tocar el aviso abre Phill.
+// En la web no hay nada que programar: la agenda vive en Phill.
 // =====================================================================
 
 import { Capacitor } from '@capacitor/core';
@@ -41,13 +41,13 @@ export function sincronizarAgenda(): Promise<void> {
       await LocalNotifications.schedule({
         notifications: data.map((d: any) => ({
           id: idDe(d.id),
-          title: 'Jarvis · recordatorio',
+          title: 'Phill · recordatorio',
           body: String(d.texto),
           schedule: { at: new Date(d.cuando), allowWhileIdle: true },
           extra: { jarvis: true, agenda: d.id },
         })),
       });
-    } catch { /* sin el complemento o sin permiso: Jarvis igual lo tiene anotado */ }
+    } catch { /* sin el complemento o sin permiso: Phill igual lo tiene anotado */ }
     finally { enCurso = null; }
   })();
   return enCurso;

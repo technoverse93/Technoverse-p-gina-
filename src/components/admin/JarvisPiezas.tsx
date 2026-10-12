@@ -129,13 +129,13 @@ export function TarjetaAccion({ id }: { id: string }) {
           res = { ok: true, mensaje: `Orden ${o.ticket} abierta: ${d.crear.equipo} de ${d.crear.cliente}.`, extra: { ticket: o.ticket, repairId: o.id } };
         } else if (r.ejecutarEnCliente.tipo === 'inventario' && Array.isArray(d.crear)) {
           const { crearProductos } = await import('../../utils/inventario');
-          const hechos = await crearProductos(d.crear, d.enTienda !== false, quien, 'Creado por Jarvis');
+          const hechos = await crearProductos(d.crear, d.enTienda !== false, quien, 'Creado por Phill');
           res = hechos.length
             ? { ok: true, mensaje: hechos.length === 1 ? `Creado: ${hechos[0].nombre}.` : `Creados: ${hechos.map(h => h.nombre).join(', ')}.`, extra: { creados: JSON.stringify(hechos.map(h => h.id)) } }
             : { ok: false, mensaje: 'Esos productos ya existen en el inventario.' };
         } else if (r.ejecutarEnCliente.tipo === 'inventario') {
           const { editarProducto } = await import('../../utils/inventario');
-          const antes = editarProducto(d.productId, { modo: d.modo, stock: d.stock ?? undefined, precio: d.precio ?? undefined }, quien, 'Pedido a Jarvis');
+          const antes = editarProducto(d.productId, { modo: d.modo, stock: d.stock ?? undefined, precio: d.precio ?? undefined }, quien, 'Pedido a Phill');
           res = antes
             ? { ok: true, mensaje: `${antes.nombre}: listo.`, extra: { productId: d.productId, stockAntes: String(antes.stock), precioAntes: String(antes.precio) } }
             : { ok: false, mensaje: 'No encontré ese producto en el inventario cargado.' };
@@ -205,12 +205,12 @@ export function TarjetaAccion({ id }: { id: string }) {
         let ids: string[] = [];
         try { ids = JSON.parse(datos.creados || '[]'); } catch { /* sin ids */ }
         if (!ids.length) throw new Error('No sé qué productos retirar.');
-        await retirarProductos(ids, session?.user?.email || 'admin', 'Deshecho desde Jarvis');
+        await retirarProductos(ids, session?.user?.email || 'admin', 'Deshecho desde Phill');
       } else if (t.enCliente === 'inventario') {
         const { editarProducto } = await import('../../utils/inventario');
         const { data: { session } } = await supabase.auth.getSession();
         if (!datos.productId) throw new Error('No sé qué producto restaurar.');
-        editarProducto(datos.productId, { modo: 'fijar', stock: Number(datos.stockAntes), precio: Number(datos.precioAntes) }, session?.user?.email || 'admin', 'Deshecho desde Jarvis');
+        editarProducto(datos.productId, { modo: 'fijar', stock: Number(datos.stockAntes), precio: Number(datos.precioAntes) }, session?.user?.email || 'admin', 'Deshecho desde Phill');
       } else if (t.enCliente === 'taller') {
         const { cambiarEstadoOrden } = await import('../../utils/taller');
         const { data: { session } } = await supabase.auth.getSession();
@@ -238,7 +238,7 @@ export function TarjetaAccion({ id }: { id: string }) {
   const recienCreada = tarjetasVivas.has(id) || autoHecho.current || (!!fila.creada_en && Date.now() - new Date(fila.creada_en).getTime() < 30_000);
   const enviandoSolo = !!t.auto && (estado === 'propuesta' || estado === 'ejecutando') && !error && recienCreada;
 
-  // Lo que Jarvis hace solo (un mensaje, una orden, el inventario) se
+  // Lo que Phill hace solo (un mensaje, una orden, el inventario) se
   // confirma como un asistente: una línea discreta con «Deshacer», no una
   // tarjeta grande. Si falla, vuelve la tarjeta completa para reintentar.
   if (t.auto && !error && (enviandoSolo || estado === 'ejecutada' || estado === 'deshecha')) {
@@ -433,7 +433,7 @@ export function GraficoComparado({ g }: { g: Grafico }) {
   );
 }
 
-/** «Recordado» / «Olvidado»: lo que Jarvis hizo con su memoria, con deshacer. */
+/** «Recordado» / «Olvidado»: lo que Phill hizo con su memoria, con deshacer. */
 export function ChipMemoria({ id, texto, estado, detalle }: { id?: string; texto: string; estado: string; detalle: string }) {
   const [hecho, setHecho] = useState<null | 'deshecho' | 'error'>(null);
   const olvido = estado === 'olvidado';

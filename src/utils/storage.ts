@@ -1709,7 +1709,7 @@ function initSettingsRealtimeSync() {
 /**
  * Espera a que esas tablas hayan bajado del servidor al menos una vez.
  *
- * Lo usa Jarvis antes de ejecutar una orden en el aparato (mover una
+ * Lo usa Phill antes de ejecutar una orden en el aparato (mover una
  * orden del taller, ajustar inventario, responder un chat, cobrar). Al
  * arrancar —sobre todo la ventanita del mini-widget, que abre en frío—
  * solo están el catálogo y la configuración de la copia local, quizá

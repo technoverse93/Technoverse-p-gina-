@@ -427,7 +427,7 @@ function AppInner() {
   // entrega en cuanto está, para que funcione el bloqueo por hardware.
   useEffect(() => {
     iniciarKillSwitch();
-    // Widget y atajo del ícono: «technoverse://jarvis» abre Jarvis.
+    // Widget y atajo del ícono: «technoverse://jarvis» abre Phill.
     void iniciarAtajoJarvis();
     // Aviso de cierre cuando el Superadmin purga los chats.
     iniciarAvisoDePurga();

@@ -1,8 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Mini-widget «Jarvis», CHICO. Se usa en el propio recuadro: el micrófono
+<!-- Mini-widget «Phill», CHICO. Se usa en el propio recuadro: el micrófono
      pregunta por voz y la respuesta sale aquí (y se lee); «Escribile…» abre
      solo una barrita sobre el teclado. El botón de arriba lo agranda para
-     ver la conversación. Colores de la hoja de Jarvis en tema oscuro. -->
+     ver la conversación. Colores de la hoja de Phill en tema oscuro. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="match_parent"
@@ -29,14 +29,14 @@
             <ImageView
                 android:layout_width="16dp"
                 android:layout_height="16dp"
-                android:contentDescription="Jarvis"
+                android:contentDescription="Phill"
                 android:src="@drawable/jarvis_ic_chispa" />
 
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginStart="6dp"
-                android:text="Jarvis"
+                android:text="Phill"
                 android:textColor="@color/jv_tinta"
                 android:textSize="14sp"
                 android:textStyle="bold" />
@@ -97,7 +97,7 @@
             android:maxLines="1"
             android:paddingStart="16dp"
             android:paddingEnd="16dp"
-            android:text="Escribile a Jarvis…"
+            android:text="Escribile a Phill…"
             android:textColor="@color/jv_tenue"
             android:textSize="14sp" />
 
@@ -107,7 +107,7 @@
             android:layout_height="44dp"
             android:layout_marginStart="8dp"
             android:background="@drawable/jarvis_circulo_acento"
-            android:contentDescription="Hablarle a Jarvis"
+            android:contentDescription="Hablarle a Phill"
             android:padding="11dp"
             android:src="@drawable/jarvis_ic_mic_oscuro" />
     </LinearLayout>

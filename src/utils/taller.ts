@@ -2,7 +2,7 @@
 // TALLER — cambio de estado de una orden
 // =====================================================================
 // Un solo camino para mover una orden de columna: el tablero Kanban y
-// Jarvis («pasá la orden de Laura a Lista») hacen exactamente lo mismo,
+// Phill («pasá la orden de Laura a Lista») hacen exactamente lo mismo,
 // incluida la bitácora de la orden, el sello de garantía al entregar y la
 // bitácora general.
 // =====================================================================
@@ -49,7 +49,7 @@ export function cambiarEstadoOrden(repairId: string, newStatus: RepairOrder['sta
 }
 
 // ---------------------------------------------------------------------
-// Abrir una orden (Jarvis: «entró un A12 de Laura, no carga»). Igual que
+// Abrir una orden (Phill: «entró un A12 de Laura, no carga»). Igual que
 // el formulario del tablero: estado Pendiente, bitácora y bitácora
 // general. Sin correo ni teléfono (no se piden por voz): se completan en
 // el tablero si hacen falta, y por eso no se crea ficha de cliente.
@@ -79,12 +79,12 @@ export function abrirOrden(n: OrdenNueva, quien: string): RepairOrder {
     totalCost: Math.max(0, Math.round(n.mano || 0)),
     status: 'Pendiente',
     warrantyMonths: Math.max(3, Math.round(n.garantia || 3)),
-    bitacora: [{ status: 'Pendiente', notes: 'Orden abierta por Jarvis. Equipo recibido para diagnóstico.', timestamp: ahora, user: quien }],
+    bitacora: [{ status: 'Pendiente', notes: 'Orden abierta por Phill. Equipo recibido para diagnóstico.', timestamp: ahora, user: quien }],
     createdAt: ahora,
     repairLocation: 'Taller en casa',
   };
   db.repair_orders.push(orden);
   void saveDB(db);
-  addAuditLog(quien, 'Taller', 'Crear Orden', `Orden ${orden.id} (${orden.ticket}) abierta por Jarvis para ${orden.customerName}: ${orden.device}.`);
+  addAuditLog(quien, 'Taller', 'Crear Orden', `Orden ${orden.id} (${orden.ticket}) abierta por Phill para ${orden.customerName}: ${orden.device}.`);
   return orden;
 }

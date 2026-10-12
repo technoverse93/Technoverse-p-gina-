@@ -12,7 +12,7 @@ import java.util.Map;
  * mensajes de cada conversación. Ver supabase/functions/asistente-ia/push.ts.
  *
  *   tipo=chat   conv, cliente, texto, ts, llave   → notificación del chat
- *   tipo=aviso  titulo, texto, destino, nivel     → aviso de Jarvis
+ *   tipo=aviso  titulo, texto, destino, nivel     → aviso de Phill
  */
 public class JarvisPushService extends FirebaseMessagingService {
     @Override

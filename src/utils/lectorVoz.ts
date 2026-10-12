@@ -84,7 +84,7 @@ function enOraciones(t: string): string[] {
 // ------------------------- motores -------------------------
 type Motor = { decir: (texto: string) => Promise<void>; callar: () => void; preparar?: (texto: string) => void };
 
-/** La voz propia de Jarvis (neuronal, en el aparato). Si falla una vez en
+/** La voz propia de Phill (neuronal, en el aparato). Si falla una vez en
  *  esta sesión, se vuelve a la voz del teléfono sin cortar la lectura. */
 let propiaFallo = false;
 function motorPropio(): Motor | null {

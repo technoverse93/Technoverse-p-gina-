@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Ventanita de Jarvis sobre la pantalla de inicio (JarvisRapido): un
+    <!-- Ventanita de Phill sobre la pantalla de inicio (JarvisRapido): un
          puente de Capacitor (AppCompat), translúcido y a pantalla completa.
          Lo que se ve lo dibuja la página jarvis-rapido.html; detrás queda la
          pantalla de inicio, oscurecida. -->
