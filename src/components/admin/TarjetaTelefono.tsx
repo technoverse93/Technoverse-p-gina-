@@ -13,11 +13,11 @@ import { useEstadoTelefono, type AccionTelefono, type PedidoTelefono } from '../
 
 const ICONOS: Record<AccionTelefono, LucideIcon> = {
   alarma: AlarmClock, temporizador: Timer, abrir_app: AppWindow, llamar: Phone, whatsapp: MessageCircle, sms: MessageSquare,
-  calendario: CalendarPlus, mapa: MapPin, musica: Music, linterna: Flashlight, ajustes: Settings, enlace: ExternalLink, youtube: Play,
+  calendario: CalendarPlus, mapa: MapPin, musica: Music, multimedia: Music, linterna: Flashlight, ajustes: Settings, enlace: ExternalLink, youtube: Play,
 };
 
 /** Repetirlas no hace daño (una alarma o un temporizador duplicados, sí). */
-const REPETIBLES: AccionTelefono[] = ['llamar', 'whatsapp', 'sms', 'mapa', 'abrir_app', 'enlace'];
+const REPETIBLES: AccionTelefono[] = ['llamar', 'whatsapp', 'sms', 'mapa', 'abrir_app', 'enlace', 'multimedia'];
 
 export type EjecutarTelefono = (p: PedidoTelefono, o?: { elegido?: string; forzar?: boolean }) => void;
 

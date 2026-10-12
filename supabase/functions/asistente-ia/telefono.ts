@@ -14,13 +14,16 @@
 
 export type AccionTelefono =
   | 'alarma' | 'temporizador' | 'abrir_app' | 'llamar' | 'whatsapp' | 'sms'
-  | 'calendario' | 'mapa' | 'musica' | 'linterna' | 'ajustes' | 'enlace' | 'youtube';
+  | 'calendario' | 'mapa' | 'musica' | 'multimedia' | 'linterna' | 'ajustes' | 'enlace' | 'youtube';
 
-export const ACCIONES_TELEFONO: AccionTelefono[] = ['alarma', 'temporizador', 'abrir_app', 'llamar', 'whatsapp', 'sms', 'calendario', 'mapa', 'musica', 'linterna', 'ajustes', 'enlace', 'youtube'];
+export const ACCIONES_TELEFONO: AccionTelefono[] = ['alarma', 'temporizador', 'abrir_app', 'llamar', 'whatsapp', 'sms', 'calendario', 'mapa', 'musica', 'multimedia', 'linterna', 'ajustes', 'enlace', 'youtube'];
 export const PANTALLAS_AJUSTES = ['wifi', 'bluetooth', 'sonido', 'pantalla', 'bateria', 'aplicaciones', 'ubicacion', 'general'] as const;
 
 /** Estas solo se pueden en la app del teléfono (en el navegador no hay cómo). */
-export const SOLO_APK: AccionTelefono[] = ['alarma', 'temporizador', 'abrir_app', 'musica', 'linterna', 'ajustes'];
+export const SOLO_APK: AccionTelefono[] = ['alarma', 'temporizador', 'abrir_app', 'musica', 'multimedia', 'linterna', 'ajustes'];
+
+/** Controles de lo que suena (cualquier app de música o video): sin abrir nada. */
+export const CONTROLES_MULTIMEDIA = ['pausar', 'reproducir', 'siguiente', 'anterior', 'detener', 'subir_volumen', 'bajar_volumen', 'silenciar', 'volumen'] as const;
 
 export interface PedidoTelefono {
   id: string;
@@ -178,7 +181,18 @@ export function prepararTelefono(args: Record<string, unknown>, id: string): Res
     case 'musica': {
       const consulta = texto(args?.consulta, 100);
       if (consulta.length < 2) return { ok: false, error: 'Decime qué música poner (artista, canción o género).' };
-      return pedido(`Poner música: ${consulta}`, { consulta });
+      // «Spotify», «YouTube Music»… la app donde ponerla (vacío = la que el teléfono tenga por defecto).
+      const app = sinTildes(texto(args?.app, 30));
+      const musicaEn = /spotify/.test(app) ? 'spotify' : /youtube|yt music/.test(app) ? 'youtube_music' : '';
+      return pedido(`Poner música: ${consulta}${musicaEn ? ` en ${musicaEn === 'spotify' ? 'Spotify' : 'YouTube Music'}` : ''}`, { consulta, app: musicaEn });
+    }
+    case 'multimedia': {
+      const control = sinTildes(texto(args?.control, 20)).replace(/\s+/g, '_');
+      if (!(CONTROLES_MULTIMEDIA as readonly string[]).includes(control)) return { ok: false, error: `Ese control no lo tengo. Los que sí: ${CONTROLES_MULTIMEDIA.join(', ')}.` };
+      const nivel = numero(args?.nivel);
+      if (control === 'volumen' && (nivel === null || nivel < 0 || nivel > 100)) return { ok: false, error: 'Decime el volumen en porcentaje (0 a 100).' };
+      const etiquetas: Record<string, string> = { pausar: 'Pausar', reproducir: 'Reproducir', siguiente: 'Siguiente canción', anterior: 'Canción anterior', detener: 'Detener', subir_volumen: 'Subir el volumen', bajar_volumen: 'Bajar el volumen', silenciar: 'Silenciar', volumen: `Volumen al ${Math.round(nivel ?? 0)} %` };
+      return pedido(etiquetas[control], { control, ...(control === 'volumen' ? { nivel: Math.round(nivel ?? 0) } : {}) });
     }
     case 'youtube': {
       const consulta = texto(args?.consulta, 120);

@@ -24,7 +24,10 @@ export interface PluginTelefono {
   sms(o: { numero: string; mensaje?: string }): Promise<Resp>;
   calendario(o: { titulo: string; inicioMs: number; finMs: number; todoElDia?: boolean; lugar?: string; descripcion?: string }): Promise<Resp>;
   mapa(o: { consulta: string; navegar?: boolean }): Promise<Resp>;
-  musica(o: { consulta: string }): Promise<Resp>;
+  /** `app`: «spotify» o «youtube_music» para ponerla ahí (si está instalada). */
+  musica(o: { consulta: string; app?: string }): Promise<Resp & { en?: string }>;
+  /** Controla lo que suena en cualquier app: pausar, siguiente, volumen… (APK nueva). */
+  multimedia?(o: { control: string; nivel?: number }): Promise<Resp>;
   linterna(o: { encender: boolean }): Promise<Resp>;
   ajustes(o: { pantalla: string }): Promise<Resp>;
   enlace(o: { url: string }): Promise<Resp>;

@@ -11,12 +11,15 @@ import android.content.pm.ResolveInfo;
 import android.database.Cursor;
 import android.hardware.camera2.CameraCharacteristics;
 import android.hardware.camera2.CameraManager;
+import android.media.AudioManager;
 import android.net.Uri;
+import android.os.SystemClock;
 import android.provider.AlarmClock;
 import android.provider.CalendarContract;
 import android.provider.ContactsContract;
 import android.provider.MediaStore;
 import android.provider.Settings;
+import android.view.KeyEvent;
 import com.getcapacitor.JSArray;
 import com.getcapacitor.JSObject;
 import com.getcapacitor.PermissionState;
@@ -428,14 +431,84 @@ public class TelefonoNativoPlugin extends Plugin {
         call.resolve(iniciar(new Intent(Intent.ACTION_VIEW, Uri.parse("geo:0,0?q=" + Uri.encode(q)))));
     }
 
+    /**
+     * Pone música. Con `app` («spotify», «youtube_music») va directo a esa app si está instalada: la
+     * búsqueda por voz estándar de Android (MEDIA_PLAY_FROM_SEARCH) la maneja y empieza a sonar sola.
+     * Sin app, o si no está instalada, la elige el teléfono.
+     */
     @PluginMethod
     public void musica(PluginCall call) {
         String q = texto(call, "consulta");
         if (q.isEmpty()) { call.resolve(error("Falta qué música poner.")); return; }
+        String app = texto(call, "app");
+        String paquete = "spotify".equals(app) ? "com.spotify.music" : "youtube_music".equals(app) ? "com.google.android.apps.youtube.music" : "";
+        if (!paquete.isEmpty() && paqueteInstalado(paquete)) {
+            Intent i = armarMusica(q).setPackage(paquete);
+            JSObject r = iniciar(i);
+            if (r.optBoolean("ok")) { try { r.put("en", paquete); } catch (Exception e) { /* nada */ } call.resolve(r); return; }
+        }
+        JSObject r = iniciar(armarMusica(q));
+        if (r.optBoolean("ok") && !paquete.isEmpty()) {
+            // Pidió una app que no está: sonó en otra.
+            try { r.put("aviso", "No encontré esa app de música: la puse en la que tiene el teléfono."); } catch (Exception e) { /* nada */ }
+        }
+        call.resolve(r);
+    }
+
+    private Intent armarMusica(String q) {
         Intent i = new Intent(MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH);
         i.putExtra(MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*");
         i.putExtra(SearchManager.QUERY, q);
-        call.resolve(iniciar(i));
+        return i;
+    }
+
+    private boolean paqueteInstalado(String paquete) {
+        try {
+            getContext().getPackageManager().getPackageInfo(paquete, 0);
+            return true;
+        } catch (Exception e) {
+            return false;
+        }
+    }
+
+    /**
+     * Controla lo que suena (de cualquier app de música o video) con las teclas multimedia del sistema y el
+     * volumen, SIN abrir nada ni pedir permisos: pausar, reproducir, siguiente, anterior, detener,
+     * subir_volumen, bajar_volumen, silenciar y volumen (nivel 0-100).
+     */
+    @PluginMethod
+    public void multimedia(PluginCall call) {
+        String control = texto(call, "control");
+        try {
+            AudioManager am = (AudioManager) getContext().getSystemService(Context.AUDIO_SERVICE);
+            if (am == null) { call.resolve(error("Este teléfono no deja controlar el sonido.")); return; }
+            int tecla = -1;
+            switch (control) {
+                case "pausar": tecla = KeyEvent.KEYCODE_MEDIA_PAUSE; break;
+                case "reproducir": tecla = KeyEvent.KEYCODE_MEDIA_PLAY; break;
+                case "siguiente": tecla = KeyEvent.KEYCODE_MEDIA_NEXT; break;
+                case "anterior": tecla = KeyEvent.KEYCODE_MEDIA_PREVIOUS; break;
+                case "detener": tecla = KeyEvent.KEYCODE_MEDIA_STOP; break;
+                case "subir_volumen": am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_RAISE, AudioManager.FLAG_SHOW_UI); call.resolve(ok()); return;
+                case "bajar_volumen": am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_LOWER, AudioManager.FLAG_SHOW_UI); call.resolve(ok()); return;
+                case "silenciar": am.adjustStreamVolume(AudioManager.STREAM_MUSIC, AudioManager.ADJUST_MUTE, AudioManager.FLAG_SHOW_UI); call.resolve(ok()); return;
+                case "volumen": {
+                    Integer nivel = call.getInt("nivel");
+                    if (nivel == null) { call.resolve(error("Falta el volumen.")); return; }
+                    int max = am.getStreamMaxVolume(AudioManager.STREAM_MUSIC);
+                    am.setStreamVolume(AudioManager.STREAM_MUSIC, Math.round(max * Math.max(0, Math.min(100, nivel)) / 100f), AudioManager.FLAG_SHOW_UI);
+                    call.resolve(ok());
+                    return;
+                }
+                default: call.resolve(error("Ese control no lo conozco.")); return;
+            }
+            long ahora = SystemClock.uptimeMillis();
+            am.dispatchMediaKeyEvent(new KeyEvent(ahora, ahora, KeyEvent.ACTION_DOWN, tecla, 0));
+            am.dispatchMediaKeyEvent(new KeyEvent(ahora, ahora, KeyEvent.ACTION_UP, tecla, 0));
+            call.resolve(ok());
+        } catch (Exception e) {
+            call.resolve(error(e.getMessage() != null ? e.getMessage() : "No se pudo."));
+        }
     }
 
     /** YouTube con la búsqueda hecha («entrá a YouTube y buscame…»). Sin la app, la web. */

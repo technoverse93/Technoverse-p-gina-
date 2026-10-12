@@ -22,7 +22,7 @@ import { enAppDelTelefono, telefonoNativo, telefonoNativoDisponible, type Plugin
 
 export type AccionTelefono =
   | 'alarma' | 'temporizador' | 'abrir_app' | 'llamar' | 'whatsapp' | 'sms'
-  | 'calendario' | 'mapa' | 'musica' | 'linterna' | 'ajustes' | 'enlace' | 'youtube';
+  | 'calendario' | 'mapa' | 'musica' | 'multimedia' | 'linterna' | 'ajustes' | 'enlace' | 'youtube';
 
 export interface PedidoTelefono {
   id: string; accion: AccionTelefono; titulo: string;
@@ -148,7 +148,12 @@ export async function ejecutarTelefono(p: PedidoTelefono, privados: Record<strin
     case 'sms': r = await plugin!.sms({ numero, mensaje }); break;
     case 'calendario': r = await plugin!.calendario({ titulo: String(d.titulo), inicioMs: Number(d.inicioMs), finMs: Number(d.finMs), todoElDia: !!d.todoElDia, lugar: String(d.lugar || ''), descripcion: String(d.descripcion || '') }); break;
     case 'mapa': r = await plugin!.mapa({ consulta: String(d.consulta), navegar: !!d.navegar }); break;
-    case 'musica': r = await plugin!.musica({ consulta: String(d.consulta) }); break;
+    case 'musica': r = await plugin!.musica({ consulta: String(d.consulta), ...(d.app ? { app: String(d.app) } : {}) }); break;
+    case 'multimedia':
+      r = typeof plugin!.multimedia === 'function'
+        ? await plugin!.multimedia({ control: String(d.control), ...(d.nivel !== undefined ? { nivel: Number(d.nivel) } : {}) })
+        : { ok: false, error: 'Esta versión de la app todavía no controla la música. Instalá la nueva.' };
+      break;
     case 'linterna': r = await plugin!.linterna({ encender: d.encender !== false }); break;
     case 'ajustes': r = await plugin!.ajustes({ pantalla: String(d.pantalla || 'general') }); break;
     case 'enlace': r = await plugin!.enlace({ url: String(d.url) }); break;
@@ -175,6 +180,7 @@ const MENSAJE_HECHO: Record<AccionTelefono, string> = {
   calendario: 'Evento listo: tocá «Guardar» en el calendario.',
   mapa: 'Mapa abierto.',
   musica: 'Buscando música.',
+  multimedia: 'Listo.',
   linterna: 'Listo.',
   ajustes: 'Ajustes abiertos.',
   enlace: 'Abierto.',
