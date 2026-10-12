@@ -49,6 +49,7 @@ const InventarioControl = lazy(() => import('./InventarioControl'));
 const ChatCRM = lazy(() => import('./chat/ChatCRM'));
 const BurbujaChat = lazy(() => import('./chat/BurbujaChat'));
 const JarvisFlotante = lazy(() => import('./admin/JarvisFlotante'));
+const EstudioPauta = lazy(() => import('./admin/EstudioPauta'));
 const CyberSecurityPanel = lazy(() => import('./CyberSecurityPanel'));
 const ClienteFicha = lazy(() => import('./ClienteFicha'));
 // El módulo de cobros carga jsPDF y qrcode al emitir: se trae aparte para
@@ -1187,6 +1188,7 @@ export default function AdminPanel({
               onDataChanged={loadAllAdminData}
               defaultSubTab={tab.startsWith('inventario_') ? (tab.replace('inventario_', '') as any) : 'productos'}
               onTabChange={alCambiarSubTabInventario}
+              onAbrirModulo={irAModulo}
             />
           </Suspense>
         )}
@@ -1455,6 +1457,12 @@ export default function AdminPanel({
                 </Btn>
               }
             />
+
+            {esGestion(currentUser?.role) && (
+              <Suspense fallback={<TabLoadingFallback />}>
+                <EstudioPauta currentUser={currentUser} />
+              </Suspense>
+            )}
 
             {isCouponModalOpen && (
               <Card title="Nuevo cupón">
