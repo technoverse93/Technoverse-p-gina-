@@ -1,7 +1,7 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <string name="jarvis_widget_desc">Jarvis con tu sesión: preguntá, cobrá o respondé chats sin abrir la app.</string>
-    <string name="jarvis_atajo_voz">Hablar con Jarvis</string>
-    <string name="jarvis_atajo_voz_largo">Hablar con Jarvis</string>
-    <string name="jarvis_atajo_texto">Escribir a Jarvis</string>
+    <string name="jarvis_widget_desc">Phill con tu sesión: preguntá, cobrá o respondé chats sin abrir la app.</string>
+    <string name="jarvis_atajo_voz">Hablar con Phill</string>
+    <string name="jarvis_atajo_voz_largo">Hablar con Phill</string>
+    <string name="jarvis_atajo_texto">Escribir a Phill</string>
 </resources>

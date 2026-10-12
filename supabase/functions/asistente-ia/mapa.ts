@@ -18,7 +18,7 @@ MÓDULOS DEL PANEL (pestañas)
 - Panel general: KPIs del día, atención requerida.
 - Inventario: productos, repuestos, insumos, movimientos, reportes (tabla products: name, sku, category, brand, price, cost, stock, min_stock, warranty, active).
 - Chat y CRM: conversaciones con clientes (texto, fotos, notas de voz), burbuja flotante para el personal.
-- Asistente IA / Jarvis: chat con consultas de solo lectura; Jarvis prepara acciones que el superadmin confirma.
+- Asistente IA / Phill: chat con consultas de solo lectura; Phill prepara acciones que el superadmin confirma.
 - Taller: tablero Kanban de órdenes (repair_orders: estados Pendiente, Diagnosticada, Cotizada, Aprobada, Esperando repuestos, En Reparación, Lista, Entregada, Cancelada).
 - Clientes, Cobros (mostrador), Contabilidad/Facturación electrónica de Hacienda (invoices con consecutivo, IVA, medio de pago, garantia_meses; envío por correo).
 - Marketing (publicaciones), Configuración, Ciberseguridad (IPs bloqueadas, lista blanca, equipos y clientes baneados, bitácora).
@@ -58,7 +58,7 @@ PREGUNTAS PARA EL DUEÑO:
 `.trim();
 
 // ---------------------------------------------------------------------
-// CONTEXTO TICO — lo que Jarvis SIEMPRE entiende, y cuánto lo usa
+// CONTEXTO TICO — lo que Phill SIEMPRE entiende, y cuánto lo usa
 // ---------------------------------------------------------------------
 export const GLOSARIO_TICO = `
 Entendés siempre el habla de Costa Rica, aunque no la usés:

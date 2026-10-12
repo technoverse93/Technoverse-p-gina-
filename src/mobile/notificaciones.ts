@@ -43,7 +43,7 @@ export function iniciarNotificaciones(): void {
       const { LocalNotifications } = await import('@capacitor/local-notifications');
       // Al tocar la notificación nativa, se pide abrir el chat.
       LocalNotifications.addListener('localNotificationActionPerformed', (a) => {
-        // Un recordatorio de la agenda de Jarvis abre Jarvis, no el chat.
+        // Un recordatorio de la agenda de Phill abre Phill, no el chat.
         if (a?.notification?.extra?.jarvis) { void import('./jarvisAtajo').then(m => m.manejar('technoverse://jarvis')); return; }
         try { window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_CHAT)); } catch { /* nada */ }
       });

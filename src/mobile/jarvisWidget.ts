@@ -1,7 +1,7 @@
 // =====================================================================
 // PUENTE CON EL MINI-WIDGET NATIVO (native-android/jarvis/)
 // =====================================================================
-// El widget es Jarvis con la misma sesión de la app (lo pidió el dueño:
+// El widget es Phill con la misma sesión de la app (lo pidió el dueño:
 // «hacer todo como lo haría con mi sesión», sin huella; el teléfono es solo
 // suyo). Se usa EN EL PROPIO RECUADRO de la pantalla de inicio:
 //   · Micrófono  → dictado del teléfono; la respuesta aparece (y se lee)
@@ -10,17 +10,17 @@
 //                  widget (APK v4: el widget dice dónde está), sin oscurecer,
 //                  con el teclado abajo; la respuesta queda en el widget.
 //                  APK anterior: una barrita sobre el teclado.
-//   · «Abrir conversación» → Jarvis completo en una hoja (modo «hoja»),
+//   · «Abrir conversación» → Phill completo en una hoja (modo «hoja»),
 //                  para confirmar acciones, ver tablas o seguir hablando.
 // Todo corre en la página `jarvis-rapido.html` (src/rapido.tsx).
 //
-// Activarlo es encender una marca en el teléfono (Jarvis → Ajustes →
+// Activarlo es encender una marca en el teléfono (Phill → Ajustes →
 // Mini-widget). Solo existe en la APK con el widget nuevo (`version` 3).
 // =====================================================================
 
 import { Capacitor, registerPlugin, type PluginListenerHandle } from '@capacitor/core';
 
-/** La que entiende esta página: 3 = Jarvis con sesión, usable en el propio recuadro. */
+/** La que entiende esta página: 3 = Phill con sesión, usable en el propio recuadro. */
 export const VERSION_WIDGET = 3;
 
 export type ModoVentanita = 'hoja' | 'voz' | 'escribir';

@@ -1,15 +1,15 @@
 // =====================================================================
 // MANOS LIBRES — las reglas de la conversación continua
 // =====================================================================
-// · Cuándo lo que dijiste es una despedida («gracias, Jarvis», «eso es
-//   todo»): Jarvis contesta y sale del modo, sin que toqués nada.
-// · El saludo con que Jarvis abre la conversación (instantáneo, sin gastar
+// · Cuándo lo que dijiste es una despedida («gracias, Phill», «eso es
+//   todo»): Phill contesta y sale del modo, sin que toqués nada.
+// · El saludo con que Phill abre la conversación (instantáneo, sin gastar
 //   IA): hora del día, tu nombre y los avisos que tenés sin ver.
 // Lógica pura: se prueba sin micrófono.
 // =====================================================================
 
 /** Una despedida COMPLETA y corta. «Gracias, ¿y las ventas?» no cuenta. */
-const DESPEDIDA = /^\W*(?:(?:ok|okay|listo|bueno|perfecto|muy bien|excelente|vale)\W+)?(?:(?:muchas |mil )?gracias|chao|chau|adi[oó]s|hasta luego|hasta ma[nñ]ana|eso es todo|es todo|nada m[aá]s|terminamos)(?:\W+(?:jarvis|por hoy|por ahora|eso es todo|es todo|nos vemos|por favor))*\W*$/i;
+const DESPEDIDA = /^\W*(?:(?:ok|okay|listo|bueno|perfecto|muy bien|excelente|vale)\W+)?(?:(?:muchas |mil )?gracias|chao|chau|adi[oó]s|hasta luego|hasta ma[nñ]ana|eso es todo|es todo|nada m[aá]s|terminamos)(?:\W+(?:jarvis|phill?|fil|por hoy|por ahora|eso es todo|es todo|nos vemos|por favor))*\W*$/i;
 
 export function esDespedida(dicho: string): boolean {
   const t = String(dicho || '').trim();

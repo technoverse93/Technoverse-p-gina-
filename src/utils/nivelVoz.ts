@@ -1,5 +1,5 @@
 // =====================================================================
-// NIVEL DE VOZ — cuánto suena el micrófono o la voz de Jarvis (0 a 1)
+// NIVEL DE VOZ — cuánto suena el micrófono o la voz de Phill (0 a 1)
 // =====================================================================
 // Un bus mínimo: quien graba o reproduce publica el volumen del momento
 // y el orbe del modo «manos libres» lo dibuja. No hay estado de React de

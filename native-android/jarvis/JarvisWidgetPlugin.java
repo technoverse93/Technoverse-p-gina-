@@ -20,7 +20,7 @@ import java.security.KeyStore;
  * Puente entre la web (src/mobile/jarvisWidget.ts) y el mini-widget.
  *
  * Vive en los DOS puentes: el de la app (MainActivity, para activarlo desde
- * Jarvis → Ajustes) y el de la ventanita (JarvisRapido, para cerrarla, abrir
+ * Phill → Ajustes) y el de la ventanita (JarvisRapido, para cerrarla, abrir
  * la app y dejar la última respuesta en el widget). No es un paquete npm,
  * así que cada actividad lo registra a mano antes de super.onCreate().
  *
@@ -29,7 +29,7 @@ import java.security.KeyStore;
  */
 @CapacitorPlugin(name = "JarvisWidget")
 public class JarvisWidgetPlugin extends Plugin {
-    /** La web la compara: 3 = Jarvis con sesión, usable en el propio recuadro. */
+    /** La web la compara: 3 = Phill con sesión, usable en el propio recuadro. */
     static final int VERSION = 4;
 
     private int pedidos = 0;
@@ -96,7 +96,7 @@ public class JarvisWidgetPlugin extends Plugin {
     }
 
     /**
-     * Abre la app (con su huella de siempre) en Jarvis o, si se indica, en un
+     * Abre la app (con su huella de siempre) en Phill o, si se indica, en un
      * módulo («Ir a Taller» desde la ventanita), y cierra la ventanita.
      */
     @PluginMethod

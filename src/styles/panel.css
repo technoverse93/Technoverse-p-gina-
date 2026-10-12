@@ -1,5 +1,5 @@
 /*  PANEL (solo administración). Separado de admin.css para que la tienda no
-   lo descargue: se carga junto con AdminPanel (y en la ventanita de Jarvis).
+   lo descargue: se carga junto con AdminPanel (y en la ventanita de Phill).
    Mismo orden relativo que tenía dentro de admin.css.  */
 #admin-panel-root {
   /* Ritmo vertical único de la consola. Todo el panel mide en estos
@@ -836,7 +836,7 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
    El dueño lo veía «sofocado, todo grande e invasivo». En vez de achicar
    pieza por pieza (se notaba poco), se escala TODO el contenido de una vez
    con `zoom`: módulos, barra de pestañas, menús, ventanas emergentes y el
-   interior de Jarvis y del chat. El marco (alto de pantalla, ventanas
+   interior de Phill y del chat. El marco (alto de pantalla, ventanas
    flotantes) no se escala: su alto sale de la pantalla y quedaría corto.
    ===================================================================== */
 @media (max-width: 640px) {

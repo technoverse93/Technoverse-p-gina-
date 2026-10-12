@@ -1,7 +1,7 @@
 // =====================================================================
 // ENVIAR UNA RESPUESTA DE LA TIENDA SIN ABRIR EL CHAT
 // =====================================================================
-// Lo usa Jarvis («respondele a Laura que ya está lista»). Es el mismo
+// Lo usa Phill («respondele a Laura que ya está lista»). Es el mismo
 // camino que `handleSendMessage` de useChatAdmin —mensaje en vuelo, guardar
 // con `saveDB`, bitácora—, sin la parte de pantalla: la pestaña Chat y la
 // burbuja lo ven aparecer por el aviso normal de `technoverse_db_updated`.
@@ -36,6 +36,6 @@ export async function enviarRespuestaDeSoporte(convId: string, texto: string, qu
     confirmarMensajeEnVuelo(msg.id);
     return { ok: false, mensaje: 'No se pudo enviar: ' + (e?.message || e) };
   }
-  addAuditLog(quien || 'admin', 'Soporte', 'Respuesta Chat', `Conversación ${convId} (por Jarvis)`);
+  addAuditLog(quien || 'admin', 'Soporte', 'Respuesta Chat', `Conversación ${convId} (por Phill)`);
   return { ok: true, msgId: msg.id, mensaje: `Enviado a ${conv.customerName || 'el cliente'}: «${texto.length > 80 ? texto.slice(0, 77) + '…' : texto}»` };
 }

@@ -5,14 +5,14 @@
 // corre EN EL APARATO: la misma en el teléfono y en la computadora, sin
 // depender de las voces que traiga cada sistema. Se baja una sola vez
 // (~60 MB) desde Ajustes → Voz y queda guardada; mientras no esté bajada,
-// Jarvis habla con la voz del teléfono como antes.
+// Phill habla con la voz del teléfono como antes.
 // =====================================================================
 
 import { aVisual, nivelVoz, rms8 } from './nivelVoz';
 
 export const VOCES_PROPIAS = [
-  { id: 'es_MX-ald-medium', nombre: 'Jarvis', detalle: 'Masculina, latina · ~60 MB' },
-  { id: 'es_MX-claude-high', nombre: 'Jarvis HD', detalle: 'Masculina, más natural · ~110 MB' },
+  { id: 'es_MX-ald-medium', nombre: 'Phill', detalle: 'Masculina, latina · ~60 MB' },
+  { id: 'es_MX-claude-high', nombre: 'Phill HD', detalle: 'Masculina, más natural · ~110 MB' },
 ] as const;
 
 const CLAVE_MOTOR = 'tv_voz_motor';      // 'propia' | 'telefono'

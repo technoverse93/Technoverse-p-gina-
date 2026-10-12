@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Colores del widget de Jarvis = los del administrador (tema claro).
+<!-- Colores del widget de Phill = los del administrador (tema claro).
      El tema oscuro está en values-night: el widget sigue el del teléfono. -->
 <resources>
     <color name="jv_sup">#FFFFFF</color>

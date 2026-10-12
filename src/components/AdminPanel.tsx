@@ -210,13 +210,13 @@ export default function AdminPanel({
   >({});
   const [reenviandoFactura, setReenviandoFactura] = useState<string | null>(null);
 
-  // Los recordatorios de la agenda de Jarvis se programan en el teléfono al
+  // Los recordatorios de la agenda de Phill se programan en el teléfono al
   // abrir el panel (por si se agendaron desde otro equipo o el widget).
   useEffect(() => {
     if (!esAdminSupremo(currentUser?.email)) return;
     const t = setTimeout(() => {
       void import('../mobile/agendaJarvis').then(m => m.sincronizarAgenda()).catch(() => { /* sin agenda */ });
-      // Jarvis te habla primero: avisos en vivo y el resumen de la mañana.
+      // Phill te habla primero: avisos en vivo y el resumen de la mañana.
       void import('../mobile/avisosJarvis').then(m => m.iniciarAvisosJarvis()).catch(() => { /* sin avisos todavía */ });
     }, 4000);
     return () => clearTimeout(t);
@@ -224,7 +224,7 @@ export default function AdminPanel({
 
   // AVISOS PUSH: este teléfono se registra para que el servidor le avise de
   // los mensajes del chat (con «Responder» en la propia notificación) y de
-  // lo que vigila Jarvis, aunque la app esté cerrada. Se reintenta al volver
+  // lo que vigila Phill, aunque la app esté cerrada. Se reintenta al volver
   // a la app (token renovado, permiso dado en Ajustes del teléfono).
   useEffect(() => {
     if (!esStaff(currentUser?.role)) return;
@@ -1110,7 +1110,7 @@ export default function AdminPanel({
     try { window.history.replaceState(null, '', `/admin/${tab}`); } catch { /* la navegación funciona igual */ }
   }, [pestanas.abrir, currentUser?.email]);
 
-  // Widget de Android / atajo del ícono: abre Jarvis (y el micrófono), o el
+  // Widget de Android / atajo del ícono: abre Phill (y el micrófono), o el
   // módulo al que mandó la ventanita del widget («Ir a…»).
   const [pedidoJarvis, setPedidoJarvis] = useState<{ n: number; voz: boolean } | null>(null);
   useEffect(() => {
@@ -1864,7 +1864,7 @@ export default function AdminPanel({
           pestana={activeTab}
         />
       </Suspense>
-      {/* El asistente vive SOLO aquí, en el botón flotante: Jarvis para el
+      {/* El asistente vive SOLO aquí, en el botón flotante: Phill para el
           superadmin, «Asistencia de IA» para el resto del personal. */}
       {esStaff(currentUser?.role) && (
         <Suspense fallback={null}>

@@ -11,7 +11,7 @@
 //   solo con ella, el teléfono puede mandar la respuesta escrita en la
 //   notificación (accion «responder_push»). No es una sesión: no sirve para
 //   leer nada ni para otra conversación.
-// · También avisa lo que Jarvis vigila (chats esperando, existencias,
+// · También avisa lo que Phill vigila (chats esperando, existencias,
 //   seguridad…), para que lleguen con la app cerrada.
 // Secreto necesario (Supabase → Edge Functions → Secrets):
 //   FCM_SERVICE_ACCOUNT  el JSON de la cuenta de servicio de Firebase.
@@ -153,7 +153,7 @@ export async function enviarPrueba(admin: Db, uid: string) {
   return enviarPush(admin, new Map([[uid, { tipo: 'chat', conv: CONV_PRUEBA, cliente: 'Prueba de Technoverse', texto: 'Si ves esto, los avisos funcionan. Tocá «Responder» para probar también la respuesta.', msg: `prueba-${Date.now()}`, ts: String(Date.now()), ...(llave ? { llave } : {}) }]]));
 }
 
-/** Un aviso de Jarvis: a la persona dueña, con el módulo al que lleva. */
+/** Un aviso de Phill: a la persona dueña, con el módulo al que lleva. */
 export async function empujarAviso(admin: Db, uid: string, a: { tipo: string; titulo: string; cuerpo: string; nivel?: string; destino?: string }): Promise<void> {
   await enviarPush(admin, new Map([[uid, { tipo: 'aviso', subtipo: a.tipo, titulo: recortar(a.titulo, 80), texto: recortar(a.cuerpo, 400), nivel: a.nivel || 'info', ...(a.destino ? { destino: a.destino } : {}) }]])).catch(e => console.log(`push aviso: ${e instanceof Error ? e.message : e}`));
 }

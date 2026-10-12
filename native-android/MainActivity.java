@@ -16,7 +16,7 @@ public class MainActivity extends BridgeActivity {
     @Override
     public void onCreate(Bundle savedInstanceState) {
         registerPlugin(PantallaNativaPlugin.class);
-        // Puente del mini-widget de Jarvis (native-android/jarvis/).
+        // Puente del mini-widget de Phill (native-android/jarvis/).
         registerPlugin(JarvisWidgetPlugin.class);
         // Avisos push (Firebase) y respuesta desde la notificación (native-android/push/).
         registerPlugin(PushNativoPlugin.class);

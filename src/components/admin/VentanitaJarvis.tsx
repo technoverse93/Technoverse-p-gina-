@@ -1,5 +1,5 @@
 // =====================================================================
-// VENTANITA DEL MINI-WIDGET — Jarvis completo encima de la pantalla de inicio
+// VENTANITA DEL MINI-WIDGET — Phill completo encima de la pantalla de inicio
 // =====================================================================
 // Es la página `jarvis-rapido.html` (src/rapido.tsx) que abre el widget del
 // teléfono en su propia ventanita nativa (native-android/jarvis/
@@ -57,17 +57,17 @@ type Fase = 'cargando' | 'listo' | 'fuera' | 'sin_puente' | 'apagado' | 'sin_ses
 type Boton = 'app' | 'panel' | 'reintentar';
 
 const AVISOS: Record<Exclude<Fase, 'cargando' | 'listo'>, { icono: LucideIcon; titulo: string; texto: string; boton?: Boton }> = {
-  fuera: { icono: Smartphone, titulo: 'Esta es la ventanita del widget', texto: 'Se abre desde el widget de Jarvis en el teléfono. Jarvis completo está en el panel.', boton: 'panel' },
-  sin_puente: { icono: Smartphone, titulo: 'No se pudo abrir Jarvis aquí', texto: 'Abrí Jarvis en la app; si vuelve a pasar, reinstalá la APK más nueva.', boton: 'app' },
-  apagado: { icono: Power, titulo: 'El mini-widget está apagado', texto: 'Activalo en la app: Jarvis → Ajustes → Mini-widget → «Activar en este teléfono».', boton: 'app' },
+  fuera: { icono: Smartphone, titulo: 'Esta es la ventanita del widget', texto: 'Se abre desde el widget de Phill en el teléfono. Phill completo está en el panel.', boton: 'panel' },
+  sin_puente: { icono: Smartphone, titulo: 'No se pudo abrir Phill aquí', texto: 'Abrí Phill en la app; si vuelve a pasar, reinstalá la APK más nueva.', boton: 'app' },
+  apagado: { icono: Power, titulo: 'El mini-widget está apagado', texto: 'Activalo en la app: Phill → Ajustes → Mini-widget → «Activar en este teléfono».', boton: 'app' },
   sin_sesion: { icono: LogIn, titulo: 'No hay sesión en este teléfono', texto: 'Entrá a la app una vez con tu cuenta y el widget queda listo.', boton: 'app' },
-  no_super: { icono: ShieldAlert, titulo: 'Solo para la cuenta del dueño', texto: 'El mini-widget de Jarvis es del superadmin.', boton: 'app' },
+  no_super: { icono: ShieldAlert, titulo: 'Solo para la cuenta del dueño', texto: 'El mini-widget de Phill es del superadmin.', boton: 'app' },
   bloqueado: { icono: ShieldAlert, titulo: 'Acceso bloqueado', texto: 'Este aparato o esta conexión están bloqueados.' },
   sin_red: { icono: WifiOff, titulo: 'Sin conexión', texto: 'No se pudo revisar tu sesión. Revisá internet y probá de nuevo.', boton: 'reintentar' },
 };
 
 function Esqueleto() {
-  return <div className="jv-esqueleto" aria-label="Cargando Jarvis"><i /><i /><i /></div>;
+  return <div className="jv-esqueleto" aria-label="Cargando Phill"><i /><i /><i /></div>;
 }
 
 class ErrorDeCarga extends React.Component<{ children: React.ReactNode }, { error: boolean }> {
@@ -78,7 +78,7 @@ class ErrorDeCarga extends React.Component<{ children: React.ReactNode }, { erro
     if (!this.state.error) return this.props.children;
     return (
       <div className="jv-esqueleto" role="alert">
-        <p>No se pudo cargar Jarvis.</p>
+        <p>No se pudo cargar Phill.</p>
         <button type="button" className="ai-chip" onClick={() => location.reload()}>Reintentar</button>
       </div>
     );
@@ -123,7 +123,7 @@ function BarraEscribir({ onEnviar, onHoja, onCerrar }: { onEnviar: (t: string) =
   return (
     <form className="vj-barra" onSubmit={e => { e.preventDefault(); enviar(); }}>
       <span className="vj-barra-marca" aria-hidden><Sparkles className="w-4 h-4" /></span>
-      <textarea ref={caja} rows={1} value={texto} placeholder="Escribile a Jarvis…" aria-label="Pregunta para Jarvis" maxLength={2000}
+      <textarea ref={caja} rows={1} value={texto} placeholder="Escribile a Phill…" aria-label="Pregunta para Phill" maxLength={2000}
         onChange={e => { setTexto(e.target.value); const t = e.target; t.style.height = 'auto'; t.style.height = `${Math.min(120, t.scrollHeight)}px`; }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } }} />
       <button type="button" className="vj-barra-btn" onClick={onHoja} aria-label="Abrir la conversación completa" title="Abrir la conversación completa"><Maximize2 className="w-4 h-4" /></button>
       <button type="button" className="vj-barra-btn" onClick={onCerrar} aria-label="Cerrar" title="Cerrar"><X className="w-4 h-4" /></button>
@@ -162,16 +162,16 @@ function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, extra, 
   const top = Math.max(8, Math.min(marco.y, alto - marco.alto - 8));
   const enviar = () => { const t = texto.trim(); if (!t || !listo || estado) return; setTexto(''); caja.current?.blur(); onEnviar(t); };
   return (
-    <section className="vj-recuadro" data-tema={noche ? 'oscuro' : 'claro'} data-activo={!estado || undefined} role="dialog" aria-label="Jarvis"
+    <section className="vj-recuadro" data-tema={noche ? 'oscuro' : 'claro'} data-activo={!estado || undefined} role="dialog" aria-label="Phill"
       style={{ left: marco.x, top, width: marco.ancho, height: marco.alto }}>
       <header className="vj-rc-cab">
         <span className="vj-rc-marca" aria-hidden><Sparkles className="w-3.5 h-3.5" /></span>
-        <b>Jarvis</b>
+        <b>Phill</b>
         <span className="vj-rc-est" aria-live="polite">{estado || (listo ? '' : 'Abriendo…')}</span>
         <button type="button" onClick={onCerrar} aria-label="Cerrar" title="Cerrar"><X className="w-4 h-4" /></button>
       </header>
       <div className="vj-rc-conv" ref={lista}>
-        {historial.length === 0 && !estado && !aviso && <p className="vj-rc-vacio">Escribile a Jarvis: la respuesta sale aquí.</p>}
+        {historial.length === 0 && !estado && !aviso && <p className="vj-rc-vacio">Escribile a Phill: la respuesta sale aquí.</p>}
         {historial.map((v, i) => (
           <React.Fragment key={i}>
             {v.p && <div className="vj-rc-yo">{v.p}</div>}
@@ -182,7 +182,7 @@ function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, extra, 
         {extra}
       </div>
       <form className="vj-rc-caja" onSubmit={e => { e.preventDefault(); enviar(); }}>
-        <input ref={caja} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribile a Jarvis…" aria-label="Pregunta para Jarvis"
+        <input ref={caja} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribile a Phill…" aria-label="Pregunta para Phill"
           maxLength={2000} enterKeyHint="send" autoComplete="off" disabled={!listo || !!estado} />
         <button type="submit" disabled={!texto.trim() || !listo || !!estado} aria-label="Enviar"><ArrowUp className="w-[18px] h-[18px]" /></button>
       </form>
@@ -273,7 +273,7 @@ export default function VentanitaJarvis() {
   }, [intento]);
 
   // Con la ventanita lista: vigilancia de bloqueos, huella del aparato (va
-  // con cada pregunta, para que Jarvis nunca proponga bloquear este mismo
+  // con cada pregunta, para que Phill nunca proponga bloquear este mismo
   // teléfono), el pase de la huella al día y los datos del negocio bajando.
   useEffect(() => {
     if (fase !== 'listo') return;
@@ -393,7 +393,7 @@ export default function VentanitaJarvis() {
               <button type="button" className="vj-velo" aria-label="Cerrar" tabIndex={-1} onClick={cerrar} />
               {fase === 'listo'
                 ? <BarraEscribir onEnviar={t => void responderEnWidget(t, false)} onHoja={verHoja} onCerrar={cerrar} />
-                : <div className="vj-barra" aria-busy><span className="vj-barra-marca"><Sparkles className="w-4 h-4" /></span><span className="vj-barra-espera">Abriendo Jarvis…</span></div>}
+                : <div className="vj-barra" aria-busy><span className="vj-barra-marca"><Sparkles className="w-4 h-4" /></span><span className="vj-barra-espera">Abriendo Phill…</span></div>}
             </>
           )}
         </div>
@@ -404,12 +404,12 @@ export default function VentanitaJarvis() {
   return (
     <OverlayProvider>
       <div id="admin-panel-root" className="vj-raiz">
-        {nativa && <button type="button" className="vj-velo" aria-label="Cerrar Jarvis" tabIndex={-1} onClick={cerrar} />}
-        <section className="jv-hoja vj-hoja" role="dialog" aria-label="Jarvis" data-compacta={aviso ? '' : undefined}>
+        {nativa && <button type="button" className="vj-velo" aria-label="Cerrar Phill" tabIndex={-1} onClick={cerrar} />}
+        <section className="jv-hoja vj-hoja" role="dialog" aria-label="Phill" data-compacta={aviso ? '' : undefined}>
           <header className="jv-hoja-cab vj-cab">
-            <span><Sparkles className="w-3.5 h-3.5" />Jarvis</span>
+            <span><Sparkles className="w-3.5 h-3.5" />Phill</span>
             {nativa && !aviso && (
-              <button type="button" className="vj-abrir" onClick={() => abrirApp()} title="Abrir Jarvis en la app (con tu huella)">
+              <button type="button" className="vj-abrir" onClick={() => abrirApp()} title="Abrir Phill en la app (con tu huella)">
                 <ExternalLink className="w-4 h-4" />Abrir la app
               </button>
             )}

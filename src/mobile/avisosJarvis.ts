@@ -1,11 +1,11 @@
 // =====================================================================
-// AVISOS DE JARVIS — cuando Jarvis te habla primero
+// AVISOS DE JARVIS — cuando Phill te habla primero
 // =====================================================================
 // El servidor vigila solo (ver supabase/functions/asistente-ia/proactivo.ts)
 // y deja cada aviso en `jarvis_avisos`. Aquí se reciben EN VIVO:
 //   · se notifican en el teléfono (APK: notificación nativa; web: la del
 //     navegador si diste permiso);
-//   · se avisa a Jarvis (evento `jarvis-aviso`) para la campana.
+//   · se avisa a Phill (evento `jarvis-aviso`) para la campana.
 // Además, en la APK queda programado todos los días a las 7:05 el aviso
 // del resumen de la mañana (suena aunque la app esté cerrada).
 // =====================================================================
@@ -29,7 +29,7 @@ function idNotif(uuid: string): number {
 
 async function notificar(a: AvisoJarvis): Promise<void> {
   if (pushActivo()) return; // el servidor ya lo mandó al teléfono (push)
-  const titulo = a.tipo === 'resumen' ? 'Jarvis · resumen de la mañana' : `Jarvis · ${a.titulo}`;
+  const titulo = a.tipo === 'resumen' ? 'Phill · resumen de la mañana' : `Phill · ${a.titulo}`;
   const cuerpo = a.tipo === 'resumen' ? a.cuerpo.slice(0, 180) : a.cuerpo;
   try {
     if (Capacitor.isNativePlatform()) {
@@ -56,7 +56,7 @@ async function programarResumen(): Promise<void> {
     const { notifications } = await LocalNotifications.getPending();
     if (notifications.some(n => Number(n.id) === ID_RESUMEN)) return;
     await LocalNotifications.schedule({ notifications: [{
-      id: ID_RESUMEN, title: 'Jarvis · buenos días', body: 'Tu resumen de la mañana está listo. Tocá para escucharlo.',
+      id: ID_RESUMEN, title: 'Phill · buenos días', body: 'Tu resumen de la mañana está listo. Tocá para escucharlo.',
       schedule: { on: { hour: 7, minute: 5 }, allowWhileIdle: true }, extra: { jarvis: true, avisos: true },
     }] });
   } catch { /* sin complemento: el resumen igual queda en la campana */ }

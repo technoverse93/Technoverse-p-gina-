@@ -29,7 +29,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 
 /**
- * Lo que hay detrás del mini-widget de Jarvis: el MISMO Jarvis de la app con
+ * Lo que hay detrás del mini-widget de Phill: el MISMO Phill de la app con
  * la MISMA sesión (lo pidió el dueño: «hacer todo como lo haría con mi
  * sesión», sin huella y sin ventanas emergentes; el teléfono es solo suyo).
  * Es un segundo puente de Capacitor con la página liviana jarvis-rapido.html
@@ -38,13 +38,13 @@ import java.util.ArrayList;
  *
  * Tres modos (EXTRA_MODO):
  *  · «voz»: solo el dictado del teléfono. No se ve nada propio: la pregunta
- *    va a Jarvis y la respuesta sale en el widget (y se lee). Mientras
+ *    va a Phill y la respuesta sale en el widget (y se lee). Mientras
  *    contesta, esta ventana no tapa nada: los toques pasan a la pantalla
  *    de inicio.
  *  · «escribir»: el chat se dibuja exactamente encima del recuadro del
  *    widget (sin oscurecer), con el teclado abajo; la respuesta queda en el
  *    widget. Si no se sabe dónde está el widget, una barrita sobre el teclado.
- *  · «hoja»: Jarvis completo, para confirmar acciones o ver tablas.
+ *  · «hoja»: Phill completo, para confirmar acciones o ver tablas.
  *
  * La página decide si puede abrir: widget activado en este teléfono, sesión
  * del superadmin y sin bloqueo de aparato. El candado de huella de la app no
@@ -199,7 +199,7 @@ public class JarvisRapido extends BridgeActivity {
         }
     }
 
-    /** Deja de tapar: los toques pasan a la pantalla de inicio mientras Jarvis contesta. */
+    /** Deja de tapar: los toques pasan a la pantalla de inicio mientras Phill contesta. */
     void soltar() {
         Window ventana = getWindow();
         ventana.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
@@ -212,7 +212,7 @@ public class JarvisRapido extends BridgeActivity {
         Intent pedir = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         pedir.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         pedir.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-CR");
-        pedir.putExtra(RecognizerIntent.EXTRA_PROMPT, "Hablale a Jarvis");
+        pedir.putExtra(RecognizerIntent.EXTRA_PROMPT, "Hablale a Phill");
         try {
             dictado.launch(pedir);
         } catch (ActivityNotFoundException e) {
