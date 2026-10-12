@@ -41,3 +41,10 @@ el sistema y sus aplicaciones con una página o con algo oscuro:
   ni en `VentanitaJarvis`; lo que se muestre va en un panel chico y traslúcido.
 
 Cualquier cambio a la ventanita tiene que respetar esto.
+
+## Mapa del código de Javier
+
+Javier conoce el sistema por `supabase/functions/asistente-ia/mapa-codigo.ts`,
+que se genera con `npm run mapa` a partir del comentario con que empieza cada
+archivo. Después de agregar o cambiar archivos, correr `npm run mapa` y subir
+el resultado junto con el cambio (la función lo trae al desplegarse).

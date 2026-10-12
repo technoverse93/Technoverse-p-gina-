@@ -81,6 +81,7 @@ import { esCron, tareaCron } from './proactivo.ts';
 import { eventoDePrueba, informe, nombreComponente, registrar, type Prueba } from './salud.ts';
 import { empujarAviso, empujarChat, enviarPrueba, responderDesdePush } from './push.ts';
 import { crearTarea, procesarTareas, purgarTareas, type MotorTareas, type PasoPlan, type ResultadoCrear, type Tarea } from './tareas.ts';
+import { MAPA_CODIGO } from './mapa-codigo.ts';
 import { ClienteRepo, configLectura, configRepo, correrHerramientaRepo, MAX_ARCHIVOS, MAX_PROPUESTAS_DIA, NOMBRES_REPO, type EstadoRepo, type ResultadoPropuesta } from './repo.ts';
 import { armarPromptImagen, ESTILOS_VALIDOS, FORMATOS_VALIDOS, generarCopy, generarImagen, type EstiloId, type FormatoId } from './estudio.ts';
 import { ACCIONES_TELEFONO, PANTALLAS_AJUSTES, prepararTelefono, SOLO_APK, type PedidoTelefono } from './telefono.ts';
@@ -296,6 +297,27 @@ const PROPONER_CODIGO = {
     titulo: { type: 'string', description: 'Nombre corto del cambio, de 3 a 8 palabras.' },
   }, required: ['pedido'] },
 };
+const SISTEMA_BUSCAR = {
+  nombre: 'sistema_buscar',
+  descripcion: 'TU CEREBRO DEL SISTEMA: qué hace cada archivo de esta app (el panel, la tienda/página, la APK, Javier, el servidor), sacado del propio código. Usala PRIMERO para cualquier pregunta sobre cómo funciona o por qué falla algo de la app o de la página, o dónde está algo; después leé el archivo con repo_leer si necesitás el detalle. NUNCA busques en internet cosas del propio sistema.',
+  parametros: { type: 'object', properties: { tema: { type: 'string', description: 'De qué se trata, en palabras («cobro factura», «huella arranque», «widget», «inventario tienda», «ciberseguridad ingresos»).' } }, required: ['tema'] },
+};
+/** Sin tildes ni mayúsculas, para comparar palabras. */
+const plano = (t: string) => t.normalize('NFD').replace(/\p{M}+/gu, '').toLowerCase();
+const VACIAS = new Set(['el', 'la', 'los', 'las', 'de', 'del', 'que', 'y', 'en', 'un', 'una', 'por', 'para', 'con', 'como', 'se', 'al', 'lo', 'es', 'no', 'mi', 'su', 'cual', 'donde', 'esta', 'esto', 'eso', 'hace', 'funciona', 'falla']);
+/** Los archivos del mapa que mejor coinciden con el tema (título vale más que la ruta, y ésta más que el resumen). */
+function buscarEnMapa(tema: string): { ruta: string; titulo: string; resumen: string }[] {
+  const palabras = plano(tema).split(/[^a-z0-9ñ]+/).filter(p => p.length >= 3 && !VACIAS.has(p));
+  if (!palabras.length) return [];
+  const raiz = (p: string) => p.length > 5 ? p.slice(0, p.length - 2) : p; // «facturas» ~ «factura»
+  return MAPA_CODIGO.map(e => {
+    const t = plano(e.titulo), r = plano(e.ruta), d = plano(e.resumen);
+    let puntos = 0;
+    for (const p of palabras) { const q = raiz(p); if (t.includes(q)) puntos += 3; if (r.includes(q)) puntos += 2; if (d.includes(q)) puntos += 1; }
+    return { e, puntos };
+  }).filter(x => x.puntos > 0).sort((a, b) => b.puntos - a.puntos).slice(0, 8).map(x => x.e);
+}
+
 const REPO_LEER = {
   nombre: NOMBRES_REPO.leer,
   descripcion: 'Lee un archivo del repositorio (rama principal), por tramos de líneas. Devuelve el texto TAL CUAL (para copiarlo exacto en los reemplazos) y cuántas líneas tiene en total. Sin desde/hasta trae las primeras ~200 líneas.',
@@ -463,7 +485,7 @@ function declaraciones(sis: Sistema) {
   if (sis.cerebro && sis.telefono) lista.push(MIRAR);
   // Un encargo creado después de leer algo de afuera podría traer órdenes escondidas: tampoco.
   if (sis.cerebro && sis.encargar && !sis.leyoAfuera) lista.push(ENCARGAR, PROPONER_CODIGO);
-  if (sis.repo) lista.push(REPO_LEER, REPO_LISTAR, REPO_BUSCAR, ...(sis.repo.soloLectura ? [] : [PROPONER_CAMBIO]));
+  if (sis.repo) lista.push(SISTEMA_BUSCAR, REPO_LEER, REPO_LISTAR, REPO_BUSCAR, ...(sis.repo.soloLectura ? [] : [PROPONER_CAMBIO]));
   return lista;
 }
 
@@ -601,6 +623,14 @@ async function correrHerramienta(nombre: string, args: Record<string, unknown>, 
     };
   }
   // El agente de código (solo dentro de un encargo de código): lee el repositorio y PROPONE; nunca fusiona.
+  if (sis.repo && nombre === SISTEMA_BUSCAR.nombre) {
+    const hallados = buscarEnMapa(String(args?.tema ?? ''));
+    const c: Consulta = { tipo: 'cerebro', modulo: 'Cerebro', desc: `sistema · «${String(args?.tema ?? '').slice(0, 50)}»`, filas: `${hallados.length} archivo${hallados.length === 1 ? '' : 's'}`, detalle: hallados.map(h => h.ruta).join(' · ').slice(0, 400) };
+    sis.consultas.push(c); sis.emitir('cerebro', c);
+    return hallados.length
+      ? { archivos: hallados, nota: 'Esto es lo que dice el propio código de cada archivo. Para el detalle exacto, leé el que corresponda con repo_leer. No busques en internet cosas del sistema.' }
+      : { archivos: [], nota: 'No encontré ese tema en el mapa: probá otras palabras, o listá carpetas con repo_listar (src/components, src/utils, supabase/functions, native-android).' };
+  }
   if (sis.repo && (Object.values(NOMBRES_REPO) as string[]).includes(nombre)) return await correrHerramientaRepo(nombre, args, sis.repo);
   if (nombre === PROPONER_CODIGO.nombre && sis.cerebro && sis.encargar && !sis.leyoAfuera) {
     if (!configRepo()) return { error: 'Para proponer cambios de código necesito acceso al repositorio de GitHub y todavía no lo tengo: el dueño tiene que crear un token de GitHub (solo para este repositorio, con permisos de «Contents» y «Pull requests») y guardarlo en Supabase → Edge Functions → Secrets con el nombre GITHUB_TOKEN. Decíselo claro y corto.' };
@@ -2339,7 +2369,7 @@ export async function atender(req: Request): Promise<Response> {
     // Desde el mini-widget del teléfono la respuesta se lee en un recuadro
     // chico (y muchas veces en voz alta): corta y sin tablas. Las acciones
     // siguen igual que en la app.
-    if (esSuper && modo === 'jarvis') extra += `\n\nCÓDIGO DEL SISTEMA: podés LEER el código de la app (repo_listar, repo_buscar por nombre de archivo, repo_leer) para diagnosticar fallos reales. Si te preguntan por qué algo falla o cómo funciona una parte, buscá el archivo, leelo y respondé con lo que dice el código, citando archivo y línea. Desde el chat no podés cambiar nada.\nCIBERSEGURIDAD: para un día concreto («ayer», «antier») pasá \`dia\`; para «excepto el equipo X» o «además de mí» usá \`excepto\` (con «yo» para sacar lo del dueño). Contestá SOLO con lo que traen las consultas (el \`detalle\` con marcas [CUENTA·n] e [IP·n]); si algo no está, decí que no hay registro.`;
+    if (esSuper && modo === 'jarvis') extra += `\n\nCÓDIGO DEL SISTEMA (tu cerebro del sistema): para CUALQUIER pregunta sobre la app, el panel, la tienda/página, la APK o vos mismo —cómo funciona algo, por qué falla, dónde está— usá primero sistema_buscar (qué hace cada archivo) y después repo_leer para el detalle; respondé con lo que dice el código, citando el archivo. NUNCA busques en internet cosas del propio sistema: internet es solo para lo de afuera (precios de otras tiendas, productos, noticias). Desde el chat no podés cambiar nada.\nCIBERSEGURIDAD: para un día concreto («ayer», «antier») pasá \`dia\`; para «excepto el equipo X» o «además de mí» usá \`excepto\` (con «yo» para sacar lo del dueño). Contestá SOLO con lo que traen las consultas (el \`detalle\` con marcas [CUENTA·n] e [IP·n]); si algo no está, decí que no hay registro.`;
     if (cuerpo?.desde === 'widget') extra += `\n\nESTÁS EN EL MINI-WIDGET DEL TELÉFONO (un recuadro chico en la pantalla de inicio, que muchas veces se escucha en voz alta): respondé MUY corto y directo: una o dos frases (unas 30 palabras como mucho), sin tablas, listas ni títulos. Las cifras, completas. Si preparás una acción que pide confirmación, decí en una frase qué preparaste: el dueño la confirma tocando «Abrir conversación» en el widget.`;
 
     // Control del teléfono: solo cuando la respuesta llega en vivo a la app (el widget y el modo sin
