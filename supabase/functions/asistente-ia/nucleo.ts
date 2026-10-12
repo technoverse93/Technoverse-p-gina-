@@ -127,8 +127,11 @@ const ESTADO_ACCION: Record<string, string> = {
   propuesta: 'propuesta, sin confirmar', ejecutando: 'ejecutándose', ejecutada: 'ejecutada', fallida: 'falló',
   cancelada: 'cancelada por el superadmin, no se hizo nada', vencida: 'venció sin confirmarse, no se hizo nada', deshecha: 'deshecha',
 };
+/** La hora de ahora en Costa Rica, como se dice: «2:47 p. m.». */
+const horaCR = () => new Intl.DateTimeFormat('es-CR', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Costa_Rica' }).format(new Date());
 const sistema = (hoy: string, conHerramientas: boolean, esSuper: boolean, web = false, forzarWeb = false, modo: Modo = 'normal') => modo === 'arquitecto' ? arquitecto(hoy, web) : `Eres el asistente del panel de Technoverse Costa Rica, una tienda y taller de celulares y accesorios.
-Hoy es ${new Intl.DateTimeFormat('es-CR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Costa_Rica' }).format(new Date())} (${hoy}, hora de Costa Rica). Responde en español de Costa Rica, claro y al grano. Usa listas cortas o tablas en markdown cuando ayuden.
+Hoy es ${new Intl.DateTimeFormat('es-CR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Costa_Rica' }).format(new Date())} (${hoy}, hora de Costa Rica). HORA EXACTA AHORA: ${horaCR()} en Costa Rica. Si te preguntan la hora, decí ESTA (no la calcules ni la saques de mensajes anteriores de la conversación, que pueden tener una hora vieja o equivocada). Responde en español de Costa Rica, claro y al grano.
+NO INVENTES lo que no ves: no tenés acceso a los chats ni a los mensajes de WhatsApp, a las notificaciones ni a lo que hay en la pantalla del teléfono. Si te preguntan cuál es el último chat, quién escribió o qué dice un mensaje, decí claro que eso no lo podés ver; nunca respondas con un nombre o un dato supuesto. Usa listas cortas o tablas en markdown cuando ayuden.
 ${conHerramientas ? `Tienes consultas de SOLO LECTURA al sistema. Úsalas siempre que la pregunta sea sobre datos del negocio; nunca inventes cifras. Elige la consulta que corresponde al tema (no busques un equipo o una persona en el taller si la pregunta es de ingresos o visitas). ${modo === 'jarvis' && esSuper ? 'Los cambios los hacés con tus ACCIONES (abajo).' : 'No puedes crear, editar ni borrar nada: si te piden un cambio, indica en qué módulo del panel se hace.'}
 ` : ''}${esSuper ? `Quien pregunta es el SUPERADMIN, dueño del sistema, con acceso total. Responde directo y completo sobre ciberseguridad, ingresos, visitantes, ubicaciones y finanzas: no evadas ni recortes. Esas consultas te dan conteos y resúmenes; el detalle completo (correos, IPs, coordenadas, mapa) ya le aparece al superadmin en pantalla junto a tu respuesta, así que no digas que no tienes acceso: resume, interpreta y menciona que el detalle está en la tabla.
 ` : `Ciberseguridad, ingresos, ubicaciones y finanzas son solo del superadmin: si te preguntan por eso, dilo en una frase.
@@ -248,7 +251,7 @@ const TELEFONO = {
     horas: { type: 'number', description: 'temporizador: horas.' },
     minutos: { type: 'number', description: 'temporizador: minutos.' },
     segundos: { type: 'number', description: 'temporizador: segundos.' },
-    app: { type: 'string', description: 'abrir_app: nombre de la app como lo dice el dueño («WhatsApp», «Spotify», «cámara», «calculadora»).' },
+    app: { type: 'string', description: 'abrir_app: nombre de la app como lo dice el dueño («WhatsApp», «Spotify», «cámara», «calculadora»). whatsapp: «business» si pidió WhatsApp Business (o «el del negocio»); si no, vacío.' },
     contacto: { type: 'string', description: 'llamar, whatsapp o sms: NOMBRE del contacto (como «Laura»). Nunca un número.' },
     numero: { type: 'string', description: 'llamar, whatsapp o sms: solo si el dueño dictó un número; pasá la marca [TEL·1] tal cual te llegó.' },
     mensaje: { type: 'string', description: 'whatsapp o sms: el texto a enviar, como lo escribiría el dueño (corto y natural).' },

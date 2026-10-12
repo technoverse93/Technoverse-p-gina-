@@ -143,7 +143,7 @@ export async function ejecutarTelefono(p: PedidoTelefono, privados: Record<strin
     case 'temporizador': r = await plugin!.temporizador({ segundos: Number(d.segundos), etiqueta: String(d.etiqueta || '') }); break;
     case 'abrir_app': r = await plugin!.abrirApp(elegido ? { paquete: elegido } : { nombre: String(d.app || '') }); break;
     case 'llamar': r = await plugin!.marcar({ numero }); break;
-    case 'whatsapp': r = await plugin!.whatsapp({ numero: numero.replace(/\D/g, ''), mensaje }); break;
+    case 'whatsapp': r = await plugin!.whatsapp({ numero: numero.replace(/\D/g, ''), mensaje, ...(d.negocio ? { negocio: true } : {}) }); break;
     case 'sms': r = await plugin!.sms({ numero, mensaje }); break;
     case 'calendario': r = await plugin!.calendario({ titulo: String(d.titulo), inicioMs: Number(d.inicioMs), finMs: Number(d.finMs), todoElDia: !!d.todoElDia, lugar: String(d.lugar || ''), descripcion: String(d.descripcion || '') }); break;
     case 'mapa': r = await plugin!.mapa({ consulta: String(d.consulta), navegar: !!d.navegar }); break;

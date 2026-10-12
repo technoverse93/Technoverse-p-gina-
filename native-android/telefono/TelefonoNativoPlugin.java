@@ -376,7 +376,11 @@ public class TelefonoNativoPlugin extends Plugin {
         if (n.length() < 7) { call.resolve(error("El número no es válido.")); return; }
         String mensaje = texto(call, "mensaje");
         String url = "https://wa.me/" + n + (mensaje.isEmpty() ? "" : "?text=" + Uri.encode(mensaje));
-        call.resolve(iniciar(new Intent(Intent.ACTION_VIEW, Uri.parse(url))));
+        Intent i = new Intent(Intent.ACTION_VIEW, Uri.parse(url));
+        // «WhatsApp Business»: directo a esa app (si no está, el que haya).
+        String paquete = Boolean.TRUE.equals(call.getBoolean("negocio", false)) ? "com.whatsapp.w4b" : "com.whatsapp";
+        if (getContext().getPackageManager().getLaunchIntentForPackage(paquete) != null) i.setPackage(paquete);
+        call.resolve(iniciar(i));
     }
 
     @PluginMethod
