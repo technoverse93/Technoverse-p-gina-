@@ -803,6 +803,8 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
   const inicioVoz = useRef(0);
   // DICTADO DEL TELÉFONO (opcional): el texto aparece mientras hablás (ver src/mobile/dictadoNativo.ts).
   const dictadoActivo = useRef(false);
+  /** Cuenta de dictados: un aviso de un dictado viejo (el tope de espera) no corta uno nuevo. */
+  const dictadoSesion = useRef(0);
   const [textoVivo, setTextoVivo] = useState('');
   // MANOS LIBRES: escuchar → contestar hablando → volver a escuchar, sin tocar nada.
   const [manos, setManos] = useState(false);
@@ -1155,6 +1157,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
     });
     if (!r.ok) return false;
     dictadoActivo.current = true;
+    dictadoSesion.current++;
     inicioVoz.current = Date.now();
     setSegVoz(0);
     setVoz('grabando');
@@ -1217,8 +1220,9 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, manosAlAbrir = 
     // Dictado del teléfono: se le pide que entregue lo que entendió (llega por alFinalDictado).
     if (dictadoActivo.current) {
       void dictadoNativo.detener();
-      // Por si el reconocedor del teléfono no contesta: no se queda colgado.
-      setTimeout(() => { if (dictadoActivo.current) { dictadoActivo.current = false; void dictadoNativo.cancelar(); setVoz(null); setTextoVivo(''); } }, 6000);
+      // Por si el reconocedor del teléfono no contesta: no se queda colgado (solo si sigue siendo ESTE dictado).
+      const esta = dictadoSesion.current;
+      setTimeout(() => { if (dictadoActivo.current && dictadoSesion.current === esta) { dictadoActivo.current = false; void dictadoNativo.cancelar(); setVoz(null); setTextoVivo(''); } }, 6000);
       return;
     }
     const g = grabacion.current;
