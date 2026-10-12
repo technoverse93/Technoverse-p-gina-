@@ -1,5 +1,5 @@
 // =====================================================================
-// ESTUDIO DE PAUTA — imágenes y textos de publicidad hechos por Phill
+// ESTUDIO DE PAUTA — imágenes y textos de publicidad hechos por Javier
 // =====================================================================
 // Dos cosas que el servidor hace por el Estudio (src/components/admin/
 // EstudioPauta.tsx) y por la herramienta «crear_pauta» del chat:

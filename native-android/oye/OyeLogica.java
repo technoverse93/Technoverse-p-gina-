@@ -11,7 +11,7 @@ import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
 /**
- * Lo de «Oye Phill» que NO depende de Android (por eso se prueba solo):
+ * Lo de «Oye Javier» que NO depende de Android (por eso se prueba solo):
  * limpiar las frases de activación, armar la gramática del reconocedor,
  * leer lo que contesta, decidir si lo que se oyó es el llamado y la
  * «puerta de voz» que solo deja pasar al reconocedor los trozos donde alguien
@@ -29,16 +29,18 @@ final class OyeLogica {
     static final int SENS_SENSIBLE = 2;
 
     /**
-     * Cómo suele «oír» el reconocedor en español a «Oye Phill» (suena «fil»). La
-     * persona puede enseñarle otras con «Probar». Las palabras que el oído no
-     * conoce se descartan al arrancar (ver OyeModelo.vocabulario).
+     * El llamado. Antes era «Oye Phill», y el reconocedor en español casi nunca
+     * entendía «Phill» (lo oía «fil», «fin»…); el dueño le cambió el nombre a
+     * «Javier» (2026-10-12), una palabra que el oído conoce. La persona puede
+     * enseñarle otras con «Probar». Las palabras que el oído no conoce se
+     * descartan al arrancar (ver OyeModelo.vocabulario).
      */
-    static final String[] FRASES_INICIALES = { "oye fil", "oye fin" };
+    static final String[] FRASES_INICIALES = { "oye javier", "hola javier" };
     static final int MAX_FRASES = 8;
 
     // ------------------------------ texto ------------------------------
 
-    /** Minúsculas, sin tildes ni símbolos: «Oye, Phill» → «oye phill». */
+    /** Minúsculas, sin tildes ni símbolos: «Oye, Javier» → «oye phill». */
     static String norm(String s) {
         if (s == null) return "";
         String t = Normalizer.normalize(s, Normalizer.Form.NFD).replaceAll("\\p{M}+", "");

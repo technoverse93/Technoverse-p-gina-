@@ -5,8 +5,8 @@ import java.util.Set;
 import java.util.concurrent.ConcurrentHashMap;
 
 /**
- * Qué pantallas de Phill se ven ahora (la app, la ventanita). Mientras alguna se ve, usa ella
- * el micrófono y «Oye Phill» se calla; al irse, vuelve a escuchar. Vive aparte del motor de voz a
+ * Qué pantallas de Javier se ven ahora (la app, la ventanita). Mientras alguna se ve, usa ella
+ * el micrófono y «Oye Javier» se calla; al irse, vuelve a escuchar. Vive aparte del motor de voz a
  * propósito: las pantallas lo llaman en cada abrir y cerrar, y una falla del motor (Vosk) nunca
  * debe poder tocarlas. Todo está envuelto: aquí nada lanza.
  */
@@ -35,7 +35,7 @@ final class OyeVisibilidad {
         return !visibles.isEmpty();
     }
 
-    /** La ventanita ya abrió (la abrió «Oye Phill» o no): se quita el aviso de «tocá para hablar». */
+    /** La ventanita ya abrió (la abrió «Oye Javier» o no): se quita el aviso de «tocá para hablar». */
     static void aperturaConfirmada() {
         try {
             Runnable r = alConfirmarApertura;

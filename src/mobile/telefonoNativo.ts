@@ -28,6 +28,8 @@ export interface PluginTelefono {
   linterna(o: { encender: boolean }): Promise<Resp>;
   ajustes(o: { pantalla: string }): Promise<Resp>;
   enlace(o: { url: string }): Promise<Resp>;
+  /** Abre YouTube con la búsqueda hecha (APK nueva). */
+  youtube?(o: { consulta: string }): Promise<Resp>;
 }
 
 export const telefonoNativo = registerPlugin<PluginTelefono>('TelefonoNativo');

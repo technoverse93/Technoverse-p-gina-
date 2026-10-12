@@ -1,8 +1,8 @@
 // =====================================================================
 // «OYE PHILL» — lo que no depende del teléfono (se prueba solo)
 // =====================================================================
-// Phill te escucha con el teléfono desbloqueado y se abre cuando decís «Oye
-// Phill». El servicio nativo (native-android/oye/) hace el trabajo; acá van
+// Javier te escucha con el teléfono desbloqueado y se abre cuando decís «Oye
+// Javier». El servicio nativo (native-android/oye/) hace el trabajo; acá van
 // las frases, los textos de cada estado y la lista de lo que falta para que
 // funcione (el oído, el micrófono, los permisos de Android).
 // =====================================================================
@@ -10,7 +10,7 @@
 export type Sens = 0 | 1 | 2;
 export type MotorOye = 'apagado' | 'cargando' | 'escuchando' | 'pausa' | 'error';
 
-/** Lo que cuenta el complemento nativo sobre «Oye Phill» en este teléfono. */
+/** Lo que cuenta el complemento nativo sobre «Oye Javier» en este teléfono. */
 export interface EstadoOye {
   ok: boolean;
   version: number;
@@ -21,7 +21,7 @@ export interface EstadoOye {
   bajando: boolean;
   permisoMic: boolean;
   notificaciones: boolean;
-  /** «Mostrar sobre otras apps»: lo que deja a Phill abrirse solo desde el fondo. */
+  /** «Mostrar sobre otras apps»: lo que deja a Javier abrirse solo desde el fondo. */
   overlay: boolean;
   bateriaLibre: boolean;
   /** Lo que la persona prendió. */
@@ -36,8 +36,10 @@ export interface EstadoOye {
   ultimoOido: string;
   ultimaDecision: string;
   sdk: number;
-  /** ¿Phill es la app de asistente del teléfono (mantener inicio / encendido)? Desde la versión 2 del complemento. */
+  /** ¿Javier es la app de asistente del teléfono (mantener inicio / encendido)? Desde la versión 2 del complemento. */
   asistente?: boolean;
+  /** ¿Se muestra la burbuja de Javier mientras escucha? Desde la versión 3 del complemento. */
+  burbuja?: boolean;
 }
 
 export const FRASE_MIN_PALABRAS = 2;
@@ -52,16 +54,16 @@ export const SENSIBILIDADES: { id: Sens; nombre: string; ayuda: string }[] = [
 
 /** Por qué está en pausa (los mismos códigos que manda el servicio). */
 export const MOTIVOS_PAUSA: Record<string, string> = {
-  app: 'tenés Phill abierto (sale a escuchar cuando te vas)',
+  app: 'tenés Javier abierto (sale a escuchar cuando te vas)',
   pantalla: 'la pantalla está apagada',
   bloqueado: 'el teléfono está bloqueado (se abre solo con el teléfono desbloqueado)',
   llamada: 'hay una llamada',
   pausa: 'lo pausaste',
-  despertando: 'abriendo Phill…',
+  despertando: 'abriendo Javier…',
   ruido: 'hay mucho ruido o música seguidos (descansa unos segundos)',
 };
 
-/** Minúsculas, sin tildes ni símbolos: «Oye, Phill» → «oye phill». */
+/** Minúsculas, sin tildes ni símbolos: «Oye, Javier» → «oye phill». */
 export function normalizar(s: unknown): string {
   return String(s ?? '').normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9 ]/g, ' ').replace(/\s+/g, ' ').trim();
 }
@@ -95,14 +97,14 @@ export function frasesValidas(lista: unknown[]): string[] {
 
 export interface TextoEstado { tono: 'ok' | 'espera' | 'error' | 'apagado'; texto: string }
 
-/** Una línea para el estado de «Oye Phill». */
+/** Una línea para el estado de «Oye Javier». */
 export function textoEstado(e: Pick<EstadoOye, 'activo' | 'servicio' | 'motor' | 'detalle' | 'probando'>): TextoEstado {
-  if (e.probando && e.motor === 'escuchando') return { tono: 'ok', texto: 'Probando: decí «Oye Phill» y mirá lo que oye.' };
+  if (e.probando && e.motor === 'escuchando') return { tono: 'ok', texto: 'Probando: decí «Oye Javier» y mirá lo que oye.' };
   if (!e.activo) return { tono: 'apagado', texto: 'Apagado en este teléfono.' };
   if (e.motor === 'error') return { tono: 'error', texto: e.detalle || 'No pude escuchar.' };
-  if (e.motor === 'cargando') return { tono: 'espera', texto: 'Preparando el oído de Phill…' };
+  if (e.motor === 'cargando') return { tono: 'espera', texto: 'Preparando el oído de Javier…' };
   if (e.motor === 'pausa') return { tono: 'espera', texto: `En pausa: ${MOTIVOS_PAUSA[e.detalle] || 'esperando'}.` };
-  if (e.motor === 'escuchando') return { tono: 'ok', texto: 'Te escucha: decí «Oye Phill».' };
+  if (e.motor === 'escuchando') return { tono: 'ok', texto: 'Te escucha: decí «Oye Javier».' };
   return { tono: 'espera', texto: e.servicio ? 'Arrancando…' : 'Activado, pero sin arrancar: abrí la app y tocá «Reiniciar».' };
 }
 
@@ -115,13 +117,13 @@ export interface PasoOye {
   obligatorio: boolean;
 }
 
-/** Lo que hace falta (y lo recomendado) para que «Oye Phill» ande bien. */
+/** Lo que hace falta (y lo recomendado) para que «Oye Javier» ande bien. */
 export function pasosOye(e: Pick<EstadoOye, 'modeloListo' | 'modeloMB' | 'permisoMic' | 'notificaciones' | 'overlay' | 'bateriaLibre'>): PasoOye[] {
   return [
-    { id: 'modelo', titulo: 'El oído de Phill', detalle: e.modeloListo ? `Listo (${e.modeloMB || '~50'} MB en el teléfono).` : 'Se baja una sola vez (~40 MB, mejor con wifi). Después escucha sin internet.', hecho: e.modeloListo, obligatorio: true },
-    { id: 'mic', titulo: 'Micrófono', detalle: 'Para escucharte decir «Oye Phill».', hecho: e.permisoMic, obligatorio: true },
-    { id: 'notif', titulo: 'Notificación fija', detalle: 'Android muestra un aviso mientras Phill te escucha; así sabés cuándo está activo.', hecho: e.notificaciones, obligatorio: false },
-    { id: 'overlay', titulo: 'Mostrar sobre otras apps', detalle: 'Para que Phill se abra solo cuando lo llamás. Sin esto, te sale un aviso para tocar.', hecho: e.overlay, obligatorio: false },
+    { id: 'modelo', titulo: 'El oído de Javier', detalle: e.modeloListo ? `Listo (${e.modeloMB || '~50'} MB en el teléfono).` : 'Se baja una sola vez (~40 MB, mejor con wifi). Después escucha sin internet.', hecho: e.modeloListo, obligatorio: true },
+    { id: 'mic', titulo: 'Micrófono', detalle: 'Para escucharte decir «Oye Javier».', hecho: e.permisoMic, obligatorio: true },
+    { id: 'notif', titulo: 'Notificación fija', detalle: 'Android muestra un aviso mientras Javier te escucha; así sabés cuándo está activo.', hecho: e.notificaciones, obligatorio: false },
+    { id: 'overlay', titulo: 'Mostrar sobre otras apps', detalle: 'Para que Javier se abra solo cuando lo llamás. Sin esto, te sale un aviso para tocar.', hecho: e.overlay, obligatorio: false },
     { id: 'bateria', titulo: 'Batería sin restricciones', detalle: 'Para que Android no cierre el oído al rato. En algunos teléfonos (Xiaomi, Huawei, Samsung) también hay que permitir el «inicio automático».', hecho: e.bateriaLibre, obligatorio: false },
   ];
 }

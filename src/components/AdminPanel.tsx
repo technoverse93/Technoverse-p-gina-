@@ -211,13 +211,13 @@ export default function AdminPanel({
   >({});
   const [reenviandoFactura, setReenviandoFactura] = useState<string | null>(null);
 
-  // Los recordatorios de la agenda de Phill se programan en el teléfono al
+  // Los recordatorios de la agenda de Javier se programan en el teléfono al
   // abrir el panel (por si se agendaron desde otro equipo o el widget).
   useEffect(() => {
     if (!esAdminSupremo(currentUser?.email)) return;
     const t = setTimeout(() => {
       void import('../mobile/agendaJarvis').then(m => m.sincronizarAgenda()).catch(() => { /* sin agenda */ });
-      // Phill te habla primero: avisos en vivo y el resumen de la mañana.
+      // Javier te habla primero: avisos en vivo y el resumen de la mañana.
       void import('../mobile/avisosJarvis').then(m => m.iniciarAvisosJarvis()).catch(() => { /* sin avisos todavía */ });
     }, 4000);
     return () => clearTimeout(t);
@@ -225,7 +225,7 @@ export default function AdminPanel({
 
   // AVISOS PUSH: este teléfono se registra para que el servidor le avise de
   // los mensajes del chat (con «Responder» en la propia notificación) y de
-  // lo que vigila Phill, aunque la app esté cerrada. Se reintenta al volver
+  // lo que vigila Javier, aunque la app esté cerrada. Se reintenta al volver
   // a la app (token renovado, permiso dado en Ajustes del teléfono).
   useEffect(() => {
     if (!esStaff(currentUser?.role)) return;
@@ -241,7 +241,7 @@ export default function AdminPanel({
   // no sea la del dueño, se apaga. Sin el complemento (web o APK vieja) no hace nada.
   useEffect(() => {
     if (!esStaff(currentUser?.role)) return;
-    const arrancar = () => { void import('../mobile/oyePhill').then(m => m.restaurarOyePhill(currentUser?.role)).catch(() => { /* sin Oye Phill */ }); };
+    const arrancar = () => { void import('../mobile/oyePhill').then(m => m.restaurarOyePhill(currentUser?.role)).catch(() => { /* sin Oye Javier */ }); };
     const t = setTimeout(arrancar, 3500);
     const alVolver = () => { if (document.visibilityState === 'visible') arrancar(); };
     document.addEventListener('visibilitychange', alVolver);
@@ -727,8 +727,8 @@ export default function AdminPanel({
     // Este teléfono deja de recibir los avisos de la cuenta (volverá a
     // recibirlos cuando se entre otra vez).
     await import('../mobile/pushNativo').then(m => m.cerrarPush()).catch(() => { /* sin push */ });
-    // «Oye Phill» también se apaga: otra persona no puede llamar a Phill del dueño en este teléfono.
-    await import('../mobile/oyePhill').then(m => m.detenerOyePhill()).catch(() => { /* sin Oye Phill */ });
+    // «Oye Javier» también se apaga: otra persona no puede llamar a Javier del dueño en este teléfono.
+    await import('../mobile/oyePhill').then(m => m.detenerOyePhill()).catch(() => { /* sin Oye Javier */ });
     await cerrarSesionConservandoBiometria();
     onLogout();
   }, [currentUser, onLogout]);
@@ -1114,7 +1114,7 @@ export default function AdminPanel({
     try { window.history.replaceState(null, '', `/admin/${tab}`); } catch { /* la navegación funciona igual */ }
   }, [pestanas.abrir, currentUser?.email]);
 
-  // Widget de Android / atajo del ícono: abre Phill (y el micrófono), o el
+  // Widget de Android / atajo del ícono: abre Javier (y el micrófono), o el
   // módulo al que mandó la ventanita del widget («Ir a…»).
   const [pedidoJarvis, setPedidoJarvis] = useState<{ n: number; voz: boolean } | null>(null);
   useEffect(() => {
@@ -1156,7 +1156,7 @@ export default function AdminPanel({
   // SALIDA TEMPRANA: SIEMPRE DESPUÉS DE TODOS LOS HOOKS
   // ---------------------------------------------------------------------
   // Esta pantalla de espera estaba ANTES de seis hooks (irAModulo, el pedido
-  // de Phill, etc.). La APK arranca directo en el panel (App.tsx) y el panel
+  // de Javier, etc.). La APK arranca directo en el panel (App.tsx) y el panel
   // se monta mientras todavía se está leyendo la sesión: primero se pintaba
   // la espera (menos hooks) y, al llegar el perfil, el panel completo (más
   // hooks). React no lo tolera —«Rendered more hooks than during the previous
@@ -1900,7 +1900,7 @@ export default function AdminPanel({
           pestana={activeTab}
         />
       </Suspense>
-      {/* El asistente vive SOLO aquí, en el botón flotante: Phill para el
+      {/* El asistente vive SOLO aquí, en el botón flotante: Javier para el
           superadmin, «Asistencia de IA» para el resto del personal. */}
       {esStaff(currentUser?.role) && (
         <Suspense fallback={null}>

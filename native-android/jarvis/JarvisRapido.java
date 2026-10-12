@@ -30,7 +30,7 @@ import java.lang.reflect.Field;
 import java.util.ArrayList;
 
 /**
- * Lo que hay detrás del mini-widget de Phill: el MISMO Phill de la app con
+ * Lo que hay detrás del mini-widget de Javier: el MISMO Javier de la app con
  * la MISMA sesión (lo pidió el dueño: «hacer todo como lo haría con mi
  * sesión», sin huella y sin ventanas emergentes; el teléfono es solo suyo).
  * Es un segundo puente de Capacitor con la página liviana jarvis-rapido.html
@@ -39,14 +39,14 @@ import java.util.ArrayList;
  *
  * Tres modos (EXTRA_MODO):
  *  · «voz»: solo el dictado del teléfono. No se ve nada propio: la pregunta
- *    va a Phill y la respuesta sale en el widget (y se lee). Mientras
+ *    va a Javier y la respuesta sale en el widget (y se lee). Mientras
  *    contesta, esta ventana no tapa nada: los toques pasan a la pantalla
  *    de inicio.
  *  · «escribir»: el chat se dibuja exactamente encima del recuadro del
  *    widget (sin oscurecer), con el teclado abajo; la respuesta queda en el
  *    widget. Si no se sabe dónde está el widget, una barrita sobre el teclado.
- *  · «hoja»: Phill completo, para confirmar acciones o ver tablas.
- *  · «oye»: lo llamaste («Oye Phill» o el botón del asistente, ver
+ *  · «hoja»: Javier completo, para confirmar acciones o ver tablas.
+ *  · «oye»: lo llamaste («Oye Javier» o el botón del asistente, ver
  *    PhillAsistente): un panel chico abajo, escuchando de una, SIN oscurecer
  *    la pantalla (como el asistente de Google). Si abre otra app, se quita.
  *
@@ -60,12 +60,19 @@ public class JarvisRapido extends BridgeActivity {
     static final String EXTRA_VOZ = "voz";
     /** La abrió el botón del asistente del teléfono (PhillAsistente). */
     static final String EXTRA_ASISTENTE = "asistente";
+    /** La abrió la burbuja de Javier: y (px, en pantalla) del centro de la burbuja, para abrirse a su lado. */
+    static final String EXTRA_ANCLA_Y = "anclaY";
+    static final String EXTRA_BURBUJA = "burbuja";
+    /** Alto del chat que sale de la burbuja (dp). */
+    static final int ALTO_CHAT_BURBUJA_DP = 380;
     static final String PAGINA = "/jarvis-rapido.html";
 
     private boolean conPagina = false;
     private boolean creada = false;
     private String modo = "hoja";
     private boolean comoAsistente = false;
+    private boolean desdeBurbuja = false;
+    private int anclaY = -1;
     private ActivityResultLauncher<Intent> dictado;
     /** Dónde está el widget en la pantalla (px), si se abrió desde su caja. */
     private Rect marco = null;
@@ -81,7 +88,7 @@ public class JarvisRapido extends BridgeActivity {
         return modo;
     }
 
-    /** ¿La abrió el botón del asistente? (elegir a Phill como asistente ya es el permiso). */
+    /** ¿La abrió el botón del asistente? (elegir a Javier como asistente ya es el permiso). */
     boolean comoAsistente() {
         return comoAsistente;
     }
@@ -91,12 +98,13 @@ public class JarvisRapido extends BridgeActivity {
         // Antes de super.onCreate(): ahí el puente arma su lista de plugins y
         // lee la configuración (con la página de inicio de la ventanita).
         registerPlugin(JarvisWidgetPlugin.class);
-        // El teléfono de Phill (abrir apps, llamar, WhatsApp, alarmas…): sin esto, fuera de la app
-        // Phill decía que lo hacía pero no pasaba nada (este puente no lo tenía registrado).
+        // El teléfono de Javier (abrir apps, llamar, WhatsApp, alarmas…): sin esto, fuera de la app
+        // Javier decía que lo hacía pero no pasaba nada (este puente no lo tenía registrado).
         registerPlugin(TelefonoNativoPlugin.class);
         config = configConPagina();
         modo = modoDe(getIntent());
         comoAsistente = getIntent() != null && getIntent().getBooleanExtra(EXTRA_ASISTENTE, false);
+        leerBurbuja(getIntent());
         marco = marcoDe(getIntent());
         super.onCreate(savedInstanceState);
         dictado = registerForActivityResult(new ActivityResultContracts.StartActivityForResult(), this::alDictar);
@@ -128,12 +136,12 @@ public class JarvisRapido extends BridgeActivity {
 
         creada = true;
         aplicarModo();
-        // Si la abrió «Oye Phill», ya abrió: se quita el aviso de «tocá para hablar».
+        // Si la abrió «Oye Javier», ya abrió: se quita el aviso de «tocá para hablar».
         OyeVisibilidad.aperturaConfirmada();
         if ("voz".equals(modo)) dictar();
     }
 
-    // Mientras la ventanita se ve, el micrófono lo usa ella: «Oye Phill» se calla y vuelve al cerrarla.
+    // Mientras la ventanita se ve, el micrófono lo usa ella: «Oye Javier» se calla y vuelve al cerrarla.
     @Override
     public void onStart() {
         super.onStart();
@@ -155,6 +163,7 @@ public class JarvisRapido extends BridgeActivity {
         setIntent(intent);
         modo = modoDe(intent);
         comoAsistente = intent.getBooleanExtra(EXTRA_ASISTENTE, false);
+        leerBurbuja(intent);
         marco = marcoDe(intent);
         aplicarModo();
         OyeVisibilidad.aperturaConfirmada();
@@ -168,6 +177,7 @@ public class JarvisRapido extends BridgeActivity {
      */
     private Rect marcoDe(Intent intent) {
         if (intent == null || !"escribir".equals(modoDe(intent))) return null;
+        if (desdeBurbuja) return marcoJuntoALaBurbuja();
         int id = intent.getIntExtra(AppWidgetManager.EXTRA_APPWIDGET_ID, -1);
         Rect caja = intent.getSourceBounds();
         if (caja == null) return null;
@@ -189,6 +199,35 @@ public class JarvisRapido extends BridgeActivity {
         } catch (Exception e) {
             return cajaSola(caja);
         }
+    }
+
+    private void leerBurbuja(Intent intent) {
+        desdeBurbuja = intent != null && intent.getBooleanExtra(EXTRA_BURBUJA, false);
+        anclaY = desdeBurbuja ? intent.getIntExtra(EXTRA_ANCLA_Y, -1) : -1;
+    }
+
+    boolean desdeBurbuja() {
+        return desdeBurbuja;
+    }
+
+    /** El chat de la burbuja: a lo ancho, debajo de la burbuja si está arriba, o encima si está abajo. */
+    private Rect marcoJuntoALaBurbuja() {
+        float d = getResources().getDisplayMetrics().density;
+        int ancho = getResources().getDisplayMetrics().widthPixels;
+        int altoPantalla = getResources().getDisplayMetrics().heightPixels;
+        int alto = Math.min(Math.round(ALTO_CHAT_BURBUJA_DP * d), Math.round(altoPantalla * 0.6f));
+        int margen = Math.round(10 * d);
+        int y = posicionJuntoALaBurbuja(alto);
+        return new Rect(margen, y, ancho - margen, y + alto);
+    }
+
+    /** Dónde va (y en px) una ventana de `alto` junto a la burbuja, sin salirse de la pantalla. */
+    private int posicionJuntoALaBurbuja(int alto) {
+        float d = getResources().getDisplayMetrics().density;
+        int altoPantalla = getResources().getDisplayMetrics().heightPixels;
+        int radio = Math.round(36 * d);
+        int y = anclaY < altoPantalla / 2 ? anclaY + radio : anclaY - radio - alto;
+        return Math.max(Math.round(28 * d), Math.min(y, altoPantalla - alto - Math.round(16 * d)));
     }
 
     /** Sin el tamaño del widget: un recuadro que crece hacia arriba desde la caja tocada. */
@@ -226,10 +265,10 @@ public class JarvisRapido extends BridgeActivity {
     static final float PARTE_HOJA = 0.58f;
 
     /**
-     * REGLA DEL DUEÑO (2026-10-12): fuera de la app, Phill y el widget NUNCA tapan el
+     * REGLA DEL DUEÑO (2026-10-12): fuera de la app, Javier y el widget NUNCA tapan el
      * teléfono con una página ni con algo oscuro. Se tiene que seguir viendo y usando lo
      * que había (WhatsApp, YouTube, el escritorio). Por eso la ventana nunca oscurece y
-     * mide SOLO lo que Phill dibuja; los toques de afuera pasan a la app de atrás
+     * mide SOLO lo que Javier dibuja; los toques de afuera pasan a la app de atrás
      * (FLAG_NOT_TOUCH_MODAL):
      *  · «voz»: no se dibuja nada; la ventana no recibe toques (solo el cartel del dictado).
      *  · «oye»: el panel de abajo (ALTO_LLAMADO_DP).
@@ -268,6 +307,16 @@ public class JarvisRapido extends BridgeActivity {
             ventana.setLayout(ancho, marco.height());
             return;
         }
+        if ("oye".equals(modo) && desdeBurbuja && anclaY >= 0) {
+            // Llamado desde la burbuja: el panel sale a su lado (no siempre abajo).
+            int alto = Math.round(ALTO_LLAMADO_DP * d);
+            ventana.addFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
+            lp.y = posicionJuntoALaBurbuja(alto);
+            ventana.setAttributes(lp);
+            ventana.setGravity(Gravity.TOP);
+            ventana.setLayout(WindowManager.LayoutParams.MATCH_PARENT, alto);
+            return;
+        }
         ventana.clearFlags(WindowManager.LayoutParams.FLAG_LAYOUT_IN_SCREEN | WindowManager.LayoutParams.FLAG_LAYOUT_NO_LIMITS);
         int alto;
         if ("oye".equals(modo)) alto = Math.round(ALTO_LLAMADO_DP * d);
@@ -285,7 +334,7 @@ public class JarvisRapido extends BridgeActivity {
         aplicarModo();
     }
 
-    /** Deja de tapar: los toques pasan a la pantalla de inicio mientras Phill contesta. */
+    /** Deja de tapar: los toques pasan a la pantalla de inicio mientras Javier contesta. */
     void soltar() {
         Window ventana = getWindow();
         ventana.clearFlags(WindowManager.LayoutParams.FLAG_DIM_BEHIND);
@@ -299,7 +348,7 @@ public class JarvisRapido extends BridgeActivity {
         Intent pedir = new Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH);
         pedir.putExtra(RecognizerIntent.EXTRA_LANGUAGE_MODEL, RecognizerIntent.LANGUAGE_MODEL_FREE_FORM);
         pedir.putExtra(RecognizerIntent.EXTRA_LANGUAGE, "es-CR");
-        pedir.putExtra(RecognizerIntent.EXTRA_PROMPT, "Hablale a Phill");
+        pedir.putExtra(RecognizerIntent.EXTRA_PROMPT, "Hablale a Javier");
         try {
             dictado.launch(pedir);
         } catch (ActivityNotFoundException e) {

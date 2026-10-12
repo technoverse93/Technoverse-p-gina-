@@ -1,17 +1,17 @@
 // =====================================================================
 // ATAJO A JARVIS — widget de la pantalla de inicio y atajo del ícono
 // =====================================================================
-// El atajo de mantener presionado el ícono, la marca «Phill» del widget
+// El atajo de mantener presionado el ícono, la marca «Javier» del widget
 // y el botón «Abrir la app» de su ventanita abren la app con
 // `technoverse://jarvis` (`?voz=1` para empezar a escuchar de una;
-// `?modulo=taller` para abrir ese módulo en vez de Phill, cuando la
+// `?modulo=taller` para abrir ese módulo en vez de Javier, cuando la
 // ventanita manda a «Ir a…»). Aquí se recibe ese enlace, se lleva al panel
 // si hacía falta y se avisa con el evento `tv:jarvis`. (Lo que se hace en
 // la ventanita NO pasa por aquí: es su propia página, src/rapido.tsx.)
 //
 // El pedido queda guardado unos segundos en sessionStorage: si el panel
 // todavía no está montado (arranque en frío, bloqueo con huella), lo
-// recoge en cuanto aparece. Abrir Phill no salta ninguna seguridad: usa
+// recoge en cuanto aparece. Abrir Javier no salta ninguna seguridad: usa
 // la sesión del panel, y sin sesión se ve el inicio de sesión de siempre.
 // =====================================================================
 

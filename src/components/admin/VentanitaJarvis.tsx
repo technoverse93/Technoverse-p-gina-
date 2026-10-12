@@ -1,5 +1,5 @@
 // =====================================================================
-// VENTANITA DEL MINI-WIDGET — Phill completo encima de la pantalla de inicio
+// VENTANITA DEL MINI-WIDGET — Javier completo encima de la pantalla de inicio
 // =====================================================================
 // Es la página `jarvis-rapido.html` (src/rapido.tsx) que abre el widget del
 // teléfono en su propia ventanita nativa (native-android/jarvis/
@@ -21,7 +21,7 @@
 // =====================================================================
 
 import React, { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
-import { Sparkles, X, ExternalLink, Power, LogIn, ShieldAlert, WifiOff, Smartphone, ArrowUp, Maximize2 } from 'lucide-react';
+import { Sparkles, X, Mic, ExternalLink, Power, LogIn, ShieldAlert, WifiOff, Smartphone, ArrowUp, Maximize2 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 import { OverlayProvider } from '../ui/Overlays';
 import { supabase } from '../../supabaseClient';
@@ -58,17 +58,17 @@ type Fase = 'cargando' | 'listo' | 'fuera' | 'sin_puente' | 'apagado' | 'sin_ses
 type Boton = 'app' | 'panel' | 'reintentar';
 
 const AVISOS: Record<Exclude<Fase, 'cargando' | 'listo'>, { icono: LucideIcon; titulo: string; texto: string; boton?: Boton }> = {
-  fuera: { icono: Smartphone, titulo: 'Esta es la ventanita del widget', texto: 'Se abre desde el widget de Phill en el teléfono. Phill completo está en el panel.', boton: 'panel' },
-  sin_puente: { icono: Smartphone, titulo: 'No se pudo abrir Phill aquí', texto: 'Abrí Phill en la app; si vuelve a pasar, reinstalá la APK más nueva.', boton: 'app' },
-  apagado: { icono: Power, titulo: 'El mini-widget está apagado', texto: 'Activalo en la app: Phill → Ajustes → Mini-widget → «Activar en este teléfono».', boton: 'app' },
+  fuera: { icono: Smartphone, titulo: 'Esta es la ventanita del widget', texto: 'Se abre desde el widget de Javier en el teléfono. Javier completo está en el panel.', boton: 'panel' },
+  sin_puente: { icono: Smartphone, titulo: 'No se pudo abrir Javier aquí', texto: 'Abrí Javier en la app; si vuelve a pasar, reinstalá la APK más nueva.', boton: 'app' },
+  apagado: { icono: Power, titulo: 'El mini-widget está apagado', texto: 'Activalo en la app: Javier → Ajustes → Mini-widget → «Activar en este teléfono».', boton: 'app' },
   sin_sesion: { icono: LogIn, titulo: 'No hay sesión en este teléfono', texto: 'Entrá a la app una vez con tu cuenta y el widget queda listo.', boton: 'app' },
-  no_super: { icono: ShieldAlert, titulo: 'Solo para la cuenta del dueño', texto: 'El mini-widget de Phill es del superadmin.', boton: 'app' },
+  no_super: { icono: ShieldAlert, titulo: 'Solo para la cuenta del dueño', texto: 'El mini-widget de Javier es del superadmin.', boton: 'app' },
   bloqueado: { icono: ShieldAlert, titulo: 'Acceso bloqueado', texto: 'Este aparato o esta conexión están bloqueados.' },
   sin_red: { icono: WifiOff, titulo: 'Sin conexión', texto: 'No se pudo revisar tu sesión. Revisá internet y probá de nuevo.', boton: 'reintentar' },
 };
 
 function Esqueleto() {
-  return <div className="jv-esqueleto" aria-label="Cargando Phill"><i /><i /><i /></div>;
+  return <div className="jv-esqueleto" aria-label="Cargando Javier"><i /><i /><i /></div>;
 }
 
 class ErrorDeCarga extends React.Component<{ children: React.ReactNode }, { error: boolean }> {
@@ -79,7 +79,7 @@ class ErrorDeCarga extends React.Component<{ children: React.ReactNode }, { erro
     if (!this.state.error) return this.props.children;
     return (
       <div className="jv-esqueleto" role="alert">
-        <p>No se pudo cargar Phill.</p>
+        <p>No se pudo cargar Javier.</p>
         <button type="button" className="ai-chip" onClick={() => location.reload()}>Reintentar</button>
       </div>
     );
@@ -124,7 +124,7 @@ function BarraEscribir({ onEnviar, onHoja, onCerrar }: { onEnviar: (t: string) =
   return (
     <form className="vj-barra" onSubmit={e => { e.preventDefault(); enviar(); }}>
       <span className="vj-barra-marca" aria-hidden><Sparkles className="w-4 h-4" /></span>
-      <textarea ref={caja} rows={1} value={texto} placeholder="Escribile a Phill…" aria-label="Pregunta para Phill" maxLength={2000}
+      <textarea ref={caja} rows={1} value={texto} placeholder="Escribile a Javier…" aria-label="Pregunta para Javier" maxLength={2000}
         onChange={e => { setTexto(e.target.value); const t = e.target; t.style.height = 'auto'; t.style.height = `${Math.min(120, t.scrollHeight)}px`; }} onKeyDown={e => { if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); enviar(); } }} />
       <button type="button" className="vj-barra-btn" onClick={onHoja} aria-label="Abrir la conversación completa" title="Abrir la conversación completa"><Maximize2 className="w-4 h-4" /></button>
       <button type="button" className="vj-barra-btn" onClick={onCerrar} aria-label="Cerrar" title="Cerrar"><X className="w-4 h-4" /></button>
@@ -140,13 +140,15 @@ function BarraEscribir({ onEnviar, onHoja, onCerrar }: { onEnviar: (t: string) =
  * la conversación del widget, la caja con el cursor y el botón de enviar.
  * Si el teclado tapa el widget, el recuadro sube lo justo para quedar encima.
  */
-function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, extra, onEnviar, onCerrar }: {
+function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, extra, onEnviar, onCerrar, onHablar }: {
   marco: MarcoWidget; noche: boolean; historial: VueltaWidget[]; listo: boolean; estado: string;
   /** Lo que hay que confirmar (tarjetas de acción): se confirma AQUÍ, en el recuadro. */
   extra?: React.ReactNode;
   /** Si algo impide contestar (sin sesión, sin red…), se dice AQUÍ: nunca se abre otra ventana. */
   aviso?: { titulo: string; texto: string } | null;
   onEnviar: (t: string) => void; onCerrar: () => void;
+  /** Desde la burbuja: pasar a hablarle (Javier escucha a su lado). */
+  onHablar?: () => void;
 }) {
   const [texto, setTexto] = useState('');
   const [alto, setAlto] = useState(() => window.visualViewport?.height || window.innerHeight);
@@ -165,16 +167,17 @@ function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, extra, 
   const top = marco.y + marco.alto <= alto ? marco.y : Math.max(8, alto - marco.alto - 8);
   const enviar = () => { const t = texto.trim(); if (!t || !listo || estado) return; setTexto(''); caja.current?.blur(); onEnviar(t); };
   return (
-    <section className="vj-recuadro" data-tema={noche ? 'oscuro' : 'claro'} data-activo={!estado || undefined} role="dialog" aria-label="Phill"
+    <section className="vj-recuadro" data-tema={noche ? 'oscuro' : 'claro'} data-activo={!estado || undefined} role="dialog" aria-label="Javier"
       style={{ left: marco.x, top, width: marco.ancho, height: marco.alto }}>
       <header className="vj-rc-cab">
         <span className="vj-rc-marca" aria-hidden><Sparkles className="w-3.5 h-3.5" /></span>
-        <b>Phill</b>
+        <b>Javier</b>
         <span className="vj-rc-est" aria-live="polite">{estado || (listo ? '' : 'Abriendo…')}</span>
+        {onHablar && <button type="button" onClick={onHablar} aria-label="Hablarle a Javier" title="Hablarle"><Mic className="w-4 h-4" /></button>}
         <button type="button" onClick={onCerrar} aria-label="Cerrar" title="Cerrar"><X className="w-4 h-4" /></button>
       </header>
       <div className="vj-rc-conv" ref={lista}>
-        {historial.length === 0 && !estado && !aviso && <p className="vj-rc-vacio">Escribile a Phill: la respuesta sale aquí.</p>}
+        {historial.length === 0 && !estado && !aviso && <p className="vj-rc-vacio">Escribile a Javier: la respuesta sale aquí.</p>}
         {historial.map((v, i) => (
           <React.Fragment key={i}>
             {v.p && <div className="vj-rc-yo">{v.p}</div>}
@@ -185,7 +188,7 @@ function RecuadroWidget({ marco, noche, historial, listo, estado, aviso, extra, 
         {extra}
       </div>
       <form className="vj-rc-caja" onSubmit={e => { e.preventDefault(); enviar(); }}>
-        <input ref={caja} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribile a Phill…" aria-label="Pregunta para Phill"
+        <input ref={caja} value={texto} onChange={e => setTexto(e.target.value)} placeholder="Escribile a Javier…" aria-label="Pregunta para Javier"
           maxLength={2000} enterKeyHint="send" autoComplete="off" disabled={!listo || !!estado} />
         <button type="submit" disabled={!texto.trim() || !listo || !!estado} aria-label="Enviar"><ArrowUp className="w-[18px] h-[18px]" /></button>
       </form>
@@ -197,7 +200,7 @@ export default function VentanitaJarvis() {
   const [fase, setFase] = useState<Fase>('cargando');
   const [usuario, setUsuario] = useState<User | null>(null);
   const [pedirVoz, setPedirVoz] = useState(0);
-  // «Oye Phill»: cuenta de llamados (cada uno arranca manos libres una vez).
+  // «Oye Javier»: cuenta de llamados (cada uno arranca manos libres una vez).
   const [pedirManos, setPedirManos] = useState(0);
   const [intento, setIntento] = useState(0);
   // Cómo se abrió: hoja completa, pregunta dictada o barrita para escribir.
@@ -213,6 +216,10 @@ export default function VentanitaJarvis() {
   const [pendiente, setPendiente] = useState<string | null>(null);
   // Sobre el recuadro del widget (APK v4): dónde está, su tema y su conversación.
   const [marco, setMarco] = useState<MarcoWidget | null>(null);
+  // Abierta desde la burbuja de Javier: el chat queda abierto después de contestar.
+  const [enBurbuja, setEnBurbuja] = useState(false);
+  const enBurbujaRef = useRef(false);
+  enBurbujaRef.current = enBurbuja;
   const [noche, setNoche] = useState(false);
   const [historial, setHistorial] = useState<VueltaWidget[]>([]);
   const [estadoRecuadro, setEstadoRecuadro] = useState('');
@@ -221,7 +228,7 @@ export default function VentanitaJarvis() {
     const atender = (p: PedidoVentanita) => {
       const m: ModoVentanita = p.modo || (p.voz ? 'voz' : 'hoja');
       setModo(m);
-      if (m === 'escribir') void widgetNativo.estado().then(e => { if (e.version) { setMarco(e.marco); setNoche(e.noche); setHistorial(e.historial.slice(-12)); } });
+      if (m === 'escribir') void widgetNativo.estado().then(e => { if (e.version) { setMarco(e.marco); setNoche(e.noche); setEnBurbuja(!!e.burbuja); setHistorial(e.historial.slice(-12)); } });
       if (m === 'voz' && p.texto) setPendiente(p.texto);
       if (m === 'hoja' && p.voz) setPedirVoz(p.n);
       if (m === 'oye') setPedirManos(p.n);
@@ -248,9 +255,9 @@ export default function VentanitaJarvis() {
       }
       if (!vivo) return;
       setModo(m => m || e.modo);
-      // Si la abrió «Oye Phill», arranca manos libres de una (el aviso del puente puede haber llegado antes de escuchar).
+      // Si la abrió «Oye Javier», arranca manos libres de una (el aviso del puente puede haber llegado antes de escuchar).
       if (e.modo === 'oye') setPedirManos(n => n || 1);
-      setMarco(e.marco); setNoche(e.noche); setHistorial(e.historial.slice(-12));
+      setMarco(e.marco); setNoche(e.noche); setEnBurbuja(!!e.burbuja); setHistorial(e.historial.slice(-12));
       setConversacion(e.conversacion || conversacionDelWidget());
       if (!e.version) { setFase('sin_puente'); return; }
       // Esta página solo vale dentro de la ventanita del widget. Si por lo
@@ -281,7 +288,7 @@ export default function VentanitaJarvis() {
   }, [intento]);
 
   // Con la ventanita lista: vigilancia de bloqueos, huella del aparato (va
-  // con cada pregunta, para que Phill nunca proponga bloquear este mismo
+  // con cada pregunta, para que Javier nunca proponga bloquear este mismo
   // teléfono), el pase de la huella al día y los datos del negocio bajando.
   useEffect(() => {
     if (fase !== 'listo') return;
@@ -336,6 +343,8 @@ export default function VentanitaJarvis() {
         // widget, que ya muestra lo mismo.
         setHistorial(h => [...h.slice(0, -1), { p: texto, r: final.replace(/\*\*/g, '') }]);
         setEstadoRecuadro('');
+        // Desde la burbuja, el chat se queda abierto para seguir hablando (se cierra con ✕ o la burbuja).
+        if (enBurbujaRef.current) { setTrabajando(false); return; }
         void widgetNativo.soltar();
         await new Promise(ok => setTimeout(ok, 1800));
       }
@@ -360,7 +369,7 @@ export default function VentanitaJarvis() {
     }
   }, [fase, modo, pendiente, trabajando, responderEnWidget]);
   const abrirApp = useCallback((modulo?: string) => { lector.callar(); void widgetNativo.abrirApp(modulo); }, []);
-  // Si Phill abrió otra app (WhatsApp, el mapa, una llamada…), la ventanita se quita para que se
+  // Si Javier abrió otra app (WhatsApp, el mapa, una llamada…), la ventanita se quita para que se
   // vea lo que hizo, como el asistente de Google. La respuesta queda en el widget.
   useEffect(() => alTerminarTelefono((p, r) => {
     if (r.estado === 'hecho' && ABRE_OTRA_APP.has(p.accion)) cerrar();
@@ -398,7 +407,8 @@ export default function VentanitaJarvis() {
               <RecuadroWidget marco={marco} noche={noche} historial={historial} listo={fase === 'listo'} estado={estadoRecuadro}
                 extra={porConfirmar.length > 0 && fase === 'listo' ? <div className="vj-rc-acciones"><Suspense fallback={null}>{porConfirmar.map(id => <TarjetaAccion key={id} id={id} />)}</Suspense></div> : null}
                 aviso={aviso ? { titulo: aviso.titulo, texto: aviso.texto } : null}
-                onEnviar={t => void responderEnWidget(t, false, true)} onCerrar={cerrar} />
+                onEnviar={t => void responderEnWidget(t, false, true)} onCerrar={cerrar}
+                onHablar={enBurbuja && fase === 'listo' ? () => { void widgetNativo.ajustar('oye'); setModo('oye'); setPedirManos(n => n + 1); } : undefined} />
             </>
           )}
           {modo === 'escribir' && !marco && !trabajando && (
@@ -406,7 +416,7 @@ export default function VentanitaJarvis() {
               <button type="button" className="vj-velo" aria-label="Cerrar" tabIndex={-1} onClick={cerrar} />
               {fase === 'listo'
                 ? <BarraEscribir onEnviar={t => void responderEnWidget(t, false)} onHoja={verHoja} onCerrar={cerrar} />
-                : <div className="vj-barra" aria-busy><span className="vj-barra-marca"><Sparkles className="w-4 h-4" /></span><span className="vj-barra-espera">Abriendo Phill…</span></div>}
+                : <div className="vj-barra" aria-busy><span className="vj-barra-marca"><Sparkles className="w-4 h-4" /></span><span className="vj-barra-espera">Abriendo Javier…</span></div>}
             </>
           )}
         </div>
@@ -417,13 +427,13 @@ export default function VentanitaJarvis() {
   return (
     <OverlayProvider>
       <div id="admin-panel-root" className="vj-raiz">
-        {nativa && <button type="button" className="vj-velo" aria-label="Cerrar Phill" tabIndex={-1} onClick={cerrar} />}
-        <section className="jv-hoja vj-hoja" role="dialog" aria-label="Phill" data-compacta={aviso ? '' : undefined}
+        {nativa && <button type="button" className="vj-velo" aria-label="Cerrar Javier" tabIndex={-1} onClick={cerrar} />}
+        <section className="jv-hoja vj-hoja" role="dialog" aria-label="Javier" data-compacta={aviso ? '' : undefined}
           data-oye={modo === 'oye' ? '' : undefined} data-listo={fase === 'listo' ? '' : undefined}>
           <header className="jv-hoja-cab vj-cab">
-            <span><Sparkles className="w-3.5 h-3.5" />Phill</span>
+            <span><Sparkles className="w-3.5 h-3.5" />Javier</span>
             {nativa && !aviso && (
-              <button type="button" className="vj-abrir" onClick={() => abrirApp()} title="Abrir Phill en la app (con tu huella)">
+              <button type="button" className="vj-abrir" onClick={() => abrirApp()} title="Abrir Javier en la app (con tu huella)">
                 <ExternalLink className="w-4 h-4" />Abrir la app
               </button>
             )}
@@ -433,7 +443,8 @@ export default function VentanitaJarvis() {
             {fase === 'listo' && usuario && modo ? (
               <ErrorDeCarga>
                 <Suspense fallback={<Esqueleto />}>
-                  <AsistenteIA currentUser={usuario} onAbrirModulo={abrirApp} pedirVoz={pedirVoz} manosAlAbrir={pedirManos} onFinManos={cerrar} onRespuesta={alResponder} conversacionInicial={conversacion} />
+                  <AsistenteIA currentUser={usuario} onAbrirModulo={abrirApp} pedirVoz={pedirVoz} manosAlAbrir={pedirManos} onFinManos={cerrar} onRespuesta={alResponder} conversacionInicial={conversacion}
+                    alCambiarCamara={abierta => { if (modo === 'oye') void widgetNativo.ajustar(abierta ? 'hoja' : 'oye'); }} />
                 </Suspense>
               </ErrorDeCarga>
             ) : aviso ? (

@@ -1,7 +1,7 @@
 // =====================================================================
 // CEREBRO DE JARVIS — lo que aprende, guardado como una red
 // =====================================================================
-// Cada cosa que Phill aprende es un NODO con un resumen de lo que sabe y
+// Cada cosa que Javier aprende es un NODO con un resumen de lo que sabe y
 // su fuente; los ENLACES dicen cómo se relacionan y engordan con el uso.
 // Ramas reales, por ejemplo:
 //
@@ -11,7 +11,7 @@
 //                                              └─ Internet · iPhone (resumen con enlace)
 //
 // Cómo crece (todo es aprendizaje):
-//   · aprender_tema: Phill investiga un tema a fondo (inventario, taller e
+//   · aprender_tema: Javier investiga un tema a fondo (inventario, taller e
 //     internet) y arma la rama completa.
 //   · Cada búsqueda en internet queda como nodo bajo «Internet».
 //   · Cada «recordá…» queda bajo «Sobre vos».
@@ -68,7 +68,7 @@ export function ramaCanonica(propuesta: string, tema = '', resto = ''): (typeof 
   return pts ? mejor : RAMAS.find(r => r.clave === 'trabajo')!;
 }
 /** Lo que NO es conocimiento: lo que alguien pidió, lo que no se sabe,
- *  reglas obvias o frases sobre Phill mismo. Antes se guardaba y era basura. */
+ *  reglas obvias o frases sobre Javier mismo. Antes se guardaba y era basura. */
 export const BASURA = /^(el|la|un|una)?\s*(due[ñn]o|usuario|cliente|jefe|superadmin)\s+(solicit|pidi|pregunt|quiere|quer[ií]a|consult|busc[oó]|necesit)|^(jarvis|phill?|el asistente|la ia|el sistema)\b|se debe (evitar|verificar|confirmar|consultar)|no se (dispone|tiene|encontr|cuenta)|no (est[aá]n?|se encuentran?|fue|fueron) (registrad|disponible|encontrad|especificad)|no hay (datos|informaci|registros)|sin (datos|informaci[oó]n) (disponible|registrad)|^(se )?(recomienda|sugiere) (verificar|consultar|revisar)|^(es importante|hay que tener en cuenta)|(pregunt[oó]|consult[oó]) por\b|no (est[aá] |se encuentra |aparece |figura )?disponible|no aparece|no se (pudo|logr[oó])|al momento de la consulta|^precio:? no/i;
 /** Sitios cuyos resultados no aportan conocimiento (perfiles, redes). */
 export const SITIO_BASURA = /rocketreach|instagram|facebook|linkedin|pinterest|tiktok|zoominfo|scribd|quora/i;
@@ -89,7 +89,7 @@ const MODULOS: Record<string, string> = {
   ubicaciones: 'Ubicaciones', errores: 'Errores del sistema', vivo: 'En vivo',
 };
 
-/** Phill consulta SU cerebro cuando lo necesita (no solo lo que se le pasó al inicio). */
+/** Javier consulta SU cerebro cuando lo necesita (no solo lo que se le pasó al inicio). */
 export const CONSULTAR_CEREBRO = {
   nombre: 'consultar_cerebro',
   descripcion: 'Busca en TU cerebro (todo lo que aprendiste: productos, reparaciones, proveedores, políticas, lo que te dijo el dueño, lo que leíste en internet) por palabras y por significado. Usala antes de buscar en internet cuando la pregunta pueda estar en lo que ya sabés, o cuando el dueño pregunte «qué sabés de…». Con buscar vacío devuelve el mapa: ramas y temas.',
@@ -161,7 +161,7 @@ export function crearCerebro(admin: Db, uid: string) {
   }
 
   // Raíz y ramas fijas.
-  const raiz = () => asegurarNodo('raiz', 'Technoverse', 'raiz', { resumen: 'Todo lo que Phill sabe del negocio.' });
+  const raiz = () => asegurarNodo('raiz', 'Technoverse', 'raiz', { resumen: 'Todo lo que Javier sabe del negocio.' });
   async function dominio(clave: string, etiqueta: string) {
     const r = await raiz();
     const d = await asegurarNodo(`dom:${clave}`, etiqueta, 'dominio');
@@ -497,7 +497,7 @@ export function crearCerebro(admin: Db, uid: string) {
       ].filter(Boolean).join('\n\n').slice(0, 14000);
       if (!datos.trim()) return false;
       const t = await redactar(
-        `Sos el cerebro de Phill. Escribí la FICHA del dueño de Technoverse Costa Rica para que Phill lo conozca de verdad: cómo se llama y cómo prefiere que le hablen, cómo trabaja (horarios, rutinas, cómo decide), qué le importa del negocio ahora (metas, preocupaciones, proyectos), sus preferencias concretas y lo que tiene pendiente. Solo lo que surja de los datos; nada inventado, nada de clientes. Máximo 900 caracteres, frases cortas separadas por « · ». Devolvé SOLO JSON: {"texto":"…"}`,
+        `Sos el cerebro de Javier. Escribí la FICHA del dueño de Technoverse Costa Rica para que Javier lo conozca de verdad: cómo se llama y cómo prefiere que le hablen, cómo trabaja (horarios, rutinas, cómo decide), qué le importa del negocio ahora (metas, preocupaciones, proyectos), sus preferencias concretas y lo que tiene pendiente. Solo lo que surja de los datos; nada inventado, nada de clientes. Máximo 900 caracteres, frases cortas separadas por « · ». Devolvé SOLO JSON: {"texto":"…"}`,
         datos,
       ).catch(() => null);
       if (!t || t.length < 40 || PRIVADO.test(t)) return false;
@@ -722,14 +722,14 @@ export function crearCerebro(admin: Db, uid: string) {
       const nombre = (n: Nodo) => normalizar(n.etiqueta.replace(/^(Inventario|Taller|Internet) · /, ''));
       // Lo que es basura (aunque todavía no se haya ordenado el cerebro) no se
       // recuerda: antes «Precio no disponible…» volvía en cada respuesta y
-      // Phill repetía su propio error.
+      // Javier repetía su propio error.
       const sirve = (n: Nodo) => !(BASURA.test(n.etiqueta) || BASURA.test(n.resumen || '') || SITIO_BASURA.test(`${n.etiqueta} ${n.url || ''}`));
       const directos = ((nodos || []) as Nodo[]).filter(sirve)
         .filter(n => n.tipo !== 'recuerdo' && n.resumen && nombre(n).length >= 3 && msg.includes(` ${nombre(n)} `))
         .filter(n => !(esOrden && n.fuente === 'internet'))
         .sort((x, y) => nombre(y).length - nombre(x).length || y.usos - x.usos).slice(0, 5);
       // Además, por PALABRAS: lo que comparte palabras importantes con el
-      // mensaje (en el nombre pesa más que en el resumen). Así Phill revisa
+      // mensaje (en el nombre pesa más que en el resumen). Así Javier revisa
       // primero lo que ya sabe aunque no se nombre el tema tal cual.
       // «Costa Rica» y las palabras de pedir («enlaces», «buscame»…) no dicen de
       // QUÉ se habla: con ellas salía política al pedir enlaces de cargadores.
@@ -786,7 +786,7 @@ export function crearCerebro(admin: Db, uid: string) {
 export type Cerebro = ReturnType<typeof crearCerebro>;
 
 /**
- * Cuando ninguna IA contesta, Phill responde con su cerebro. Antes tiraba
+ * Cuando ninguna IA contesta, Javier responde con su cerebro. Antes tiraba
  * TODO lo que encontraba, con nombres técnicos y texto de menús. Ahora:
  *  - solo lo que de verdad trata de lo que se preguntó (lo demás se calla);
  *  - con nombres humanos y resúmenes limpios;

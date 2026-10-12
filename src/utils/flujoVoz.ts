@@ -1,5 +1,5 @@
 // =====================================================================
-// FLUJO DE VOZ — Phill habla mientras la respuesta todavía llega
+// FLUJO DE VOZ — Javier habla mientras la respuesta todavía llega
 // =====================================================================
 // La respuesta llega en trozos (eventos «texto» de la función). En vez de
 // esperar a que termine para empezar a hablar, este módulo va sacando

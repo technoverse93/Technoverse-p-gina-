@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <!-- Una vuelta de la conversación del widget: la pregunta a la derecha y
-     la respuesta de Phill a la izquierda, como en la app. -->
+     la respuesta de Javier a la izquierda, como en la app. -->
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"

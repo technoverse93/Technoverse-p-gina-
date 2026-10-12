@@ -1,8 +1,8 @@
 // =====================================================================
 // AJUSTES → MINI-WIDGET DEL TELÉFONO
 // =====================================================================
-// Enciende en ESTE teléfono el mini-widget de Phill: una ventanita sobre
-// la pantalla de inicio que es Phill completo con tu sesión, sin huella y
+// Enciende en ESTE teléfono el mini-widget de Javier: una ventanita sobre
+// la pantalla de inicio que es Javier completo con tu sesión, sin huella y
 // sin abrir la app (lo pidió el dueño: el teléfono es solo suyo). Ver
 // src/mobile/jarvisWidget.ts y src/rapido.tsx.
 //
@@ -15,7 +15,7 @@ import { supabase } from '../../supabaseClient';
 import { widgetNativo, VERSION_WIDGET, type EstadoWidget } from '../../mobile/jarvisWidget';
 import { aparatoActual } from '../../seguridad/killSwitch';
 
-const COMO_PONERLO = 'Mantené presionada la pantalla de inicio → Widgets → Technoverse → Phill.';
+const COMO_PONERLO = 'Mantené presionada la pantalla de inicio → Widgets → Technoverse → Javier.';
 
 async function anotar(accion: string): Promise<void> {
   try {
@@ -34,7 +34,7 @@ export default function MiniWidgetAjustes() {
   const cargar = useCallback(async () => { setEstado(await widgetNativo.estado()); }, []);
   useEffect(() => { void cargar(); }, [cargar]);
 
-  // La APK del widget anterior (con llave) no sabe abrir Phill con la sesión.
+  // La APK del widget anterior (con llave) no sabe abrir Javier con la sesión.
   const apkVieja = nativo && !!estado && estado.version < VERSION_WIDGET;
   const activo = !!estado?.activo && !apkVieja;
 
@@ -61,7 +61,7 @@ export default function MiniWidgetAjustes() {
     if (estado?.enVentanita) { void widgetNativo.cerrar(); return; }
     await cargar();
     setOcupado(false);
-    setAviso({ tipo: 'ok', texto: 'Apagado: el widget de este teléfono ya no abre Phill.' });
+    setAviso({ tipo: 'ok', texto: 'Apagado: el widget de este teléfono ya no abre Javier.' });
   };
 
   const titulo = !nativo ? 'Se activa desde la app del teléfono'
@@ -76,7 +76,7 @@ export default function MiniWidgetAjustes() {
         <span className="ai-modu-ic"><Smartphone className="w-4 h-4" /></span>
         <span className="ai-modu-t">
           <b>{titulo}</b>
-          <span>Phill en tu pantalla de inicio, con tu sesión y sin huella: le hablás desde el widget y la respuesta sale ahí mismo; se agranda para ver la conversación. «Abrir conversación» da Phill completo para cobrar, responder chats, mover el taller o ajustar inventario. Bloquear o cerrar sesiones te sigue pidiendo confirmación.</span>
+          <span>Javier en tu pantalla de inicio, con tu sesión y sin huella: le hablás desde el widget y la respuesta sale ahí mismo; se agranda para ver la conversación. «Abrir conversación» da Javier completo para cobrar, responder chats, mover el taller o ajustar inventario. Bloquear o cerrar sesiones te sigue pidiendo confirmación.</span>
         </span>
       </div>
       {nativo && !apkVieja && estado && (
@@ -94,7 +94,7 @@ export default function MiniWidgetAjustes() {
         </div>
       )}
       {apkVieja && <p className="ai-mw-nota">Instalá la APK nueva (la de la última compilación) y volvé aquí para activarlo.</p>}
-      {!nativo && <p className="ai-mw-nota">Abrí Phill en la app del teléfono → Ajustes → Mini-widget → «Activar en este teléfono».</p>}
+      {!nativo && <p className="ai-mw-nota">Abrí Javier en la app del teléfono → Ajustes → Mini-widget → «Activar en este teléfono».</p>}
       {activo && <p className="ai-mw-nota">Si perdés el teléfono, bloquearlo o cerrar sus sesiones también apaga el widget.</p>}
       {aviso && <p className="ai-mw-aviso" data-tipo={aviso.tipo} role="status">{aviso.texto}</p>}
     </div>

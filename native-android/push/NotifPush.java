@@ -23,7 +23,7 @@ import java.util.List;
 /**
  * Las notificaciones de la app que llegan por push (Firebase): el chat de los
  * clientes (con «Responder» en la propia notificación, como WhatsApp) y los
- * avisos de Phill. Las usan JarvisPushService (llega un aviso) y
+ * avisos de Javier. Las usan JarvisPushService (llega un aviso) y
  * ResponderReceiver (se contestó desde la notificación).
  *
  * Lo que se guarda en este teléfono (SharedPreferences «tv_push»):
@@ -77,8 +77,8 @@ final class NotifPush {
         chat.enableVibration(true);
         chat.setLockscreenVisibility(android.app.Notification.VISIBILITY_PRIVATE);
         nm.createNotificationChannel(chat);
-        NotificationChannel avisos = new NotificationChannel(CANAL_AVISOS, "Avisos de Phill", NotificationManager.IMPORTANCE_DEFAULT);
-        avisos.setDescription("Lo que Phill vigila: chats esperando, existencias, seguridad y el resumen de la mañana");
+        NotificationChannel avisos = new NotificationChannel(CANAL_AVISOS, "Avisos de Javier", NotificationManager.IMPORTANCE_DEFAULT);
+        avisos.setDescription("Lo que Javier vigila: chats esperando, existencias, seguridad y el resumen de la mañana");
         nm.createNotificationChannel(avisos);
     }
 
@@ -173,7 +173,7 @@ final class NotifPush {
     }
 
     // ------------------------------- avisos -------------------------------
-    /** Un aviso de Phill. Tocarlo abre Phill (o el módulo al que lleva). */
+    /** Un aviso de Javier. Tocarlo abre Javier (o el módulo al que lleva). */
     static void publicarAviso(Context c, String titulo, String texto, String destino, String nivel) {
         canales(c);
         String url = "technoverse://jarvis" + (destino != null && !destino.isEmpty() ? "?modulo=" + Uri.encode(destino) : "");
@@ -185,7 +185,7 @@ final class NotifPush {
         NotificationCompat.Builder b = new NotificationCompat.Builder(c, CANAL_AVISOS)
                 .setSmallIcon(R.drawable.ic_stat_aviso)
                 .setColor(0xFF031837)
-                .setContentTitle("Phill · " + titulo)
+                .setContentTitle("Javier · " + titulo)
                 .setContentText(texto)
                 .setStyle(new NotificationCompat.BigTextStyle().bigText(texto))
                 .setCategory(NotificationCompat.CATEGORY_MESSAGE)

@@ -84,7 +84,7 @@ export function aGuardable(p: Pieza): Omit<Pieza, 'productoImg' | 'fondoImg'> {
   return resto;
 }
 
-/** Los textos que arma Phill (ver supabase/functions/asistente-ia/estudio.ts). */
+/** Los textos que arma Javier (ver supabase/functions/asistente-ia/estudio.ts). */
 export interface CopyPauta {
   titular: string; subtitulo: string; etiqueta: string; cta: string; pie: string;
   caption: string; hashtags: string[]; fondo: string; estilo: EstiloId;

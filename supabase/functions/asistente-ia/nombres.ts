@@ -2,7 +2,7 @@
 // =====================================================================
 // CEREBRO DE JARVIS — nombres en lenguaje humano
 // =====================================================================
-// Lo que Phill aprende de internet se guardaba con la búsqueda tal cual
+// Lo que Javier aprende de internet se guardaba con la búsqueda tal cual
 // («site:planetcellcr.com plancha OR separador», «"Planet Group CR" sitio
 // web oficial») y en la ficha se veía la dirección cruda. Eso es técnico y
 // es de la IA; la persona tiene que ver nombres que entienda:

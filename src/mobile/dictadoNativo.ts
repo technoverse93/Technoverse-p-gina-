@@ -3,7 +3,7 @@
 // =====================================================================
 // El reconocedor de voz de Android (native-android/oye/DictadoNativoPlugin):
 // mientras hablás, el texto va apareciendo. Es opcional (Ajustes → Voz →
-// «Dictado del teléfono»); apagado, el micrófono de Phill graba el audio y el
+// «Dictado del teléfono»); apagado, el micrófono de Javier graba el audio y el
 // servidor lo pasa a texto al terminar. No se usa en manos libres.
 //
 // Todo responde en vez de lanzar: si falla, quien lo llama sigue con la

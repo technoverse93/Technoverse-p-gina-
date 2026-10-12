@@ -139,8 +139,8 @@ async function revisar(): Promise<void> {
     if (fila) {
       bloqueado = true;
       mostrarPantalla(fila.motivo ?? null, fila.hasta ?? null);
-      // Un aparato bloqueado no escucha: «Oye Phill» se apaga (hay que volver a prenderlo a mano).
-      void import('../mobile/oyePhill').then(m => m.detenerOyePhill()).catch(() => { /* sin Oye Phill */ });
+      // Un aparato bloqueado no escucha: «Oye Javier» se apaga (hay que volver a prenderlo a mano).
+      void import('../mobile/oyePhill').then(m => m.detenerOyePhill()).catch(() => { /* sin Oye Javier */ });
     } else if (bloqueado) {
       // Liberado: la pantalla se retira sola, sin recargar.
       bloqueado = false;
@@ -204,7 +204,7 @@ export async function avisarCambioDeBloqueos(): Promise<void> {
 }
 
 /**
- * ¿Me cerraron la sesión? Phill puede cerrar las sesiones de una persona
+ * ¿Me cerraron la sesión? Javier puede cerrar las sesiones de una persona
  * (borra sus sesiones en el servidor); el token que ya tiene seguiría
  * sirviendo hasta vencer, así que cada panel pregunta por la suya y, si ya
  * no existe, sale. Mismo criterio que arriba: el aviso no dice a quién, y
@@ -222,13 +222,13 @@ async function revisarSesion(): Promise<void> {
     if (error || data !== false) return;
     // Cerraron esta sesión desde otro lado: el teléfono deja de recibir avisos de la cuenta.
     await import('../mobile/pushNativo').then(m => m.cerrarPush()).catch(() => { /* sin push */ });
-    await import('../mobile/oyePhill').then(m => m.detenerOyePhill()).catch(() => { /* sin Oye Phill */ });
+    await import('../mobile/oyePhill').then(m => m.detenerOyePhill()).catch(() => { /* sin Oye Javier */ });
     await supabase.auth.signOut({ scope: 'local' });
     location.reload();
   } catch { /* sin red: nadie sale */ }
 }
 
-/** Avisa a todos que revisen si su sesión sigue viva. Lo usa Phill. */
+/** Avisa a todos que revisen si su sesión sigue viva. Lo usa Javier. */
 export async function avisarCierreDeSesion(): Promise<void> {
   try {
     const c = canal || supabase.channel('system_bans');

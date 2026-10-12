@@ -23,9 +23,9 @@ import java.util.ArrayList;
 /**
  * El dictado del propio teléfono (el reconocedor de voz de Android) con el texto
  * APARECIENDO MIENTRAS HABLÁS. Es opcional (Ajustes → Voz → «Dictado del
- * teléfono»): sin esto, el micrófono de Phill graba el audio y el servidor lo
+ * teléfono»): sin esto, el micrófono de Javier graba el audio y el servidor lo
  * pasa a texto cuando terminás de hablar. Ninguno de los dos corre en manos
- * libres (ahí sigue la grabación de siempre, que permite interrumpir a Phill).
+ * libres (ahí sigue la grabación de siempre, que permite interrumpir a Javier).
  *
  * No es un paquete npm: MainActivity lo registra a mano. Todas las llamadas
  * responden { ok: true } o { ok: false, error, codigo }; lo que se va

@@ -1,6 +1,6 @@
 // =====================================================================
 // JARVIS · piezas del lenguaje visual (diseño aprobado «Sistema visual de
-// Phill»): el orbe —una constelación chiquita del cerebro con señales que
+// Javier»): el orbe —una constelación chiquita del cerebro con señales que
 // viajan—, el «pensando» de tres neuronas y el color de cada área.
 // Todo el color sale de los tokens --jv-* de admin.css (claro y oscuro).
 // =====================================================================
@@ -22,7 +22,7 @@ export function saludo(): string {
   return h < 12 ? 'BUENOS DÍAS' : h < 19 ? 'BUENAS TARDES' : 'BUENAS NOCHES';
 }
 
-/** Logo vivo de Phill: 5 neuronas, fibras curvas y dos señales. */
+/** Logo vivo de Javier: 5 neuronas, fibras curvas y dos señales. */
 export const Orbe = React.memo(function Orbe({ tam = 30, className = '' }: { tam?: number; className?: string }) {
   return (
     <svg className={`jv-orbe ${className}`} viewBox="0 0 100 100" width={tam} height={tam} aria-hidden="true" focusable="false">

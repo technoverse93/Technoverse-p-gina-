@@ -1,5 +1,5 @@
 // =====================================================================
-// LA PIEZA DE PAUTA EN EL CHAT — lo que Phill armó con «crear_pauta»
+// LA PIEZA DE PAUTA EN EL CHAT — lo que Javier armó con «crear_pauta»
 // =====================================================================
 // Una tarjeta con la pieza ya dibujada (con la foto y el precio reales del
 // inventario), sus textos y dos botones: abrirla en el Estudio para afinarla

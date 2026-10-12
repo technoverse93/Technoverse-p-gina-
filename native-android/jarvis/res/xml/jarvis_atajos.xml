@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="utf-8"?>
-<!-- Mantener presionado el ícono de la app: «Hablar con Phill». -->
+<!-- Mantener presionado el ícono de la app: «Hablar con Javier». -->
 <shortcuts xmlns:android="http://schemas.android.com/apk/res/android">
     <shortcut
         android:shortcutId="jarvis_voz"

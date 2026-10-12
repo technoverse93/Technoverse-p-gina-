@@ -1,7 +1,7 @@
 // =====================================================================
 // PAUTA — pasarle un pedido al Estudio desde otro lado
 // =====================================================================
-// El chat de Phill (tarjeta de la pieza) e Inventario («Crear con Phill»
+// El chat de Javier (tarjeta de la pieza) e Inventario («Crear con Javier»
 // en una publicación de Instagram sin imagen) abren el Estudio ya con el
 // producto, el formato y los textos puestos. El pedido queda en
 // sessionStorage (por si el Estudio todavía no está montado) y se avisa

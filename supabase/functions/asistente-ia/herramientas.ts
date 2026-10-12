@@ -30,11 +30,11 @@ export type Consulta = {
   filas: string;        // «4 productos», «23 facturas»
   detalle: string;      // lo que leyó la IA, resumido (se ve al abrir la tarjeta)
   sinPermiso?: boolean;
-  /** Marcas de Phill dentro de la respuesta: tarjeta de acción o botón para abrir un módulo. */
+  /** Marcas de Javier dentro de la respuesta: tarjeta de acción o botón para abrir un módulo. */
   tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision' | 'pieza' | 'telefono' | 'tarea';
   id?: string;
   destino?: string;
-  /** Una pieza de pauta armada por Phill (tarjeta con vista previa y botón al Estudio). */
+  /** Una pieza de pauta armada por Javier (tarjeta con vista previa y botón al Estudio). */
   pieza?: Record<string, unknown>;
   /** Un pedido al teléfono del dueño (alarma, llamada, mapa…): la app lo ejecuta en el aparato. */
   telefono?: Record<string, unknown>;
@@ -819,7 +819,7 @@ const MAX_TEXTO = 9000;
  * PRECIOS de una página de tienda. Casi nunca están en el texto visible al
  * principio: las tiendas (Magento como Tienda Monge, Shopify, WooCommerce…)
  * los ponen en datos estructurados (JSON-LD), metaetiquetas o atributos.
- * Antes solo se leían si venían entre comillas y Phill decía «precio no
+ * Antes solo se leían si venían entre comillas y Javier decía «precio no
  * disponible» con el precio en la página.
  */
 function preciosDe(html: string): string[] {

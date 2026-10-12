@@ -1,7 +1,7 @@
 // =====================================================================
 // ASISTENTE IA — ACCIONES DE JARVIS (solo superadmin, con confirmación)
 // =====================================================================
-// Phill no ejecuta nada por su cuenta. El protocolo es siempre:
+// Javier no ejecuta nada por su cuenta. El protocolo es siempre:
 //
 //   1. PREPARAR  (sin efectos) — la IA pide una acción del catálogo; el
 //      servidor busca el objetivo con la sesión del superadmin, revisa las
@@ -18,7 +18,7 @@
 //
 // COBRAR y RESPONDER UN CHAT no los ejecuta el servidor: emitir la factura
 // (PDF, consecutivo, Hacienda, correo) ya está resuelto y probado en el
-// panel (`cobrarServicio`). Phill prepara los datos y calcula los montos;
+// panel (`cobrarServicio`). Javier prepara los datos y calcula los montos;
 // al confirmar, el servidor entrega esos datos validados y el panel los
 // cobra por el MISMO camino que el módulo de Cobros, nunca por uno aparte.
 // =====================================================================
@@ -135,7 +135,7 @@ export function validarOpciones(t: Tarjeta, crudas: unknown): Record<string, any
 }
 export const pideToken = (t: Tarjeta, o: Record<string, any>) => t.token === 'para_siempre' && o.minutos === null;
 
-/** Módulos del panel que Phill puede abrir (los mismos ids de las pestañas). */
+/** Módulos del panel que Javier puede abrir (los mismos ids de las pestañas). */
 export const MODULOS_PANEL: Record<string, string> = {
   dashboard: 'Panel general', inventario_productos: 'Inventario', chat: 'Chat y CRM', taller: 'Taller', clientes: 'Clientes',
   cobros: 'Cobros', facturacion: 'Contabilidad', marketing: 'Marketing', ciberseguridad: 'Ciberseguridad',
@@ -239,7 +239,7 @@ export const ACCIONES: Accion[] = [
           opciones: [
             { id: 'alcance', tipo: 'elegir', etiqueta: 'A quién', valores: elegibles.map((a, i) => ({ valor: `a${i}`, texto: a.texto, ayuda: a.ayuda })), defecto: 'a0' },
             { id: 'minutos', tipo: 'duracion', etiqueta: 'Duración', defecto: 1440 },
-            { id: 'motivo', tipo: 'texto', etiqueta: 'Motivo', defecto: texto(args.motivo, 120) || 'Pedido desde Phill' },
+            { id: 'motivo', tipo: 'texto', etiqueta: 'Motivo', defecto: texto(args.motivo, 120) || 'Pedido desde Javier' },
           ],
           boton: 'Bloquear ahora', botonSiempre: 'Bloquear para siempre', token: 'para_siempre', deshacible: true,
         },
@@ -365,7 +365,7 @@ export const ACCIONES: Accion[] = [
               valores: lista.map(([, p], i) => ({ valor: `p${i}`, texto: p.email,
                 ayuda: `${ROL_TXT[p.rol] || p.rol} · ${p.sesiones.length} ${p.sesiones.length === 1 ? 'sesión abierta' : 'sesiones abiertas'}: ` +
                   p.sesiones.slice(0, 4).map(s => `${equipoDe(s.agente)} (${fechaCorta(s.actividad)})`).join(', ') })) },
-            { id: 'motivo', tipo: 'texto', etiqueta: 'Motivo', defecto: 'Pedido desde Phill' },
+            { id: 'motivo', tipo: 'texto', etiqueta: 'Motivo', defecto: 'Pedido desde Javier' },
           ],
           boton: 'Cerrar sesiones', token: 'nunca', deshacible: false,
           nota: 'No se puede deshacer: vuelve a entrar con su clave.',
@@ -386,7 +386,7 @@ export const ACCIONES: Accion[] = [
   // -------------------------------------------------------------------
   {
     nombre: 'preparar_cobro',
-    bitacora: 'Cobro preparado por Phill',
+    bitacora: 'Cobro preparado por Javier',
     descripcion: 'PREPARA un cobro con factura electrónica (servicio con repuestos del inventario). Calcula el precio en el servidor a partir del costo real y el margen, o usa el monto que se indique, o el precio de venta del inventario. El superadmin revisa los datos del cliente y los montos en una tarjeta y confirma; el panel emite la factura por el mismo camino del módulo de Cobros. Usala solo cuando pida cobrar o facturar. Los datos del cliente llegan como marcas [CÉDULA·1], [CORREO·1], [TEL·1]: pasalas tal cual en `cliente`, nunca inventes cédulas ni correos.',
     parametros: {
       type: 'object',
@@ -537,7 +537,7 @@ export const ACCIONES: Accion[] = [
   // -------------------------------------------------------------------
   {
     nombre: 'responder_chat',
-    bitacora: 'Respuesta de chat por Phill',
+    bitacora: 'Respuesta de chat por Javier',
     descripcion: 'ENVÍA un mensaje a un cliente en el Chat de la tienda, como respuesta del personal. Usala SIEMPRE que el dueño pida responder, contestar, escribirle, mandarle o decirle algo a un cliente por el chat (no abras el módulo Chat en su lugar). `texto` es lo que el dueño pidió decir, tal cual (si dijo «respondele yo más», el texto es «Yo más»); solo corregí mayúscula inicial y puntuación, no agregues saludos ni contenido. `cliente` es el nombre como lo dijo, o «último» si habla del chat más reciente.',
     parametros: {
       type: 'object',
@@ -614,7 +614,7 @@ export const ACCIONES: Accion[] = [
   // -------------------------------------------------------------------
   {
     nombre: 'cambiar_estado_orden',
-    bitacora: 'Estado de orden por Phill',
+    bitacora: 'Estado de orden por Javier',
     descripcion: 'CAMBIA el estado de una orden del Taller (mueve la tarjeta en el tablero). Usala cuando el dueño pida pasar, mover, marcar o poner una orden en un estado («la de Laura ya está lista», «marcá el TKT-104 como entregado»). Estados: Pendiente, Diagnosticada, Cotizada, Aprobada, Esperando repuestos, En Reparación, Lista, Entregada, Cancelada.',
     parametros: {
       type: 'object',
@@ -674,7 +674,7 @@ export const ACCIONES: Accion[] = [
   // -------------------------------------------------------------------
   {
     nombre: 'editar_producto',
-    bitacora: 'Inventario por Phill',
+    bitacora: 'Inventario por Javier',
     descripcion: 'CAMBIA las existencias o el precio de venta de un producto del inventario. Usala cuando el dueño pida subir, bajar, poner o corregir el stock («entraron 5 cargadores USB-C», «quedan 2 fundas A12») o el precio («poné la funda A12 a ₡4 500»). `sumar` para sumar o restar unidades; `stock` para dejar un número exacto; `precio` en colones con IVA.',
     parametros: {
       type: 'object',
@@ -740,7 +740,7 @@ export const ACCIONES: Accion[] = [
   // -------------------------------------------------------------------
   {
     nombre: 'crear_producto',
-    bitacora: 'Producto creado por Phill',
+    bitacora: 'Producto creado por Javier',
     descripcion: 'CREA productos nuevos en el inventario (uno o varios de una vez, hasta 10). Usala cuando el dueño pida crear, agregar, registrar o dar de alta productos, también «de prueba». Precios en colones con IVA. `categoria`: Dispositivos, Estuches, Cargadores, Audio o Accesorios. Si el dueño dice que son de prueba o que no se vean, `en_tienda` = false. Si falta el precio o la cantidad, poné lo razonable y decí qué supusiste.',
     parametros: {
       type: 'object',
@@ -816,11 +816,11 @@ export const ACCIONES: Accion[] = [
     },
   },
   // -------------------------------------------------------------------
-  // AGENDA del dueño: Phill como secretario. Con hora = recordatorio (el
+  // AGENDA del dueño: Javier como secretario. Con hora = recordatorio (el
   // teléfono avisa a esa hora); sin hora = pendiente.
   {
     nombre: 'agendar',
-    bitacora: 'Agenda de Phill',
+    bitacora: 'Agenda de Javier',
     descripcion: 'ANOTA un recordatorio o un pendiente en la agenda del dueño. Usala cuando diga «recordame…», «avisame a las…», «anotá…», «apuntá…», «no me dejés olvidar…», «tengo que…», o cuando le prometas hacer algo después y no tengas acción para hacerlo ya. Con hora (`cuando` o `en_minutos`) el teléfono le avisa a esa hora; sin hora queda como pendiente. `texto` corto y en infinitivo o como nota («Llamar a Luis por la pantalla del S21»).',
     parametros: {
       type: 'object',
@@ -873,7 +873,7 @@ export const ACCIONES: Accion[] = [
   // -------------------------------------------------------------------
   {
     nombre: 'cerrar_pendiente',
-    bitacora: 'Agenda de Phill',
+    bitacora: 'Agenda de Javier',
     descripcion: 'MARCA como hecho (o cancela) un recordatorio o pendiente de la agenda del dueño. Usala cuando diga «ya hice lo de…», «ya llamé a…», «tachá…», «quitá el recordatorio de…», «ya no hace falta…». `buscar`: unas palabras del pendiente.',
     parametros: {
       type: 'object',
@@ -921,7 +921,7 @@ export const ACCIONES: Accion[] = [
   // -------------------------------------------------------------------
   {
     nombre: 'crear_orden_taller',
-    bitacora: 'Orden de taller por Phill',
+    bitacora: 'Orden de taller por Javier',
     descripcion: 'ABRE una orden nueva en el Taller (recibir un equipo). Usala cuando diga «entró un…», «recibí el … de …», «abrí una orden para…», «anotá la reparación de…». Pedí solo lo que falte de lo esencial (cliente, equipo y falla); lo demás es opcional. Garantía mínima 3 meses (Ley 7472).',
     parametros: {
       type: 'object',

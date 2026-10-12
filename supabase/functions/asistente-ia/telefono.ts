@@ -1,5 +1,5 @@
 // =====================================================================
-// TELÉFONO — lo que Phill le pide al celular del dueño
+// TELÉFONO — lo que Javier le pide al celular del dueño
 // =====================================================================
 // Alarmas, temporizadores, abrir apps, llamar, WhatsApp, SMS, calendario,
 // mapas, música, linterna, ajustes y enlaces. La función NO hace nada en el
@@ -14,9 +14,9 @@
 
 export type AccionTelefono =
   | 'alarma' | 'temporizador' | 'abrir_app' | 'llamar' | 'whatsapp' | 'sms'
-  | 'calendario' | 'mapa' | 'musica' | 'linterna' | 'ajustes' | 'enlace';
+  | 'calendario' | 'mapa' | 'musica' | 'linterna' | 'ajustes' | 'enlace' | 'youtube';
 
-export const ACCIONES_TELEFONO: AccionTelefono[] = ['alarma', 'temporizador', 'abrir_app', 'llamar', 'whatsapp', 'sms', 'calendario', 'mapa', 'musica', 'linterna', 'ajustes', 'enlace'];
+export const ACCIONES_TELEFONO: AccionTelefono[] = ['alarma', 'temporizador', 'abrir_app', 'llamar', 'whatsapp', 'sms', 'calendario', 'mapa', 'musica', 'linterna', 'ajustes', 'enlace', 'youtube'];
 export const PANTALLAS_AJUSTES = ['wifi', 'bluetooth', 'sonido', 'pantalla', 'bateria', 'aplicaciones', 'ubicacion', 'general'] as const;
 
 /** Estas solo se pueden en la app del teléfono (en el navegador no hay cómo). */
@@ -179,6 +179,11 @@ export function prepararTelefono(args: Record<string, unknown>, id: string): Res
       const consulta = texto(args?.consulta, 100);
       if (consulta.length < 2) return { ok: false, error: 'Decime qué música poner (artista, canción o género).' };
       return pedido(`Poner música: ${consulta}`, { consulta });
+    }
+    case 'youtube': {
+      const consulta = texto(args?.consulta, 120);
+      if (consulta.length < 2) return { ok: false, error: 'Decime qué buscar en YouTube.' };
+      return pedido(`Buscar en YouTube: ${consulta}`, { consulta });
     }
     case 'linterna': {
       const encender = args?.encender !== false;

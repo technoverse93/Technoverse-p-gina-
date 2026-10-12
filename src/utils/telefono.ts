@@ -1,5 +1,5 @@
 // =====================================================================
-// TELÉFONO — Phill hace cosas en el celular del dueño
+// TELÉFONO — Javier hace cosas en el celular del dueño
 // =====================================================================
 // La función (supabase/functions/asistente-ia/telefono.ts) valida el pedido
 // y lo manda en vivo (evento «telefono»). Aquí se ejecuta EN EL APARATO:
@@ -22,7 +22,7 @@ import { enAppDelTelefono, telefonoNativo, telefonoNativoDisponible, type Plugin
 
 export type AccionTelefono =
   | 'alarma' | 'temporizador' | 'abrir_app' | 'llamar' | 'whatsapp' | 'sms'
-  | 'calendario' | 'mapa' | 'musica' | 'linterna' | 'ajustes' | 'enlace';
+  | 'calendario' | 'mapa' | 'musica' | 'linterna' | 'ajustes' | 'enlace' | 'youtube';
 
 export interface PedidoTelefono {
   id: string; accion: AccionTelefono; titulo: string;
@@ -77,6 +77,7 @@ export function enlaceWeb(p: PedidoTelefono, numero: string, mensaje: string): s
         + `${d.descripcion ? `&details=${enc(String(d.descripcion))}` : ''}${d.lugar ? `&location=${enc(String(d.lugar))}` : ''}`;
     }
     case 'enlace': return /^https?:\/\//i.test(String(d.url)) ? String(d.url) : null;
+    case 'youtube': return `https://www.youtube.com/results?search_query=${enc(String(d.consulta || ''))}`;
     default: return null;
   }
 }
@@ -151,6 +152,10 @@ export async function ejecutarTelefono(p: PedidoTelefono, privados: Record<strin
     case 'linterna': r = await plugin!.linterna({ encender: d.encender !== false }); break;
     case 'ajustes': r = await plugin!.ajustes({ pantalla: String(d.pantalla || 'general') }); break;
     case 'enlace': r = await plugin!.enlace({ url: String(d.url) }); break;
+    // APK sin el método nuevo: la búsqueda va como enlace (YouTube lo abre igual).
+    case 'youtube': r = typeof plugin!.youtube === 'function'
+      ? await plugin!.youtube({ consulta: String(d.consulta) }).catch(() => plugin!.enlace({ url: `https://www.youtube.com/results?search_query=${encodeURIComponent(String(d.consulta))}` }))
+      : await plugin!.enlace({ url: `https://www.youtube.com/results?search_query=${encodeURIComponent(String(d.consulta))}` }); break;
     default: return fallo('No sé hacer eso todavía.');
   }
   if (r.candidatos?.length) {
@@ -173,6 +178,7 @@ const MENSAJE_HECHO: Record<AccionTelefono, string> = {
   linterna: 'Listo.',
   ajustes: 'Ajustes abiertos.',
   enlace: 'Abierto.',
+  youtube: 'YouTube abierto con la búsqueda.',
 };
 
 // ------------------------- estado de cada tarjeta -------------------------
@@ -203,8 +209,8 @@ export async function correrTelefono(p: PedidoTelefono, privados: Record<string,
   for (const f of alTerminar) { try { f(p, r); } catch { /* quien escucha no frena el pedido */ } }
 }
 
-/** Pedidos que dejan OTRA app al frente (la ventanita de Phill se quita para que se vea). */
-export const ABRE_OTRA_APP: ReadonlySet<AccionTelefono> = new Set<AccionTelefono>(['abrir_app', 'llamar', 'whatsapp', 'sms', 'calendario', 'mapa', 'musica', 'ajustes', 'enlace']);
+/** Pedidos que dejan OTRA app al frente (la ventanita de Javier se quita para que se vea). */
+export const ABRE_OTRA_APP: ReadonlySet<AccionTelefono> = new Set<AccionTelefono>(['abrir_app', 'llamar', 'whatsapp', 'sms', 'calendario', 'mapa', 'musica', 'ajustes', 'enlace', 'youtube']);
 
 const alTerminar = new Set<(p: PedidoTelefono, r: ResultadoTelefono) => void>();
 /** Avisa cada pedido terminado (hecho o no). Devuelve cómo dejar de escuchar. */

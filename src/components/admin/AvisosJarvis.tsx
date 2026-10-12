@@ -1,7 +1,7 @@
 // =====================================================================
-// AVISOS DE JARVIS — lo que Phill te dijo sin que le preguntaras
+// AVISOS DE JARVIS — lo que Javier te dijo sin que le preguntaras
 // =====================================================================
-// La campana de Phill: el resumen de la mañana arriba (con «Escuchar»), y
+// La campana de Javier: el resumen de la mañana arriba (con «Escuchar»), y
 // después los avisos (chats esperando, existencias, seguridad, taller,
 // ventas). Cada uno lleva al módulo que corresponde y se marca como leído.
 // Llegan en vivo (src/mobile/avisosJarvis.ts).
@@ -77,7 +77,7 @@ export default function AvisosJarvis({ onAbrir }: { onAbrir?: (modulo: string) =
       </div>
 
       <div className="ai-aj">
-        <h4>Avisos <small>Phill vigila cada 15 min</small></h4>
+        <h4>Avisos <small>Javier vigila cada 15 min</small></h4>
         {sinLeer.length > 1 && <button type="button" className="ai-chip jv-avisos-todos" onClick={() => void marcar(sinLeer.map(a => a.id))}><Check className="w-4 h-4" />Marcar todo como visto</button>}
         {avisos === null ? <div className="ai-esqueleto" aria-label="Cargando"><i /><i /></div>
           : !resto.length ? <p className="jv-aviso-vacio">Todo en orden: nada que avisar. Cuando un cliente espere, algo se agote o haya un ingreso raro, te aviso aquí y en el teléfono.</p>

@@ -1,9 +1,9 @@
 // =====================================================================
-// MANOS LIBRES — el orbe de Phill que escucha, piensa y habla
+// MANOS LIBRES — el orbe de Javier que escucha, piensa y habla
 // =====================================================================
 // Pantalla de conversación continua: el orbe respira con el volumen de tu
-// voz mientras hablás y con el de Phill mientras contesta. Tocarlo
-// corta lo que Phill dice (y lo pone a escucharte) o, si lo estás
+// voz mientras hablás y con el de Javier mientras contesta. Tocarlo
+// corta lo que Javier dice (y lo pone a escucharte) o, si lo estás
 // escuchando, manda lo que llevás dicho. El volumen llega por `nivelVoz`
 // y se dibuja con una variable CSS (sin volver a pintar React).
 // =====================================================================
@@ -16,10 +16,10 @@ import { nivelVoz } from '../../utils/nivelVoz';
 export type FaseManos = 'saludando' | 'escuchando' | 'pensando' | 'hablando' | 'espera';
 
 const ETIQUETA: Record<FaseManos, string> = {
-  saludando: 'Phill',
+  saludando: 'Javier',
   escuchando: 'Te escucho…',
   pensando: 'Pensando…',
-  hablando: 'Phill',
+  hablando: 'Javier',
   espera: 'Un momento…',
 };
 const AYUDA: Record<FaseManos, string> = {
@@ -32,16 +32,16 @@ const AYUDA: Record<FaseManos, string> = {
 
 export default function HudVoz({ fase, vos, jarvis, onToque, onTerminar, onCamara, interrumpe = false }: {
   fase: FaseManos; vos: string; jarvis: string; onToque: () => void; onTerminar: () => void;
-  /** «Mirá esto»: abre la cámara para mostrarle algo a Phill. */
+  /** «Mirá esto»: abre la cámara para mostrarle algo a Javier. */
   onCamara?: () => void;
-  /** Se puede interrumpir a Phill hablándole encima (el oído está vigilando). */
+  /** Se puede interrumpir a Javier hablándole encima (el oído está vigilando). */
   interrumpe?: boolean;
 }) {
   const orbe = useRef<HTMLButtonElement>(null);
   const faseRef = useRef(fase);
   faseRef.current = fase;
 
-  // El volumen suavizado a una variable CSS. Si Phill habla con la voz del
+  // El volumen suavizado a una variable CSS. Si Javier habla con la voz del
   // teléfono (que no se puede medir), el orbe late solo, como al hablar.
   useEffect(() => {
     let id = 0, suave = 0;
@@ -62,9 +62,9 @@ export default function HudVoz({ fase, vos, jarvis, onToque, onTerminar, onCamar
   }, []);
 
   return (
-    <div className="jv-hud" data-fase={fase} role="dialog" aria-label="Conversación con Phill, manos libres">
+    <div className="jv-hud" data-fase={fase} role="dialog" aria-label="Conversación con Javier, manos libres">
       <button type="button" className="jv-hud-x ai-chip" onClick={onTerminar} aria-label="Terminar la conversación"><X className="w-4 h-4" />Terminar</button>
-      {onCamara && <button type="button" className="jv-hud-cam ai-chip" onClick={onCamara} aria-label="Mirá esto: mostrarle algo a Phill con la cámara"><Camera className="w-4 h-4" />Mirá esto</button>}
+      {onCamara && <button type="button" className="jv-hud-cam ai-chip" onClick={onCamara} aria-label="Mirá esto: mostrarle algo a Javier con la cámara"><Camera className="w-4 h-4" />Mirá esto</button>}
       <button type="button" ref={orbe} className="jv-hud-orbe" onClick={onToque} aria-label={AYUDA[fase] || ETIQUETA[fase]}>
         <span className="jv-hud-aro" aria-hidden="true" />
         <span className="jv-hud-aro dos" aria-hidden="true" />
@@ -74,7 +74,7 @@ export default function HudVoz({ fase, vos, jarvis, onToque, onTerminar, onCamar
         <b className="jv-hud-estado">{ETIQUETA[fase]}</b>
         <span className="jv-hud-ayuda">{fase === 'hablando' && interrumpe ? 'Hablá encima para interrumpirlo, o tocá el orbe.' : AYUDA[fase]}</span>
         {vos && <p className="jv-hud-vos"><small>Vos</small>{vos}</p>}
-        {jarvis && fase !== 'escuchando' && <p className="jv-hud-jarvis"><small>Phill</small>{jarvis}</p>}
+        {jarvis && fase !== 'escuchando' && <p className="jv-hud-jarvis"><small>Javier</small>{jarvis}</p>}
       </div>
     </div>
   );

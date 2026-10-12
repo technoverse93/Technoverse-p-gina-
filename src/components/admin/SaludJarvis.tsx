@@ -32,7 +32,7 @@ const hace = (f: string) => {
   const d = Math.round(h / 24); return d === 1 ? 'ayer' : `hace ${d} días`;
 };
 const LETRA = ['D', 'L', 'K', 'M', 'J', 'V', 'S'];
-const TITULO = { bien: 'Todo en orden', atencion: 'Funciona, con detalles', mal: 'Phill tiene problemas' } as const;
+const TITULO = { bien: 'Todo en orden', atencion: 'Funciona, con detalles', mal: 'Javier tiene problemas' } as const;
 
 export default function SaludJarvis() {
   const [inf, setInf] = useState<Informe | null>(null);
@@ -43,7 +43,7 @@ export default function SaludJarvis() {
     if (probar) setProbando(true);
     const { data, error: e } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'salud', probar } });
     if (probar) setProbando(false);
-    if (e || !data?.ok) { setError(probar ? 'No se pudo correr la prueba. Probá de nuevo en un momento.' : 'No se pudo leer la salud de Phill.'); if (!inf) setInf({ ok: false }); return; }
+    if (e || !data?.ok) { setError(probar ? 'No se pudo correr la prueba. Probá de nuevo en un momento.' : 'No se pudo leer la salud de Javier.'); if (!inf) setInf({ ok: false }); return; }
     setInf(data as Informe);
   };
   useEffect(() => { void pedir(false); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -71,10 +71,10 @@ export default function SaludJarvis() {
   const estado = inf?.estado || 'bien';
   return (
     <div className="ai-aj jv-salud">
-      <h4><i className="jv-pt" data-area="neg" aria-hidden="true" />Salud de Phill <small>últimas 24 h</small></h4>
+      <h4><i className="jv-pt" data-area="neg" aria-hidden="true" />Salud de Javier <small>últimas 24 h</small></h4>
       {!inf ? <div className="ai-esqueleto" aria-label="Cargando"><i /><i /></div>
         : inf.falta ? (
-          <p className="jv-salud-nota">Falta un paso: correr en Supabase el SQL de salud (<code>migracion_jarvis_salud.sql</code>). Desde ahí Phill anota cada respuesta y se prueba solo cada mañana. La prueba de abajo ya funciona.</p>
+          <p className="jv-salud-nota">Falta un paso: correr en Supabase el SQL de salud (<code>migracion_jarvis_salud.sql</code>). Desde ahí Javier anota cada respuesta y se prueba solo cada mañana. La prueba de abajo ya funciona.</p>
         ) : hoy && (
           <>
             <div className="jv-salud-estado" data-estado={estado}>
@@ -163,7 +163,7 @@ export default function SaludJarvis() {
         </ul>
       )}
 
-      <h5 className="jv-salud-sub">Avisos al teléfono <small>chat y Phill, aunque la app esté cerrada</small></h5>
+      <h5 className="jv-salud-sub">Avisos al teléfono <small>chat y Javier, aunque la app esté cerrada</small></h5>
       <ul className="jv-salud-lista">
         <li>
           <i className="jv-sd-luz" data-ok={push && !ESTADO_PENDIENTE.has(push) ? (push === 'activo' ? 'si' : 'no') : undefined} aria-label={push === 'activo' ? 'Activos' : 'Sin activar'} />

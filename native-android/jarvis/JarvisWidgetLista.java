@@ -11,7 +11,7 @@ import org.json.JSONObject;
 /**
  * La conversación del widget grande (la lista que se desliza). Lee las
  * vueltas que guardó JarvisWidget.anotar: pregunta a la derecha, respuesta
- * de Phill a la izquierda, la más nueva abajo.
+ * de Javier a la izquierda, la más nueva abajo.
  */
 public class JarvisWidgetLista extends RemoteViewsService {
     @Override

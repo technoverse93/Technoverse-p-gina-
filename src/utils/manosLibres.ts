@@ -1,17 +1,17 @@
 // =====================================================================
 // MANOS LIBRES — las reglas de la conversación continua
 // =====================================================================
-// · Cuándo lo que dijiste es una despedida («gracias, Phill», «eso es
-//   todo»): Phill contesta y sale del modo, sin que toqués nada.
-// · El saludo con que Phill abre la conversación (instantáneo, sin gastar
+// · Cuándo lo que dijiste es una despedida («gracias, Javier», «eso es
+//   todo»): Javier contesta y sale del modo, sin que toqués nada.
+// · El saludo con que Javier abre la conversación (instantáneo, sin gastar
 //   IA): hora del día, tu nombre y los avisos que tenés sin ver.
 // · Qué tan rápido da por terminado lo que decís (la pausa de silencio) y
-//   la frase corta con que Phill llena la espera si está consultando algo.
+//   la frase corta con que Javier llena la espera si está consultando algo.
 // Lógica pura: se prueba sin micrófono.
 // =====================================================================
 
 /** Una despedida COMPLETA y corta. «Gracias, ¿y las ventas?» no cuenta. */
-const DESPEDIDA = /^\W*(?:(?:ok|okay|listo|bueno|perfecto|muy bien|excelente|vale)\W+)?(?:(?:muchas |mil )?gracias|chao|chau|adi[oó]s|hasta luego|hasta ma[nñ]ana|eso es todo|es todo|nada m[aá]s|terminamos)(?:\W+(?:jarvis|phill?|fil|por hoy|por ahora|eso es todo|es todo|nos vemos|por favor))*\W*$/i;
+const DESPEDIDA = /^\W*(?:(?:ok|okay|listo|bueno|perfecto|muy bien|excelente|vale)\W+)?(?:(?:muchas |mil )?gracias|chao|chau|adi[oó]s|hasta luego|hasta ma[nñ]ana|eso es todo|es todo|nada m[aá]s|terminamos)(?:\W+(?:jarvis|javier|phill?|fil|por hoy|por ahora|eso es todo|es todo|nos vemos|por favor))*\W*$/i;
 
 export function esDespedida(dicho: string): boolean {
   const t = String(dicho || '').trim();
@@ -44,7 +44,7 @@ export function pausaElegida(): PausaVoz {
 }
 export function fijarPausa(p: PausaVoz): void { try { localStorage.setItem(CLAVE_PAUSA, p); } catch { /* sin almacenamiento */ } }
 
-/** Cuánto espera Phill, consultando, antes de decir algo corto para que no haya silencio muerto. */
+/** Cuánto espera Javier, consultando, antes de decir algo corto para que no haya silencio muerto. */
 export const ESPERA_RELLENO_MS = 2600;
 const RELLENOS = ['Un momento.', 'Lo reviso.', 'Ya lo miro.', 'Dame un segundo.'];
 let turnoRelleno = 0;
@@ -52,7 +52,7 @@ export function fraseRelleno(): string { return RELLENOS[turnoRelleno++ % RELLEN
 
 // ------------------------- interrumpir hablando encima -------------------------
 const CLAVE_INTERRUMPIR = 'tv_voz_interrumpir';
-/** ¿Se puede interrumpir a Phill hablándole encima? (activado por defecto; con auriculares va mejor) */
+/** ¿Se puede interrumpir a Javier hablándole encima? (activado por defecto; con auriculares va mejor) */
 export function interrumpirActivo(): boolean {
   try { return localStorage.getItem(CLAVE_INTERRUMPIR) !== 'no'; } catch { return true; }
 }
