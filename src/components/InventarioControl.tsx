@@ -91,6 +91,8 @@ interface InventarioControlProps {
   onDataChanged: () => void;
   defaultSubTab?: 'productos' | 'movimientos' | 'reportes' | 'repuestos' | 'insumos';
   onTabChange?: (tab: 'productos' | 'movimientos' | 'reportes' | 'repuestos' | 'insumos') => void;
+  /** Abre otro módulo del panel (para «Crear con Phill» en las publicaciones de Instagram). */
+  onAbrirModulo?: (modulo: string) => void;
 }
 
 
@@ -103,7 +105,7 @@ function usePagination(items, itemsPerPage = 10) {
   return { page, setPage, totalPages, startIndex, visibleItems, itemsPerPage };
 }
 
-function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'productos', onTabChange }: InventarioControlProps) {
+function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'productos', onTabChange, onAbrirModulo }: InventarioControlProps) {
   const toast = useToast();
   const [activeSubTab, setActiveSubTab] = useState<'productos' | 'movimientos' | 'reportes' | 'repuestos' | 'insumos'>(defaultSubTab);
 
@@ -1469,6 +1471,16 @@ if (!m) return null;
                       </button>
                     </div>
                   </div>
+
+                  {req.status === 'pendiente_imagen' && onAbrirModulo && ['superadmin', 'admin'].includes(currentUser?.role) && (
+                    <button
+                      type="button"
+                      onClick={() => { void import('../utils/pauta/pedido').then(m => m.abrirEstudio({ productoId: req.productId, requestId: req.id, formato: 'retrato' }, onAbrirModulo)); }}
+                      className="w-full px-3 py-2 rounded-lg text-[11px] font-bold bg-[var(--accent)] text-[var(--accent-ink)] hover:bg-[var(--accent-hover)] transition"
+                    >
+                      Crear la imagen con Phill
+                    </button>
+                  )}
 
                   {req.status === 'pendiente_imagen' && (
                     <div className="flex gap-2">

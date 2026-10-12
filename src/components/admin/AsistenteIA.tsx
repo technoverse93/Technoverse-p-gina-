@@ -24,9 +24,11 @@ const CerebroJarvis = React.lazy(() => import('./CerebroJarvis'));
 const AvisosJarvis = React.lazy(() => import('./AvisosJarvis'));
 const SaludJarvis = React.lazy(() => import('./SaludJarvis'));
 const HudVoz = React.lazy(() => import('./HudVoz'));
+const PiezaPauta = React.lazy(() => import('./PiezaPauta'));
 import { useAvisosSinLeer } from '../../mobile/avisosJarvis';
 import { BotonEscuchar, BarraLectura, AjusteVoz, useLector } from './LectorPiezas';
 import type { FaseManos } from './HudVoz';
+import type { PiezaChat } from './PiezaPauta';
 import { lector, modoLectura, paraHablar, puedeHablar } from '../../utils/lectorVoz';
 import { nivelVoz } from '../../utils/nivelVoz';
 import { esDespedida, saludoManos } from '../../utils/manosLibres';
@@ -56,7 +58,9 @@ interface Panel { columnas: string[]; filas: (string | number | null)[][]; punto
 interface Consulta {
   modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean; panel?: Panel;
   /** Phill: «accion» es una propuesta (tarjeta con confirmar); «navegar», un botón para abrir un módulo. */
-  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision'; id?: string; destino?: string; grafico?: Grafico;
+  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision' | 'pieza'; id?: string; destino?: string; grafico?: Grafico;
+  /** Una pieza de pauta armada por Phill (tarjeta con vista previa). */
+  pieza?: PiezaChat;
 }
 type Perfil = 'rapido' | 'equilibrado' | 'profundo';
 type Persona = 'jarvis' | 'arquitecto';
@@ -506,6 +510,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
   const graficos = lecturas.filter(c => c.grafico);
   const irs = (m.consultas || []).filter(c => c.tipo === 'navegar' && c.destino);
   const acciones = (m.consultas || []).filter(c => c.tipo === 'accion' && c.id);
+  const piezas = (m.consultas || []).filter(c => c.tipo === 'pieza' && c.pieza);
   const perfil = PERFILES.find(p => p.id === m.perfil);
   const esRequerimiento = m.persona === 'arquitecto' && /REQUERIMIENTO:/.test(m.texto);
   const jv = React.useContext(JarvisCtx);
@@ -518,6 +523,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
       {graficos.map((c, i) => <React.Fragment key={`g${i}`}><GraficoComparado g={c.grafico!} /></React.Fragment>)}
       {irs.map((c, i) => <React.Fragment key={`n${i}`}><IrModulo titulo={c.desc} destino={c.destino!} /></React.Fragment>)}
       {acciones.map(c => <React.Fragment key={c.id}><TarjetaAccion id={c.id!} /></React.Fragment>)}
+      {piezas.map((c, i) => <React.Fragment key={`p${i}`}><PiezaEnChat pieza={c.pieza!} /></React.Fragment>)}
       {memorias.map((c, i) => <React.Fragment key={`m${i}`}><ChipMemoria id={c.id} texto={c.desc} estado={c.filas} detalle={c.detalle} /></React.Fragment>)}
       {cerebros.map((c, i) => <React.Fragment key={`c${i}`}><ChipCerebro texto={c.desc} aprendido={c.filas === 'aprendido'} /></React.Fragment>)}
       {esRequerimiento && !enVivo && (
@@ -582,6 +588,12 @@ function ChipCerebro({ texto, aprendido }: { texto: string; aprendido: boolean }
     </div>
   );
 }
+/** La pieza de pauta que armó Phill (carga perezosa: el dibujo solo se baja si hace falta). */
+function PiezaEnChat({ pieza }: { pieza: PiezaChat }) {
+  const abrir = React.useContext(AbrirModuloCtx);
+  return <React.Suspense fallback={<div className="ai-esqueleto" aria-label="Preparando la pieza"><i /><i /></div>}><PiezaPauta pieza={pieza} onAbrir={abrir} /></React.Suspense>;
+}
+
 function IrModulo({ titulo, destino }: { titulo: string; destino: string }) {
   const abrir = React.useContext(AbrirModuloCtx);
   return <TarjetaIr titulo={titulo} destino={destino} onAbrir={abrir} />;
@@ -1002,7 +1014,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             tarjetasVivas.set(d.id, { id: d.id, estado: d.estado, vence_en: d.venceEn, tarjeta: d.tarjeta });
             borrador.consultas = [...(borrador.consultas || []), { tipo: 'accion', id: d.id, modulo: d.tarjeta?.modulo || 'Phill', desc: d.tarjeta?.titulo || 'Acción', filas: 'propuesta', detalle: '' }];
           }
-          else if (evento === 'navegar' || evento === 'memoria') borrador.consultas = [...(borrador.consultas || []), d];
+          else if (evento === 'navegar' || evento === 'memoria' || evento === 'pieza') borrador.consultas = [...(borrador.consultas || []), d];
           else if (evento === 'cerebro') borrador.consultas = [...(borrador.consultas || []).filter(c => !(c.tipo === 'cerebro' && c.filas === d.filas)), d];
           else return;
           pedirPintar();
