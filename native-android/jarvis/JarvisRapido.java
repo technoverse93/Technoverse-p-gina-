@@ -91,6 +91,9 @@ public class JarvisRapido extends BridgeActivity {
         // Antes de super.onCreate(): ahí el puente arma su lista de plugins y
         // lee la configuración (con la página de inicio de la ventanita).
         registerPlugin(JarvisWidgetPlugin.class);
+        // El teléfono de Phill (abrir apps, llamar, WhatsApp, alarmas…): sin esto, fuera de la app
+        // Phill decía que lo hacía pero no pasaba nada (este puente no lo tenía registrado).
+        registerPlugin(TelefonoNativoPlugin.class);
         config = configConPagina();
         modo = modoDe(getIntent());
         comoAsistente = getIntent() != null && getIntent().getBooleanExtra(EXTRA_ASISTENTE, false);

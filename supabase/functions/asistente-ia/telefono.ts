@@ -147,7 +147,9 @@ export function prepararTelefono(args: Record<string, unknown>, id: string): Res
       const { contacto, num } = quien();
       if (!contacto && !num) return { ok: false, error: 'Falta a quién escribirle: el nombre del contacto o el número que dictó.' };
       const mensaje = texto(args?.mensaje, 1000);
-      return pedido(`WhatsApp a ${contacto || 'el número que dictaste'}`, { contacto, numero: num, mensaje });
+      // «WhatsApp Business» (o «el del negocio») se abre en esa app, no en el WhatsApp normal.
+      const negocio = /business|negocio|empresa/i.test(texto(args?.app, 40));
+      return pedido(`WhatsApp${negocio ? ' Business' : ''} a ${contacto || 'el número que dictaste'}`, { contacto, numero: num, mensaje, ...(negocio ? { negocio: true } : {}) });
     }
     case 'sms': {
       const { contacto, num } = quien();

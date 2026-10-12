@@ -19,7 +19,8 @@ export interface PluginTelefono {
   /** Busca contactos por nombre. Los números NUNCA salen de este aparato. */
   contactos(o: { nombre: string }): Promise<Resp & { permiso?: 'concedido' | 'denegado'; contactos?: { nombre: string; numeros: string[] }[] }>;
   marcar(o: { numero: string }): Promise<Resp>;
-  whatsapp(o: { numero: string; mensaje?: string }): Promise<Resp>;
+  /** `negocio`: abrir en WhatsApp Business (si está instalado). */
+  whatsapp(o: { numero: string; mensaje?: string; negocio?: boolean }): Promise<Resp>;
   sms(o: { numero: string; mensaje?: string }): Promise<Resp>;
   calendario(o: { titulo: string; inicioMs: number; finMs: number; todoElDia?: boolean; lugar?: string; descripcion?: string }): Promise<Resp>;
   mapa(o: { consulta: string; navegar?: boolean }): Promise<Resp>;
