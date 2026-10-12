@@ -9,7 +9,7 @@
 // =====================================================================
 
 import { useEffect, useRef } from 'react';
-import { X } from 'lucide-react';
+import { Camera, X } from 'lucide-react';
 import { Orbe } from './JarvisVisual';
 import { nivelVoz } from '../../utils/nivelVoz';
 
@@ -30,8 +30,10 @@ const AYUDA: Record<FaseManos, string> = {
   espera: '',
 };
 
-export default function HudVoz({ fase, vos, jarvis, onToque, onTerminar, interrumpe = false }: {
+export default function HudVoz({ fase, vos, jarvis, onToque, onTerminar, onCamara, interrumpe = false }: {
   fase: FaseManos; vos: string; jarvis: string; onToque: () => void; onTerminar: () => void;
+  /** «Mirá esto»: abre la cámara para mostrarle algo a Phill. */
+  onCamara?: () => void;
   /** Se puede interrumpir a Phill hablándole encima (el oído está vigilando). */
   interrumpe?: boolean;
 }) {
@@ -62,6 +64,7 @@ export default function HudVoz({ fase, vos, jarvis, onToque, onTerminar, interru
   return (
     <div className="jv-hud" data-fase={fase} role="dialog" aria-label="Conversación con Phill, manos libres">
       <button type="button" className="jv-hud-x ai-chip" onClick={onTerminar} aria-label="Terminar la conversación"><X className="w-4 h-4" />Terminar</button>
+      {onCamara && <button type="button" className="jv-hud-cam ai-chip" onClick={onCamara} aria-label="Mirá esto: mostrarle algo a Phill con la cámara"><Camera className="w-4 h-4" />Mirá esto</button>}
       <button type="button" ref={orbe} className="jv-hud-orbe" onClick={onToque} aria-label={AYUDA[fase] || ETIQUETA[fase]}>
         <span className="jv-hud-aro" aria-hidden="true" />
         <span className="jv-hud-aro dos" aria-hidden="true" />

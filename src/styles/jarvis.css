@@ -325,6 +325,34 @@ span.jv-tit:hover { background: transparent; }
 .ai-root[data-jarvis] .jv-pieza-error { margin: 0; font: 400 12px var(--jv-f-ui); color: #E5484D; }
 .ai-root[data-jarvis] .jv-pieza-botones { display: flex; flex-wrap: wrap; gap: 6px; }
 
+/* ---------- Lo que Phill hace en el teléfono ---------- */
+.ai-root[data-jarvis] .jv-tel { display: flex; flex-direction: column; gap: 6px; margin-top: 8px; padding: 10px 12px; background: var(--jv-sup); border: 1px solid var(--jv-linea); border-radius: 14px; min-width: 0; }
+.ai-root[data-jarvis] .jv-tel > header { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.ai-root[data-jarvis] .jv-tel > header b { flex: 1 1 auto; min-width: 0; font: 600 13px var(--jv-f-ui); color: var(--jv-tinta); overflow-wrap: anywhere; }
+.ai-root[data-jarvis] .jv-tel-ic { display: inline-grid; place-items: center; flex: none; width: 28px; height: 28px; border-radius: 9px; background: var(--jv-hundido); color: var(--jv-oro); }
+.ai-root[data-jarvis] .jv-tel-est { display: inline-flex; align-items: center; gap: 4px; flex: none; font: 500 11px var(--jv-f-ui); color: var(--jv-tenue); }
+.ai-root[data-jarvis] .jv-tel[data-estado="hecho"] .jv-tel-est { color: var(--jv-acento); }
+.ai-root[data-jarvis] .jv-tel[data-estado="error"] .jv-tel-est, .ai-root[data-jarvis] .jv-tel[data-estado="sin_contacto"] .jv-tel-est, .ai-root[data-jarvis] .jv-tel[data-estado="solo_app"] .jv-tel-est { color: #E5484D; }
+.ai-root[data-jarvis] .jv-tel-msj { margin: 0; font: 400 12.5px/1.45 var(--jv-f-ui); color: var(--jv-tinta2); overflow-wrap: anywhere; }
+.ai-root[data-jarvis] .jv-tel-botones { display: flex; flex-wrap: wrap; gap: 6px; }
+.ai-root[data-jarvis] .jv-tel-botones:empty { display: none; }
+.ai-root[data-jarvis] .jv-tel-botones .ai-chip small { margin-left: 6px; font: 400 11px var(--jv-f-dato); color: var(--jv-tenue); }
+
+/* ---------- «Mirá esto»: la cámara de Phill ---------- */
+.jv-cam { position: fixed; inset: 0; z-index: 2147483000; display: flex; flex-direction: column; justify-content: space-between; background: #05080d; color: #fff; padding: env(safe-area-inset-top, 0px) 0 env(safe-area-inset-bottom, 0px); }
+.jv-cam-video { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; background: #05080d; }
+.jv-cam-barra { position: relative; display: flex; align-items: center; justify-content: space-between; gap: 10px; padding: 12px 16px; background: linear-gradient(#05080dcc, transparent); }
+.jv-cam-motivo { flex: 1; min-width: 0; text-align: center; font: 500 13px system-ui, sans-serif; opacity: .9; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.jv-cam-btn { display: inline-grid; place-items: center; width: 42px; height: 42px; border-radius: 50%; border: 1px solid #ffffff44; background: #0b1220aa; color: #fff; backdrop-filter: blur(6px); }
+.jv-cam-cuenta { position: absolute; inset: 0; display: grid; place-items: center; font: 700 120px/1 system-ui, sans-serif; text-shadow: 0 4px 30px #000a; pointer-events: none; }
+.jv-cam-pie { position: relative; display: flex; flex-direction: column; align-items: center; gap: 10px; padding: 14px 16px 22px; background: linear-gradient(transparent, #05080dcc); }
+.jv-cam-pie small { font: 500 13px system-ui, sans-serif; opacity: .9; text-shadow: 0 1px 8px #000a; }
+.jv-cam-obt { display: inline-grid; place-items: center; width: 68px; height: 68px; border-radius: 50%; border: 4px solid #fff; background: #ffffff33; color: #fff; }
+.jv-cam-obt:disabled { opacity: .4; }
+.jv-cam-error { position: relative; margin: auto 24px; padding: 16px; display: flex; flex-direction: column; gap: 12px; align-items: center; text-align: center; background: #0b1220ee; border: 1px solid #ffffff33; border-radius: 14px; font: 400 14px/1.45 system-ui, sans-serif; }
+.jv-cam-error p { margin: 0; }
+.ai-root[data-jarvis] .jv-hud-cam { position: absolute; top: max(14px, env(safe-area-inset-top, 0px)); left: 14px; }
+
 /* ---------- Cerebro a pantalla completa ---------- */
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ch { display: none; }
 .ai-root[data-jarvis][data-vista="cerebro"] .ai-ajustes { padding: 0; overflow: hidden; animation: none; }

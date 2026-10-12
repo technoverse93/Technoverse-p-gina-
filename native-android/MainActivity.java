@@ -20,6 +20,8 @@ public class MainActivity extends BridgeActivity {
         registerPlugin(JarvisWidgetPlugin.class);
         // Avisos push (Firebase) y respuesta desde la notificación (native-android/push/).
         registerPlugin(PushNativoPlugin.class);
+        // El teléfono de Phill: alarmas, llamadas, WhatsApp, calendario, mapas… (native-android/telefono/).
+        registerPlugin(TelefonoNativoPlugin.class);
         super.onCreate(savedInstanceState);
 
         // Tamaño de letra FIJO dentro de la app. Android aplica el «Tamaño de

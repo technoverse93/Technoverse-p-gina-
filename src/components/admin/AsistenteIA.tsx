@@ -16,7 +16,7 @@ import {
   Package, Receipt, Wrench, TriangleAlert, Ban, ChevronRight, ShieldAlert, Wallet, MapPin,
   Paperclip, Square, RotateCcw, Pencil, Link2, Code2, FileText,
   Mic, Zap, Scale, Brain, ChevronDown, Lightbulb, Check, Bot, ThumbsUp, ThumbsDown, MessageCircleQuestion, SlidersHorizontal, Search,
-  Download, Bell, AudioLines,
+  Download, Bell, AudioLines, Camera,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 const MapaModal = React.lazy(() => import('../ui/MapaModal'));
@@ -24,6 +24,7 @@ const CerebroJarvis = React.lazy(() => import('./CerebroJarvis'));
 const AvisosJarvis = React.lazy(() => import('./AvisosJarvis'));
 const SaludJarvis = React.lazy(() => import('./SaludJarvis'));
 const HudVoz = React.lazy(() => import('./HudVoz'));
+const CamaraPhill = React.lazy(() => import('./CamaraPhill'));
 const PiezaPauta = React.lazy(() => import('./PiezaPauta'));
 import { useAvisosSinLeer } from '../../mobile/avisosJarvis';
 import { BotonEscuchar, BarraLectura, AjusteVoz, useLector } from './LectorPiezas';
@@ -33,6 +34,9 @@ import { lector, modoLectura, paraHablar, puedeHablar } from '../../utils/lector
 import { nivelVoz } from '../../utils/nivelVoz';
 import { ESPERA_RELLENO_MS, esDespedida, fraseRelleno, interrumpirActivo, PAUSAS_MS, pausaElegida, saludoManos } from '../../utils/manosLibres';
 import { abrirOido, type Oido } from '../../utils/oidoVoz';
+import TarjetaTelefono from './TarjetaTelefono';
+import { correrTelefono, type PedidoTelefono } from '../../utils/telefono';
+import { enAppDelTelefono } from '../../mobile/telefonoNativo';
 const MiniWidgetAjustes = React.lazy(() => import('./MiniWidgetAjustes'));
 import { supabase, SUPABASE_URL, SUPABASE_KEY } from '../../supabaseClient';
 import { cabeceraClientInfo } from '../../utils/dispositivo';
@@ -50,6 +54,8 @@ import { Orbe, Pensando, IconoConstelacion, areaDe, saludo } from './JarvisVisua
 /** Abre un módulo del panel en su pestaña (lo da AdminPanel). */
 const AbrirModuloCtx = React.createContext<((m: string) => void) | undefined>(undefined);
 const VerCerebroCtx = React.createContext<(() => void) | undefined>(undefined);
+/** Ejecuta (o repite) un pedido de Phill al teléfono: lo da AsistenteIA, que tiene los datos privados. */
+const TelefonoCtx = React.createContext<((p: PedidoTelefono, o?: { elegido?: string; forzar?: boolean }) => void) | undefined>(undefined);
 /** Phill (superadmin) usa el diseño de constelaciones; el resto del personal, el de siempre. */
 const JarvisCtx = React.createContext(false);
 
@@ -59,9 +65,11 @@ interface Panel { columnas: string[]; filas: (string | number | null)[][]; punto
 interface Consulta {
   modulo: string; desc: string; filas: string; detalle: string; sinPermiso?: boolean; panel?: Panel;
   /** Phill: «accion» es una propuesta (tarjeta con confirmar); «navegar», un botón para abrir un módulo. */
-  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision' | 'pieza'; id?: string; destino?: string; grafico?: Grafico;
+  tipo?: 'accion' | 'navegar' | 'memoria' | 'cerebro' | 'revision' | 'pieza' | 'telefono'; id?: string; destino?: string; grafico?: Grafico;
   /** Una pieza de pauta armada por Phill (tarjeta con vista previa). */
   pieza?: PiezaChat;
+  /** Algo que Phill hace en el teléfono (alarma, llamada, mapa…). */
+  telefono?: PedidoTelefono;
 }
 type Perfil = 'rapido' | 'equilibrado' | 'profundo';
 type Persona = 'jarvis' | 'arquitecto';
@@ -512,6 +520,8 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
   const irs = (m.consultas || []).filter(c => c.tipo === 'navegar' && c.destino);
   const acciones = (m.consultas || []).filter(c => c.tipo === 'accion' && c.id);
   const piezas = (m.consultas || []).filter(c => c.tipo === 'pieza' && c.pieza);
+  const telefonos = (m.consultas || []).filter(c => c.tipo === 'telefono' && c.telefono);
+  const ejecutarTel = React.useContext(TelefonoCtx);
   const perfil = PERFILES.find(p => p.id === m.perfil);
   const esRequerimiento = m.persona === 'arquitecto' && /REQUERIMIENTO:/.test(m.texto);
   const jv = React.useContext(JarvisCtx);
@@ -525,6 +535,7 @@ const Burbuja = React.memo(function Burbuja({ m, onCopiar, onRegenerar, onEditar
       {irs.map((c, i) => <React.Fragment key={`n${i}`}><IrModulo titulo={c.desc} destino={c.destino!} /></React.Fragment>)}
       {acciones.map(c => <React.Fragment key={c.id}><TarjetaAccion id={c.id!} /></React.Fragment>)}
       {piezas.map((c, i) => <React.Fragment key={`p${i}`}><PiezaEnChat pieza={c.pieza!} /></React.Fragment>)}
+      {ejecutarTel && telefonos.map(c => <React.Fragment key={c.telefono!.id}><TarjetaTelefono pedido={c.telefono!} onEjecutar={ejecutarTel} /></React.Fragment>)}
       {memorias.map((c, i) => <React.Fragment key={`m${i}`}><ChipMemoria id={c.id} texto={c.desc} estado={c.filas} detalle={c.detalle} /></React.Fragment>)}
       {cerebros.map((c, i) => <React.Fragment key={`c${i}`}><ChipCerebro texto={c.desc} aprendido={c.filas === 'aprendido'} /></React.Fragment>)}
       {esRequerimiento && !enVivo && (
@@ -791,7 +802,9 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const oidoListo = useRef<Promise<Oido | null>>(Promise.resolve(null));
   const falsasSeguidas = useRef(0);       // pausas por «alguien habla» que no eran nadie
   const interrupcionOff = useRef(false);  // se apagó sola: el altavoz se escuchaba solo
-  const audioPendiente = useRef<(() => void) | null>(null); // lo que dijiste mientras Phill todavía terminaba de contestar
+  const audioPendiente = useRef<(() => void) | null>(null); // lo que dijiste (o la foto que sacaste) mientras Phill todavía terminaba de contestar
+  // «Mirá esto»: la cámara en vivo. `auto`: Phill la abrió por vos (cuenta 3, 2, 1 y manda la foto).
+  const [camara, setCamara] = useState<null | { auto: boolean; motivo: string }>(null);
   const { estado: estadoLector } = useLector();
   // Phill se enciende solo cuando el servidor ya lo tiene (la función
   // nueva informa las velocidades en el cupo); antes, todo queda como siempre.
@@ -810,6 +823,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     return () => { if (w.cancelIdleCallback) w.cancelIdleCallback(id); else clearTimeout(id); };
   }, [jarvis]);
   const privadosRef = useRef<Record<string, string>>({});
+  const ejecutarTelefonoPedido = useCallback((p: PedidoTelefono, o?: { elegido?: string; forzar?: boolean }) => { void correrTelefono(p, privadosRef.current, o); }, []);
   useEffect(() => { privadosRef.current = {}; }, [activa]);
   // La voz se calla si la app pasa a segundo plano o se cierra el asistente.
   useEffect(() => {
@@ -924,7 +938,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
 
   const nueva = () => { setActiva(null); setMensajes([]); setAviso(null); setCajon(null); setVista('chat'); setTimeout(() => cajaRef.current?.focus(), 50); };
 
-  const enviar = async (contenido?: string, opciones: { regenerar?: boolean; porVoz?: number; audio?: { datos: string; tipo: string } } = {}) => {
+  const enviar = async (contenido?: string, opciones: { regenerar?: boolean; porVoz?: number; audio?: { datos: string; tipo: string }; adjuntos?: Adjunto[] } = {}) => {
     const crudo = opciones.audio ? '' : (contenido ?? texto).trim();
     // Phill: los datos personales se quedan en este aparato (ver separarPrivados).
     const sep = jarvis ? separarPrivados(crudo, privadosRef.current) : { texto: crudo, privados: {} };
@@ -935,7 +949,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     lector.callar();
     // Editar el último mensaje = regenerar con el texto nuevo.
     const regenerar = opciones.regenerar || editando;
-    const mios = regenerar ? [] : adjuntos;
+    const mios = regenerar ? [] : (opciones.adjuntos || adjuntos);
     if (!opciones.audio) setTexto('');
     setAdjuntos([]);
     setEditando(false);
@@ -1008,7 +1022,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
         {
           accion: 'enviar', texto: opciones.audio ? '' : t, conversacionId: activa, idPregunta, idRespuesta, buscar: buscar && busquedaPermitida, regenerar, adjuntos: mios.map(a => ({ nombre: a.nombre, tipo: a.tipo, datos: a.datos })),
           // Phill: el aparato propio va para que nunca proponga bloquearse a sí mismo.
-          ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, hablado: hablarla || undefined, privados: sep.privados, ...(opciones.audio ? { audio: opciones.audio.datos, tipoAudio: opciones.audio.tipo } : {}), yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
+          ...(jarvis ? { persona, perfil, porVoz: opciones.porVoz || undefined, hablado: hablarla || undefined, nativa: enAppDelTelefono() || undefined, privados: sep.privados, ...(opciones.audio ? { audio: opciones.audio.datos, tipoAudio: opciones.audio.tipo } : {}), yo: { device: aparatoActual().huella, modelo: aparatoActual().modelo } } : {}),
         },
         (evento, d) => {
           if (evento === 'inicio') {
@@ -1030,6 +1044,12 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
             borrador.consultas = [...(borrador.consultas || []), { tipo: 'accion', id: d.id, modulo: d.tarjeta?.modulo || 'Phill', desc: d.tarjeta?.titulo || 'Acción', filas: 'propuesta', detalle: '' }];
           }
           else if (evento === 'navegar' || evento === 'memoria' || evento === 'pieza') borrador.consultas = [...(borrador.consultas || []), d];
+          else if (evento === 'camara') setCamara({ auto: true, motivo: String(d?.motivo || '') });
+          else if (evento === 'telefono') {
+            // Se hace en el acto en el teléfono; la tarjeta deja a la vista qué pasó.
+            if (d?.telefono?.id && !(borrador.consultas || []).some(c => c.telefono?.id === d.telefono.id)) borrador.consultas = [...(borrador.consultas || []), d];
+            void correrTelefono(d.telefono, privadosRef.current);
+          }
           else if (evento === 'cerebro') borrador.consultas = [...(borrador.consultas || []).filter(c => !(c.tipo === 'cerebro' && c.filas === d.filas)), d];
           else return;
           pedirPintar();
@@ -1193,6 +1213,29 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   }, [pedirVoz, conVoz]); // eslint-disable-line react-hooks/exhaustive-deps
   // Al salir del módulo, el micrófono se suelta.
   useEffect(() => () => { grabacion.current?.cancelar(); oido.current?.cerrar(); oido.current = null; }, []);
+
+  // ------------------------- «MIRÁ ESTO» -------------------------
+  const alFoto = async (f: File) => {
+    const modo = camara;
+    setCamara(null);
+    try {
+      const a = await prepararArchivo(f);
+      if (!a) { toast.error('No pude leer esa foto.'); return; }
+      if (modo?.auto) {
+        // Phill la pidió: se manda enseguida (apenas termine de contestar lo que estaba diciendo).
+        const mandar = () => { void enviarRef.current('Acá está lo que te quería mostrar.', { adjuntos: [a] }); };
+        if (enviandoRef.current) audioPendiente.current = mandar; else mandar();
+      } else {
+        setAdjuntos(prev => [...prev, a].slice(0, 3));
+        if (manosRef.current) {
+          // Phill habla: se corta la escucha en curso (si no, grabaría su propia voz) y, al terminar, vuelve a escuchar.
+          if (grabacion.current) { grabacion.current.cancelar(); grabacion.current = null; setVoz(null); }
+          void lector.hablar('Listo, ya la veo. ¿Qué querés saber de esto?', 'foto-lista');
+        }
+        else setTimeout(() => cajaRef.current?.focus(), 50);
+      }
+    } catch (e: any) { toast.error(e?.message || 'No se pudo usar la foto.'); }
+  };
 
   // ------------------------- MANOS LIBRES -------------------------
   // Escuchar → (pausa) → mandar → Phill contesta hablando → escuchar otra
@@ -1399,6 +1442,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
   const verCerebro = () => setVista('cerebro');
   return (
     <AbrirModuloCtx.Provider value={onAbrirModulo}>
+    <TelefonoCtx.Provider value={ejecutarTelefonoPedido}>
     <VerCerebroCtx.Provider value={jarvis ? verCerebro : undefined}>
     <JarvisCtx.Provider value={jarvis}>
     <div className="ai-root" id="view-asistente" data-jarvis={jarvis || undefined} data-vista={vista}>
@@ -1626,6 +1670,11 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
                       <span className="ai-pop-ic"><Paperclip className="w-4 h-4" /></span><span>Adjuntar foto o documento<small>{adjuntos.length >= 3 ? 'Ya hay 3 en este mensaje' : 'Fotos, PDF, txt, csv · hasta 3'}</small></span>
                     </button>
                   )}
+                  {archivosPermitidos && (
+                    <button type="button" className="ai-mas-op" role="menuitem" disabled={adjuntos.length >= 3} onClick={() => { setMenu(null); setCamara({ auto: false, motivo: '' }); }}>
+                      <span className="ai-pop-ic"><Camera className="w-4 h-4" /></span><span>Mirá esto (cámara)<small>Mostrale algo a Phill con la cámara</small></span>
+                    </button>
+                  )}
                   {busquedaPermitida && (
                     <button type="button" className="ai-mas-op" role="menuitemcheckbox" aria-checked={buscar} onClick={() => { setBuscar(v => !v); setMenu(null); }}>
                       <span className="ai-pop-ic"><Globe className="w-4 h-4" /></span><span>Buscar en internet<small>{buscar ? 'Activado para la próxima respuesta' : 'La próxima respuesta busca primero'}</small></span>
@@ -1668,9 +1717,14 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
           )}
         </div>
       )}
+      {camara && (
+        <React.Suspense fallback={null}>
+          <CamaraPhill auto={camara.auto} motivo={camara.motivo} onFoto={f => void alFoto(f)} onCerrar={() => setCamara(null)} />
+        </React.Suspense>
+      )}
       {manos && jarvis && (
         <React.Suspense fallback={null}>
-          <HudVoz fase={faseManos} interrumpe={interrumpirActivo() && !interrupcionOff.current}
+          <HudVoz fase={faseManos} interrumpe={interrumpirActivo() && !interrupcionOff.current} onCamara={() => setCamara({ auto: false, motivo: '' })}
             vos={[...mensajes].reverse().find(m => m.rol === 'user' && !m.pendiente)?.texto || ''}
             jarvis={paraHablar([...mensajes].reverse().find(m => m.rol === 'assistant')?.texto || '').slice(0, 420)}
             onToque={tocarOrbe} onTerminar={terminarManos} />
@@ -1679,6 +1733,7 @@ function AsistenteIA({ currentUser, onAbrirModulo, pedirVoz = 0, onRespuesta, co
     </div>
     </JarvisCtx.Provider>
     </VerCerebroCtx.Provider>
+    </TelefonoCtx.Provider>
     </AbrirModuloCtx.Provider>
   );
 }
