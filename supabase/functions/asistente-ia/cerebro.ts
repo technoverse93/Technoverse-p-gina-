@@ -72,7 +72,9 @@ export function ramaCanonica(propuesta: string, tema = '', resto = ''): (typeof 
 }
 /** Lo que NO es conocimiento: lo que alguien pidió, lo que no se sabe,
  *  reglas obvias o frases sobre Javier mismo. Antes se guardaba y era basura. */
-export const BASURA = /^(el|la|un|una)?\s*(due[ñn]o|usuario|cliente|jefe|superadmin)\s+(solicit|pidi|pregunt|quiere|quer[ií]a|consult|busc[oó]|necesit)|^(jarvis|phill?|el asistente|la ia|el sistema)\b|se debe (evitar|verificar|confirmar|consultar)|no se (dispone|tiene|encontr|cuenta)|no (est[aá]n?|se encuentran?|fue|fueron) (registrad|disponible|encontrad|especificad)|no hay (datos|informaci|registros)|sin (datos|informaci[oó]n) (disponible|registrad)|^(se )?(recomienda|sugiere) (verificar|consultar|revisar)|^(es importante|hay que tener en cuenta)|(pregunt[oó]|consult[oó]) por\b|no (est[aá] |se encuentra |aparece |figura )?disponible|no aparece|no se (pudo|logr[oó])|al momento de la consulta|^precio:? no/i;
+// Incluye lo que caduca en horas (visitas, sesiones, «ayer», «hoy»): guardado como dato servía de «verdad»
+// y Javier lo repetía en vez de consultar (pasó con «Sesiones en el periodo ayer: 5»).
+export const BASURA = /^(el|la|un|una)?\s*(due[ñn]o|usuario|cliente|jefe|superadmin)\s+(solicit|pidi|pregunt|quiere|quer[ií]a|consult|busc[oó]|necesit)|^(jarvis|phill?|el asistente|la ia|el sistema)\b|se debe (evitar|verificar|confirmar|consultar)|no se (dispone|tiene|encontr|cuenta)|no (est[aá]n?|se encuentran?|fue|fueron) (registrad|disponible|encontrad|especificad)|no hay (datos|informaci|registros)|sin (datos|informaci[oó]n) (disponible|registrad)|^(se )?(recomienda|sugiere) (verificar|consultar|revisar)|^(es importante|hay que tener en cuenta)|(pregunt[oó]|consult[oó]) por\b|no (est[aá] |se encuentra |aparece |figura )?disponible|no aparece|no se (pudo|logr[oó])|al momento de la consulta|^precio:? no|\b(ayer|hoy|anoche|antier)\b|sesiones? (activas?|abiertas?|en el periodo)|visitas? (totales|activas|acumuladas)|visitantes? activos?|se excluy[oó]|en las [uú]ltimas? \d+ (horas?|minutos?)|p[aá]ginas m[aá]s visitadas|ingresos? (exitosos|fallidos)|quedan? \d+ horas?/i;
 /** Sitios cuyos resultados no aportan conocimiento (perfiles, redes). */
 export const SITIO_BASURA = /rocketreach|instagram|facebook|linkedin|pinterest|tiktok|zoominfo|scribd|quora/i;
 
@@ -772,7 +774,7 @@ export function crearCerebro(admin: Db, uid: string) {
         const mover: { tema: string; desde: string | null; hacia: (typeof RAMAS)[number] }[] = [];
         const CANON = new Set(RAMAS.map(r => `dom:rama:${r.clave}`));
         // 1) Datos que no son conocimiento.
-        for (const n of nodos) if (n.tipo === 'dato' && (BASURA.test(n.etiqueta) || BASURA.test(n.resumen || ''))) borrar.set(n.id, 'no es un dato útil');
+        for (const n of nodos) if (n.tipo === 'dato' && !String(n.clave).startsWith('sis:') && (BASURA.test(n.etiqueta) || BASURA.test(n.resumen || ''))) borrar.set(n.id, 'no es un dato útil');
         // 2) Datos repetidos (mismo texto): queda el más usado.
         const vistos = new Map<string, any>();
         for (const n of nodos.filter(x => x.tipo === 'dato' && !borrar.has(x.id)).sort((x, y) => (y.usos || 0) - (x.usos || 0))) {
@@ -895,7 +897,7 @@ export function crearCerebro(admin: Db, uid: string) {
       const vecinos: Nodo[] = [];
       for (const e of (enl || []) as any[]) {
         const otro = porId.get(ids.includes(e.origen) ? e.destino : e.origen);
-        if (otro && otro.resumen && !ids.includes(otro.id) && !vecinos.includes(otro) && !(esOrden && otro.fuente === 'internet')) vecinos.push(otro);
+        if (otro && otro.resumen && sirve(otro) && !ids.includes(otro.id) && !vecinos.includes(otro) && !(esOrden && otro.fuente === 'internet')) vecinos.push(otro);
       }
       const linea = (n: Nodo) => `- ${nombreHumano(n.etiqueta, n.tipo, n.url)}${n.fuente ? ` [${n.fuente}]` : ''}: ${n.fuente === 'internet' ? limpiarExtracto(n.resumen || '', 500) : recortar(n.resumen || '', 500)}${n.url ? ` (enlace: ${n.url})` : ''}`;
       // Primero los puntos que cuelgan de lo encontrado (lo aprendido en

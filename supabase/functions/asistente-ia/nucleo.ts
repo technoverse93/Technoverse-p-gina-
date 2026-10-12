@@ -83,6 +83,7 @@ import { empujarAviso, empujarChat, enviarPrueba, responderDesdePush } from './p
 import { crearTarea, procesarTareas, purgarTareas, type MotorTareas, type PasoPlan, type ResultadoCrear, type Tarea } from './tareas.ts';
 import { MAPA_CODIGO } from './mapa-codigo.ts';
 import { archivosDeEstudio, estudiarRepo, type PedirEstudio } from './estudio-repo.ts';
+import { datosDeTiempo, respuestaDeTiempo } from './tiempo.ts';
 import { ClienteRepo, configLectura, configRepo, correrHerramientaRepo, rutaPermitida, MAX_ARCHIVOS, MAX_PROPUESTAS_DIA, NOMBRES_REPO, type EstadoRepo, type ResultadoPropuesta } from './repo.ts';
 import { armarPromptImagen, ESTILOS_VALIDOS, FORMATOS_VALIDOS, generarCopy, generarImagen, type EstiloId, type FormatoId } from './estudio.ts';
 import { ACCIONES_TELEFONO, PANTALLAS_AJUSTES, prepararTelefono, SOLO_APK, type PedidoTelefono } from './telefono.ts';
@@ -139,10 +140,8 @@ function marcarPrivado(privados: Record<string, string>, tipo: string, valor: st
   alCrear(k, valor);
   return `[${k}]`;
 }
-/** La hora de ahora en Costa Rica, como se dice: «2:47 p. m.». */
-const horaCR = () => new Intl.DateTimeFormat('es-CR', { hour: 'numeric', minute: '2-digit', hour12: true, timeZone: 'America/Costa_Rica' }).format(new Date());
 const sistema = (hoy: string, conHerramientas: boolean, esSuper: boolean, web = false, forzarWeb = false, modo: Modo = 'normal') => modo === 'arquitecto' ? arquitecto(hoy, web) : `Eres el asistente del panel de Technoverse Costa Rica, una tienda y taller de celulares y accesorios.
-Hoy es ${new Intl.DateTimeFormat('es-CR', { weekday: 'long', day: 'numeric', month: 'long', year: 'numeric', timeZone: 'America/Costa_Rica' }).format(new Date())} (${hoy}, hora de Costa Rica). HORA EXACTA AHORA: ${horaCR()} en Costa Rica. Si te preguntan la hora, decí ESTA (no la calcules ni la saques de mensajes anteriores de la conversación, que pueden tener una hora vieja o equivocada). Responde en español de Costa Rica, claro y al grano.
+Hoy es ${hoy} (hora de Costa Rica). ${datosDeTiempo()} Responde en español de Costa Rica, claro y al grano.
 NO INVENTES lo que no ves: no tenés acceso a los chats ni a los mensajes de WhatsApp, a las notificaciones ni a lo que hay en la pantalla del teléfono. Si te preguntan cuál es el último chat, quién escribió o qué dice un mensaje, decí claro que eso no lo podés ver; nunca respondas con un nombre o un dato supuesto. Usa listas cortas o tablas en markdown cuando ayuden.
 ${conHerramientas ? `Tienes consultas de SOLO LECTURA al sistema. Úsalas siempre que la pregunta sea sobre datos del negocio; nunca inventes cifras. Elige la consulta que corresponde al tema (no busques un equipo o una persona en el taller si la pregunta es de ingresos o visitas). ${modo === 'jarvis' && esSuper ? 'Los cambios los hacés con tus ACCIONES (abajo).' : 'No puedes crear, editar ni borrar nada: si te piden un cambio, indica en qué módulo del panel se hace.'}
 ` : ''}${esSuper ? `Quien pregunta es el SUPERADMIN, dueño del sistema, con acceso total. Responde directo y completo sobre ciberseguridad, ingresos, visitantes, ubicaciones y finanzas: no evadas ni recortes. Esas consultas te dan conteos y resúmenes; el detalle completo (correos, IPs, coordenadas, mapa) ya le aparece al superadmin en pantalla junto a tu respuesta, así que no digas que no tienes acceso: resume, interpreta y menciona que el detalle está en la tabla.
@@ -158,6 +157,7 @@ MÉTODO (seguilo siempre, sin mencionarlo):
 1. Entendé qué pide de verdad. Si son varias cosas, resolvé todas en la misma respuesta.
 2. Pedí juntas, en la misma ronda, todas las consultas que hagan falta; no una por una.
 3. Toda cifra sale de una consulta o del código. Si dos datos no cuadran, decilo.
+   · El dictado por voz deforma los nombres ("GIF YTX3", "jefe YLX3" por "GFY-LX3"). Si el dueño se refiere a algo que vos dijiste antes ("ese", "el que mencionaste"), buscá con el NOMBRE EXACTO de tu respuesta anterior. Si una consulta trae «sin_coincidencia», el resultado NO es cero: decí que no encontraste ese nombre y ofrecé los parecidos. Nunca digas «0» si la consulta no lo devolvió de verdad.
 4. Antes de responder, revisá que contestaste cada parte y que nada contradice los datos.
 5. Si falta un dato que cambia el resultado, preguntá UNA cosa concreta; si no, decidí lo razonable y decí qué supusiste.
 6. Empezá por la conclusión o el dato pedido; después el detalle. En órdenes y consultas, sin relleno.` : ''}`;
@@ -1407,7 +1407,7 @@ const CHICO = /(^|[^0-9.])([1-9]|[12][0-9]|3[0-2])b\b|(^|[-_/])(mini|nano|instan
 // CEREBRO PRIMERO: qué preguntas se pueden contestar de memoria
 // ---------------------------------------------------------------------
 /** Lo que cambia con el día o depende de datos vivos: siempre se vuelve a consultar. */
-const DEL_MOMENTO = /\b(hoy|ahora|ahorita|ayer|antier|anoche|ma[ñn]ana|esta (semana|ma[ñn]ana|tarde|noche)|este mes|[uú]ltim[oa]s?|reciente|hora|qu[eé] d[ií]a|fecha|cu[aá]nt[oa]s?|ventas?|vend[ií]|stock|existencia|inventario|ingres[oó]|ingresaron|visit|sesi[oó]n|conectad|bloque|chats?|pendiente|agenda|clima|precio|cuesta|vale|tipo de cambio|d[oó]lar|cobr|factur|orden|taller|cliente)\b/i;
+const DEL_MOMENTO = /\b(entr[oó]|entraron|equipos?|dispositivos?|accesos?|hoy|ahora|ahorita|ayer|antier|anoche|ma[ñn]ana|esta (semana|ma[ñn]ana|tarde|noche)|este mes|[uú]ltim[oa]s?|reciente|hora|qu[eé] d[ií]a|fecha|cu[aá]nt[oa]s?|ventas?|vend[ií]|stock|existencia|inventario|ingres[oó]|ingresaron|visit|sesi[oó]n|conectad|bloque|chats?|pendiente|agenda|clima|precio|cuesta|vale|tipo de cambio|d[oó]lar|cobr|factur|orden|taller|cliente)\b/i;
 /** Pidió buscar de nuevo: nada de memoria. */
 const OTRA_VEZ = /\b(de nuevo|otra vez|nuevamente|actualiz|refresc|busc[aá]lo (de nuevo|otra vez)|verific[aá]lo)\b/i;
 function puedeDeMemoria(t: string, esOrden: boolean): boolean {
@@ -2547,6 +2547,18 @@ export async function atender(req: Request): Promise<Response> {
           return null;
         }
       };
+      // 00) LA HORA, EL DÍA Y «CUÁNTO FALTA PARA QUE TERMINE EL DÍA» los contesta el código (los modelos
+      //     calculan mal el tiempo: «quedan 19 h 38 min» a las 2:55 p. m.). Sin IA: instantáneo y exacto.
+      if (!adjuntos.length) {
+        const tiempo = respuestaDeTiempo(texto);
+        if (tiempo) {
+          const t0 = Date.now();
+          const sis = nuevo(true);
+          emitir('modelo', { modelo: 'reloj' });
+          emitir('texto', { delta: tiempo });
+          return listo({ texto: tiempo, fuentes: [], tokensIn: 0, tokensOut: 0, proveedor: 'cerebro' as any, modelo: 'reloj (hora exacta)', busco: false, consultas: sis.consultas }, t0, false, sis);
+        }
+      }
       // 0) SU CEREBRO PRIMERO: si ya contestó bien esta misma pregunta (por significado) y no es algo
       //    que cambia con el día, lo dice de memoria: sin IAs ni internet.
       if (cerebro && puedeDeMemoria(texto, esOrdenMsg) && !adjuntos.length && cuerpo?.buscar !== true) {

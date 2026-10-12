@@ -112,6 +112,48 @@ const texto = (v: unknown) => String(v ?? '').trim().slice(0, 60);
 /** Para filtros `ilike`: sin comas, paréntesis ni comodines que rompan el filtro. */
 const patron = (v: unknown) => texto(v).replace(/[,()%*_\\]/g, ' ').trim();
 
+const plano = (t: unknown) => String(t ?? '').toLowerCase().normalize('NFD').replace(/\p{M}+/gu, '').replace(/[^a-z0-9]+/g, '');
+function distancia(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, (_, i) => [i, ...Array(b.length).fill(0)] as number[]);
+  for (let j = 1; j <= b.length; j++) d[0][j] = j;
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = Math.min(d[i - 1][j] + 1, d[i][j - 1] + 1, d[i - 1][j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
+  return d[a.length][b.length];
+}
+function subsecuencia(a: string, b: string): number {
+  const d = Array.from({ length: a.length + 1 }, () => Array(b.length + 1).fill(0) as number[]);
+  for (let i = 1; i <= a.length; i++) for (let j = 1; j <= b.length; j++) d[i][j] = a[i - 1] === b[j - 1] ? d[i - 1][j - 1] + 1 : Math.max(d[i - 1][j], d[i][j - 1]);
+  return d[a.length][b.length];
+}
+/**
+ * Nombres que se parecen a lo buscado. El dictado por voz deforma los modelos («GIF YTX3», «jefe YLX3»
+ * por «GFY-LX3») y entonces la búsqueda exacta da 0 y la IA contestaba «0 entradas», que es FALSO:
+ * lo que pasó es que ese nombre no existe. Con esto se le da a la IA los nombres parecidos.
+ */
+export function parecidos(buscar: string, candidatos: unknown[], max = 3): string[] {
+  const q = plano(buscar);
+  if (q.length < 3) return [];
+  const puntos = new Map<string, number>();
+  for (const c of candidatos) {
+    const nombre = String(c ?? '').trim();
+    const p = plano(nombre);
+    if (!p || nombre === '—') continue;
+    const largo = Math.max(q.length, p.length);
+    const puntaje = Math.max(1 - distancia(q, p) / largo, 0.95 * (subsecuencia(q, p) / largo), p.includes(q) || q.includes(p) ? 0.9 : 0);
+    if (puntaje >= 0.47 && puntaje > (puntos.get(nombre) || 0)) puntos.set(nombre, puntaje);
+  }
+  return [...puntos.entries()].sort((a, b) => b[1] - a[1]).slice(0, max).map(x => x[0]);
+}
+/** Lo que se le dice a la IA cuando buscó un nombre y no hay ninguno igual. */
+function sinCoincidencia(buscar: string, candidatos: unknown[]) {
+  const unicos = [...new Set(candidatos.map(c => String(c ?? '').trim()).filter(c => c && c !== '—'))];
+  return {
+    buscado: buscar,
+    parecidos: parecidos(buscar, unicos),
+    otros_nombres_en_el_periodo: unicos.slice(0, 15),
+    aviso: 'NO hay nada con ese nombre exacto en este periodo. Eso NO significa «0 visitas» ni «0 entradas»: puede estar mal dictado o ser de otro día. Decí que no encontraste «' + buscar + '» y ofrecé los parecidos (si hay) o los otros nombres; no inventes cifras.',
+  };
+}
+
 /** Tacha correos, teléfonos y números de identificación de un texto libre. */
 export function limpiar(t: unknown, max = 140): string {
   return String(t ?? '')
@@ -532,9 +574,12 @@ export const HERRAMIENTAS: Herramienta[] = [
         return ![f.email, f.user_agent, f.device_id, f.ip, equipoDeAgente(f.user_agent)].some(v => String(v || '').toLowerCase().includes(excepto));
       });
       if (a.solo_fallidos) filas = filas.filter(f => !f.exito || f.bloqueado);
+      const todasLasFilas = filas;
       if (buscar) filas = filas.filter(f => [f.email, f.ciudad, f.pais, f.user_agent, f.device_id, f.ip].some(v => String(v || '').toLowerCase().includes(buscar)));
+      const sinNombre = buscar && !filas.length ? sinCoincidencia(buscar, todasLasFilas.flatMap(f => [equipoDeAgente(f.user_agent), f.ciudad])) : null;
       const correctos = filas.filter(f => f.exito && !f.bloqueado).length;
       const datos = {
+        ...(sinNombre ? { sin_coincidencia: sinNombre } : {}),
         dias, total: filas.length, correctos, fallidos: filas.filter(f => !f.exito).length, bloqueados: filas.filter(f => f.bloqueado).length,
         ultimo_hora_cr: fechaCorta(filas[0]?.ocurrido_en || null),
         cuentas_distintas: new Set(filas.map(f => f.email)).size, equipos_nuevos: filas.filter(f => f.dispositivo_conocido === false).length,
@@ -597,31 +642,34 @@ export const HERRAMIENTAS: Herramienta[] = [
       };
       const h = huellas.filter(f => coincide(f.dispositivo, f.sistema, f.navegador, f.tipo, f.ultima_ruta) && !fuera(f.dispositivo, f.email));
       const s2 = sesiones.filter(f => coincide(f.modelo, f.tipo, f.entorno, f.ruta) && !fuera(f.modelo));
+      // Buscó un nombre y no hay ninguno igual: se le dan los parecidos (no un «0» falso).
+      const sinNombre = buscar && !h.length && !s2.length ? sinCoincidencia(buscar, [...huellas.map(f => f.dispositivo), ...sesiones.map(f => f.modelo)]) : null;
       const datos = {
         dias, buscar: buscar || null,
-        equipos: h.length, visitas_acumuladas: h.reduce((t, f) => t + Number(f.visitas || 0), 0), sesiones_en_el_periodo: s2.length,
+        ...(sinNombre ? { sin_coincidencia: sinNombre } : {}),
+        equipos: h.length, visitas_de_toda_la_vida_de_esos_equipos: h.reduce((t, f) => t + Number(f.visitas || 0), 0), sesiones_en_el_periodo: s2.length,
         ultima_vez_hora_cr: fechaCorta(s2[0]?.last_seen || h[0]?.ultima_visita || null),
         por_equipo: contar([...h.map(f => f.dispositivo), ...s2.map(f => f.modelo)], x => x),
         por_sistema: contar(h, f => f.sistema), paginas: contar(s2, f => f.ruta),
         periodo: r.etiqueta,
         detalle: h.slice(0, 40).map(f => ({
           ultima_vez_cr: fechaCorta(f.ultima_visita), primera_vez_cr: fechaCorta(f.primera_visita), equipo: f.dispositivo || '—',
-          sistema: [f.sistema, f.navegador].filter(Boolean).join(' · ') || '—', visitas: Number(f.visitas || 0), pagina: f.ultima_ruta || '—',
+          sistema: [f.sistema, f.navegador].filter(Boolean).join(' · ') || '—', visitas_de_toda_su_vida: Number(f.visitas || 0), pagina: f.ultima_ruta || '—',
           ip: ipDe(ctx, f.ip), cuenta: f.email ? quien(ctx, f.email) : 'sin cuenta (visitante)', es_tu_equipo: esMio(ctx, f.dispositivo),
         })),
-        nota: REGLA_DETALLE,
+        nota: `${REGLA_DETALLE} OJO: «visitas_de_toda_su_vida» es el total acumulado del equipo desde que existe, NO lo que hizo en el día pedido. Lo del día es «sesiones_en_el_periodo» y «ultima_vez_cr». Nunca digas que un equipo tuvo N visitas «ayer» usando el total de toda su vida.`,
       };
       const filasP = [
         ...s2.map(f => ({ t: f.last_seen, fila: [fechaCorta(f.last_seen), f.modelo || '—', 'Sesión', f.entorno, f.ruta || '—', '—', '—'], p: coord(f.lat, f.lon, `${f.modelo} · ${fechaCorta(f.last_seen)}`) })),
-        ...h.map(f => ({ t: f.ultima_visita, fila: [fechaCorta(f.ultima_visita), f.dispositivo || '—', `${f.visitas} visitas`, [f.sistema, f.navegador].filter(Boolean).join(' · '), f.ultima_ruta || '—', f.ip || '—', f.email || '—'], p: null })),
+        ...h.map(f => ({ t: f.ultima_visita, fila: [fechaCorta(f.ultima_visita), f.dispositivo || '—', `${f.visitas} en total`, [f.sistema, f.navegador].filter(Boolean).join(' · '), f.ultima_ruta || '—', f.ip || '—', f.email || '—'], p: null })),
       ].sort((x, y) => String(y.t).localeCompare(String(x.t))).slice(0, MAX_PANEL);
       return {
         datos,
         consulta: {
           modulo: 'Ciberseguridad', desc: `visitantes · ${r.etiqueta}${buscar ? ` · «${buscar}»` : ''}${excepto ? ` · sin «${excepto}»` : ''}`,
           filas: `${s2.length} sesión${s2.length === 1 ? '' : 'es'} · ${h.length} equipo${h.length === 1 ? '' : 's'}`,
-          detalle: `visitas acumuladas ${datos.visitas_acumuladas} · última vez ${datos.ultima_vez_hora_cr}`,
-          panel: { columnas: ['Fecha', 'Equipo', 'Visitas', 'Sistema / entorno', 'Página', 'IP', 'Correo'], filas: filasP.map(x => x.fila), puntos: filasP.map(x => x.p) },
+          detalle: sinNombre ? `sin equipo llamado «${buscar}»${sinNombre.parecidos.length ? ` · parecidos: ${sinNombre.parecidos.join(', ')}` : ''}` : `visitas en total de esos equipos ${datos.visitas_de_toda_la_vida_de_esos_equipos} · última vez ${datos.ultima_vez_hora_cr}`,
+          panel: { columnas: ['Fecha', 'Equipo', 'Visitas (en total)', 'Sistema / entorno', 'Página', 'IP', 'Correo'], filas: filasP.map(x => x.fila), puntos: filasP.map(x => x.p) },
         },
       };
     },
