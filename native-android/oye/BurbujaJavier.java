@@ -68,6 +68,11 @@ final class BurbujaJavier {
         return lp == null ? -1 : lp.y + dp(TAM_DP) / 2;
     }
 
+    /** Centro horizontal (px): el panel se abre del lado de la pantalla donde está la burbuja. */
+    int centroX() {
+        return lp == null ? -1 : lp.x + dp(TAM_DP) / 2;
+    }
+
     void mostrar() {
         if (vista != null || wm == null || !puede(ctx)) return;
         try {
@@ -115,12 +120,14 @@ final class BurbujaJavier {
         }
     }
 
-    /** Javier está abierto (escuchando o con el chat): la burbuja se marca en dorado. */
+    /**
+     * Javier está abierto (escuchando o con el chat): la burbuja se ESCONDE. Antes quedaba dibujada
+     * encima del panel y tapaba su botón de cerrar (es una ventana del sistema, siempre va por
+     * encima de la ventanita). Al cerrar el panel vuelve en el mismo lugar.
+     */
     void activo(boolean si) {
         principal.post(() -> {
-            if (fondo == null) return;
-            fondo.setStroke(dp(si ? 3 : 2), si ? Color.rgb(232, 194, 122) : Color.argb(220, 255, 255, 255));
-            if (vista != null) vista.setAlpha(si ? 1f : 0.92f);
+            if (vista != null) vista.setVisibility(si ? View.INVISIBLE : View.VISIBLE);
         });
     }
 
@@ -131,6 +138,7 @@ final class BurbujaJavier {
                 .putExtra(JarvisRapido.EXTRA_MODO, modo)
                 .putExtra(JarvisRapido.EXTRA_BURBUJA, true)
                 .putExtra(JarvisRapido.EXTRA_ANCLA_Y, centroY())
+                .putExtra(JarvisRapido.EXTRA_ANCLA_X, centroX())
                 .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
             ctx.startActivity(i);
         } catch (Throwable t) {

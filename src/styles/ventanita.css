@@ -297,3 +297,24 @@ html.tv-ventanita #root { height: 100%; }
 /* Lo que hay que confirmar, dentro del propio recuadro (sin otra ventana). */
 .vj-rc-acciones { align-self: stretch; display: grid; gap: 8px; font-size: 12.5px; }
 .vj-rc-acciones > * { min-width: 0; }
+
+/* ---------------------------------------------------------------------
+   DESDE LA BURBUJA DE JAVIER
+   ---------------------------------------------------------------------
+   La ventana nativa mide EXACTO la tarjeta (JarvisRapido.recuadroBurbuja: ~330 dp de ancho, a su
+   lado), así que la hoja llena la ventana. Lo que queda fuera de la tarjeta es la pantalla de
+   verdad (YouTube, WhatsApp, el escritorio): se ve y se toca. Sin sombra grande: la ventana la cortaría. */
+html[data-burbuja] .jv-hoja.vj-hoja,
+html[data-burbuja] .jv-hoja.vj-hoja[data-oye],
+html[data-burbuja] .jv-hoja.vj-hoja[data-oye][data-compacta] {
+  inset: 0;
+  width: auto;
+  height: auto;
+  margin: 0;
+  border-radius: 22px;
+  box-shadow: none;
+  animation: none;
+}
+html[data-burbuja] .vj-recuadro { box-shadow: none; }
+/* Con la tarjeta chica, la cabecera y los botones no se tapan unos a otros. */
+html[data-burbuja] .vj-hoja .vj-abrir { padding: 0 9px; }

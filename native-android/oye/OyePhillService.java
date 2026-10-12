@@ -217,7 +217,7 @@ public class OyePhillService extends Service {
             @Override
             public void run() {
                 despertarBucle();
-                // Javier abierto (chat o escuchando): la burbuja se marca.
+                // Javier abierto (chat o escuchando): la burbuja se esconde (no tapa su botón de cerrar).
                 BurbujaJavier b = burbuja;
                 if (b != null) b.activo(OyeVisibilidad.hayAlgoVisible());
             }
@@ -805,7 +805,7 @@ public class OyePhillService extends Service {
             .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK | Intent.FLAG_ACTIVITY_CLEAR_TOP | Intent.FLAG_ACTIVITY_SINGLE_TOP);
         // Con la burbuja a la vista, Javier contesta a su lado.
         BurbujaJavier b = burbuja;
-        if (b != null && b.visible()) i.putExtra(JarvisRapido.EXTRA_BURBUJA, true).putExtra(JarvisRapido.EXTRA_ANCLA_Y, b.centroY());
+        if (b != null && b.visible()) i.putExtra(JarvisRapido.EXTRA_BURBUJA, true).putExtra(JarvisRapido.EXTRA_ANCLA_Y, b.centroY()).putExtra(JarvisRapido.EXTRA_ANCLA_X, b.centroX());
         return i;
     }
 
