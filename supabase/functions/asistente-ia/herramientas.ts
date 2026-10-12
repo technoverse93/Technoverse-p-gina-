@@ -56,7 +56,18 @@ export type Panel = {
   /** Coordenadas por fila (mismo índice), para «Ver en el mapa». */
   puntos?: ({ lat: number; lon: number; etiqueta: string } | null)[];
 };
-export type Contexto = { db: Db; esSuper: boolean; hoy: string; fuentes?: { titulo: string; url: string }[] };
+export type Contexto = {
+  db: Db; esSuper: boolean; hoy: string; fuentes?: { titulo: string; url: string }[];
+  /**
+   * Carril privado para el DETALLE de seguridad: cambia un correo o una IP por una marca
+   * ([CUENTA·1], [IP·1]) que la IA puede usar para distinguir y filtrar, y que el panel del
+   * dueño vuelve a mostrar con el dato real. Sin esto, la IA solo recibía conteos y, cuando
+   * le preguntaban «quiénes entraron además de mí», inventaba correos.
+   */
+  marcar?: (tipo: 'CUENTA' | 'IP', valor: string) => string;
+  /** Quién pregunta: su correo y su aparato (para decir «vos» y «tu equipo» en vez de una marca). */
+  yo?: { email?: string; modelo?: string | null; device?: string | null };
+};
 type Salida = { datos: unknown; consulta: Consulta };
 
 type Herramienta = {
@@ -111,6 +122,45 @@ export function limpiar(t: unknown, max = 140): string {
 
 /** Fecha «AAAA-MM-DD» de Costa Rica → inicio del día en ISO (CR es UTC−6 todo el año). */
 function inicioDia(d: string): string { return `${d}T00:00:00-06:00`; }
+function finDia(d: string): string { return `${d}T23:59:59.999-06:00`; }
+/**
+ * El rango a consultar: un DÍA exacto (`dia`: «hoy», «ayer», «antier» o AAAA-MM-DD) o los
+ * últimos `dias`. Antes solo existía `dias` (1 = hoy) y «ayer» se consultaba como «hoy».
+ */
+function rango(a: Record<string, unknown>, hoy: string): { desde: string; hasta: string | null; etiqueta: string; dias: number } {
+  const d = String(a.dia ?? '').trim().toLowerCase();
+  const exacto = d === 'hoy' ? hoy : d === 'ayer' ? restarDias(hoy, 1) : d === 'antier' || d === 'anteayer' ? restarDias(hoy, 2) : /^\d{4}-\d{2}-\d{2}$/.test(d) ? d : '';
+  if (exacto) return { desde: inicioDia(exacto), hasta: finDia(exacto), etiqueta: exacto === hoy ? 'hoy' : exacto === restarDias(hoy, 1) ? 'ayer' : exacto, dias: 1 };
+  const dias = num(a.dias, 1, 1, 90);
+  return { desde: inicioDia(restarDias(hoy, dias - 1)), hasta: null, etiqueta: dias === 1 ? 'hoy' : `${dias} días`, dias };
+}
+const PARAM_DIA = { type: 'string', description: 'Un día exacto: «hoy», «ayer», «antier» o AAAA-MM-DD. Usalo cuando pregunten por un día («ayer quién entró»). Si lo pasás, `dias` no se usa.' };
+/** Lo que se le muestra a la IA de una cuenta o una IP: «vos» si es del dueño; si no, una marca. */
+function quien(ctx: Contexto, email: unknown): string {
+  const e = String(email || '').trim().toLowerCase();
+  if (!e) return '—';
+  if (ctx.yo?.email && e === ctx.yo.email.toLowerCase()) return 'vos (el dueño)';
+  return ctx.marcar ? ctx.marcar('CUENTA', e) : 'una cuenta';
+}
+function ipDe(ctx: Contexto, ip: unknown): string {
+  const v = String(ip || '').trim();
+  if (!v) return '—';
+  return ctx.marcar ? ctx.marcar('IP', v) : 'una IP';
+}
+/** Modelo del equipo a partir del navegador («SM-A127M · APK», «iPhone», «Windows»). */
+function equipoDeAgente(ua: unknown): string {
+  const u = String(ua || '');
+  const m = u.match(/Android [\d.]+; ([^;)]+)/);
+  if (m && m[1] !== 'K') return m[1].trim() + (/ wv\)/.test(u) ? ' · APK' : '');
+  if (/iPhone/.test(u)) return 'iPhone';
+  if (/iPad/.test(u)) return 'iPad';
+  if (/Windows/.test(u)) return 'Windows';
+  if (/Mac OS X/.test(u)) return 'Mac';
+  if (/Android/.test(u)) return 'Android';
+  return u ? 'Navegador' : '—';
+}
+const esMio = (ctx: Contexto, modelo: unknown) => !!ctx.yo?.modelo && String(modelo || '').toLowerCase().includes(String(ctx.yo.modelo).toLowerCase());
+const REGLA_DETALLE = 'En `detalle` va cada registro: las cuentas e IPs vienen como marcas ([CUENTA·1], [IP·1]) que el dueño ve con el dato real en su pantalla; usalas tal cual para nombrar, distinguir o filtrar, y NUNCA inventes correos, nombres, IPs ni equipos que no estén ahí. «vos (el dueño)» y `es_tu_equipo` son del dueño.';
 function diaSiguiente(d: string): string {
   const f = new Date(`${d}T12:00:00Z`); f.setUTCDate(f.getUTCDate() + 1);
   return f.toISOString().slice(0, 10);
@@ -428,7 +478,8 @@ export const HERRAMIENTAS: Herramienta[] = [
       properties: { buscar: { type: 'string', description: 'Correo o nombre de la persona.' } },
       required: ['buscar'],
     },
-    async ejecutar(a, { db }) {
+    async ejecutar(a, ctx) {
+      const { db } = ctx;
       const buscar = patron(a.buscar);
       const { data, error } = await db.rpc('sesiones_de', { p_buscar: buscar });
       if (error) throw new Error(error.message);
@@ -436,7 +487,11 @@ export const HERRAMIENTAS: Herramienta[] = [
       const personas = new Set(filas.map(f => f.persona));
       const equipo = (ua: string) => { const u = String(ua || ''); const m = u.match(/Android [\d.]+; ([^;)]+)/); if (m && m[1] !== 'K') return m[1] + (/ wv\)/.test(u) ? ' · APK' : ''); if (/iPhone/.test(u)) return 'iPhone'; if (/Windows/.test(u)) return 'Windows'; if (/Mac OS X/.test(u)) return 'Mac'; if (/Android/.test(u)) return 'Android'; return 'Navegador'; };
       return {
-        datos: { personas: personas.size, sesiones: filas.length, ultima_actividad_hora_cr: fechaCorta(filas[0]?.actividad || null), nota: 'Correos, equipos e IPs se le muestran al superadmin en pantalla, no aquí.' },
+        datos: {
+          personas: personas.size, sesiones: filas.length, ultima_actividad_hora_cr: fechaCorta(filas[0]?.actividad || null),
+          detalle: filas.slice(0, 30).map(f => ({ cuenta: quien(ctx, f.correo), rol: f.rol, equipo: equipo(f.agente), es_tu_equipo: esMio(ctx, equipo(f.agente)), abierta_cr: fechaCorta(f.creada), ultima_actividad_cr: fechaCorta(f.actividad), ip: ipDe(ctx, f.ip) })),
+          nota: REGLA_DETALLE,
+        },
         consulta: {
           modulo: 'Ciberseguridad', desc: `sesiones abiertas · «${buscar}»`, filas: `${filas.length} sesión${filas.length === 1 ? '' : 'es'}`,
           detalle: `personas ${personas.size} · sesiones ${filas.length}`,
@@ -458,13 +513,24 @@ export const HERRAMIENTAS: Herramienta[] = [
       properties: {
         buscar: { type: 'string', description: 'Parte del correo, ciudad o equipo (opcional).' },
         dias: { type: 'integer', description: 'Días hacia atrás (1-90, por defecto 1 = hoy).' },
+        dia: PARAM_DIA,
         solo_fallidos: { type: 'boolean', description: 'Solo intentos fallidos o bloqueados.' },
+        excepto: { type: 'string', description: 'Dejar afuera un equipo o una cuenta (p. ej. el modelo SM-A127M, o «yo» para sacar lo del dueño).' },
       },
     },
-    async ejecutar(a, { db, hoy }) {
-      const dias = num(a.dias, 1, 1, 90), buscar = patron(a.buscar).toLowerCase();
-      let filas = await todos(db, 'login_audit_logs', 'ocurrido_en,email,exito,bloqueado,motivo,ip,origen,pais,ciudad,region,latitud,longitud,gps_latitud,gps_longitud,device_id,dispositivo_conocido,user_agent', q =>
-        q.gte('ocurrido_en', inicioDia(restarDias(hoy, dias - 1))).order('ocurrido_en', { ascending: false }));
+    async ejecutar(a, ctx) {
+      const { db, hoy } = ctx;
+      const r = rango(a, hoy), dias = r.dias, buscar = patron(a.buscar).toLowerCase();
+      let filas = await todos(db, 'login_audit_logs', 'ocurrido_en,email,exito,bloqueado,motivo,ip,origen,pais,ciudad,region,latitud,longitud,gps_latitud,gps_longitud,device_id,dispositivo_conocido,user_agent', q => {
+        let x = q.gte('ocurrido_en', r.desde);
+        if (r.hasta) x = x.lte('ocurrido_en', r.hasta);
+        return x.order('ocurrido_en', { ascending: false });
+      });
+      const excepto = patron(a.excepto).toLowerCase();
+      if (excepto) filas = filas.filter(f => {
+        if (/^(yo|mi|m[ií]o|el due[ñn]o|vos)$/.test(excepto)) return !(ctx.yo?.email && String(f.email || '').toLowerCase() === ctx.yo.email.toLowerCase());
+        return ![f.email, f.user_agent, f.device_id, f.ip, equipoDeAgente(f.user_agent)].some(v => String(v || '').toLowerCase().includes(excepto));
+      });
       if (a.solo_fallidos) filas = filas.filter(f => !f.exito || f.bloqueado);
       if (buscar) filas = filas.filter(f => [f.email, f.ciudad, f.pais, f.user_agent, f.device_id, f.ip].some(v => String(v || '').toLowerCase().includes(buscar)));
       const correctos = filas.filter(f => f.exito && !f.bloqueado).length;
@@ -474,13 +540,21 @@ export const HERRAMIENTAS: Herramienta[] = [
         cuentas_distintas: new Set(filas.map(f => f.email)).size, equipos_nuevos: filas.filter(f => f.dispositivo_conocido === false).length,
         por_origen: contar(filas, f => f.origen), por_ciudad: contar(filas, f => [f.ciudad, f.pais].filter(Boolean).join(', ')),
         motivos_de_fallo: contar(filas.filter(f => !f.exito), f => limpiar(f.motivo, 60)),
-        nota: 'El detalle con correos, IPs y equipos se le muestra al superadmin en pantalla, no aquí.',
+        periodo: r.etiqueta,
+        por_equipo: contar(filas, f => equipoDeAgente(f.user_agent)),
+        detalle: filas.slice(0, 40).map(f => ({
+          hora_cr: fechaCorta(f.ocurrido_en), cuenta: quien(ctx, f.email),
+          resultado: f.bloqueado ? 'bloqueado' : f.exito ? 'correcto' : `fallido${f.motivo ? ` (${limpiar(f.motivo, 40)})` : ''}`,
+          origen: f.origen || '—', lugar: [f.ciudad, f.pais].filter(Boolean).join(', ') || '—', ip: ipDe(ctx, f.ip),
+          equipo: equipoDeAgente(f.user_agent), es_tu_equipo: esMio(ctx, equipoDeAgente(f.user_agent)), equipo_conocido: f.dispositivo_conocido !== false,
+        })),
+        nota: REGLA_DETALLE,
       };
       const vis = filas.slice(0, MAX_PANEL);
       return {
         datos,
         consulta: {
-          modulo: 'Ciberseguridad', desc: `ingresos · ${dias === 1 ? 'hoy' : `${dias} días`}${buscar ? ` · «${buscar}»` : ''}`,
+          modulo: 'Ciberseguridad', desc: `ingresos · ${r.etiqueta}${buscar ? ` · «${buscar}»` : ''}`,
           filas: `${filas.length} ingreso${filas.length === 1 ? '' : 's'}`,
           detalle: `correctos ${correctos} · fallidos ${datos.fallidos} · bloqueados ${datos.bloqueados} · equipos nuevos ${datos.equipos_nuevos}`,
           panel: {
@@ -502,25 +576,40 @@ export const HERRAMIENTAS: Herramienta[] = [
       properties: {
         buscar: { type: 'string', description: 'Modelo del equipo (p. ej. GFY-LX3), sistema o navegador (opcional).' },
         dias: { type: 'integer', description: 'Días hacia atrás según la última visita (1-90, por defecto 1 = hoy).' },
+        dia: PARAM_DIA,
+        excepto: { type: 'string', description: 'Dejar afuera un equipo (p. ej. SM-A127M) o «yo» para sacar los equipos y la cuenta del dueño.' },
       },
     },
-    async ejecutar(a, { db, hoy }) {
-      const dias = num(a.dias, 1, 1, 90), buscar = patron(a.buscar).toLowerCase();
-      const desde = inicioDia(restarDias(hoy, dias - 1));
+    async ejecutar(a, ctx) {
+      const { db, hoy } = ctx;
+      const r = rango(a, hoy), dias = r.dias, buscar = patron(a.buscar).toLowerCase();
+      const desde = r.desde;
       const [huellas, sesiones] = await Promise.all([
-        todos(db, 'visitor_fingerprints', 'huella,visitas,primera_visita,ultima_visita,ip,dispositivo,sistema,version_sistema,navegador,tipo,origen,ultima_ruta,email', q => q.gte('ultima_visita', desde).order('ultima_visita', { ascending: false })),
-        todos(db, 'supervision_visitantes', 'visita,modelo,tipo,entorno,ruta,last_seen,lat,lon', q => q.gte('last_seen', desde).order('last_seen', { ascending: false })),
+        todos(db, 'visitor_fingerprints', 'huella,visitas,primera_visita,ultima_visita,ip,dispositivo,sistema,version_sistema,navegador,tipo,origen,ultima_ruta,email', q => { let x = q.gte('ultima_visita', desde); if (r.hasta) x = x.lte('ultima_visita', r.hasta); return x.order('ultima_visita', { ascending: false }); }),
+        todos(db, 'supervision_visitantes', 'visita,modelo,tipo,entorno,ruta,last_seen,lat,lon', q => { let x = q.gte('last_seen', desde); if (r.hasta) x = x.lte('last_seen', r.hasta); return x.order('last_seen', { ascending: false }); }),
       ]);
       const coincide = (...vs: unknown[]) => !buscar || vs.some(v => String(v || '').toLowerCase().includes(buscar));
-      const h = huellas.filter(f => coincide(f.dispositivo, f.sistema, f.navegador, f.tipo, f.ultima_ruta));
-      const s2 = sesiones.filter(f => coincide(f.modelo, f.tipo, f.entorno, f.ruta));
+      const excepto = patron(a.excepto).toLowerCase();
+      const fuera = (modelo: unknown, email?: unknown) => {
+        if (!excepto) return false;
+        if (/^(yo|mi|m[ií]o|el due[ñn]o|vos)$/.test(excepto)) return esMio(ctx, modelo) || (!!ctx.yo?.email && String(email || '').toLowerCase() === ctx.yo.email.toLowerCase());
+        return String(modelo || '').toLowerCase().includes(excepto);
+      };
+      const h = huellas.filter(f => coincide(f.dispositivo, f.sistema, f.navegador, f.tipo, f.ultima_ruta) && !fuera(f.dispositivo, f.email));
+      const s2 = sesiones.filter(f => coincide(f.modelo, f.tipo, f.entorno, f.ruta) && !fuera(f.modelo));
       const datos = {
         dias, buscar: buscar || null,
         equipos: h.length, visitas_acumuladas: h.reduce((t, f) => t + Number(f.visitas || 0), 0), sesiones_en_el_periodo: s2.length,
         ultima_vez_hora_cr: fechaCorta(s2[0]?.last_seen || h[0]?.ultima_visita || null),
         por_equipo: contar([...h.map(f => f.dispositivo), ...s2.map(f => f.modelo)], x => x),
         por_sistema: contar(h, f => f.sistema), paginas: contar(s2, f => f.ruta),
-        nota: 'IPs, huellas y correos se le muestran al superadmin en pantalla, no aquí.',
+        periodo: r.etiqueta,
+        detalle: h.slice(0, 40).map(f => ({
+          ultima_vez_cr: fechaCorta(f.ultima_visita), primera_vez_cr: fechaCorta(f.primera_visita), equipo: f.dispositivo || '—',
+          sistema: [f.sistema, f.navegador].filter(Boolean).join(' · ') || '—', visitas: Number(f.visitas || 0), pagina: f.ultima_ruta || '—',
+          ip: ipDe(ctx, f.ip), cuenta: f.email ? quien(ctx, f.email) : 'sin cuenta (visitante)', es_tu_equipo: esMio(ctx, f.dispositivo),
+        })),
+        nota: REGLA_DETALLE,
       };
       const filasP = [
         ...s2.map(f => ({ t: f.last_seen, fila: [fechaCorta(f.last_seen), f.modelo || '—', 'Sesión', f.entorno, f.ruta || '—', '—', '—'], p: coord(f.lat, f.lon, `${f.modelo} · ${fechaCorta(f.last_seen)}`) })),
@@ -529,7 +618,7 @@ export const HERRAMIENTAS: Herramienta[] = [
       return {
         datos,
         consulta: {
-          modulo: 'Ciberseguridad', desc: `visitantes · ${dias === 1 ? 'hoy' : `${dias} días`}${buscar ? ` · «${buscar}»` : ''}`,
+          modulo: 'Ciberseguridad', desc: `visitantes · ${r.etiqueta}${buscar ? ` · «${buscar}»` : ''}${excepto ? ` · sin «${excepto}»` : ''}`,
           filas: `${s2.length} sesión${s2.length === 1 ? '' : 'es'} · ${h.length} equipo${h.length === 1 ? '' : 's'}`,
           detalle: `visitas acumuladas ${datos.visitas_acumuladas} · última vez ${datos.ultima_vez_hora_cr}`,
           panel: { columnas: ['Fecha', 'Equipo', 'Visitas', 'Sistema / entorno', 'Página', 'IP', 'Correo'], filas: filasP.map(x => x.fila), puntos: filasP.map(x => x.p) },
@@ -546,7 +635,8 @@ export const HERRAMIENTAS: Herramienta[] = [
       type: 'object',
       properties: { minutos: { type: 'integer', description: 'Ventana en minutos (1-60, por defecto 5).' } },
     },
-    async ejecutar(a, { db }) {
+    async ejecutar(a, ctx) {
+      const { db } = ctx;
       const minutos = num(a.minutos, 5, 1, 60);
       const desde = new Date(Date.now() - minutos * 60_000).toISOString();
       const [vis, staff] = await Promise.all([
@@ -560,7 +650,8 @@ export const HERRAMIENTAS: Herramienta[] = [
         ultimo_visitante: vis[0] ? { equipo: vis[0].modelo || 'sin modelo', pagina: vis[0].ruta || '—', entorno: vis[0].entorno, visto: hace(vis[0].last_seen) } : null,
         por_pagina: contar(vis, f => f.ruta), por_equipo: contar(vis, f => f.modelo),
         personal_conectado: staff.length,
-        nota: 'Los correos del personal y las ubicaciones se le muestran al superadmin en pantalla, no aquí.',
+        personal: staff.slice(0, 20).map(f => ({ cuenta: quien(ctx, f.email), equipo: f.modelo || f.device || '—', es_tu_equipo: esMio(ctx, f.modelo), visto: hace(f.last_seen) })),
+        nota: REGLA_DETALLE,
       };
       const filas = [
         ...vis.map(f => ({ t: f.last_seen, fila: [hace(f.last_seen), 'Visitante', f.modelo || '—', f.entorno || '—', f.ruta || '—'], p: coord(f.lat, f.lon, `${f.modelo || 'Visitante'} · ${hace(f.last_seen)}`) })),

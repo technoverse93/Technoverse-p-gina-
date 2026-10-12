@@ -52,7 +52,9 @@ export async function preguntarDesdeWidget(crudo: string, porVoz: boolean): Prom
   guardar({ id: conversacion, en: Date.now(), privados: sep.privados });
   const consultas: any[] = r.mensaje?.consultas || [];
   const acciones = consultas.filter(c => c?.tipo === 'accion' && c?.id).map(c => String(c.id));
-  return { ok: true, texto: restaurarPrivados(String(r.mensaje?.texto || ''), sep.privados), conversacion, acciones };
+  // Las marcas del detalle de seguridad ([CUENTA·1], [IP·1]) también vuelven a su dato real.
+  const marcas = { ...sep.privados, ...(r.privados && typeof r.privados === 'object' ? r.privados : {}) };
+  return { ok: true, texto: restaurarPrivados(String(r.mensaje?.texto || ''), marcas), conversacion, acciones };
 }
 
 type FilaAccion = { id: string; estado: string; tarjeta?: { auto?: boolean }; resultado?: { detalle?: string; texto?: string } | null };
