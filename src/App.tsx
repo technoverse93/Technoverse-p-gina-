@@ -117,12 +117,41 @@ function resolverVistaDesdeRuta(pathname: string): 'store' | 'admin' | 'reset-pa
   return 'store';
 }
 
+// ¿Esta persona es del personal? Se recuerda en este aparato para que, al
+// abrir la app instalada, se entre directo al panel y no se vea un instante
+// la tienda pública (con su lápiz de «Editar la página») antes del panel.
+const CLAVE_PERSONAL = 'technoverse_es_personal';
+const leerPersonal = () => { try { return localStorage.getItem(CLAVE_PERSONAL) === '1'; } catch { return false; } };
+const guardarPersonal = (v: boolean) => { try { if (v) localStorage.setItem(CLAVE_PERSONAL, '1'); else localStorage.removeItem(CLAVE_PERSONAL); } catch { /* sin almacenamiento */ } };
+/** ¿Abierta como app (APK o instalada en la pantalla de inicio) y no en una pestaña del navegador? */
+function abiertaComoApp(): boolean {
+  if (esAplicacionNativa()) return true;
+  try { return window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true; } catch { return false; }
+}
+
+/**
+ * Dónde se arranca. En `/` (la tienda) todos veían primero la tienda —el
+ * personal también, con el lápiz de edición—, aunque venían por el panel.
+ * Ahora, abierta como app y siendo del personal, se entra directo al panel:
+ *   · la APK (es la app del panel): siempre;
+ *   · la web instalada: si en este aparato ya entró personal (los clientes
+ *     que instalen la tienda siguen entrando a la tienda).
+ * Sin sesión válida, el panel manda al acceso como siempre.
+ */
+function vistaInicial(): 'store' | 'admin' | 'reset-password' {
+  const v = resolverVistaDesdeRuta(window.location.pathname);
+  if (v !== 'store' || window.location.pathname !== '/') return v;
+  if (abiertaComoApp() && (esAplicacionNativa() || leerPersonal())) {
+    try { window.history.replaceState(null, '', '/admin'); } catch { /* el estado alcanza */ }
+    return 'admin';
+  }
+  return v;
+}
+
 function AppInner() {
   const toast = useToast();
 
-  const [currentView, setCurrentView] = useState<'store' | 'admin' | 'reset-password'>(
-    () => resolverVistaDesdeRuta(window.location.pathname)
-  );
+  const [currentView, setCurrentView] = useState<'store' | 'admin' | 'reset-password'>(vistaInicial);
   const [refreshTrigger, setRefreshTrigger] = useState<number>(0);
 
   useEffect(() => {
@@ -342,6 +371,9 @@ function AppInner() {
 
   const isAuthenticated = !!currentUser;
 
+  // Se recuerda si quien entró es del personal (ver `vistaInicial`).
+  useEffect(() => { if (currentUser) guardarPersonal(esStaff(currentUser.role)); }, [currentUser]);
+
   const handleLogin = (user: User) => {
     setCurrentUser(user);
     window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: user } }));
@@ -467,6 +499,7 @@ function AppInner() {
     // aplicación dijera lo contrario. Ahora se cierra de verdad — y en la
     // APK con alcance local, para no invalidar el pase que guarda la huella.
     void cerrarSesionConservandoBiometria();
+    guardarPersonal(false);
     setCurrentUser(null);
     window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: null } }));
     window.history.pushState(null, "", "/");
@@ -562,7 +595,12 @@ function AppInner() {
   useEffect(() => {
     if (currentView === 'admin') {
       if (!sesionVerificada) return;
+      // Cerrada con llave (huella): el candado de arranque pide la huella
+      // aquí mismo. Mandar a la tienda mostraba la tienda pública debajo del
+      // candado y, al desbloquear, la persona quedaba en la tienda.
+      if (!currentUser && sesionBloqueada()) return;
       if (!currentUser) {
+        guardarPersonal(false);
         window.history.replaceState(null, "", "/");
         setCurrentView("store");
         setAutoOpenLogin(true);
