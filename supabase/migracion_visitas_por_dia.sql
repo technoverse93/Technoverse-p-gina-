@@ -1,7 +1,8 @@
 -- ===========================================================================
 -- CADA ENTRADA A LA TIENDA QUEDA REGISTRADA (oct 2026)
 -- ===========================================================================
--- POR EJECUTAR (pendiente de que el dueño lo autorice; no se corrió todavía).
+-- YA EJECUTADO el 2026-10-13 en producción (autorizado por el dueño). Se deja
+-- como referencia; sigue siendo seguro repetirlo.
 --
 -- Por qué: `visitor_fingerprints` y `supervision_visitantes` solo guardan la
 -- ÚLTIMA vez que entró cada equipo y un contador de toda su vida (`visitas`).
