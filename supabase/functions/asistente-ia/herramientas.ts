@@ -129,7 +129,13 @@ function subsecuencia(a: string, b: string): number {
  * por «GFY-LX3») y entonces la búsqueda exacta da 0 y la IA contestaba «0 entradas», que es FALSO:
  * lo que pasó es que ese nombre no existe. Con esto se le da a la IA los nombres parecidos.
  */
-export function parecidos(buscar: string, candidatos: unknown[], max = 3): string[] {
+function multiconjuntoContenido(a: string, b: string): boolean {
+  const cuenta = new Map<string, number>();
+  for (const c of b) cuenta.set(c, (cuenta.get(c) || 0) + 1);
+  for (const c of a) { const n = cuenta.get(c) || 0; if (!n) return false; cuenta.set(c, n - 1); }
+  return true;
+}
+export function parecidos(buscar: string, candidatos: unknown[], max = 3, minimo = 0.47): string[] {
   const q = plano(buscar);
   if (q.length < 3) return [];
   const puntos = new Map<string, number>();
@@ -138,11 +144,34 @@ export function parecidos(buscar: string, candidatos: unknown[], max = 3): strin
     const p = plano(nombre);
     if (!p || nombre === '—') continue;
     const largo = Math.max(q.length, p.length);
-    const puntaje = Math.max(1 - distancia(q, p) / largo, 0.95 * (subsecuencia(q, p) / largo), p.includes(q) || q.includes(p) ? 0.9 : 0);
-    if (puntaje >= 0.47 && puntaje > (puntos.get(nombre) || 0)) puntos.set(nombre, puntaje);
+    // El dictado cambia el orden de letras y números («am 127» por A127M): si TODAS las letras y cifras de lo dicho
+    // están en el nombre (aunque en otro orden) y casi alcanzan, es el mismo.
+    const mismasLetras = q.length >= 4 && q.length / p.length >= 0.5 && multiconjuntoContenido(q, p) ? 0.8 : 0;
+    const puntaje = Math.max(1 - distancia(q, p) / largo, 0.95 * (subsecuencia(q, p) / largo), p.includes(q) || q.includes(p) ? 0.9 : 0, mismasLetras);
+    if (puntaje >= minimo && puntaje > (puntos.get(nombre) || 0)) puntos.set(nombre, puntaje);
   }
   return [...puntos.entries()].sort((a, b) => b[1] - a[1]).slice(0, max).map(x => x[0]);
 }
+/**
+ * A qué nombres de equipo se refiere el dueño. El dictado deforma los modelos («am 127» por SM-A127M,
+ * «gfy lx3» por GFY-LX3), así que primero se busca que el nombre CONTENGA lo dicho y, si no hay,
+ * el más parecido (solo uno, y se avisa cómo se interpretó).
+ */
+function elegirNombres(pedido: string, nombres: string[], minimo = 0.47): { elegidos: Set<string>; interpretado?: string } {
+  const p = plano(pedido);
+  const elegidos = new Set<string>();
+  if (!p) return { elegidos };
+  for (const n of nombres) { const q = plano(n); if (q.length >= 3 && (q.includes(p) || (p.length >= 4 && p.includes(q)))) elegidos.add(n); }
+  if (elegidos.size) return { elegidos };
+  const cerca = parecidos(pedido, nombres, 1, minimo)[0];
+  if (cerca) { elegidos.add(cerca); return { elegidos, interpretado: cerca }; }
+  return { elegidos };
+}
+const horaCorta = (v: unknown) => {
+  if (!v) return '—';
+  try { return new Date(String(v)).toLocaleTimeString('es-CR', { timeZone: 'America/Costa_Rica', hour: 'numeric', minute: '2-digit', hour12: true }); } catch { return '—'; }
+};
+
 /** Lo que se le dice a la IA cuando buscó un nombre y no hay ninguno igual. */
 function sinCoincidencia(buscar: string, candidatos: unknown[]) {
   const unicos = [...new Set(candidatos.map(c => String(c ?? '').trim()).filter(c => c && c !== '—'))];
@@ -549,7 +578,7 @@ export const HERRAMIENTAS: Herramienta[] = [
     nombre: 'ingresos_cuentas',
     modulo: 'seguridad',
     soloSuper: true,
-    descripcion: 'Inicios de sesión al panel y a la app (intentos correctos, fallidos y bloqueados), con ciudad, país, origen (web o app) y si el equipo es conocido. Usa esto para «quién entró», «cuántas veces entró X», «intentos fallidos», «desde dónde». La tabla completa con correos e IPs le aparece al superadmin en pantalla; tú recibes los conteos.',
+    descripcion: 'Inicios de sesión al panel y a la app (intentos correctos, fallidos y bloqueados), con ciudad, país, origen (web o app) y si el equipo es conocido. Es SOLO de cuentas que inician sesión (personal y dueño en el panel o la app), NO de quién visita la página o la tienda (para eso está visitantes_tienda). Usa esto para «quién inició sesión», «intentos fallidos», «desde dónde se conectó tal cuenta», «cuántas veces entró al panel». Cada inicio de sesión es un registro real, así que las cuentas sí se pueden contar por día. La tabla completa con correos e IPs le aparece al superadmin en pantalla.',
     parametros: {
       type: 'object',
       properties: {
@@ -615,61 +644,125 @@ export const HERRAMIENTAS: Herramienta[] = [
     nombre: 'visitantes_tienda',
     modulo: 'seguridad',
     soloSuper: true,
-    descripcion: 'Visitantes y equipos que entran a la tienda en línea (incluye modelos como GFY-LX3): visitas, primera y última vez, sistema, navegador y página. Usa esto para «cuántas veces entró el equipo X», «quién visitó hoy». El detalle con IP y huella le aparece al superadmin en pantalla.',
+    descripcion: 'Qué EQUIPOS entraron a la tienda en línea (la página) un día o en un período: modelo, sesiones y última hora de ese día, visitas acumuladas, sistema y página. Usala para «quién entró ayer a la página», «cuántas veces entró el equipo X», «a qué hora entró», «cuántos equipos entraron sin contar el mío». Un equipo no es una persona. Devuelve `respuesta_lista` y `como_responder`: contestá con eso. El detalle con IP y cuentas le aparece al superadmin en pantalla.',
     parametros: {
       type: 'object',
       properties: {
-        buscar: { type: 'string', description: 'Modelo del equipo (p. ej. GFY-LX3), sistema o navegador (opcional).' },
-        dias: { type: 'integer', description: 'Días hacia atrás según la última visita (1-90, por defecto 1 = hoy).' },
+        buscar: { type: 'string', description: 'Modelo del equipo (p. ej. GFY-LX3), sistema o navegador (opcional). Si el dueño sigue hablando de un equipo ya mencionado, usá su nombre exacto.' },
+        dias: { type: 'integer', description: 'Días hacia atrás (1-90, por defecto 1 = hoy).' },
         dia: PARAM_DIA,
-        excepto: { type: 'string', description: 'Dejar afuera un equipo (p. ej. SM-A127M) o «yo» para sacar los equipos y la cuenta del dueño.' },
+        excepto: { type: 'string', description: 'Dejar afuera un equipo (p. ej. SM-A127M) o «yo» para sacar los equipos y la cuenta del dueño. Si el dueño ya pidió dejar uno afuera en la conversación, repetilo.' },
       },
     },
     async ejecutar(a, ctx) {
       const { db, hoy } = ctx;
-      const r = rango(a, hoy), dias = r.dias, buscar = patron(a.buscar).toLowerCase();
-      const desde = r.desde;
-      const [huellas, sesiones] = await Promise.all([
-        todos(db, 'visitor_fingerprints', 'huella,visitas,primera_visita,ultima_visita,ip,dispositivo,sistema,version_sistema,navegador,tipo,origen,ultima_ruta,email', q => { let x = q.gte('ultima_visita', desde); if (r.hasta) x = x.lte('ultima_visita', r.hasta); return x.order('ultima_visita', { ascending: false }); }),
-        todos(db, 'supervision_visitantes', 'visita,modelo,tipo,entorno,ruta,last_seen,lat,lon', q => { let x = q.gte('last_seen', desde); if (r.hasta) x = x.lte('last_seen', r.hasta); return x.order('last_seen', { ascending: false }); }),
+      const r = rango(a, hoy);
+      const buscarCrudo = patron(a.buscar), exceptoCrudo = patron(a.excepto);
+      const enRango = (col: string) => (q: Db) => { let x = q.gte(col, r.desde); if (r.hasta) x = x.lte(col, r.hasta); return x.order(col, { ascending: false }); };
+      const colHuella = 'huella,visitas,primera_visita,ultima_visita,ip,dispositivo,sistema,version_sistema,navegador,tipo,origen,ultima_ruta,email';
+      const [huellas, sesiones, registro, inicioLog] = await Promise.all([
+        todos(db, 'visitor_fingerprints', colHuella, enRango('ultima_visita')),
+        todos(db, 'supervision_visitantes', 'visita,modelo,tipo,entorno,ruta,last_seen,lat,lon', enRango('last_seen')),
+        // Registro de CADA entrada (supabase/migracion_visitas_por_dia.sql). Si todavía no está instalado: null.
+        todos(db, 'visitor_visit_log', 'huella,visto_en', enRango('visto_en')).catch(() => null),
+        todos(db, 'visitor_visit_log', 'visto_en', q => q.order('visto_en', { ascending: true }).limit(1)).then(f => (f[0]?.visto_en ? String(f[0].visto_en) : null)).catch(() => null),
       ]);
-      const coincide = (...vs: unknown[]) => !buscar || vs.some(v => String(v || '').toLowerCase().includes(buscar));
-      const excepto = patron(a.excepto).toLowerCase();
-      const fuera = (modelo: unknown, email?: unknown) => {
-        if (!excepto) return false;
-        if (/^(yo|mi|m[ií]o|el due[ñn]o|vos)$/.test(excepto)) return esMio(ctx, modelo) || (!!ctx.yo?.email && String(email || '').toLowerCase() === ctx.yo.email.toLowerCase());
-        return String(modelo || '').toLowerCase().includes(excepto);
+      // El registro vale para ESTE período solo si ya existía cuando empezó (si no, faltan entradas de antes).
+      const exacto = !!registro && !!inicioLog && new Date(inicioLog).getTime() <= new Date(r.desde).getTime();
+      // Los equipos de las sesiones y del registro: sus huellas (totales, sistema, cuenta) aunque su última visita sea de otro día.
+      const conocidas = new Set(huellas.map(f => String(f.huella)));
+      const pedir = [...new Set([...sesiones.map(x => String(x.visita || '')), ...(registro || []).map(x => String(x.huella || ''))])].filter(x => x && !conocidas.has(x)).slice(0, 200);
+      const extra: Record<string, any>[] = pedir.length ? await todos(db, 'visitor_fingerprints', colHuella, q => q.in('huella', pedir)).catch(() => []) : [];
+      type Equipo = { equipo: string; entradas: number; ultima: string | null; enTotal: number | null; primera: string | null; sistema: string; ip: string; email: string; punto: ReturnType<typeof coord> };
+      const mapa = new Map<string, Equipo>();
+      const de = (nombre: unknown): Equipo => {
+        const k = String(nombre || '').trim() || 'Equipo sin nombre';
+        let e = mapa.get(k);
+        if (!e) { e = { equipo: k, entradas: 0, ultima: null, enTotal: null, primera: null, sistema: '', ip: '', email: '', punto: null }; mapa.set(k, e); }
+        return e;
       };
-      const h = huellas.filter(f => coincide(f.dispositivo, f.sistema, f.navegador, f.tipo, f.ultima_ruta) && !fuera(f.dispositivo, f.email));
-      const s2 = sesiones.filter(f => coincide(f.modelo, f.tipo, f.entorno, f.ruta) && !fuera(f.modelo));
-      // Buscó un nombre y no hay ninguno igual: se le dan los parecidos (no un «0» falso).
-      const sinNombre = buscar && !h.length && !s2.length ? sinCoincidencia(buscar, [...huellas.map(f => f.dispositivo), ...sesiones.map(f => f.modelo)]) : null;
+      const masReciente = (e: Equipo, t: unknown) => { const v = t ? String(t) : ''; if (v && (!e.ultima || v > e.ultima)) e.ultima = v; };
+      const nombreDeHuella = new Map<string, string>();
+      for (const f of [...huellas, ...extra]) {
+        const e = de(f.dispositivo);
+        nombreDeHuella.set(String(f.huella), e.equipo);
+        e.enTotal = (e.enTotal || 0) + Number(f.visitas || 0);
+        if (f.primera_visita && (!e.primera || String(f.primera_visita) < e.primera)) e.primera = String(f.primera_visita);
+        if (conocidas.has(String(f.huella))) masReciente(e, f.ultima_visita);
+        e.sistema = e.sistema || [f.sistema, f.navegador].filter(Boolean).join(' · ');
+        e.ip = e.ip || String(f.ip || '');
+        e.email = e.email || String(f.email || '');
+      }
+      for (const s of sesiones) {
+        const e = de(s.modelo);
+        masReciente(e, s.last_seen);
+        if (!e.punto) e.punto = coord(s.lat, s.lon, `${e.equipo} · ${fechaCorta(s.last_seen)}`);
+      }
+      for (const x of registro || []) {
+        const nombre = nombreDeHuella.get(String(x.huella));
+        if (!nombre) continue;
+        const e = de(nombre);
+        e.entradas++;
+        masReciente(e, x.visto_en);
+      }
+      // «buscar» y «excepto» se resuelven contra los nombres que hay (el dictado los deforma: «am 127» = SM-A127M).
+      const nombres = [...mapa.keys()];
+      const esYo = /^(yo|mi|m[ií]o|el due[ñn]o|vos)$/i.test(exceptoCrudo);
+      const buscado = buscarCrudo ? elegirNombres(buscarCrudo, nombres) : null;
+      const quitado = exceptoCrudo && !esYo ? elegirNombres(exceptoCrudo, nombres, 0.72) : null;
+      const generico = (f: Equipo) => !!buscarCrudo && [f.sistema, f.equipo].some(v => plano(v).includes(plano(buscarCrudo)));
+      const equipos = [...mapa.values()].filter(e => {
+        if (buscarCrudo && !(buscado?.elegidos.has(e.equipo) || generico(e))) return false;
+        if (quitado?.elegidos.has(e.equipo)) return false;
+        if (esYo && (esMio(ctx, e.equipo) || (!!ctx.yo?.email && e.email.toLowerCase() === ctx.yo.email.toLowerCase()))) return false;
+        return true;
+      }).sort((x, y) => String(y.ultima || '').localeCompare(String(x.ultima || '')));
+      const sinNombre = buscarCrudo && !equipos.length ? sinCoincidencia(buscarCrudo, nombres) : null;
+      const n = (k: number, uno: string, varios: string) => `${k} ${k === 1 ? uno : varios}`;
+      const cuando = r.etiqueta === 'ayer' ? 'Ayer' : r.etiqueta === 'hoy' ? 'Hoy' : `En ${r.etiqueta}`;
+      const quitaDesc = esYo ? ' (sin contar tus equipos)' : exceptoCrudo ? ` (sin ${quitado?.elegidos.size ? [...quitado.elegidos].join(', ') : exceptoCrudo})` : '';
+      const fraseEquipo = (e: Equipo) => `${e.equipo}${esMio(ctx, e.equipo) ? ' (tu equipo)' : ''}: ${exacto ? `${n(e.entradas, 'entrada', 'entradas')}, última` : 'entró, última'} vez ${horaCorta(e.ultima)}`;
+      const respuestaLista = sinNombre ? `No encontré ningún equipo llamado «${buscarCrudo}» ${r.etiqueta === 'hoy' ? 'hoy' : 'en ese período'}.`
+        : !equipos.length ? `${cuando} no entró ningún equipo a la página${quitaDesc}.`
+          : `${cuando} entraron ${n(equipos.length, 'equipo distinto', 'equipos distintos')} a la página${quitaDesc}: ${equipos.map(fraseEquipo).join('; ').replace(/\.$/, '')}.`;
       const datos = {
-        dias, buscar: buscar || null,
+        periodo: r.etiqueta, buscar: buscarCrudo || null, excepto: exceptoCrudo || null,
+        ...(buscado?.interpretado ? { buscar_interpretado_como: buscado.interpretado } : {}),
+        ...(quitado?.interpretado ? { excepto_interpretado_como: quitado.interpretado } : {}),
+        ...(exceptoCrudo && !esYo && !quitado?.elegidos.size ? { excepto_sin_efecto: `Ningún equipo llamado «${exceptoCrudo}» entró en este período, así que no hubo nada que dejar afuera.` } : {}),
         ...(sinNombre ? { sin_coincidencia: sinNombre } : {}),
-        equipos: h.length, visitas_de_toda_la_vida_de_esos_equipos: h.reduce((t, f) => t + Number(f.visitas || 0), 0), sesiones_en_el_periodo: s2.length,
-        ultima_vez_hora_cr: fechaCorta(s2[0]?.last_seen || h[0]?.ultima_visita || null),
-        por_equipo: contar([...h.map(f => f.dispositivo), ...s2.map(f => f.modelo)], x => x),
-        por_sistema: contar(h, f => f.sistema), paginas: contar(s2, f => f.ruta),
-        periodo: r.etiqueta,
-        detalle: h.slice(0, 40).map(f => ({
-          ultima_vez_cr: fechaCorta(f.ultima_visita), primera_vez_cr: fechaCorta(f.primera_visita), equipo: f.dispositivo || '—',
-          sistema: [f.sistema, f.navegador].filter(Boolean).join(' · ') || '—', visitas_de_toda_su_vida: Number(f.visitas || 0), pagina: f.ultima_ruta || '—',
-          ip: ipDe(ctx, f.ip), cuenta: f.email ? quien(ctx, f.email) : 'sin cuenta (visitante)', es_tu_equipo: esMio(ctx, f.dispositivo),
+        equipos_distintos: equipos.length,
+        ...(exacto ? { entradas_en_total_ese_periodo: equipos.reduce((t, e) => t + e.entradas, 0) } : {}),
+        conteo_por_dia: exacto ? 'exacto (cada entrada queda registrada)' : 'NO disponible: el sistema solo guarda la ÚLTIMA vez que entró cada equipo, no cuántas veces entró por día',
+        respuesta_lista: respuestaLista,
+        equipos: equipos.slice(0, 40).map(e => ({
+          equipo: e.equipo, es_tu_equipo: esMio(ctx, e.equipo),
+          ...(exacto ? { entradas_ese_periodo: e.entradas } : { entradas_ese_periodo: 'no se registra (solo se sabe que entró)' }),
+          ultima_vez_cr: fechaCorta(e.ultima), ultima_hora_cr: horaCorta(e.ultima),
+          visitas_en_total_toda_su_vida: e.enTotal === null ? 'sin dato' : e.enTotal, primera_vez_en_el_sistema_cr: e.primera ? fechaCorta(e.primera) : 'sin dato',
+          sistema: e.sistema || '—', ip: ipDe(ctx, e.ip), cuenta: e.email ? quien(ctx, e.email) : 'sin cuenta (visitante)',
         })),
-        nota: `${REGLA_DETALLE} OJO: «visitas_de_toda_su_vida» es el total acumulado del equipo desde que existe, NO lo que hizo en el día pedido. Lo del día es «sesiones_en_el_periodo» y «ultima_vez_cr». Nunca digas que un equipo tuvo N visitas «ayer» usando el total de toda su vida.`,
+        como_responder: [
+          'Son EQUIPOS (modelos de aparato), no personas: nunca digas «personas»; decí «equipos» y que no se puede saber cuántas personas son.',
+          exacto
+            ? '«entradas» es cuántas veces abrió la tienda en el período (una por visita, con 30 min o más entre una y otra): úsalo para «cuántas veces entró».'
+            : 'Para «cuántas veces entró X» NO inventes un número: decí que entró, a qué hora fue la última vez, y que el conteo exacto de veces por día todavía no se registra (solo queda la última vez de cada equipo, así que si volvió a entrar después, ese día puede no aparecer). Nunca cuentes filas, sesiones ni líneas como «veces».',
+          '«visitas_en_total_toda_su_vida» es de toda la vida del equipo: NO es lo de ese día y NO se suma entre equipos; solo mencionalo, si ayuda, como «en total desde el [primera vez] suma N».',
+          'Copiá las cifras y horas de `respuesta_lista` / `equipos`; no hagas cuentas ni inventes.',
+        ].join(' '),
+        nota: 'Las cuentas y las IPs vienen como marcas ([CUENTA·1], [IP·1]) que el dueño ve con el dato real en su pantalla; usalas tal cual y NUNCA inventes correos ni IPs.',
       };
-      const filasP = [
-        ...s2.map(f => ({ t: f.last_seen, fila: [fechaCorta(f.last_seen), f.modelo || '—', 'Sesión', f.entorno, f.ruta || '—', '—', '—'], p: coord(f.lat, f.lon, `${f.modelo} · ${fechaCorta(f.last_seen)}`) })),
-        ...h.map(f => ({ t: f.ultima_visita, fila: [fechaCorta(f.ultima_visita), f.dispositivo || '—', `${f.visitas} en total`, [f.sistema, f.navegador].filter(Boolean).join(' · '), f.ultima_ruta || '—', f.ip || '—', f.email || '—'], p: null })),
-      ].sort((x, y) => String(y.t).localeCompare(String(x.t))).slice(0, MAX_PANEL);
+      const filasP = equipos.slice(0, MAX_PANEL).map(e => ({
+        fila: [e.equipo, exacto ? n(e.entradas, 'entrada', 'entradas') : 'entró', fechaCorta(e.ultima), e.enTotal === null ? '—' : `${e.enTotal} (toda su vida)`, e.sistema || '—', e.ip || '—', e.email || '—'],
+        p: e.punto,
+      }));
       return {
         datos,
         consulta: {
-          modulo: 'Ciberseguridad', desc: `visitantes · ${r.etiqueta}${buscar ? ` · «${buscar}»` : ''}${excepto ? ` · sin «${excepto}»` : ''}`,
-          filas: `${s2.length} sesión${s2.length === 1 ? '' : 'es'} · ${h.length} equipo${h.length === 1 ? '' : 's'}`,
-          detalle: sinNombre ? `sin equipo llamado «${buscar}»${sinNombre.parecidos.length ? ` · parecidos: ${sinNombre.parecidos.join(', ')}` : ''}` : `visitas en total de esos equipos ${datos.visitas_de_toda_la_vida_de_esos_equipos} · última vez ${datos.ultima_vez_hora_cr}`,
-          panel: { columnas: ['Fecha', 'Equipo', 'Visitas (en total)', 'Sistema / entorno', 'Página', 'IP', 'Correo'], filas: filasP.map(x => x.fila), puntos: filasP.map(x => x.p) },
+          modulo: 'Ciberseguridad', desc: `visitantes · ${r.etiqueta}${buscarCrudo ? ` · «${buscarCrudo}»` : ''}${exceptoCrudo ? ` · sin «${exceptoCrudo}»` : ''}`,
+          filas: n(equipos.length, 'equipo', 'equipos'),
+          detalle: respuestaLista,
+          panel: { columnas: ['Equipo', exacto ? 'Entradas ese día' : 'Ese día', 'Última vez', 'Visitas en total', 'Sistema', 'IP', 'Correo'], filas: filasP.map(x => x.fila), puntos: filasP.map(x => x.p) },
         },
       };
     },

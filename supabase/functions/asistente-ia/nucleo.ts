@@ -194,6 +194,8 @@ type Sistema = {
   propuestas: Map<string, { r: unknown; marca: Consulta; evento: unknown }>;
   /** Memoria, tono y ejemplos de estilo del dueño (se suma a las instrucciones). */
   extra: string;
+  /** Pregunta de datos en vivo (seguridad): la primera vuelta TIENE que consultar una herramienta. */
+  exigirHerr?: boolean;
   rondas: number;
   /** recordar / olvidar (service role, solo superadmin). */
   memoria: { guardar: (texto: string, tipo: string) => Promise<string>; olvidar: (buscar: string) => Promise<{ id: string; texto: string; tipo: string }[]> } | null;
@@ -1153,6 +1155,8 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
     if (usarHerr && paralelo) cuerpo.parallel_tool_calls = true;
     if (conUso) cuerpo.stream_options = { include_usage: true };
     if (usarHerr) cuerpo.tools = herramientasDe();
+    // Pregunta de datos en vivo: la primera vuelta tiene que consultar (si no, contestaba de la historia).
+    if (usarHerr && ronda === 0 && sis.exigirHerr && !mensajes.some(m => m.role === 'tool')) cuerpo.tool_choice = 'required';
     const restante = sis.limite - Date.now();
     if (restante < 2500) throw new CupoAgotado('sin tiempo');
     const corte = new AbortController();
@@ -1179,6 +1183,7 @@ async function preguntarCompatible(historial: Turno[], sis: Sistema, prov: Compa
       if (conUso && (r.status === 400 || r.status === 422) && /stream_options|include_usage/i.test(det)) { conUso = false; ronda--; continue; }
       if (cuerpo.parallel_tool_calls && (r.status === 400 || r.status === 422) && /parallel/i.test(det)) { paralelo = false; ronda--; continue; }
       if (cuerpo.reasoning_effort && (r.status === 400 || r.status === 422) && /reasoning/i.test(det)) { esfuerzo = false; ronda--; continue; }
+      if (cuerpo.tool_choice && (r.status === 400 || r.status === 404 || r.status === 422) && /tool_choice|required/i.test(det)) { sis.exigirHerr = false; ronda--; continue; }
       if (cuerpo.tools && (r.status === 400 || r.status === 404 || r.status === 422) && /tool|function/i.test(det)) { conHerramientas = false; mensajes = armar(); ronda--; continue; }
       // Muy grande para el plan gratis: se achica y se repite.
       // Groq gratis: algunos modelos solo dan 1 000 tokens de SALIDA por minuto.
@@ -1410,7 +1415,30 @@ const CHICO = /(^|[^0-9.])([1-9]|[12][0-9]|3[0-2])b\b|(^|[-_/])(mini|nano|instan
 // CEREBRO PRIMERO: qué preguntas se pueden contestar de memoria
 // ---------------------------------------------------------------------
 /** Lo que cambia con el día o depende de datos vivos: siempre se vuelve a consultar. */
-const DEL_MOMENTO = /\b(entr[oó]|entraron|equipos?|dispositivos?|accesos?|hoy|ahora|ahorita|ayer|antier|anoche|ma[ñn]ana|esta (semana|ma[ñn]ana|tarde|noche)|este mes|[uú]ltim[oa]s?|reciente|hora|qu[eé] d[ií]a|fecha|cu[aá]nt[oa]s?|ventas?|vend[ií]|stock|existencia|inventario|ingres[oó]|ingresaron|visit|sesi[oó]n|conectad|bloque|chats?|pendiente|agenda|clima|precio|cuesta|vale|tipo de cambio|d[oó]lar|cobr|factur|orden|taller|cliente)\b/i;
+const DEL_MOMENTO = /(?<![a-záéíóúñ])(entr[oó]|entraron|equipos?|dispositivos?|accesos?|hoy|ahora|ahorita|ayer|antier|anoche|ma[ñn]ana|esta (semana|ma[ñn]ana|tarde|noche)|este mes|[uú]ltim[oa]s?|reciente|hora|qu[eé] d[ií]a|fecha|cu[aá]nt[oa]s?|ventas?|vend[ií]|stock|existencia|inventario|ingres[oó]|ingresaron|visit|sesi[oó]n|conectad|bloque|chats?|pendiente|agenda|clima|precio|cuesta|vale|tipo de cambio|d[oó]lar|cobr|factur|orden|taller|cliente)(?![a-záéíóúñ])/i;
+/**
+ * Preguntas de DATOS de seguridad (quién entró, cuántas veces, desde qué equipo, ingresos al panel): se consultan
+ * SIEMPRE en el momento. Antes Javier contestaba de la historia de la conversación o de notas del cerebro
+ * («386 veces ayer», «416 entradas») sin volver a consultar, y con cifras que ni eran de ese día.
+ */
+const RE_SEGURIDAD = /(?<![a-záéíóúñ])(entr[oó]|entraron|entran|entrada|entradas|ingres[oó]|ingresaron|ingresos?|visit\w*|sesi[oó]n(es)?|conectad\w*|accesos?|intentos?|bloquead\w*|login|ips?|dispositivos?)(?![a-záéíóúñ])/i;
+const RE_OTRO_TEMA = /(?<![a-záéíóúñ])(taller|orden(es)?|reparaci\w*|ticket|cliente|factura\w*|inventario|producto\w*|stock|precio\w*|cobr\w*|ventas?|chats?|whatsapp|alarma|recordatorio|agenda|c[oó]digo|archivo|funci[oó]n)(?![a-záéíóúñ])/i;
+function esDatoDeSeguridad(texto: string, previas: any[]): boolean {
+  const t = texto.trim();
+  if (!t || t.length > 400 || RE_OTRO_TEMA.test(t)) return false;
+  if (RE_SEGURIDAD.test(t)) return true;
+  if (/\bequipos?\b/i.test(t) && /(?<![a-záéíóúñ])(ayer|hoy|antier|p[aá]gina|tienda)(?![a-záéíóúñ])/i.test(t)) return true;
+  // Seguimiento corto de una respuesta de seguridad («solo ayer», «¿y a qué hora?», «quitando el A127»).
+  const ultima = (previas || []).find(m => m?.rol === 'assistant');
+  const venia = Array.isArray(ultima?.consultas) && ultima.consultas.some((c: any) => c?.modulo === 'Ciberseguridad');
+  return venia && t.length <= 160 && /(?<![a-záéíóúñ])(ayer|hoy|antier|total|solo|solamente|cu[aá]nt\w*|veces|hora|modelo|equipo|ese|esos|esa|esas|quit\w*|excepto|menos|sin|pero|no)(?![a-záéíóúñ])/i.test(t);
+}
+const REGLA_CIFRAS_SEGURIDAD = `\n\nESTA PREGUNTA ES DE DATOS DE SEGURIDAD (visitas, ingresos, equipos). Reglas obligatorias:
+- Consultá con la herramienta EN ESTE MENSAJE (visitantes_tienda para quién entró a la tienda o la página; ingresos_cuentas para quién inició sesión en el panel o la app). Nunca respondas con cifras de mensajes anteriores: eran de otra consulta y pueden estar mal.
+- Si el dueño sigue hablando de un día o un equipo ya mencionado («solo ayer», «ese», «quitando el A127»), repetí en la consulta el mismo \`dia\`, \`buscar\` y \`excepto\`.
+- Contestá copiando \`respuesta_lista\` y siguiendo \`como_responder\`. Un equipo NO es una persona. «Visitas en total» es de toda la vida del equipo: no es lo de ese día ni se suma entre equipos. Si el conteo exacto no existe, decilo en una frase; no inventes nada ni cuentes filas como «veces».
+- Si el dueño dice que algo está mal, volvé a consultar y explicá la diferencia; no cambies la cifra sin consultar.`;
+
 /** Pidió buscar de nuevo: nada de memoria. */
 const OTRA_VEZ = /\b(de nuevo|otra vez|nuevamente|actualiz|refresc|busc[aá]lo (de nuevo|otra vez)|verific[aá]lo)\b/i;
 function puedeDeMemoria(t: string, esOrden: boolean): boolean {
@@ -2330,6 +2358,8 @@ export async function atender(req: Request): Promise<Response> {
       if (quitar.length) await admin.from('ia_mensajes').delete().in('id', quitar).eq('user_id', uid);
     }
     previas = previas.slice(0, MAX_HISTORIAL);
+    // Datos en vivo de seguridad: se consultan siempre, sin cerebro ni historia (ver RE_SEGURIDAD).
+    const datoSeg = modo === 'jarvis' && esSuper && !adjuntos.length && esDatoDeSeguridad(texto, previas);
     // Lo que pasó con las tarjetas de Javier se le cuenta a la IA (sin datos personales).
     const idsAcc = previas.flatMap(m => (m.consultas || []).filter((c: any) => c?.tipo === 'accion' && c.id).map((c: any) => c.id));
     const notas = new Map<string, string>();
@@ -2337,9 +2367,14 @@ export async function atender(req: Request): Promise<Response> {
       const { data: accs } = await admin.from('ia_acciones').select('id,estado,resultado,tarjeta').in('id', idsAcc);
       for (const a of accs || []) notas.set(a.id, `[Tarjeta «${a.tarjeta?.titulo || 'acción'}»: ${ESTADO_ACCION[a.estado] || a.estado}${a.estado === 'ejecutada' && a.resultado?.texto ? ` — ${a.resultado.texto}` : ''}]`);
     }
+    // Las respuestas viejas de seguridad conservan los nombres pero no las cifras (eran de otra consulta y varias
+    // estaban mal: la IA las repetía en vez de volver a consultar).
+    const esDeSeguridad = (m: any) => (Array.isArray(m.consultas) && m.consultas.some((c: any) => c?.modulo === 'Ciberseguridad')) || RE_SEGURIDAD.test(String(m.texto)) || /\bequipos?\b/i.test(String(m.texto));
+    const sinCifrasViejas = (m: any) => datoSeg && m.rol === 'assistant' && esDeSeguridad(m) ? String(m.texto).replace(/(?<![\w\u2011-])\d[\d.,:]*(?![\w\u2011-])/g, '[cifra]') : m.texto;
     const conNotas = (m: any) => {
       const extra = (m.consultas || []).filter((c: any) => c?.tipo === 'accion' && notas.has(c.id)).map((c: any) => notas.get(c.id)).join('\n');
-      return extra ? `${m.texto}\n\n${extra}` : m.texto;
+      const previo = sinCifrasViejas(m);
+      return extra ? `${previo}\n\n${extra}` : previo;
     };
     const historial: Turno[] = [...previas.reverse().map(m => ({ rol: m.rol, texto: conNotas(m) })), { rol: 'user', texto }] as Turno[];
 
@@ -2351,6 +2386,7 @@ export async function atender(req: Request): Promise<Response> {
     let extra = '';
     let perfilUsado = perfil;
     const cerebro = modo === 'jarvis' && esSuper ? crearCerebro(admin, uid) : null;
+    if (datoSeg) extra += REGLA_CIFRAS_SEGURIDAD;
     let usadosCerebro: string[] = [];
     let bloqueCerebro = '';
     let notasCerebro: Nota[] = [];
@@ -2362,7 +2398,7 @@ export async function atender(req: Request): Promise<Response> {
     if (esCodigo) extra += `\n\nMODO PROGRAMADOR: este mensaje es de programación. Respondé como un ingeniero de software senior: entendé bien qué se necesita, dá el código COMPLETO y funcional (nada de «…resto igual»), en bloques \`\`\`lenguaje, con una explicación corta de qué hace y cómo usarlo, y avisá de errores o riesgos (seguridad, rendimiento). Si falta un dato clave, asumí lo razonable y decilo. Si te piden revisar código, señalá los errores con la línea y la corrección.`;
     // La respuesta de memoria se busca YA, mientras se arma el contexto (antes esperaba a que todo
     // terminara y sumaba su tiempo al de la pregunta). Se usa más abajo si corresponde.
-    const memoriaP = cerebro && modo === 'jarvis' && !adjuntos.length && cuerpo?.buscar !== true && puedeDeMemoria(texto, false)
+    const memoriaP = cerebro && !datoSeg && modo === 'jarvis' && !adjuntos.length && cuerpo?.buscar !== true && puedeDeMemoria(texto, false)
       ? cerebro.respuestaGuardada(texto).catch(() => null) : null;
     const conMemoria = /record|acord|olvid|anot|prefer|siempre|nunca|de ahora en adelante|guard[aá]|no (me )?(digas|hables|uses)|llamame|forma de/i.test(texto);
     if (modo !== 'normal') {
@@ -2431,8 +2467,9 @@ export async function atender(req: Request): Promise<Response> {
           consulta: 'ESTE MENSAJE ES UNA CONSULTA: dato exacto primero; después qué significa para el negocio (comparado con algo: ayer, la semana, lo normal) y una recomendación concreta. Si viene al caso, una observación proactiva del contexto de hoy.',
           conversacion: 'ESTE MENSAJE ES CONVERSACIÓN O CONSEJO: respondé como un verdadero asistente personal, no como un bot. Elaborado y cálido (2 a 4 párrafos cortos o una lista breve), con criterio propio, opinión fundamentada y algo útil que él no pidió pero le sirve: un dato del contexto de hoy, una idea, un siguiente paso. Usá tu memoria de él. Cerrá ofreciendo algo concreto que podés hacer vos.',
         };
-        // Lo que ya aprendió y viene al caso (lo de internet, nunca en órdenes).
-        if (cerebro) {
+        // Lo que ya aprendió y viene al caso (lo de internet, nunca en órdenes). Los datos de seguridad en
+        // vivo no llevan notas del cerebro: solo traían ruido (código ajeno y cifras viejas).
+        if (cerebro && !datoSeg) {
           const sabe = await cerebro.recordarPara(texto, intencion === 'orden').catch(() => ({ bloque: '', usados: [] as string[], notas: [] as Nota[] }));
           notasCerebro = sabe.notas;
           usadosCerebro = sabe.usados;
@@ -2539,7 +2576,7 @@ export async function atender(req: Request): Promise<Response> {
           modo, pensar: conf.pensar, intento: conf.intento,
           acciones: modo === 'jarvis' && mods.acciones !== false && !adjuntos.length,
           leyoAfuera: adjuntos.length > 0, ctxAcc: modo === 'jarvis' ? ctxAcc : null, guardarPropuesta, propuestas,
-          extra, rondas, memoria: memoriaFns, cerebro, gasto, utiles, conMemoria,
+          extra, rondas, memoria: memoriaFns, cerebro, gasto, utiles, conMemoria, exigirHerr: datoSeg && herramientas.some(h => h.modulo === 'seguridad'),
           telefono: modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget' ? (cuerpo?.nativa === true ? 'nativa' : 'web') : null, telefonos,
           encargar: esSuper && modo === 'jarvis' && cuerpo?.envivo === true && cuerpo?.desde !== 'widget' ? encargar : undefined,
         };
@@ -2575,7 +2612,7 @@ export async function atender(req: Request): Promise<Response> {
       }
       // 0) SU CEREBRO PRIMERO: si ya contestó bien esta misma pregunta (por significado) y no es algo
       //    que cambia con el día, lo dice de memoria: sin IAs ni internet.
-      if (cerebro && puedeDeMemoria(texto, esOrdenMsg) && !adjuntos.length && cuerpo?.buscar !== true) {
+      if (cerebro && !datoSeg && puedeDeMemoria(texto, esOrdenMsg) && !adjuntos.length && cuerpo?.buscar !== true) {
         const memo = memoriaP ? await memoriaP : await cerebro.respuestaGuardada(texto).catch(() => null);
         if (memo) {
           const t0 = Date.now();
@@ -2930,7 +2967,7 @@ export async function atender(req: Request): Promise<Response> {
       // RESPUESTAS APRENDIDAS (cerebro propio): lo que contestó bien y no cambia con el día queda para
       // contestarlo de memoria la próxima vez. Si el dueño está corrigiendo («eso es falso»), la
       // respuesta mala de la pregunta anterior se borra y queda ESTA (la corrección) en su lugar.
-      if (cerebro && esSuper && modo === 'jarvis' && (res.proveedor as string) !== 'cerebro' && !adjuntos.length) {
+      if (cerebro && esSuper && modo === 'jarvis' && !datoSeg && (res.proveedor as string) !== 'cerebro' && !adjuntos.length) {
         try {
           const vivos = ['Ciberseguridad', 'Inventario', 'Facturación', 'Taller', 'Finanzas', 'Errores del sistema', 'Conversaciones'];
           const usoDatosVivos = res.consultas.some(c => vivos.includes(c.modulo) || ['accion', 'navegar', 'telefono', 'tarea', 'pieza', 'memoria'].includes(String(c.tipo || '')));
@@ -2947,7 +2984,7 @@ export async function atender(req: Request): Promise<Response> {
       }
       // HUECOS: una pregunta de conocimiento que su cerebro no supo contestar (la contestó una IA de afuera) se
       // anota; el autoestudio la estudia y la próxima vez contesta su cerebro.
-      if (cerebro && esSuper && modo === 'jarvis' && (res.proveedor as string) !== 'cerebro' && !adjuntos.length && !bloqueCerebro
+      if (cerebro && esSuper && modo === 'jarvis' && !datoSeg && (res.proveedor as string) !== 'cerebro' && !adjuntos.length && !bloqueCerebro
         && puedeDeMemoria(texto, esOrdenMsg) && /\?\s*$|^(qu[eé]|c[oó]mo|por qu[eé]|cu[aá]l(es)?|qui[eé]n|cu[aá]ndo|d[oó]nde|explic|ens[eé]ñ|dec[ií]me)/i.test(texto.trim())
         && !res.consultas.some(c => ['Ciberseguridad', 'Inventario', 'Facturación', 'Taller', 'Finanzas', 'Errores del sistema', 'Conversaciones'].includes(c.modulo) || ['accion', 'navegar', 'telefono', 'tarea', 'pieza', 'memoria'].includes(String(c.tipo || '')))) {
         await cerebro.anotarHueco(texto).catch(() => { /* sin cerebro instalado */ });
@@ -2957,7 +2994,7 @@ export async function atender(req: Request): Promise<Response> {
       // existan. Si se leyó internet, un enlace o un archivo, solo se aprende
       // de lo que dijo el dueño: lo de afuera nunca se cuela como «hecho».
       // Lo que gasta también se cobra: se suma a la respuesta y al día.
-      if (cerebro && esSuper && modo === 'jarvis' && mods.aprender !== false && Deno.env.get('IA_APRENDER') !== '0'
+      if (cerebro && esSuper && modo === 'jarvis' && !datoSeg && mods.aprender !== false && Deno.env.get('IA_APRENDER') !== '0'
         && (res.proveedor as string) !== 'cerebro' && texto.trim().length >= 12
         // Lo de ciberseguridad (quién entró, equipos, IPs) es del momento y cambia todo el tiempo: no se
         // aprende. Pasó: el cerebro guardó «ayer entraron 5 usuarios» de una respuesta inventada y la repetía.

@@ -92,7 +92,7 @@ export const CADUCA = /₡|¢|US\$|\$\s?\d|\bUSD\b|\bSKU\b\s*[:#]?\s*\d|precio (
  *  reglas obvias o frases sobre Javier mismo. Antes se guardaba y era basura. */
 // Incluye lo que caduca en horas (visitas, sesiones, «ayer», «hoy»): guardado como dato servía de «verdad»
 // y Javier lo repetía en vez de consultar (pasó con «Sesiones en el periodo ayer: 5»).
-export const BASURA = /^(el|la|un|una)?\s*(due[ñn]o|usuario|cliente|jefe|superadmin)\s+(solicit|pidi|pregunt|quiere|quer[ií]a|consult|busc[oó]|necesit)|^(jarvis|phill?|el asistente|la ia|el sistema)\b|se debe (evitar|verificar|confirmar|consultar)|no se (dispone|tiene|encontr|cuenta)|no (est[aá]n?|se encuentran?|fue|fueron) (registrad|disponible|encontrad|especificad)|no hay (datos|informaci|registros)|sin (datos|informaci[oó]n) (disponible|registrad)|^(se )?(recomienda|sugiere) (verificar|consultar|revisar)|^(es importante|hay que tener en cuenta)|(pregunt[oó]|consult[oó]) por\b|no (est[aá] |se encuentra |aparece |figura )?disponible|no aparece|no se (pudo|logr[oó])|al momento de la consulta|^precio:? no|\b(ayer|hoy|anoche|antier)\b|sesiones? (activas?|abiertas?|en el periodo)|visitas? (totales|activas|acumuladas)|visitantes? activos?|se excluy[oó]|en las [uú]ltimas? \d+ (horas?|minutos?)|p[aá]ginas m[aá]s visitadas|ingresos? (exitosos|fallidos)|quedan? \d+ horas?/i;
+export const BASURA = /^(el|la|un|una)?\s*(due[ñn]o|usuario|cliente|jefe|superadmin)\s+(solicit|pidi|pregunt|quiere|quer[ií]a|consult|busc[oó]|necesit)|^(jarvis|phill?|el asistente|la ia|el sistema)\b|se debe (evitar|verificar|confirmar|consultar)|no se (dispone|tiene|encontr|cuenta)|no (est[aá]n?|se encuentran?|fue|fueron) (registrad|disponible|encontrad|especificad)|no hay (datos|informaci|registros)|sin (datos|informaci[oó]n) (disponible|registrad)|^(se )?(recomienda|sugiere) (verificar|consultar|revisar)|^(es importante|hay que tener en cuenta)|(pregunt[oó]|consult[oó]) por\b|no (est[aá] |se encuentra |aparece |figura )?disponible|no aparece|no se (pudo|logr[oó])|al momento de la consulta|^precio:? no|\b(ayer|hoy|anoche|antier)\b|sesiones? (activas?|abiertas?|en el periodo)|visitas? (totales|activas|acumuladas)|visitantes? activos?|\b20\d\d-\d\d-\d\d\b|(ingres[oó]|entr[oó]|visit[oó]) \d+ veces|se excluy[oó]|en las [uú]ltimas? \d+ (horas?|minutos?)|p[aá]ginas m[aá]s visitadas|ingresos? (exitosos|fallidos)|quedan? \d+ horas?/i;
 /** Sitios cuyos resultados no aportan conocimiento (perfiles, redes). */
 export const SITIO_BASURA = /rocketreach|instagram|facebook|linkedin|pinterest|tiktok|zoominfo|scribd|quora/i;
 
@@ -102,6 +102,8 @@ const PRIVADO = /\b\d{8,12}\b|\d{4}[-\s]\d{4}|[^\s@]+@[^\s@]+\.[^\s@]+|\[[A-ZÉ]
 export function normalizar(t: string): string {
   return t.normalize('NFD').replace(/[̀-ͯ]/g, '').toLowerCase().replace(/[^a-z0-9ñ]+/g, ' ').trim().replace(/\s+/g, ' ');
 }
+/** ¿El texto (ya normalizado) tiene una palabra que EMPIEZA con `w`? («entro» no está en «dentro».) */
+const conPalabra = (texto: string, w: string) => ` ${texto} `.includes(` ${w}`);
 /** Una respuesta aprendida: es un «recuerdo» (la tabla no tiene otro tipo) con clave «resp:…». */
 const esRespuesta = (n: { clave?: unknown }) => String(n.clave || '').startsWith('resp:');
 const recortar = (t: string, n: number) => (t.length > n ? t.slice(0, n - 1).trimEnd() + '…' : t);
@@ -962,7 +964,10 @@ export function crearCerebro(admin: Db, uid: string) {
       // Javier repetía su propio error.
       // Precios y existencias de internet o de consultas viejas caducan: no se recuerdan como si fueran verdad.
       const caducado = (n: Nodo) => n.tipo === 'dato' && (n.fuente === 'internet' || n.fuente === 'conversación') && CADUCA.test(`${n.etiqueta} ${n.resumen || ''}`);
-      const sirve = (n: Nodo) => n.fuente !== 'pendiente' && !caducado(n) && !(BASURA.test(n.etiqueta) || BASURA.test(n.resumen || '') || SITIO_BASURA.test(`${n.etiqueta} ${n.url || ''}`));
+      // Los hechos del CÓDIGO solo se usan si la pregunta es del propio sistema (antes entraban en preguntas de
+      // visitas y ventas por compartir una palabra suelta como «entró» o «modelo»).
+      const delSistema = /\b(c[oó]digo|app|apk|panel|pantalla|bot[oó]n|funci[oó]n|archivo|componente|bug|falla|error|widget|burbuja|supabase|edge|migraci[oó]n|base de datos|tabla|workflow|build|ota|repositorio|servidor|p[aá]gina web|tienda en l[ií]nea|c[oó]mo funciona|c[oó]mo est[aá] hecho|por qu[eé] (falla|no)|implement\w*|arquitectura)\b/i.test(texto);
+      const sirve = (n: Nodo) => n.fuente !== 'pendiente' && (delSistema || n.fuente !== 'código') && !caducado(n) && !(BASURA.test(n.etiqueta) || BASURA.test(n.resumen || '') || SITIO_BASURA.test(`${n.etiqueta} ${n.url || ''}`));
       const directos = ((nodos || []) as Nodo[]).filter(sirve)
         .filter(n => n.tipo !== 'recuerdo' && n.resumen && nombre(n).length >= 3 && msg.includes(` ${nombre(n)} `))
         .filter(n => !(esOrden && n.fuente === 'internet'))
@@ -983,7 +988,7 @@ export function crearCerebro(admin: Db, uid: string) {
           .map(n => {
             const et = normalizar(n.etiqueta), res = normalizar(n.resumen || '');
             let p = 0;
-            for (const w of palabras) { if (et.includes(w)) p += 3; else if (res.includes(w)) p += 1; }
+            for (const w of palabras) { if (conPalabra(et, w)) p += 3; else if (conPalabra(res, w)) p += 1; }
             return { n, p };
           })
           .filter(x => x.p >= 3 || (x.p >= 2 && palabras.length <= 3))
@@ -998,8 +1003,8 @@ export function crearCerebro(admin: Db, uid: string) {
       }
       if (!directos.length) return { bloque: '', usados: [], notas: [] };
       // Qué tan relacionada está cada idea con el mensaje (para responder sin IA).
-      const peso = (n: Nodo) => { if (msg.includes(` ${nombre(n)} `)) return 100; const et = normalizar(n.etiqueta), res = normalizar(n.resumen || ''); let p = 0; for (const w of palabras) { if (et.includes(w)) p += 3; else if (res.includes(w)) p += 1; } return p; };
-      const notas: Nota[] = directos.map(n => ({ nombre: nombreHumano(n.etiqueta, n.tipo, n.url), resumen: n.fuente === 'internet' ? limpiarExtracto(primerResultado(n.resumen || ''), 260) : recortar(n.resumen || '', 260), url: n.url, fuente: n.fuente, peso: peso(n), cubre: palabras.length ? palabras.filter(w => normalizar(n.etiqueta + ' ' + (n.resumen || '')).includes(w)).length / palabras.length : 1 }));
+      const peso = (n: Nodo) => { if (msg.includes(` ${nombre(n)} `)) return 100; const et = normalizar(n.etiqueta), res = normalizar(n.resumen || ''); let p = 0; for (const w of palabras) { if (conPalabra(et, w)) p += 3; else if (conPalabra(res, w)) p += 1; } return p; };
+      const notas: Nota[] = directos.map(n => ({ nombre: nombreHumano(n.etiqueta, n.tipo, n.url), resumen: n.fuente === 'internet' ? limpiarExtracto(primerResultado(n.resumen || ''), 260) : recortar(n.resumen || '', 260), url: n.url, fuente: n.fuente, peso: peso(n), cubre: palabras.length ? palabras.filter(w => conPalabra(normalizar(n.etiqueta + ' ' + (n.resumen || '')), w)).length / palabras.length : 1 }));
       const ids = directos.map(n => n.id);
       const { data: enl } = await admin.from('jarvis_enlaces').select('origen,destino,relacion')
         .eq('user_id', uid).or(`origen.in.(${ids.join(',')}),destino.in.(${ids.join(',')})`).limit(120);
