@@ -144,6 +144,9 @@ export const APRENDER = {
 
 import { limpiarBusqueda, limpiarExtracto, nombreHumano, sitioHumano } from './nombres.ts';
 
+/** Hasta cuándo no se piden más vectores a Gemini (se acabó su cupo gratis). Compartido por todo el proceso. */
+let sinCupoVectoresHasta = 0;
+
 export function crearCerebro(admin: Db, uid: string) {
   const cache = new Map<string, string>();
   const pendientes: Promise<unknown>[] = [];
@@ -236,6 +239,9 @@ export function crearCerebro(admin: Db, uid: string) {
   async function vectoresSinCache(textos: string[]): Promise<number[][] | null> {
     const clave = (globalThis as any).Deno?.env?.get('GEMINI_API_KEY');
     if (!clave || !textos.length) return null;
+    // Sin cupo de vectores de Gemini (429): no se insiste cada 15 minutos; se espera. Antes se golpeaba
+    // la cuota 260 veces al día y las preguntas del dueño se quedaban sin búsqueda por significado.
+    if (Date.now() < sinCupoVectoresHasta) return null;
     const modelo = (globalThis as any).Deno?.env?.get('GEMINI_EMBED_MODEL') || 'gemini-embedding-001';
     const corte = new AbortController(); const t = setTimeout(() => corte.abort(), 6000);
     try {
@@ -243,7 +249,11 @@ export function crearCerebro(admin: Db, uid: string) {
         method: 'POST', signal: corte.signal, headers: { 'Content-Type': 'application/json', 'x-goog-api-key': clave },
         body: JSON.stringify({ requests: textos.map(tx => ({ model: `models/${modelo}`, content: { parts: [{ text: tx.slice(0, 2000) }] }, outputDimensionality: 768 })) }),
       });
-      if (!r.ok) { console.log(`vectores ${r.status}: ${(await r.text().catch(() => '')).slice(0, 160)}`); return null; }
+      if (!r.ok) {
+        console.log(`vectores ${r.status}: ${(await r.text().catch(() => '')).slice(0, 160)}`);
+        if (r.status === 429) sinCupoVectoresHasta = Date.now() + 30 * 60_000;
+        return null;
+      }
       const d = await r.json();
       const vs = (d?.embeddings || []).map((e: any) => e?.values as number[]);
       return vs.length === textos.length && vs.every((v: number[]) => Array.isArray(v) && v.length === 768) ? vs : null;
@@ -253,7 +263,10 @@ export function crearCerebro(admin: Db, uid: string) {
   /** Les pone vector a las ideas que todavía no tienen (de a poco). */
   async function vectorizarPendientes(max: number) {
     if (!(await hayVectores())) return 0;
+    // Los hechos del CÓDIGO (sis:…) son miles y se buscan por palabras (ver recordarPara): no gastan vectores, que son
+    // escasos (cupo gratis de Gemini) y los necesitan las preguntas del dueño y lo que él enseña.
     const { data } = await admin.from('jarvis_nodos').select('id,etiqueta,resumen').eq('user_id', uid).is('embedding', null)
+      .not('clave', 'like', 'sis:%')
       .in('tipo', ['tema', 'dato', 'fuente', 'recuerdo']).order('usos', { ascending: false }).limit(max);
     if (!data?.length) return 0;
     const vs = await vectores(data.map(textoDe));
@@ -994,6 +1007,18 @@ export function crearCerebro(admin: Db, uid: string) {
           .filter(x => x.p >= 3 || (x.p >= 2 && palabras.length <= 3))
           .sort((x, y) => y.p - x.p || y.n.usos - x.n.usos).slice(0, Math.max(0, 8 - directos.length));
         directos.push(...puntuados.map(x => x.n));
+      }
+      // Preguntas del propio sistema: los hechos del código se buscan por palabras en la base (sin vectores). Cada
+      // vocal vale «cualquier letra» (_) para que «pagina» encuentre «página».
+      if (delSistema && palabras.length) {
+        const filtro = palabras.slice(0, 6).map(w => `resumen.ilike.%${w.replace(/[aeiou]/g, '_')}%`).join(',');
+        const { data: codigo } = await admin.from('jarvis_nodos').select('id,clave,etiqueta,tipo,resumen,fuente,url,usos')
+          .eq('user_id', uid).eq('tipo', 'dato').like('clave', 'sis:%').or(filtro).limit(120);
+        const ya = new Set(directos.map(n => n.id));
+        const mejores = ((codigo || []) as Nodo[]).filter(n => n.resumen && !ya.has(n.id) && sirve(n))
+          .map(n => { const t = normalizar(n.resumen || ''); return { n, p: palabras.filter(w => conPalabra(t, w)).length }; })
+          .filter(x => x.p >= Math.min(2, palabras.length)).sort((x, y) => y.p - x.p).slice(0, 6);
+        directos.push(...mejores.map(x => x.n));
       }
       // Lo que se parece por SIGNIFICADO aunque no comparta palabras.
       {

@@ -1450,13 +1450,15 @@ const ES_CORRECCION = /^(no[,.!]?\s+)?(eso\s+)?(es\s+falso|est[aá]\s+mal|no\s+e
 
 /** Lo que usa el estudio del código para que una IA resuma un archivo (JSON con tema y hechos). */
 const pedirEstudio: PedirEstudio = async (prompt, datos) => {
-  const r = await pedirJSON(prompt, datos, { hasta: Date.now() + 40000, gasto: { in: 0, out: 0 }, etiqueta: 'estudio', valido: j => Array.isArray(j?.hechos) && j.hechos.length > 0 }).catch(() => null);
+  // evitar: 'cerebras' → el estudio de fondo NO gasta el cupo de la IA rápida del dueño (se topaba en 429 y sus
+  // preguntas caían a una IA más lenta).
+  const r = await pedirJSON(prompt, datos, { evitar: 'cerebras', hasta: Date.now() + 40000, gasto: { in: 0, out: 0 }, etiqueta: 'estudio', valido: j => Array.isArray(j?.hechos) && j.hechos.length > 0 }).catch(() => null);
   return r ? r.j : null;
 };
 /** Una vuelta del estudio del código para cada superadmin (la llama la tarea programada). */
 /** Lo que usa el autoestudio para que una IA saque la lección de lo que encontró en internet. */
 const pedirLeccion: PedirLeccion = async (prompt, datos) => {
-  const r = await pedirJSON(prompt, datos, { hasta: Date.now() + 45000, gasto: { in: 0, out: 0 }, etiqueta: 'leccion', valido: j => j && typeof j === 'object' && 'hechos' in j }).catch(() => null);
+  const r = await pedirJSON(prompt, datos, { evitar: 'cerebras', hasta: Date.now() + 45000, gasto: { in: 0, out: 0 }, etiqueta: 'leccion', valido: j => j && typeof j === 'object' && 'hechos' in j }).catch(() => null);
   return r ? r.j : null;
 };
 const buscarParaEstudio = (q: string) => buscarWeb(q, false, true);
