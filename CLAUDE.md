@@ -54,3 +54,20 @@ Javier conoce el sistema por `supabase/functions/asistente-ia/mapa-codigo.ts`,
 que se genera con `npm run mapa` a partir del comentario con que empieza cada
 archivo. Después de agregar o cambiar archivos, correr `npm run mapa` y subir
 el resultado junto con el cambio (la función lo trae al desplegarse).
+
+## Javier y los datos en vivo (visitas, ingresos, equipos)
+
+Pasó (2026-10-12): Javier contestaba «386 veces ayer» (eran las visitas de toda la
+vida del equipo), «416 entradas» (sumaba totales) y «2 veces» (contaba filas),
+porque no volvía a consultar y repetía la historia o notas del cerebro. Reglas:
+
+- Las preguntas de seguridad (`esDatoDeSeguridad` en `nucleo.ts`) fuerzan la
+  consulta (`tool_choice: required` en la primera vuelta), no usan el cerebro y
+  ven las cifras viejas de la conversación tapadas con «[cifra]».
+- `visitantes_tienda` devuelve `respuesta_lista` y `como_responder`: EQUIPOS, no
+  personas; las «visitas en total» son de toda la vida y no se suman. Sin el
+  registro de entradas (`supabase/migracion_visitas_por_dia.sql`) solo se sabe la
+  ÚLTIMA vez de cada equipo y Javier lo dice en vez de inventar un conteo.
+- El tiempo (hora, día, cuánto falta) lo calcula `tiempo.ts`, nunca el modelo.
+- Los regex con `\b` después de una letra con tilde (`entró`) NO funcionan en JS:
+  usar `(?![a-záéíóúñ])`.
