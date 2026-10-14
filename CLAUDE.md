@@ -127,7 +127,10 @@ Ordenado por el dueño (2026-10-14), vale para la web y la APK:
   almacenamiento, y «Aceptar» o la X lo dan por conocido, guardan `technoverse_aviso_cookies_v1` en el aparato y
   lo desmontan (no vuelve). NO es un consentimiento de supervisión disfrazado: no agrupa permisos del aparato
   tras un «Aceptar» (el viejo modal tipo cookies se quitó a propósito, ver #115). Lo de supervisión y ubicación
-  se dice claro en el menú plegable del pie, al que lleva «Más información».
+  se dice claro en el menú plegable del pie, al que lleva «Más información». Tiene que ser DISCRETO (pedido del
+  dueño, 2026-10-14: «que no sea tan invasivo»): una sola fila chica —texto corto, «Aceptar» y la X—, sin fondo
+  oscuro; en teléfono sobre el botón del chat y en pantalla grande en la esquina inferior izquierda. No
+  agrandarlo con más texto, ícono ni segunda fila.
 
 ## Mapa del código de Javier
 
