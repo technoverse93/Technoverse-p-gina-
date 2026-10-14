@@ -14,24 +14,11 @@ import { cargarContenido, contenidoFresco, esperarContenido, hayContenidoLocal }
 // Cuánto se espera, como máximo, el contenido editable antes de dibujar la
 // tienda cuando NO vino con el HTML (servidor de desarrollo, la APK, o el
 // Worker no alcanzó a leerlo). Con una copia guardada en el aparato basta un
-// instante; sin nada, un poco más. Pasado el tope se dibuja igual.
+// instante; sin nada, un poco más. Pasado el tope se dibuja igual. Mientras se
+// espera no se dibuja NADA (ni aro de carga: el dueño no lo quiere, el navegador
+// ya indica la carga).
 const ESPERA_CON_COPIA_MS = 400;
 const ESPERA_SIN_COPIA_MS = 1200;
-
-/**
- * La misma pantalla de carga que trae index.html (mismo id y mismas clases),
- * para que esperar el contenido no se note como un cambio de pantalla.
- */
-function PantallaDeCarga() {
-  // Si la página ya lleva rato cargando, el aro sale de una vez (no repite
-  // el retardo con el que index.html lo muestra).
-  const yaTardo = typeof performance !== 'undefined' && performance.now() > 600;
-  return (
-    <div id="tv-arranque" role="status" aria-label="Cargando">
-      <div className="tv-arranque-rueda" style={yaTardo ? { animationDelay: '0s, 0s' } : undefined} />
-    </div>
-  );
-}
 
 interface EstadoModoEdicion {
   /** true solo si está activado Y la persona puede editar. */
@@ -87,7 +74,7 @@ export function ModoEdicionProvider({
   // Si la persona pierde el permiso (cierra sesión), se apaga el modo.
   useEffect(() => { if (!puedeEditar) setActivo(false); }, [puedeEditar]);
 
-  if (!listo) return <PantallaDeCarga />;
+  if (!listo) return null;
 
   const valor: EstadoModoEdicion = {
     activo: activo && puedeEditar,

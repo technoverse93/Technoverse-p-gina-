@@ -1816,17 +1816,19 @@ export default function PublicStore({
               </h3>
 
               {filteredProducts.length === 0 && !catalogoCargado ? (
-                /* Todavía no se sabe qué hay: esqueleto, NO «sin artículos». Decir
-                   que no hay nada antes de que llegue el catálogo era mentirle al
-                   cliente un instante (y con el texto de fábrica) en cada visita. */
+                /* Todavía no se sabe qué hay: se RESERVA el lugar, sin dibujar nada, y NO se
+                   dice «sin artículos». Decir que no hay nada antes de que llegue el
+                   catálogo era mentirle al cliente un instante (y con el texto de fábrica)
+                   en cada visita; y ningún aro ni esqueleto animado: el dueño no quiere
+                   indicadores de carga al entrar (2026-10-14), el navegador ya los muestra. */
                 <div
                   data-esqueleto-catalogo
-                  role="status"
+                  aria-busy="true"
                   aria-label="Cargando productos"
                   className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3"
                 >
                   {Array.from({ length: 12 }, (_, i) => (
-                    <div key={i} aria-hidden="true" className="aspect-[4/5] rounded-2xl bg-[var(--bg-sunken)] border border-[var(--border-color)] animate-pulse" />
+                    <div key={i} aria-hidden="true" className="invisible aspect-[4/5]" />
                   ))}
                 </div>
               ) : filteredProducts.length === 0 ? (

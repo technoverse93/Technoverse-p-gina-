@@ -36,6 +36,9 @@ const EVENTO = 'technoverse_tema_cambiado';
  * lanzar, y un fallo al leer una preferencia visual no puede tumbar el
  * arranque de la aplicación.
  */
+// OJO: index.html (`#tv-tema`) repite esta decisión (y la de iniciarVidrio) en un
+// script en línea que corre ANTES del primer dibujo, para que no haya un destello de
+// tema claro mientras llega el JavaScript. Si cambias una, cambia la otra.
 export function temaInicial(): Tema {
   try {
     const guardado = localStorage.getItem(CLAVE);

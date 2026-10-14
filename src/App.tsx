@@ -64,12 +64,11 @@ function conLimite<T>(promesa: Promise<T>, ms: number, valor: T): Promise<T> {
   });
 }
 
+// Mientras llega el código del panel NO se dibuja ningún aro de carga (el dueño
+// no lo quiere al entrar, 2026-10-14: el navegador ya indica la carga): solo el
+// fondo del tema, para que no haya un destello de otro color.
 function AdminPanelFallback() {
-  return (
-    <div className="min-h-dvh flex items-center justify-center bg-[var(--bg-base,#0F1217)]">
-      <div className="w-8 h-8 rounded-full border-2 border-current border-t-transparent animate-spin opacity-60" />
-    </div>
-  );
+  return <div className="min-h-dvh bg-[var(--bg-base,#0F1217)]" />;
 }
 
 /**
