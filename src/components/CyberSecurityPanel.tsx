@@ -1,5 +1,5 @@
 import ConfigurarDesbloqueoLocal from './security/ConfigurarDesbloqueoLocal';
-import React, { useState, useEffect, useMemo, useCallback } from 'react';
+import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 import {
   ShieldAlert, Globe, Ban, CheckCircle, XCircle, RefreshCw, Trash2,
   MapPin, Smartphone, Monitor, Plus, Unlock, Lock, BookOpen, Activity,
@@ -19,6 +19,8 @@ import { Btn } from './admin/AdminKit';
 import { Glifo } from './security/Glifos';
 import { esAdminSupremo } from '../utils/securityPin';
 import MapaModal from './ui/MapaModal';
+import { TextoMedio } from './ui/TextoMedio';
+import { useAjusteDeTextos } from '../utils/ajustarTexto';
 
 // =====================================================================
 // CENTRO DE CIBERSEGURIDAD
@@ -227,6 +229,12 @@ function fechaCorta(iso?: string | null): string {
   try { return new Date(iso).toLocaleString('es-CR'); } catch { return String(iso); }
 }
 
+/** Fecha y hora cortas para tarjetas apretadas («24/9/26, 7:21 p. m.»): sin segundos ni siglo, así cabe en UNA línea. La completa va en `title`. */
+function fechaCompacta(iso?: string | null): string {
+  if (!iso) return '—';
+  try { return new Date(iso).toLocaleString('es-CR', { day: 'numeric', month: 'numeric', year: '2-digit', hour: 'numeric', minute: '2-digit' }); } catch { return String(iso); }
+}
+
 function minutosRestantes(hasta?: string | null): number {
   if (!hasta) return 0;
   const ms = new Date(hasta).getTime() - Date.now();
@@ -309,6 +317,10 @@ function CyberSecurityPanel({
   // los módulos Bloqueos y Ubicaciones): al resto del personal ni se le
   // muestran los apartados ni los botones.
   const esSupremo = esAdminSupremo(currentUserEmail);
+  // Los rótulos de esta pantalla se achican hasta caber en su línea (ver utils/ajustarTexto.ts):
+  // ningún texto ni ícono baja o se corre por el tamaño de la letra.
+  const raizRef = useRef<HTMLDivElement>(null);
+  useAjusteDeTextos(raizRef);
 
   const [vertiente, setVertiente] = useState<Vertiente>('admin');
   const [seccion, setSeccion] = useState<Seccion>('resumen');
@@ -973,7 +985,7 @@ function CyberSecurityPanel({
   };
 
   return (
-    <div className="space-y-5" id="view-ciberseguridad">
+    <div className="space-y-5" id="view-ciberseguridad" ref={raizRef}>
 
       {/* Ciberseguridad tiene su propia forma: un riel de apartados con
           glifos de dos tonos (en teléfono, mosaico deslizable) y cada
@@ -991,7 +1003,7 @@ function CyberSecurityPanel({
               className={`sg-ri ${seccion === c.id ? 'sg-on' : ''} ${(c.id === 'bloqueos' || c.id === 'penalizados' || c.id === 'aparatos') && c.contador ? 'sg-alerta' : ''}`}
             >
               <Glifo n={GLIFO_SECCION[c.id as Seccion]} />
-              <span>{c.label}</span>
+              <span data-ajustar data-ajustar-min="11">{c.label}</span>
               {!!c.contador && <em>{c.contador}</em>}
             </button>
           ))}
@@ -1001,7 +1013,7 @@ function CyberSecurityPanel({
           <div className="sg-tit">
             <span className="sg-em"><Glifo n={GLIFO_SECCION[seccion]} className="sg-lg" /></span>
             <div className="sg-tx">
-              <h2 role="heading" aria-level={1}>{carpetas.find(c => c.id === seccion)?.label}</h2>
+              <h2 role="heading" aria-level={1} data-ajustar data-ajustar-min="14">{carpetas.find(c => c.id === seccion)?.label}</h2>
               <p>{PISTA_SECCION[seccion]}</p>
             </div>
             <Btn variant="default" onClick={cargar} disabled={cargando}>
@@ -1043,18 +1055,18 @@ function CyberSecurityPanel({
               <div className="sg-eje" style={{ marginTop: 6 }}><span>hace 24 h</span><span>hace 12 h</span><span>ahora</span></div>
             </div>
             <div className="sg-leyenda">
-              <span><i style={{ background: 'var(--ok)' }} />Correcto</span>
-              <span><i style={{ background: 'var(--tv-warn)' }} />Fallido</span>
-              <span><i style={{ background: 'var(--tv-danger)' }} />Rechazado</span>
-              <span><i style={{ background: 'var(--bg-sunken)' }} />Sin actividad</span>
+              <span><i style={{ background: 'var(--ok)' }} /><span data-ajustar data-ajustar-min="10">Correcto</span></span>
+              <span><i style={{ background: 'var(--tv-warn)' }} /><span data-ajustar data-ajustar-min="10">Fallido</span></span>
+              <span><i style={{ background: 'var(--tv-danger)' }} /><span data-ajustar data-ajustar-min="10">Rechazado</span></span>
+              <span><i style={{ background: 'var(--bg-sunken)' }} /><span data-ajustar data-ajustar-min="10">Sin actividad</span></span>
             </div>
           </div>
 
           <div className="sg-fichas">
-            <div className="sg-ficha"><Glifo n="libro" /><span>Intentos (24 h)</span><b className="tabular-nums">{resumen.intentos24h}</b></div>
-            <div className="sg-ficha sg-ok"><Glifo n="ok" /><span>Ingresos correctos</span><b className="tabular-nums">{resumen.exitosos24h}</b></div>
-            <div className="sg-ficha sg-wa"><Glifo n="alerta" /><span>Intentos fallidos</span><b className="tabular-nums">{resumen.fallidos24h}</b></div>
-            <div className="sg-ficha sg-ba"><Glifo n="prohibido" /><span>Bloqueos activos</span><b className="tabular-nums">{resumen.bloqueosActivos}</b></div>
+            <div className="sg-ficha"><Glifo n="libro" /><span data-ajustar data-ajustar-min="10">Intentos (24 h)</span><b className="tabular-nums">{resumen.intentos24h}</b></div>
+            <div className="sg-ficha sg-ok"><Glifo n="ok" /><span data-ajustar data-ajustar-min="10">Ingresos correctos</span><b className="tabular-nums">{resumen.exitosos24h}</b></div>
+            <div className="sg-ficha sg-wa"><Glifo n="alerta" /><span data-ajustar data-ajustar-min="10">Intentos fallidos</span><b className="tabular-nums">{resumen.fallidos24h}</b></div>
+            <div className="sg-ficha sg-ba"><Glifo n="prohibido" /><span data-ajustar data-ajustar-min="10">Bloqueos activos</span><b className="tabular-nums">{resumen.bloqueosActivos}</b></div>
           </div>
 
           <div className="sg-card sg-pasaporte">
@@ -1062,15 +1074,15 @@ function CyberSecurityPanel({
               <span className="sg-k">Último ingreso correcto</span>
               {resumen.ultimoExito ? (
                 <>
-                  <b style={{ fontSize: 16 }}>{resumen.ultimoExito.email || '—'}</b>
-                  <span style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{fechaCorta(resumen.ultimoExito.ocurrido_en)}</span>
-                  <span>{bandera(resumen.ultimoExito.codigo_pais)} {ubicacionTexto(resumen.ultimoExito)}</span>
-                  <span className="sg-mono" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <b className="sg-1l" style={{ fontSize: 16 }}><TextoMedio texto={resumen.ultimoExito.email || '—'} /></b>
+                  <span className="sg-1l" style={{ color: 'var(--text-secondary)', fontSize: 12 }}>{fechaCorta(resumen.ultimoExito.ocurrido_en)}</span>
+                  <span className="sg-1l">{bandera(resumen.ultimoExito.codigo_pais)} {ubicacionTexto(resumen.ultimoExito)}</span>
+                  <span className="sg-mono sg-1l" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                     {resumen.ultimoExito.ip || 'IP desconocida'}{resumen.ultimoExito.proveedor ? ` · ${resumen.ultimoExito.proveedor}` : ''}
                   </span>
-                  <span className="sg-row" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                  <span className="sg-row sg-nw" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                     <Glifo n={resumen.ultimoExito.origen === 'apk' ? 'cel' : 'pc'} />
-                    {resumirDispositivo(resumen.ultimoExito.user_agent)}{resumen.ultimoExito.origen ? ` · ${resumen.ultimoExito.origen}` : ''}
+                    <span className="sg-1l">{resumirDispositivo(resumen.ultimoExito.user_agent)}{resumen.ultimoExito.origen ? ` · ${resumen.ultimoExito.origen}` : ''}</span>
                   </span>
                   <div className="sg-row">
                     {resumen.ultimoExito.dispositivo_conocido === false && <span className="sg-badge" data-t="wa">Aparato nuevo</span>}
@@ -1095,8 +1107,8 @@ function CyberSecurityPanel({
               <span className="sg-k">Esta conexión</span>
               {miIp ? (
                 <>
-                  <span className="sg-mono" style={{ fontWeight: 500, fontSize: 17 }}>{miIp}</span>
-                  <span style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
+                  <span className="sg-mono sg-1l" style={{ fontWeight: 500, fontSize: 17 }}><TextoMedio texto={miIp} fin={9} /></span>
+                  <span className="sg-1l" style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>
                     {bandera(miGeo?.codigo_pais)} {ubicacionTexto(miGeo || {})}{miGeo?.proveedor ? ` · ${miGeo.proveedor}` : ''}
                   </span>
                   {esSupremo && <div className="sg-row" style={{ marginTop: 4 }}>
@@ -1151,7 +1163,7 @@ function CyberSecurityPanel({
                 { id: 'fallidos',   label: 'Fallidos' },
                 { id: 'bloqueados', label: 'Rechazados' },
               ] as { id: FiltroAccesos; label: string }[]).map(f => (
-                <button key={f.id} type="button" data-on={filtro === f.id ? '' : undefined} onClick={() => { setFiltro(f.id); setPaginaAccesos(1); }}>
+                <button key={f.id} type="button" data-ajustar data-ajustar-min="10" data-on={filtro === f.id ? '' : undefined} onClick={() => { setFiltro(f.id); setPaginaAccesos(1); }}>
                   {f.label}
                 </button>
               ))}
@@ -1179,21 +1191,21 @@ function CyberSecurityPanel({
                       onKeyDown={e => { if (e.key === 'Enter') setDetalle(a); }}
                     >
                       <span className="sg-h">{hora}</span>
-                      <span className={`sg-sello ${t === 'o' ? '' : 'sg-' + t}`}>
+                      <span className={`sg-sello ${t === 'o' ? '' : 'sg-' + t}`} role="img" aria-label={t === 'b' ? 'Rechazado' : t === 'f' ? 'Fallido' : 'Correcto'} title={t === 'b' ? 'Rechazado' : t === 'f' ? 'Fallido' : 'Correcto'}>
                         <Glifo n={t === 'b' ? 'prohibido' : t === 'f' ? 'alerta' : 'ok'} />
                       </span>
                       <div style={{ minWidth: 0 }}>
-                        <b>{a.email || '—'}</b>
+                        <b><TextoMedio texto={a.email || '—'} /></b>
                         <span className="sg-s">
                           {bandera(a.codigo_pais)} {ubicacionTexto(a)} · <span className="sg-mono" style={{ fontSize: 12 }}>{a.ip || '—'}{a.proveedor ? ` · ${a.proveedor}` : ''}</span>
                         </span>
                       </div>
                       <div className="sg-ls">{resumirDispositivo(a.user_agent)}</div>
-                      <div className="sg-row" style={{ gap: 4, justifyContent: 'flex-end' }}>
+                      <div className="sg-lr-der">
                         <span className="sg-hh">{hora}</span>
-                        {a.dispositivo_conocido === false && <span className="sg-badge" data-t="wa">Aparato nuevo</span>}
-                        {esSupremo && a.gps_latitud != null && <span className="sg-badge" data-t="ok">GPS</span>}
-                        <span className="sg-badge" data-t={t === 'b' ? 'ba' : t === 'f' ? 'wa' : 'ok'}>
+                        {a.dispositivo_conocido === false && <span className="sg-badge" data-t="wa"><span className="sg-largo">Aparato nuevo</span><span className="sg-corto">Nuevo</span></span>}
+                        {esSupremo && a.gps_latitud != null && <span className="sg-badge sg-gps" data-t="ok">GPS</span>}
+                        <span className="sg-badge sg-estado" data-t={t === 'b' ? 'ba' : t === 'f' ? 'wa' : 'ok'}>
                           {t === 'b' ? 'Rechazado' : t === 'f' ? 'Fallido' : 'Correcto'}
                         </span>
                       </div>
@@ -1235,20 +1247,20 @@ function CyberSecurityPanel({
                     <span className="sg-sil"><Glifo n={esMovil(d.user_agent, d.origen) ? 'cel' : 'pc'} /></span>
                     <div style={{ minWidth: 0 }}>
                       <h5>
-                        <span style={{ overflowWrap: 'anywhere' }}>{d.etiqueta || resumirDispositivo(d.user_agent)}</span>
+                        <span title={d.etiqueta || resumirDispositivo(d.user_agent)}>{d.etiqueta || resumirDispositivo(d.user_agent)}</span>
                         {d.confiable
                           ? <span className="sg-badge" data-t="ok">Reconocido</span>
                           : <span className="sg-badge" data-t="wa">No reconocido</span>}
                       </h5>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
+                      <div className="sg-1l" style={{ fontSize: 12, color: 'var(--text-secondary)' }}>
                         {resumirDispositivo(d.user_agent)}{d.origen ? ` · ${d.origen}` : ''} · {d.ingresos} ingreso(s)
                       </div>
-                      <div className="sg-id" style={{ overflowWrap: 'anywhere' }}>{d.device_id}</div>
+                      <div className="sg-id"><TextoMedio texto={d.device_id} fin={10} /></div>
                     </div>
                   </div>
                   <div className="sg-dat">
-                    <div>Primera vez<b>{fechaCorta(d.primer_visto)}</b></div>
-                    <div>Última vez<b>{fechaCorta(d.ultimo_visto)}</b>{d.ultimo_email && <span style={{ fontSize: 12 }}>{d.ultimo_email}</span>}</div>
+                    <div>Primera vez<b title={fechaCorta(d.primer_visto)}>{fechaCompacta(d.primer_visto)}</b></div>
+                    <div>Última vez<b title={fechaCorta(d.ultimo_visto)}>{fechaCompacta(d.ultimo_visto)}</b>{d.ultimo_email && <span style={{ fontSize: 12 }}><TextoMedio texto={d.ultimo_email} /></span>}</div>
                   </div>
                   <div className="sg-pie">
                     <Btn className="sg-btn-sm" onClick={() => renombrarDispositivo(d)}>Ponerle nombre</Btn>
@@ -1287,7 +1299,7 @@ function CyberSecurityPanel({
           {bloqueos.length === 0 ? (
             <Vacio g="cuenta" texto={cargando ? 'Cargando…' : 'No hay ninguna conexión bloqueada. Todo tranquilo.'} />
           ) : (
-            <div style={{ display: 'grid', gap: 10 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 10 }}>
               {bloqueos.map(b => {
                 const restantes = minutosRestantes(b.bloqueado_hasta);
                 const activo = !b.desbloqueado_en && (b.permanente || restantes > 0);
@@ -1299,24 +1311,25 @@ function CyberSecurityPanel({
                     <div className={`sg-dial ${activo ? '' : 'sg-fin'}`} style={{ ['--p' as any]: pct }}>
                       <b className="tabular-nums">
                         {b.permanente && activo ? '∞' : activo ? (restantes >= 120 ? Math.round(restantes / 60) : restantes) : '—'}
-                        <small>{b.permanente && activo ? 'permanente' : activo ? (restantes >= 120 ? 'horas' : 'min') : b.desbloqueado_en ? 'levantado' : 'vencido'}</small>
+                        {/* Dentro del aro solo caben textos cortos: «permanente» ya lo dice la insignia roja de al lado. */}
+                        {!(b.permanente && activo) && <small data-ajustar data-ajustar-min="8">{activo ? (restantes >= 120 ? 'horas' : 'min') : b.desbloqueado_en ? 'libre' : 'vencido'}</small>}
                       </b>
                     </div>
                     <div style={{ minWidth: 0 }}>
                       <h5>
-                        <span style={{ overflowWrap: 'anywhere' }}>{b.ip}</span>
+                        <TextoMedio texto={b.ip} fin={10} />
                         <span className="sg-niv" title={`Nivel ${b.nivel}`}>
                           {[1, 2, 3].map(i => <i key={i} className={i <= nivel ? 'sg-on' : ''} />)}
                         </span>
                       </h5>
-                      <div className="sg-row" style={{ marginTop: 4 }}>
+                      <div className="sg-row sg-nw" style={{ marginTop: 4 }}>
                         <span className="sg-badge" data-t={b.bloqueo_total ? 'ba' : 'wa'}>{b.bloqueo_total ? 'Sitio completo' : 'Solo login'}</span>
                         {b.nivel > 0 && !b.permanente && <span className="sg-badge">Nivel {b.nivel}</span>}
                         {b.permanente && <span className="sg-badge" data-t="ba">Permanente</span>}
                       </div>
-                      <div style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5 }}>{ubicacionTexto(b)} · {b.intentos_fallidos} intento(s)</div>
-                      {b.ultimo_email && <div className="sg-mono" style={{ fontSize: 12, color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>Último correo probado: {b.ultimo_email}</div>}
-                      <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>{b.motivo} · {fechaCorta(b.actualizado_en)}</div>
+                      <div className="sg-1l" style={{ fontSize: 12, color: 'var(--text-secondary)', marginTop: 5 }}>{ubicacionTexto(b)} · {b.intentos_fallidos} intento(s)</div>
+                      {b.ultimo_email && <div className="sg-1f sg-mono" style={{ fontSize: 12, color: 'var(--text-muted)' }}><span>Último correo:</span><TextoMedio texto={b.ultimo_email} /></div>}
+                      <div className="sg-1l" title={`${b.motivo} · ${fechaCorta(b.actualizado_en)}`} style={{ fontSize: 12, color: 'var(--text-muted)' }}>{b.motivo} · {fechaCompacta(b.actualizado_en)}</div>
                     </div>
                     {activo && (
                       <div className="sg-act">
@@ -1368,10 +1381,10 @@ function CyberSecurityPanel({
                 <div key={c.ip} className="sg-pase2">
                   <div className="sg-st"><Glifo n="ok" className="sg-lg" /></div>
                   <div className="sg-tx">
-                    <b>{c.descripcion || 'Sin descripción'}</b>
-                    <code style={{ overflowWrap: 'anywhere' }}>{c.ip}</code>
-                    <span>Agregada el {fechaCorta(c.creado_en)}</span>
-                    <div className="sg-row" style={{ marginTop: 4 }}>
+                    <b className="sg-1l">{c.descripcion || 'Sin descripción'}</b>
+                    <code className="sg-1l"><TextoMedio texto={c.ip} fin={9} /></code>
+                    <span className="sg-1l" title={fechaCorta(c.creado_en)}>Agregada el {fechaCompacta(c.creado_en)}</span>
+                    <div className="sg-row sg-nw" style={{ marginTop: 4 }}>
                       <Btn className="sg-btn-sm sg-btn-ba" onClick={() => quitarConfianza(c.ip)}>Quitar de la lista blanca</Btn>
                     </div>
                   </div>
@@ -1474,12 +1487,12 @@ function CyberSecurityPanel({
                         <span className="sg-mono2" style={{ background: colorModulo(g.clave) }}>{nombre.charAt(0).toUpperCase()}</span>
                         <div style={{ minWidth: 0 }}>
                           <div className="sg-nb">
-                            <span style={{ overflowWrap: 'anywhere' }}>{nombre}</span>
+                            <span title={nombre}>{nombre}</span>
                             {g.huellas.length > 1 && (
                               <span title={`${g.huellas.length} identidades del mismo equipo`} style={{ fontSize: 12, color: 'var(--text-muted)', fontWeight: 400 }}>×{g.huellas.length}</span>
                             )}
                             {bloqueado && <span className="sg-badge" data-t="ba">Bloqueado</span>}
-                            {esSupremo && g.oculto && <span className="sg-badge" data-t="ac" title="Solo tú ves este aparato">Oculto al personal</span>}
+                            {esSupremo && g.oculto && <span className="sg-badge" data-t="ac" title="Solo tú ves este aparato"><span className="sg-largo">Oculto al personal</span><span className="sg-corto">Oculto</span></span>}
                           </div>
                           <div className="sg-s">
                             {[[g.sistema, g.version_sistema].filter(Boolean).join(' '), g.email || 'Anónimo'].filter(Boolean).join(' · ')}
@@ -1495,7 +1508,7 @@ function CyberSecurityPanel({
                         <div className="sg-nv tabular-nums">{g.visitas}</div>
                         <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fechaCorta(g.ultima)}</span>
                       </div>
-                      <div className="sg-row" style={{ gap: 4, flexWrap: 'nowrap' }}>
+                      <div className="sg-acc">
                         <button type="button" className="sg-ib" onClick={() => setVisitanteDetalle(g.reciente)} title="Ver ficha" aria-label="Ver ficha">
                           <Glifo n="lupa" />
                         </button>
@@ -1540,23 +1553,25 @@ function CyberSecurityPanel({
           {penalizados.length === 0 ? (
             <Vacio g="exp" texto="No hay ninguna cuenta penalizada. El baneo total se aplica desde la lista de visitantes o desde la ficha del cliente." />
           ) : (
-            <div style={{ display: 'grid', gap: 14 }}>
+            <div style={{ display: 'grid', gridTemplateColumns: 'minmax(0, 1fr)', gap: 14 }}>
               {penalizados.map(x => {
                 const vigente = !x.levantado_en;
                 return (
                   <div key={x.email} className={`sg-exp ${vigente ? '' : 'sg-old'}`} data-t={vigente ? 'Expediente · vigente' : 'Expediente · levantado'}>
-                    <span className="sg-sello2">{vigente ? 'Vigente' : 'Levantado'}</span>
-                    <h5 style={{ overflowWrap: 'anywhere', paddingRight: 96 }}>{x.email}</h5>
-                    {x.nombre && <div style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{x.nombre}</div>}
+                    <div className="sg-exp-cab">
+                      <h5><TextoMedio texto={x.email} /></h5>
+                      <span className="sg-sello2">{vigente ? 'Vigente' : 'Levantado'}</span>
+                    </div>
+                    {x.nombre && <div className="sg-1l" title={x.nombre} style={{ fontSize: 12.5, color: 'var(--text-secondary)' }}>{x.nombre}</div>}
                     <p style={{ margin: '8px 0 4px', fontSize: 12.5 }}><b>Motivo:</b> {x.motivo || '—'}</p>
-                    <div className="sg-row">
+                    <div className="sg-row sg-nw">
                       {x.bloquear_user_agent && <span className="sg-badge" data-t="wa">+ navegador bloqueado</span>}
                       <span className="sg-chip">{x.ips_bloqueadas?.length || 0} IP{(x.ips_bloqueadas?.length || 0) === 1 ? '' : 's'} bloqueada{(x.ips_bloqueadas?.length || 0) === 1 ? '' : 's'}</span>
                     </div>
                     <div className="sg-pie">
-                      <span>
-                        Aplicado el {fechaCorta(x.creado_en)}{x.creado_por ? ` · ${x.creado_por}` : ''}
-                        {!vigente && ` · Levantado el ${fechaCorta(x.levantado_en)}`}
+                      <span title={`Aplicado el ${fechaCorta(x.creado_en)}${x.creado_por ? ` · ${x.creado_por}` : ''}${!vigente ? ` · Levantado el ${fechaCorta(x.levantado_en)}` : ''}`}>
+                        Aplicado el {fechaCompacta(x.creado_en)}{x.creado_por ? ` · ${x.creado_por}` : ''}
+                        {!vigente && ` · Levantado el ${fechaCompacta(x.levantado_en)}`}
                       </span>
                       {vigente && <Btn className="sg-btn-sm" onClick={() => levantarBaneo(x.email)}>Levantar</Btn>}
                     </div>
@@ -1601,14 +1616,15 @@ function CyberSecurityPanel({
                 const vigente = !a.levantado_en;
                 return (
                   <div key={a.device_uuid} className={`sg-et ${vigente ? 'sg-on' : ''}`} style={vigente ? undefined : { opacity: 0.75 }}>
-                    <div className="sg-code" style={{ overflowWrap: 'anywhere' }}>{a.device_uuid}</div>
+                    <div className="sg-code"><TextoMedio texto={a.device_uuid} fin={8} /></div>
                     <div className="sg-row" style={{ marginTop: 6 }}>
                       <span className="sg-badge" data-t={vigente ? 'ba' : undefined}>{vigente ? 'Bloqueado' : 'Liberado'}</span>
                     </div>
-                    <div style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 6 }}>Motivo: {a.motivo || '—'}</div>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)', overflowWrap: 'anywhere' }}>
-                      Cuenta: {a.email || 'Sin cuenta'} · {fechaCorta(a.creado_en)}{a.creado_por ? ` · ${a.creado_por}` : ''}
-                      {!vigente && ` · liberado el ${fechaCorta(a.levantado_en)}`}
+                    <div className="sg-1l" title={a.motivo || ''} style={{ fontSize: 12.5, color: 'var(--text-secondary)', marginTop: 6 }}>Motivo: {a.motivo || '—'}</div>
+                    <div className="sg-1f" style={{ fontSize: 12, color: 'var(--text-muted)' }}><span>Cuenta:</span>{a.email ? <TextoMedio texto={a.email} /> : <span>Sin cuenta</span>}</div>
+                    <div className="sg-1l" title={`${fechaCorta(a.creado_en)}${a.creado_por ? ` · ${a.creado_por}` : ''}${!vigente ? ` · liberado el ${fechaCorta(a.levantado_en)}` : ''}`} style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      {fechaCompacta(a.creado_en)}{a.creado_por ? ` · ${a.creado_por}` : ''}
+                      {!vigente && ` · liberado el ${fechaCompacta(a.levantado_en)}`}
                     </div>
                     {vigente && (
                       <div className="sg-row">
@@ -1691,9 +1707,9 @@ function CyberSecurityPanel({
                 <div key={l.id} className="sg-llave">
                   <span className="sg-ll"><Glifo n="huella" /></span>
                   <div style={{ flex: 1, minWidth: 0 }}>
-                    <b style={{ overflowWrap: 'anywhere' }}>{l.etiqueta || 'Aparato sin nombre'}</b>
-                    <div style={{ fontSize: 12, color: 'var(--text-muted)' }}>
-                      Activado {fechaCorta(l.creado_en)} · Último uso: {l.ultimo_uso ? fechaCorta(l.ultimo_uso) : 'nunca'}
+                    <b className="sg-1l" title={l.etiqueta || 'Aparato sin nombre'}>{l.etiqueta || 'Aparato sin nombre'}</b>
+                    <div className="sg-1l" title={`Activado ${fechaCorta(l.creado_en)} · Último uso: ${l.ultimo_uso ? fechaCorta(l.ultimo_uso) : 'nunca'}`} style={{ fontSize: 12, color: 'var(--text-muted)' }}>
+                      Activado {fechaCompacta(l.creado_en)} · Último uso: {l.ultimo_uso ? fechaCompacta(l.ultimo_uso) : 'nunca'}
                     </div>
                   </div>
                   <Btn className="sg-btn-sm sg-btn-ba" onClick={() => quitarLlave(l.id)}>Quitar</Btn>

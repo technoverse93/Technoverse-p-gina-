@@ -40,6 +40,7 @@ import { Search, Lock } from 'lucide-react';
 import { NAV_GROUPS } from './adminNav';
 import { modulosFrecuentes } from './usePestanas';
 import { resolverModulo } from './adminNav';
+import { useAjusteDeTextos } from '../../utils/ajustarTexto';
 
 interface Props {
   /** Abre el módulo elegido, reemplazando esta pestaña. */
@@ -64,6 +65,10 @@ function NuevaPestana({ onElegir, esSupremo, abiertas }: Props) {
     [esSupremo],
   );
   const [q, setQ] = useState('');
+  // Los nombres de los módulos se achican hasta caber en su línea (utils/ajustarTexto.ts): con la letra
+  // grande del teléfono no se parten en dos renglones ni se salen de su tarjeta por la izquierda.
+  const raizRef = useRef<HTMLDivElement>(null);
+  useAjusteDeTextos(raizRef);
   // El buscador se enfoca solo ÚNICAMENTE con ratón (computadora). En un
   // teléfono o tablet eso abría el teclado sin que nadie tocara el campo y
   // tapaba media pantalla; ahí el teclado sale solo al tocar el buscador.
@@ -89,7 +94,7 @@ function NuevaPestana({ onElegir, esSupremo, abiertas }: Props) {
   const primero = zonas[0]?.items[0];
 
   return (
-    <div className="tv-lz">
+    <div className="tv-lz" ref={raizRef}>
       <header className="tv-lz-cab">
         <h1 className="tv-lz-titulo">¿Qué abrimos?</h1>
         <label className="tv-lz-busca">
@@ -112,7 +117,7 @@ function NuevaPestana({ onElegir, esSupremo, abiertas }: Props) {
             {frecuentes.map(m => (
               <button key={m.id} type="button" className="tv-lz-frec-b" onClick={() => onElegir(m.id)}>
                 <span className="tv-lz-tile"><m.icon className="w-5 h-5" aria-hidden="true" /></span>
-                <span>{m.label}</span>
+                <span className="tv-lz-n"><span className="tv-lz-t" data-ajustar data-ajustar-min="10">{m.label}</span></span>
               </button>
             ))}
           </div>
@@ -141,12 +146,12 @@ function NuevaPestana({ onElegir, esSupremo, abiertas }: Props) {
                   <span className="tv-lz-tile"><item.icon className="w-5 h-5" aria-hidden="true" /></span>
                   <span className="tv-lz-tx">
                     <span className="tv-lz-n">
-                      {item.label}
+                      <span className="tv-lz-t" data-ajustar data-ajustar-min="9.5">{item.label}</span>
                       {item.soloAdminSupremo && <Lock className="w-3 h-3 tv-lz-lock" aria-label="Solo superadmin" />}
                     </span>
                     {item.descripcion && <span className="tv-lz-d">{item.descripcion}</span>}
                   </span>
-                  {abierto && <span className="tv-lz-abierto">Abierto</span>}
+                  {abierto && <span className="tv-lz-abierto" title="Abierto">Abierto</span>}
                 </button>
               );
             })}
