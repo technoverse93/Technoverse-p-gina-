@@ -48,6 +48,28 @@ el sistema y sus aplicaciones con una página o con algo oscuro:
 
 Cualquier cambio a la ventanita tiene que respetar esto.
 
+## Regla de producto: la tienda NO parpadea al abrir (lo editado sale definitivo)
+
+Ordenado por el dueño (2026-10-14, con un video): al abrir la tienda no puede verse
+primero el texto, el ícono o el logo «de fábrica» y a los instantes el editado
+(«refrescamiento tras refrescamiento»). Lo editado tiene que salir definitivo en el
+primer dibujo, en visitas nuevas y en repetidas (su equipo borra los datos del
+navegador: para él toda visita es nueva).
+
+- El Worker (`src/worker/previo.ts`) lee `contenido_sitio`, la configuración pública
+  (`app_settings`: logo, teléfono, horario) y si la tienda tiene algo que mostrar, y lo
+  deja dentro del HTML en `<script id="tv-previo" type="application/json">`. El
+  cliente lo lee antes de dibujar (`src/utils/previoDelSitio.ts`). Si otra tabla pública
+  pasa a ser «editable», se suma ahí; no se pide después del primer dibujo.
+- Un componente que muestra datos de la base arranca con el dato ya cargado (estado
+  inicial síncrono, ver `lecturaRapida()` en `storage.ts`); nunca con `[]`/`null` para
+  llenarlo en un efecto: ese primer cuadro es el parpadeo.
+- No se dice «Sin artículos disponibles» antes de saber si los hay (`catalogoListo()`):
+  mientras tanto va el esqueleto.
+- El aro de carga de `index.html` sale con 0,7 s de retardo: en una carga normal no se ve.
+- Sin el dato en el HTML (APK, desarrollo, el Worker no alcanzó a leer) la tienda espera
+  un instante acotado el contenido (`ModoEdicionProvider`) antes de dibujar.
+
 ## Mapa del código de Javier
 
 Javier conoce el sistema por `supabase/functions/asistente-ia/mapa-codigo.ts`,

@@ -1,5 +1,6 @@
 import { agruparAvisos } from './agruparAvisos';
 import { supabase } from '../supabaseClient';
+import { ajustesPrevios, catalogoVacioPrevio } from './previoDelSitio';
 import {
   User, Product, InventoryMovement, RepairOrder, Order,
   ChatConversation, ChatMessage,
@@ -100,6 +101,31 @@ const VERSION_CACHE = 1;
 // refresco solo gasta CPU para volver a fallar igual.
 let cacheDeshabilitada = false;
 
+// ¿La copia guardada en este aparato trajo catálogo? Con eso la tienda ya
+// puede dibujarlo en el primer fotograma. Una copia SIN productos no cuenta
+// (puede ser de una visita cortada antes de que llegara el catálogo).
+let catalogoHidratado = false;
+
+/**
+ * ¿Ya se sabe qué hay en el catálogo? Sí si la copia guardada lo trajo, si
+ * ya llegó de Supabase o si el borde comprobó al abrir la página que no hay
+ * nada que mostrar. Mientras NO, la tienda no debe decir «Sin artículos
+ * disponibles»: todavía no sabe si los hay.
+ */
+export function catalogoListo(): boolean {
+  return catalogoHidratado || !!genericReady['products'] || catalogoVacioPrevio();
+}
+
+/**
+ * Lo que ya hay en memoria, SIN copiarlo (getDB() clona toda la base), para
+ * que el primer dibujo de la tienda salga con el catálogo, los banners y la
+ * configuración que hay al abrir y no vacío. Es de SOLO LECTURA: quien la
+ * usa no debe modificar lo que devuelve.
+ */
+export function lecturaRapida(): { products: Product[]; banners: Banner[]; settings?: AppSettings } {
+  return { products: localCache.products, banners: localCache.banners, settings: localCache.settings };
+}
+
 function guardarCacheLocal(): void {
   if (cacheDeshabilitada || typeof window === 'undefined') return;
   try {
@@ -136,6 +162,7 @@ function hidratarCacheLocal(): void {
     if (Array.isArray(guardado.products)) {
       localCache.products = guardado.products;
       lastSyncedDb.products = structuredClone(guardado.products);
+      catalogoHidratado = guardado.products.length > 0;
     }
     if (Array.isArray(guardado.banners)) {
       localCache.banners = guardado.banners;
@@ -149,6 +176,22 @@ function hidratarCacheLocal(): void {
     // Caché ilegible: se arranca en blanco, exactamente como antes de
     // que existiera. Nunca vale la pena romper el arranque por esto.
   }
+}
+
+/**
+ * Si la página trajo la configuración pública al día (la deja el Worker
+ * dentro del HTML, ver src/worker/previo.ts), se usa YA: es más nueva que la
+ * copia del aparato y es lo que evita que el logo, el teléfono y el horario
+ * del pie de página aparezcan o cambien DESPUÉS del primer dibujo. Se mezcla
+ * sobre lo que hubiera y se pone en las DOS copias, por la misma razón que
+ * `hidratarCacheLocal`. No trae el webhook de Instagram: ese se conserva.
+ */
+function hidratarAjustesPrevios(): void {
+  const previos = ajustesPrevios();
+  if (!previos) return;
+  const mezcla: AppSettings = { ...(localCache.settings || DEFAULT_SETTINGS), ...previos };
+  localCache.settings = mezcla;
+  lastSyncedDb.settings = structuredClone(mezcla);
 }
 
 /** Tablas cuya recarga debe refrescar la copia guardada en el aparato. */
@@ -1126,6 +1169,11 @@ function initTableRealtimeSync(cfg: TableConfig<any>) {
   refreshTableFromSupabase(cfg).then(() => {
     genericReady[cfg.key as string] = true;
     flushGenericPending(cfg);
+    // La tienda espera este aviso para dejar de mostrar el esqueleto del
+    // catálogo (ver `catalogoListo`).
+    if (cfg.key === 'products' && typeof window !== 'undefined') {
+      try { window.dispatchEvent(new Event('technoverse_catalogo_listo')); } catch { /* sin ventana */ }
+    }
   });
 }
 
@@ -2276,6 +2324,7 @@ let lastSyncedDb: Database = getDefaultDB();
 // monte nada. Para cuando la tienda hace su primer `getDB()`, el catálogo
 // ya está ahí.
 hidratarCacheLocal();
+hidratarAjustesPrevios();
 
 export async function saveDB(newDb: Database) {
   const oldDb = lastSyncedDb;

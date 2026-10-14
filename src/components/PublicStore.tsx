@@ -13,10 +13,11 @@ import { CustomSelect } from './CustomSelect';
 import { MarketingRow } from './MarketingRow';
 import { Product, Order, OrderItem, RepairOrder, Banner } from '../types';
 import { supabase } from '../supabaseClient';
-import { getDB, getDBVersion, saveDB, addAuditLog } from '../utils/storage';
+import { getDB, getDBVersion, saveDB, addAuditLog, lecturaRapida, catalogoListo } from '../utils/storage';
+import { catalogoVacioPrevio } from '../utils/previoDelSitio';
 import { iniciarSesionVigilada, conTope } from '../utils/adminLogin';
 import { soportaBiometria, entrarConBiometria, biometriaYaActivada } from '../utils/biometria';
-import { CATEGORIAS_CON_TODOS, coincideCategoria, esRepuesto, esInsumo } from '../utils/categorias';
+import { CATEGORIAS_CON_TODOS, CATEGORIAS_REPUESTO, coincideCategoria, esRepuesto, esInsumo } from '../utils/categorias';
 import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
 import { useToast } from './ui/Overlays';
@@ -88,6 +89,15 @@ const COSTA_RICA_PROVINCES = [
 ];
 
 
+/** El catálogo que ve el público: activos, con existencias y sin repuestos. */
+function visiblesEnTienda(lista: Product[] | null | undefined): Product[] {
+  return (lista || []).filter(p => p && p.active !== false && Number(p.stock) > 0 && !CATEGORIAS_REPUESTO.includes(p.category) && p.category !== 'Repuestos');
+}
+
+// Cuánto se espera el catálogo antes de dejar de mostrar el esqueleto y
+// decir que no hay nada (por si la red no contesta nunca).
+const ESPERA_CATALOGO_MS = 8000;
+
 function usePagination(items, itemsPerPage = 10) {
   const [page, setPage] = React.useState(1);
   React.useEffect(() => { setPage(1); }, [items.length]);
@@ -107,10 +117,29 @@ export default function PublicStore({
   autoOpenLogin,
   onClearAutoOpenLogin,
 }: PublicStoreProps) {
-  const [products, setProducts] = useState<Product[]>([]);
-  const [dbInstance, setDbInstance] = useState<any>(null);
-  const [banners, setBanners] = useState<Banner[]>([]);
-  const [storeLogo, setStoreLogo] = useState<string | null>(null);
+  // SIN PARPADEOS: el primer dibujo sale con lo que YA hay (la copia guardada
+  // en el aparato y, si la página la trajo, la configuración al día). Antes
+  // estos estados arrancaban vacíos y se llenaban en un efecto, DESPUÉS del
+  // primer dibujo: salían «Sin artículos disponibles» y el logo de fábrica un
+  // instante, y luego cambiaban al catálogo y al logo reales.
+  const arranque = useRef(lecturaRapida()).current;
+  // Si el borde ya comprobó que no hay nada que mostrar, eso es más nuevo que
+  // la copia guardada en el aparato: se dibuja vacío de una vez.
+  const [products, setProducts] = useState<Product[]>(() => (catalogoVacioPrevio() ? [] : visiblesEnTienda(arranque.products)));
+  const [dbInstance, setDbInstance] = useState<any>(() => ({ settings: arranque.settings ? { ...arranque.settings } : undefined }));
+  const [banners, setBanners] = useState<Banner[]>(() => [...(arranque.banners || [])]);
+  const [storeLogo, setStoreLogo] = useState<string | null>(() => arranque.settings?.storeLogo || null);
+  // ¿Ya se sabe qué hay en el catálogo? Hasta que se sepa no se dice «no hay
+  // nada» (se muestra un esqueleto): decirlo antes es mentirle al cliente.
+  const [catalogoCargado, setCatalogoCargado] = useState<boolean>(() => catalogoListo());
+  useEffect(() => {
+    if (catalogoCargado) return;
+    const yaLlego = () => setCatalogoCargado(true);
+    window.addEventListener('technoverse_catalogo_listo', yaLlego);
+    const tope = setTimeout(yaLlego, ESPERA_CATALOGO_MS);
+    if (catalogoListo()) yaLlego();
+    return () => { window.removeEventListener('technoverse_catalogo_listo', yaLlego); clearTimeout(tope); };
+  }, [catalogoCargado]);
   const handleDropdownEnter = (e: React.MouseEvent<HTMLDivElement | HTMLButtonElement>) => {
     const button = e.currentTarget;
     const rect = button.getBoundingClientRect();
@@ -741,9 +770,8 @@ export default function PublicStore({
     // local, mismo evento de actualización), así que el cartel aparece en
     // el primer fotograma igual que los productos.
     setBanners(freshDb.banners || []);
-    // Filter out spare part categories from public store
-    const SPARE_PART_CATEGORIES = ['LCD', 'Batería', 'Rack de Carga', 'Tapa', 'Desbloqueo', 'Flex', 'Conector', 'Otra'];
-    setProducts((freshDb.products || []).filter(p => p && p.active !== false && Number(p.stock) > 0 && !SPARE_PART_CATEGORIES.includes(p.category) && p.category !== 'Repuestos'));
+    // Los repuestos no salen en la tienda pública.
+    setProducts(visiblesEnTienda(freshDb.products));
   };
 
   // Estables entre renders (useCallback) para que <ProductCard> memoizada no
@@ -1766,7 +1794,9 @@ export default function PublicStore({
                     className={`tv-pildora ${activa ? 'tv-pildora--on' : ''}`}
                   >
                     {cat}
-                    <span className="tv-pildora-n">{n}</span>
+                    {/* Hasta que se sepa el catálogo el número se esconde (sin quitarle el
+                        lugar, para que la pastilla no cambie de ancho al llegar). */}
+                    <span className="tv-pildora-n" style={catalogoCargado ? undefined : { visibility: 'hidden' }}>{n}</span>
                   </button>
                 );
               })}
@@ -1785,7 +1815,21 @@ export default function PublicStore({
                     </>}
               </h3>
 
-              {filteredProducts.length === 0 ? (
+              {filteredProducts.length === 0 && !catalogoCargado ? (
+                /* Todavía no se sabe qué hay: esqueleto, NO «sin artículos». Decir
+                   que no hay nada antes de que llegue el catálogo era mentirle al
+                   cliente un instante (y con el texto de fábrica) en cada visita. */
+                <div
+                  data-esqueleto-catalogo
+                  role="status"
+                  aria-label="Cargando productos"
+                  className="grid grid-cols-2 min-[400px]:grid-cols-3 sm:grid-cols-4 md:grid-cols-5 lg:grid-cols-6 xl:grid-cols-7 gap-3"
+                >
+                  {Array.from({ length: 12 }, (_, i) => (
+                    <div key={i} aria-hidden="true" className="aspect-[4/5] rounded-2xl bg-[var(--bg-sunken)] border border-[var(--border-color)] animate-pulse" />
+                  ))}
+                </div>
+              ) : filteredProducts.length === 0 ? (
                 /* Estado vacío. Nombra la categoría concreta y ofrece salida:
                    con cinco categorías y pocos artículos, entrar en una vacía
                    es algo que va a pasar de verdad, y un mensaje genérico deja
