@@ -53,6 +53,15 @@
  * seguridad si algún día se quita el Worker.
  *
  * ---------------------------------------------------------------------
+ * TAMBIÉN DEJA LO EDITABLE DENTRO DEL HTML (sin parpadeos)
+ * ---------------------------------------------------------------------
+ * Los textos, íconos y colores que el dueño edita (`contenido_sitio`) y la
+ * configuración pública (logo, teléfono, horario) se leen aquí, en paralelo
+ * con el HTML, y viajan dentro de la página (ver ./previo.ts). Así la
+ * primera pantalla ya sale con lo definitivo: antes salía con los textos de
+ * fábrica y a los pocos instantes cambiaba a los editados.
+ *
+ * ---------------------------------------------------------------------
  * REGLA DE ORO: ESTO NUNCA PUEDE TUMBAR EL SITIO
  * ---------------------------------------------------------------------
  * Si la consulta a la base de datos falla, tarda o devuelve cualquier
@@ -62,6 +71,8 @@
  * try/catch y con tope de tiempo.
  * =====================================================================
  */
+
+import { conPrevio, esPaginaDeLaApp, obtenerPrevio } from './previo';
 
 interface Env {
   ASSETS: { fetch: (request: Request) => Promise<Response> };
@@ -289,6 +300,13 @@ export default {
     const ruta = new URL(request.url).pathname;
 
     try {
+      // Lo editable del sitio se empieza a leer YA (solo en las páginas de la
+      // app) y se espera al final: corre en paralelo con la revisión del
+      // aparato y con el HTML, así que no suma espera. Nunca lanza.
+      const previoListo = request.method === 'GET' && esPaginaDeLaApp(ruta)
+        ? obtenerPrevio(SUPABASE_URL, SUPABASE_KEY)
+        : null;
+
       // Los archivos con hash no se revisan: son cientos de peticiones por
       // visita y no sirven de nada sin el HTML, que sí está protegido.
       if (!esAsset(ruta) && esDocumento(ruta)) {
@@ -299,7 +317,9 @@ export default {
       }
 
       const respuesta = await env.ASSETS.fetch(request);
-      return conCabeceras(respuesta, ruta);
+      const previo = previoListo ? await previoListo : null;
+      const entregada = previo ? await conPrevio(respuesta, previo) : respuesta;
+      return conCabeceras(entregada, ruta);
     } catch (err) {
       // Último recurso: si algo de arriba reventó, se intenta servir el
       // sitio de todos modos. Nunca dejar la página caída por el portero.

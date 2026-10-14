@@ -45,12 +45,16 @@
     <!-- Indicador de carga ESTÁTICO: se ve desde el primer instante, antes de que cargue el
          JavaScript (en un teléfono modesto eso puede tardar unos segundos, y hasta ahora se veía
          una pantalla oscura vacía). React lo reemplaza en cuanto arma la primera pantalla; si la
-         app no llega a arrancar, public/arranque.js lo convierte en un aviso con qué hacer. -->
+         app no llega a arrancar, public/arranque.js lo convierte en un aviso con qué hacer.
+         El aro sale con 0,7 s de retardo (tv-arranque-entra): en una carga normal la tienda llega antes y
+         NO se ve ningún «cargando» (el dueño no quería ver nada de eso al abrir, 2026-10-14); en un
+         teléfono lento o con mala señal sí aparece, que es para lo que existe. -->
     <style>
       #tv-arranque { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; color: #8b93a1; }
-      #tv-arranque .tv-arranque-rueda { width: 32px; height: 32px; border-radius: 9999px; border: 2px solid currentColor; border-top-color: transparent; opacity: .6; animation: tv-arranque-giro .9s linear infinite; }
+      #tv-arranque .tv-arranque-rueda { width: 32px; height: 32px; border-radius: 9999px; border: 2px solid currentColor; border-top-color: transparent; opacity: 0; animation: tv-arranque-giro .9s linear infinite, tv-arranque-entra .3s ease-out .7s forwards; }
       @keyframes tv-arranque-giro { to { transform: rotate(360deg); } }
-      @media (prefers-reduced-motion: reduce) { #tv-arranque .tv-arranque-rueda { animation-duration: 2.4s; } }
+      @keyframes tv-arranque-entra { to { opacity: .6; } }
+      @media (prefers-reduced-motion: reduce) { #tv-arranque .tv-arranque-rueda { animation-duration: 2.4s, .3s; } }
     </style>
   </head>
   <body>
