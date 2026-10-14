@@ -7,8 +7,43 @@
     <!-- Content-Security-Policy: blindaje anti-inyeccion/XSS. Solo se permite
          ejecutar codigo propio (self); cualquier script inyectado por un
          atacante queda bloqueado. Las conexiones de datos se limitan a Supabase
-         (HTTPS/WSS). Sin costo de rendimiento. -->
-    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://huggingface.co https://*.huggingface.co https://*.hf.co https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data: blob:; media-src 'self' blob: data:; worker-src 'self' blob:;" />
+         (HTTPS/WSS). Sin costo de rendimiento.
+         El marcador de huella que va en script-src es la del script en línea del tema (más abajo,
+         #tv-tema): vite.config.ts la calcula sola al compilar, no hay que tocarla a mano. -->
+    <meta http-equiv="Content-Security-Policy" content="default-src 'self'; base-uri 'self'; object-src 'none'; form-action 'self'; script-src 'self' 'wasm-unsafe-eval' 'sha256-TEMA'; style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; img-src 'self' data: blob: https:; font-src 'self' data: https://fonts.gstatic.com; connect-src 'self' https://*.supabase.co wss://*.supabase.co https://huggingface.co https://*.huggingface.co https://*.hf.co https://cdnjs.cloudflare.com https://cdn.jsdelivr.net data: blob:; media-src 'self' blob: data:; worker-src 'self' blob:;" />
+
+    <!-- TEMA ANTES DEL PRIMER DIBUJO. Sin esto la página se pintaba clara hasta que llegaba el
+         JavaScript (varios cientos de ms) y recién ahí pasaba a oscura: un destello de otro color
+         al entrar. Es en línea a propósito (un archivo aparte sería una petición más que bloquea el
+         dibujo). Hace LO MISMO que temaInicial/aplicarTema/iniciarVidrio de src/utils/tema.ts: si
+         cambias una, cambia la otra. -->
+    <script id="tv-tema">
+      (function () {
+        try {
+          var raiz = document.documentElement;
+          var guardado = null;
+          try { guardado = localStorage.getItem('technoverse_tema'); } catch (e) { /* sin preferencia guardada */ }
+          var oscuro = guardado === 'oscuro' ||
+            (guardado !== 'claro' && !!window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+          if (oscuro) raiz.classList.add('dark');
+          raiz.style.colorScheme = oscuro ? 'dark' : 'light';
+
+          var sinVidrio = false;
+          try {
+            var v = localStorage.getItem('technoverse_sin_vidrio');
+            if (v === '1') sinVidrio = true;
+            if (v !== '0') {
+              var mem = navigator.deviceMemory;
+              var telefono = window.matchMedia('(pointer: coarse)').matches && Math.min(screen.width, screen.height) < 820;
+              if (telefono || (typeof mem === 'number' && mem > 0 && mem <= 2)) sinVidrio = true;
+            }
+          } catch (e) { /* sin señal: se queda con el vidrio */ }
+          raiz.classList.toggle('sin-vidrio', sinVidrio);
+          var memoria = navigator.deviceMemory;
+          raiz.classList.toggle('vidrio-ligero', !sinVidrio && typeof memoria === 'number' && memoria > 0 && memoria <= 4);
+        } catch (e) { /* sin acceso: queda el tema claro de siempre y main.tsx lo reintenta */ }
+      })();
+    </script>
 
     <title>Technoverse Costa Rica — Tienda de Tecnología y Reparaciones</title>
     <meta name="description" content="Technoverse Costa Rica: tienda de tecnología y taller de reparaciones con garantía legal. Compra segura con SINPE Móvil y tarjeta, y facturación electrónica conforme a Hacienda." />
@@ -42,24 +77,15 @@
     <meta name="twitter:title" content="Technoverse Costa Rica — Tienda de Tecnología y Reparaciones" />
     <meta name="twitter:description" content="Tienda de tecnología y taller de reparaciones con garantía legal en Costa Rica." />
     <meta name="twitter:image" content="https://technoverse-cr.technoversecr.workers.dev/logo.png" />
-    <!-- Indicador de carga ESTÁTICO: se ve desde el primer instante, antes de que cargue el
-         JavaScript (en un teléfono modesto eso puede tardar unos segundos, y hasta ahora se veía
-         una pantalla oscura vacía). React lo reemplaza en cuanto arma la primera pantalla; si la
-         app no llega a arrancar, public/arranque.js lo convierte en un aviso con qué hacer.
-         El aro sale con 0,7 s de retardo (tv-arranque-entra): en una carga normal la tienda llega antes y
-         NO se ve ningún «cargando» (el dueño no quería ver nada de eso al abrir, 2026-10-14); en un
-         teléfono lento o con mala señal sí aparece, que es para lo que existe. -->
-    <style>
-      #tv-arranque { min-height: 100vh; min-height: 100dvh; display: flex; align-items: center; justify-content: center; color: #8b93a1; }
-      #tv-arranque .tv-arranque-rueda { width: 32px; height: 32px; border-radius: 9999px; border: 2px solid currentColor; border-top-color: transparent; opacity: 0; animation: tv-arranque-giro .9s linear infinite, tv-arranque-entra .3s ease-out .7s forwards; }
-      @keyframes tv-arranque-giro { to { transform: rotate(360deg); } }
-      @keyframes tv-arranque-entra { to { opacity: .6; } }
-      @media (prefers-reduced-motion: reduce) { #tv-arranque .tv-arranque-rueda { animation-duration: 2.4s, .3s; } }
-    </style>
+    <!-- SIN aro ni indicador de carga, a propósito: el dueño no lo quiere al entrar (2026-10-14:
+         «para eso ya carga el navegador de Chrome naturalmente»). Mientras llega el JavaScript la
+         página es solo el fondo del tema. Lo único que queda es la red de seguridad de
+         public/arranque.js: si la app no llega a armar su primera pantalla, convierte el
+         contenedor #tv-arranque (abajo) en un aviso con qué hacer. -->
   </head>
   <body>
     <div id="root">
-      <div id="tv-arranque" role="status" aria-label="Cargando"><div class="tv-arranque-rueda"></div></div>
+      <div id="tv-arranque" role="status" aria-label="Cargando"></div>
     </div>
     <script src="/arranque.js"></script>
     <script type="module" src="/src/main.tsx"></script>

@@ -65,8 +65,11 @@ navegador: para él toda visita es nueva).
   inicial síncrono, ver `lecturaRapida()` en `storage.ts`); nunca con `[]`/`null` para
   llenarlo en un efecto: ese primer cuadro es el parpadeo.
 - No se dice «Sin artículos disponibles» antes de saber si los hay (`catalogoListo()`):
-  mientras tanto va el esqueleto.
-- El aro de carga de `index.html` sale con 0,7 s de retardo: en una carga normal no se ve.
+  mientras tanto se reserva el lugar, sin dibujar nada (ni esqueleto animado ni aro).
+- NO hay aro ni indicador de carga al abrir la tienda ni el panel (orden del dueño, 2026-10-14:
+  «para eso ya carga Chrome»): mientras llega el JavaScript solo se ve el fondo del tema. Lo único
+  que queda es la red de seguridad de `public/arranque.js` (tarjeta con qué hacer si la app no
+  arranca en 15 s), que vigila el contenedor vacío `#tv-arranque`: no lo quites.
 - Sin el dato en el HTML (APK, desarrollo, el Worker no alcanzó a leer) la tienda espera
   un instante acotado el contenido (`ModoEdicionProvider`) antes de dibujar.
 

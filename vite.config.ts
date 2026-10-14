@@ -1,11 +1,33 @@
 import tailwindcss from '@tailwindcss/vite';
 import react from '@vitejs/plugin-react';
 import path from 'path';
-import {defineConfig} from 'vite';
+import {createHash} from 'node:crypto';
+import {defineConfig, type Plugin} from 'vite';
+
+/**
+ * El script del tema va EN LÍNEA en index.html (`#tv-tema`): tiene que correr
+ * antes del primer dibujo y sin pedir un archivo aparte. La política de
+ * seguridad de la página solo deja correr scripts propios o con huella
+ * conocida, así que aquí se calcula la huella (sha256) de ese script y se pone
+ * en la política en lugar de `'sha256-TEMA'`. Así editar el script no obliga a
+ * recalcular nada a mano; y si algo fallara, el navegador solo lo bloquea
+ * (vuelve el destello de tema), no se rompe nada más.
+ */
+function huellaDelScriptDelTema(): Plugin {
+  return {
+    name: 'huella-del-script-del-tema',
+    transformIndexHtml(html) {
+      const m = html.match(/<script id="tv-tema">([\s\S]*?)<\/script>/);
+      if (!m) return html;
+      const huella = createHash('sha256').update(m[1], 'utf8').digest('base64');
+      return html.replaceAll("'sha256-TEMA'", `'sha256-${huella}'`);
+    },
+  };
+}
 
 export default defineConfig(() => {
   return {
-    plugins: [react(), tailwindcss()],
+    plugins: [react(), tailwindcss(), huellaDelScriptDelTema()],
     // La voz propia de Jarvis corre en un hilo aparte (worker) que divide su código.
     worker: { format: 'es' as const },
     // Identifica la compilación que corre en cada aparato (ver el
