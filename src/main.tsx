@@ -10,6 +10,7 @@ import './index.css';
 // tienda no lo descarga.
 import './styles/admin.css';
 import { iniciarTema } from './utils/tema';
+import { instalarAjusteGlobal } from './utils/ajustarTexto';
 
 // ANTES de montar React, no dentro de un efecto: un efecto corre después
 // del primer pintado, así que abrir la app con el tema oscuro activo
@@ -19,6 +20,10 @@ iniciarTema();
 
 // Deja rastro de los errores sueltos (para verlos después en la bitácora).
 instalarRegistroDeErrores();
+
+// Los rótulos de toda la app (tienda, panel, modales) se achican hasta caber en vez de bajar de
+// renglón o salirse de su caja con la letra grande del sistema (ver utils/ajustarTexto.ts).
+instalarAjusteGlobal();
 
 // Auto-recuperación de "chunk viejo": cada deploy a Cloudflare genera assets
 // con hash nuevo (ej. jspdf.es.min-XXXXX.js) y solo sirve los del último

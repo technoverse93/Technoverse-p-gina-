@@ -174,7 +174,7 @@ export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial, pestana 
         >
           <MessageSquare className="w-5 h-5" />
           {sobrantes > 0 && (
-            <span className="absolute -top-1 -left-1 min-w-[20px] h-5 px-1 rounded-full bg-[var(--bg-surface)] text-[var(--text-primary)] text-[10.5px] font-bold flex items-center justify-center ring-1 ring-[var(--border-color)]">
+            <span className="absolute -top-1 -left-1 min-w-[1.65em] h-[1.65em] px-1 rounded-full bg-[var(--bg-surface)] text-[var(--text-primary)] text-[10.5px] font-bold flex items-center justify-center ring-1 ring-[var(--border-color)]">
               +{sobrantes}
             </span>
           )}
@@ -213,7 +213,7 @@ export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial, pestana 
                   <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[var(--ok)] ring-2 ring-[var(--bg-surface)]" aria-hidden="true" />
                 )}
                 {(c.unreadCount || 0) > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[18px] h-[18px] px-1 rounded-full bg-[#e5484d] text-white text-[10px] font-bold flex items-center justify-center tabular-nums ring-2 ring-[var(--bg-surface)]">
+                  <span className="absolute -top-1 -right-1 min-w-[1.5em] h-[1.5em] px-1 rounded-full bg-[#e5484d] text-white text-[10px] font-bold flex items-center justify-center tabular-nums ring-2 ring-[var(--bg-surface)]">
                     {c.unreadCount > 99 ? '99+' : c.unreadCount}
                   </span>
                 )}

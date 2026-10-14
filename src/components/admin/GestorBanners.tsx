@@ -265,7 +265,7 @@ export default function GestorBanners({ currentUser }: { currentUser: User | nul
                   : <div className="w-full h-full flex items-center justify-center"><ImageIcon className="w-6 h-6 text-[var(--text-muted)]" /></div>}
               </div>
               <div className="flex-1 min-w-0 p-3 flex flex-col">
-                <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                <div className="flex items-center gap-1.5 tv-nw mb-1">
                   <Chip tone="accent">{etiquetaFormato(b.formato)}</Chip>
                   {b.oferta && <Chip tone="ok">{b.oferta}</Chip>}
                   {!b.active && <Chip>Inactivo</Chip>}

@@ -761,7 +761,7 @@ export default function LiveChat() {
         >
           <MessageSquare className="w-5 h-5" />
           {conversations.some(c => c.unreadCount > 0) && (
-            <span className="absolute -top-1 -right-1 w-4 h-4 bg-rose-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 border-[var(--bg-surface)]">!</span>
+            <span className="absolute -top-1 -right-1 w-[1.35em] h-[1.35em] bg-rose-500 rounded-full flex items-center justify-center text-[10px] font-bold text-white border-2 border-[var(--bg-surface)]">!</span>
           )}
         </button>
       )}

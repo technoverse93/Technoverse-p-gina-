@@ -1642,12 +1642,42 @@ html.sin-vidrio .sg-riel, html.sin-vidrio .sg-seg { backdrop-filter: none; backg
 .tm-b { flex: none; min-width: 0; max-width: 60%; overflow: hidden; text-overflow: ellipsis; }
 /* Dato secundario de una línea: se corta con «…» en vez de bajar a otro renglón. */
 .sg-1l { display: block; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Fila de etiquetas/chips que no baja de renglón: cada una cede ancho y se corta con «…». */
+.tv-nw { flex-wrap: nowrap; min-width: 0; }
+.tv-nw > * { flex: 0 1 auto; min-width: 0; }
 /* Etiqueta fija + dato cortado al medio, en la misma línea. */
 .sg-1f { display: flex; align-items: baseline; gap: 4px; min-width: 0; white-space: nowrap; }
 .sg-1f > :first-child { flex: none; }
 /* Fila de insignias que no se parte: si no caben, se acortan con «…» (en vez de bajar). */
 .sg-nw { flex-wrap: nowrap; min-width: 0; }
 .sg-nw > .sg-badge, .sg-nw > .sg-chip { flex: 0 1 auto; min-width: 0; overflow: hidden; text-overflow: ellipsis; }
+
+/* =====================================================================
+   UNA LÍNEA · los rótulos de las piezas del kit del panel (AdminKit) y la utilidad `tv-1l`
+   =====================================================================
+   Misma regla que arriba, para TODO el panel: el rótulo, la cifra, el pie de la métrica, el título
+   de la tarjeta, el de la cabecera, su pista y la etiqueta de un campo van en UNA línea; si no
+   caben se achican (ajustarTexto.ts) y solo entonces se cortan con «…». El relleno inferior (con
+   margen negativo que lo compensa) le da al recorte lugar para las colas de la g, la p, la ₡:
+   sin él, con la letra grande el `overflow: hidden` les cortaba la punta. */
+.tv-1l, .tv-stat-lt, .tv-stat-value, .tv-stat-foot, .tv-card-title, .tv-cabecera-t,
+.tv-cabecera .tv-pista:not(:empty), .tv-field > .tv-label, .tv-field > .tv-hint {
+  min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; overflow-wrap: normal;
+  padding-bottom: 0.14em; margin-bottom: -0.14em;
+}
+.tv-cabecera .tv-pista:not(:empty) { padding-top: 0; }
+/* Lo que ajustarTexto.ts «cura» (un rótulo corto que se partía en dos renglones): una línea, con puntos si no cabe.
+   No toca el relleno: puede ser un botón. */
+[data-tv1l] { min-width: 0; max-width: 100%; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+/* Contenedor de un rótulo «curado»: puede encogerse por debajo de lo que mide su línea (si no, se sale de su caja). */
+[data-tv-min0] { min-width: 0; }
+/* Un ícono jamás se encoge ni se aplasta junto a su texto. */
+svg.lucide { flex-shrink: 0; }
+.tv-field > .tv-hint { display: block; }
+.tv-stat-label > svg { flex: none; }
+.tv-stat-value { line-height: 1.15; }
+/* Las acciones de la cabecera de una tarjeta no se encogen: el título cede, no el botón. */
+.tv-card-head > .tv-row { flex: none; }
 
 /* =====================================================================
    NUEVA PESTAÑA (botón «+») · diseño Cristal

@@ -38,7 +38,7 @@ import { PageHead, Card, Btn, Field, Chip, TableShell, Empty } from './admin/Adm
 import { resolverModulo, PESTANA_NUEVA } from './admin/adminNav';
 import NuevaPestana from './admin/NuevaPestana';
 import { usePestanas, useScrollPorPestana } from './admin/usePestanas';
-import { ContextoPestanaActiva, ContextoIconoModulo } from './admin/AdminKit';
+import { ContextoPestanaActiva, ContextoIconoModulo, PanelDePestana } from './admin/AdminKit';
 import { esAdminSupremo } from '../utils/securityPin';
 import { esSoloSupremo } from './admin/adminNav';
 
@@ -1872,7 +1872,7 @@ export default function AdminPanel({
         const viva = pestanas.estaViva(modulo);
         return (
           <Activity key={modulo} mode={viva ? 'visible' : 'hidden'}>
-            <div className="tv-tab-panel" hidden={!esActiva} role="tabpanel">
+            <PanelDePestana activa={esActiva}>
               {/* Aunque estén ocultas, las pestañas de fondo se renderizan
                   al menos una vez. Sin esta marca sus `PageHead` mandaban
                   acciones y subtítulo a la regleta igual que la activa: se
@@ -1883,7 +1883,7 @@ export default function AdminPanel({
                   {renderModulo(pestanas.tabDe(modulo))}
                 </ContextoIconoModulo.Provider>
               </ContextoPestanaActiva.Provider>
-            </div>
+            </PanelDePestana>
           </Activity>
         );
       })}
