@@ -73,28 +73,45 @@ navegador: para él toda visita es nueva).
 - Sin el dato en el HTML (APK, desarrollo, el Worker no alcanzó a leer) la tienda espera
   un instante acotado el contenido (`ModoEdicionProvider`) antes de dibujar.
 
-## Regla de producto: íconos y textos NO se desplazan por tamaño
+## Regla de producto: íconos y textos NO se desplazan por tamaño (TODO el sistema)
 
-Ordenado por el dueño (2026-10-14): en las pantallas densas del panel (Ciberseguridad,
-«Nueva pestaña», tarjetas, filas y botones) ningún ícono ni texto se corre hacia abajo ni
-hacia la izquierda porque el contenido, o la letra del teléfono, sea más grande. Tiene que
-verse atractivo y no invasivo (compacto, sin que la pantalla crezca).
+Ordenado por el dueño (2026-10-14) para las pantallas densas de Ciberseguridad y «Nueva pestaña» y
+ampliado ese mismo día a TODO el sistema («repará ese problema con la letra en todo el sistema»):
+panel (todos los módulos, modales y formularios) y tienda. Ningún ícono ni texto se corre hacia abajo
+ni hacia la izquierda porque el contenido, o la letra del teléfono, sea más grande. Tiene que verse
+atractivo y no invasivo (compacto, sin que la pantalla crezca).
 
-- El ícono queda anclado (`flex: none`) y el rótulo va en UNA línea. Nada de `flex-wrap`,
-  `overflow-wrap: anywhere` ni `justify-items: center` que deje crecer al texto: eso lo baja
-  de renglón o lo saca de su tarjeta por la izquierda.
-- Un rótulo que no cabe se achica hasta el mínimo legible (`data-ajustar` +
-  `useAjusteDeTextos`, `src/utils/ajustarTexto.ts`; las etiquetas de `Btn` van solas) y solo
-  entonces se corta con «…». Los correos, IPs e IDs se cortan AL MEDIO con `<TextoMedio>`
-  (se sigue viendo «@gmail.com» o el final del ID).
-- Las pistas de grilla son `minmax(0, 1fr)`: un `1fr` a secas se ensancha con su contenido
-  (un correo, una etiqueta con letra grande) y empuja la pantalla fuera del aparato.
+- El ícono queda anclado (`flex: none`; `svg.lucide` ya no se encoge) y el rótulo va en UNA línea. Nada de
+  `flex-wrap`, `overflow-wrap: anywhere` ni `justify-items: center` que deje crecer al texto: eso lo baja
+  de renglón o lo saca de su tarjeta por la izquierda. Una fila de etiquetas que no debe bajar: `tv-nw`.
+- Un rótulo que no cabe se achica hasta el piso legible y solo entonces se corta con «…»
+  (`src/utils/ajustarTexto.ts`). UN solo vigía para toda la app (`instalarAjusteGlobal()`, arranca en
+  `main.tsx`): ve lo que React pinta —modales y portales incluidos— y ajusta antes de pintar. Lo marcan
+  `data-ajustar`, la clase `tv-1l`, las etiquetas de `Btn` (`tv-btn-label`) y las piezas del kit
+  (`Stat`, `Card`, `PageHead`, `Field`, `Chip`, carpetas). Cada pestaña del panel registra su raíz
+  (`PanelDePestana`): una pestaña oculta que vuelve a verse se ajusta de nuevo.
+- «Curación»: con la letra del sistema agrandada, un texto CORTO que hoy se parte en 2+ renglones junto a un
+  hermano (o un botón/encabezado de tabla) se marca solo con `data-tv1l` (una línea, `…`) y sus contenedores
+  flex reciben `data-tv-min0` para poder encogerse. No toca nada con la letra normal, ni párrafos (más de
+  36–64 caracteres), ni lo marcado `data-no-1l`, ni lo editable. Un texto que DEBE fluir (descripción,
+  pregunta de un acordeón) simplemente es largo, o lleva `data-no-1l`.
+- Los correos, IPs e IDs se cortan AL MEDIO con `<TextoMedio>` (se sigue viendo «@gmail.com» o el final).
+- Las pistas de grilla son `minmax(0, 1fr)`: un `1fr` a secas se ensancha con su contenido y empuja la
+  pantalla fuera del aparato. Un hijo de una fila flex que contiene texto lleva `min-w-0`.
+- Un contador o insignia con número no tiene caja fija en px: `min-w-[1.5em] h-[1.5em]` (la caja crece con la
+  letra; con `h-[18px]` el número se salía del círculo).
 - Lo secundario o repetido se compacta en vez de bajar de línea: «Aparato nuevo» → «Nuevo»
   (`sg-largo`/`sg-corto`), el estado ya lo dice el ícono, «Abierto» pasa a ser un punto.
-- Antes de dar por buena una pantalla así, medirla con la letra del sistema agrandada (×1,3 y
-  ×1,5; en Chromium se emula redefiniendo las fuentes con `size-adjust`, que agranda solo el
-  texto como lo hace Android) a 320, 360, 412, 768 y 1280 px: una sola línea, íconos en la misma
-  posición y ninguna caja fuera del ancho del aparato.
+- CSS fuera de capas le gana a las utilidades de Tailwind (que viven en una capa): una regla como
+  `.product-media > * { position: relative }` convertía en «relative» los `absolute` de las insignias y las
+  mandaba debajo de la foto. Al escribir CSS global, no pisar `position`/`padding` de las utilidades.
+- Antes de dar por buena una pantalla así, medirla con la letra del sistema agrandada (×1,3 y ×1,5) a 320,
+  360, 412, 768 y 1280 px: una sola línea, íconos en la misma posición y ninguna caja fuera del ancho del
+  aparato. En Chromium el «tamaño de letra» de un WebView de Android (textZoom) se emula de verdad
+  escalando SOLO los `font-size` (hojas de estilo, estilos en línea y lo que el código ajuste; no paddings,
+  alturas ni interlineados en px). Cuidado con las emulaciones burdas: redefinir fuentes con `size-adjust`
+  no escala los interlineados sin unidad y fabrica choques que en el aparato no existen; y `rem` no se
+  escala dos veces (raíz y valor).
 
 ## Mapa del código de Javier
 

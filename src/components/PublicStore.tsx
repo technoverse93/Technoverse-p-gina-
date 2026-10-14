@@ -1575,7 +1575,7 @@ export default function PublicStore({
             >
               <ShoppingBag className="w-4 h-4" />
               {cart.length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-[var(--accent)] text-[var(--accent-ink)] text-[9px] font-black min-w-[18px] h-[18px] rounded-full flex items-center justify-center border-2 border-[var(--bg-surface)] px-1 shadow-sm">
+                <span className="absolute -top-1.5 -right-1.5 bg-[var(--accent)] text-[var(--accent-ink)] text-[9px] font-black min-w-[1.5em] h-[1.5em] rounded-full flex items-center justify-center border-2 border-[var(--bg-surface)] px-1 shadow-sm">
                   {cart.reduce((sum, it) => sum + it.quantity, 0)}
                 </span>
               )}
@@ -2395,7 +2395,7 @@ export default function PublicStore({
                           value={couponCode}
                           onChange={(e) => setCouponCode(e.target.value)}
                           placeholder="Cupón de descuento"
-                          className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] uppercase font-mono flex-1 focus:outline-none focus:border-blue-500 "
+                          className="bg-[var(--bg-surface)] border border-[var(--border-color)] rounded-lg px-3 py-1.5 text-sm text-[var(--text-primary)] uppercase font-mono flex-1 min-w-0 focus:outline-none focus:border-blue-500 "
                           disabled={!!appliedCoupon}
                         />
                         {/* `flex-shrink-0` + `whitespace-nowrap`: la etiqueta

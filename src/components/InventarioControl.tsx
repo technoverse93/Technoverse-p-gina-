@@ -1430,11 +1430,11 @@ if (!m) return null;
 
       {(activeSubTab === 'productos' || activeSubTab === 'repuestos' || activeSubTab === 'insumos') && marketingRequests.length > 0 && (
         <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 rounded-xl p-4 space-y-3">
-          <div className="flex items-center justify-between">
-            <h4 className="text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
-              <Send className="w-3.5 h-3.5 text-[var(--accent)]" /> Publicaciones de Instagram
+          <div className="flex items-center justify-between gap-2">
+            <h4 className="min-w-0 text-xs font-bold text-[var(--text-primary)] flex items-center gap-2">
+              <Send className="w-3.5 h-3.5 flex-shrink-0 text-[var(--accent)]" /> <span className="tv-1l">Publicaciones de Instagram</span>
             </h4>
-            <span className="text-[10px] font-mono text-[var(--text-muted)]">{marketingRequests.length} solicitud(es)</span>
+            <span className="flex-shrink-0 whitespace-nowrap text-[10px] font-mono text-[var(--text-muted)]">{marketingRequests.length} solicitud(es)</span>
           </div>
 
           <div className="space-y-2">
@@ -1450,10 +1450,10 @@ if (!m) return null;
 
               return (
                 <div key={req.id} className="border border-[var(--border-color)]/60 rounded-lg p-3 space-y-2">
-                  <div className="flex items-center justify-between gap-2 flex-wrap">
-                    <div className="min-w-0">
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{req.productName}</p>
-                      <p className="text-[10px] font-mono text-[var(--text-muted)]">₡{req.price.toLocaleString()} · Programado para {fecha}</p>
+                      <p className="tv-1l text-[10px] font-mono text-[var(--text-muted)]">₡{req.price.toLocaleString()} · Programado para {fecha}</p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${b.cls}`}>{b.label}</span>
@@ -1618,11 +1618,11 @@ if (!m) return null;
                   }}
                   className="bg-sky-500 hover:bg-sky-600 text-white font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-2 "
                 >
-                  <Plus className="w-4 h-4" /> {
+                  <Plus className="w-4 h-4 flex-shrink-0" /> <span className="tv-btn-label">{
                     activeSubTab === 'repuestos' ? 'Añadir Repuesto'
                       : activeSubTab === 'insumos' ? 'Añadir Insumo'
                       : 'Nuevo Producto'
-                  }
+                  }</span>
                 </button>
                 <button
                   type="button"
@@ -1635,7 +1635,7 @@ if (!m) return null;
                   }}
                   className="bg-emerald-500 hover:bg-emerald-600 text-slate-950 font-bold text-xs px-4 py-2 rounded-xl flex items-center justify-center gap-2 transition"
                 >
-                  <FileText className="w-4 h-4" /> Importar lista de precios
+                  <FileText className="w-4 h-4 flex-shrink-0" /> <span className="tv-btn-label">Importar lista de precios</span>
                 </button>
                 <button
                   onClick={handleStartCount}
@@ -1647,7 +1647,7 @@ if (!m) return null;
                      estado del que hay que salir. */
                   className="tv-btn font-bold text-xs px-4 py-2 flex items-center justify-center gap-2"
                 >
-                  <CheckCircle2 className="w-4 h-4" /> Iniciar Conteo
+                  <CheckCircle2 className="w-4 h-4 flex-shrink-0" /> <span className="tv-btn-label">Iniciar Conteo</span>
                 </button>
               </div>
               )}
@@ -2435,13 +2435,13 @@ if (!m) return null;
 
       {activeSubTab === 'movimientos' && (
         <div className="space-y-4">
-          <div className="flex justify-between items-center">
-            <h4 className="text-sm font-bold text-[var(--text-secondary)]">Bitácora de Movimientos de Stock</h4>
+          <div className="flex justify-between items-center gap-3">
+            <h4 className="tv-1l min-w-0 text-sm font-bold text-[var(--text-secondary)]">Bitácora de Movimientos de Stock</h4>
             <button
               onClick={handleExportCSV}
-              className="bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-2 transition"
+              className="flex-shrink-0 bg-sky-500 hover:bg-sky-600 text-slate-950 font-bold text-xs px-3 py-1.5 rounded-lg flex items-center gap-2 transition"
             >
-              <Download className="w-3.5 h-3.5" /> Exportar CSV
+              <Download className="w-3.5 h-3.5 flex-shrink-0" /> <span className="whitespace-nowrap">Exportar CSV</span>
             </button>
           </div>
           
@@ -2594,7 +2594,7 @@ if (!m) return null;
         <div className="space-y-4">
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 p-5 rounded-2xl">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Valoración del Inventario</h4>
+              <h4 className="tv-1l text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Valoración del Inventario</h4>
               <div className="space-y-3">
                 <div className="flex justify-between items-center pb-2 border-b border-[var(--border-color)]/50">
                   <span className="text-xs text-[var(--text-secondary)]">Total Artículos</span>
@@ -2612,8 +2612,8 @@ if (!m) return null;
             </div>
             
             <div className="bg-[var(--bg-surface)] border border-[var(--border-color)]/80 p-5 rounded-2xl">
-              <h4 className="text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Rotación de Productos</h4>
-              <p className="text-[10px] text-[var(--text-secondary)] mb-2">Simulación de movimiento basado en stock.</p>
+              <h4 className="tv-1l text-xs font-bold uppercase tracking-wider text-[var(--text-secondary)] mb-4">Rotación de Productos</h4>
+              <p className="tv-1l text-[10px] text-[var(--text-secondary)] mb-2">Simulación de movimiento basado en stock.</p>
               <div className="space-y-2">
                 {products.filter(p => p && p.stock !== undefined && p.stock !== null && p.stock > 0).slice(0, 4).map(p => (
                   <div key={p.id} className="bg-[var(--bg-surface)] border border-[var(--border-color)]/50 p-2 rounded-lg flex justify-between items-center">

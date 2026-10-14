@@ -520,8 +520,13 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 }
 
 .product-media > * {
-  position: relative;
   z-index: 1;
+}
+/* Lo que declara su propia posición —la foto a sangre y las insignias de garantía, descuento y «Agotado», que son
+   `absolute` de Tailwind— la conserva: este bloque va FUERA de las capas y le ganaba a la utilidad, así que las
+   insignias quedaban en el flujo, debajo de la foto, y el recorte de la vitrina las cortaba. */
+.product-media > :not(.absolute):not(.fixed):not(.sticky) {
+  position: relative;
 }
 
 .product-thumb { background-color: transparent; }
@@ -1166,7 +1171,8 @@ input, select, textarea { max-width: 100%; }
 .tv-chat-busca input { flex: 1; min-width: 0; background: transparent; border: 0; outline: 0; color: var(--text-primary); font-size: 13px; }
 .tv-chat-busca input::placeholder { color: var(--text-muted); }
 .tv-chat-busca:focus-within { box-shadow: 0 0 0 2px var(--accent); }
-.tv-chat-filtros { display: flex; flex-wrap: wrap; gap: 6px; padding: 0 12px 8px; }
+.tv-chat-filtros { display: flex; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; gap: 6px; padding: 0 12px 8px; }
+.tv-chat-filtros::-webkit-scrollbar { display: none; }
 .tv-chat-filtro { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border: 1px solid var(--border-color); background: transparent; white-space: nowrap; }
 .tv-chat-filtro[data-on] { background: var(--text-primary); color: var(--bg-surface); border-color: var(--text-primary); }
 .tv-chat-rango { display: flex; gap: 4px; align-items: center; padding: 0 12px 8px; color: var(--text-muted); }
@@ -1180,7 +1186,7 @@ input, select, textarea { max-width: 100%; }
 .tv-chat-ava--cab { width: 40px; height: 40px; border-radius: 14px; font-size: 15px; }
 .tv-chat-ava--mini { width: 26px; height: 26px; border-radius: 9px; font-size: 12px; display: grid; place-items: center; font-weight: 700; color: #fff; }
 .tv-chat-punto { position: absolute; right: -2px; bottom: -2px; width: 12px; height: 12px; border-radius: 50%; background: var(--ok); border: 2px solid var(--bg-surface); }
-.tv-chat-cuenta { min-width: 18px; height: 18px; padding: 0 5px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; display: grid; place-items: center; }
+.tv-chat-cuenta { min-width: 1.5em; height: 1.5em; padding: 0 .4em; line-height: 1; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-size: 12px; font-weight: 700; display: grid; place-items: center; }
 
 .tv-chat-cab { display: flex; align-items: center; justify-content: space-between; gap: 8px; padding: 10px 12px; border-bottom: 1px solid var(--border-color); position: relative; flex: none; }
 .tv-chat-ib { width: 36px; height: 36px; border-radius: 12px; display: inline-grid; place-items: center; color: var(--text-secondary); background: var(--tile); flex: none; }

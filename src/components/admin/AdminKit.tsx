@@ -22,6 +22,7 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
+import { useAjusteDeTextos } from '../../utils/ajustarTexto';
 
 // =====================================================================
 // PUENTES HACIA LA REGLETA
@@ -67,6 +68,17 @@ export const ContextoPestanaActiva = React.createContext(true);
 /** El ícono del módulo al que pertenece la pantalla: lo pone el armazón por
  *  pestaña y lo usa `PageHead` para la baldosa de la cabecera. */
 export const ContextoIconoModulo = React.createContext<LucideIcon | null>(null);
+
+/**
+ * El panel de UNA pestaña. Registra su raíz en el ajuste de textos (utils/ajustarTexto.ts): una pestaña
+ * que estaba oculta y vuelve a verse, o cuyo ancho cambia, vuelve a ajustar sus rótulos al ancho que tiene
+ * ahora —mientras estaba oculta no tenía ancho y no se pudo medir nada.
+ */
+export function PanelDePestana({ activa, children }: { activa: boolean; children: React.ReactNode }) {
+  const ref = React.useRef<HTMLDivElement>(null);
+  useAjusteDeTextos(ref);
+  return <div ref={ref} className="tv-tab-panel" hidden={!activa} role="tabpanel">{children}</div>;
+}
 
 function usePortalEn(id: string): HTMLElement | null {
   const activa = React.useContext(ContextoPestanaActiva);
@@ -119,8 +131,8 @@ export function PageHead({
         </em>
       )}
       <div className="tv-cabecera-tx">
-        <div className="tv-cabecera-t" role="heading" aria-level={1}>{title}</div>
-        {subtitle && <div className="tv-pista">{subtitle}</div>}
+        <div className="tv-cabecera-t" role="heading" aria-level={1} title={title}>{title}</div>
+        {subtitle && <div className="tv-pista" title={subtitle}>{subtitle}</div>}
       </div>
       {actions && <div className="tv-regleta-acciones"><div className="tv-row">{actions}</div></div>}
     </div>
@@ -215,7 +227,7 @@ export function Card({
     <section className={`tv-card ${className}`}>
       {(title || actions) && (
         <header className="tv-card-head">
-          {title && <span className="tv-card-title">{title}</span>}
+          {title && <span className="tv-card-title" title={title}>{title}</span>}
           {actions && <div className="tv-row">{actions}</div>}
         </header>
       )}
@@ -248,8 +260,8 @@ export function Stat({
   return (
     <div className="tv-card tv-stat" data-alert={alert || undefined}>
       <div className="tv-stat-label">
-        {Icon && <Icon className="w-3.5 h-3.5" aria-hidden="true" />}
-        {label}
+        {Icon && <Icon className="w-3.5 h-3.5 flex-shrink-0" aria-hidden="true" />}
+        <span className="tv-stat-lt" title={label}>{label}</span>
       </div>
       <div className="tv-stat-value">{value}</div>
       {foot && <div className="tv-stat-foot">{foot}</div>}
@@ -309,7 +321,7 @@ export function Field({
 }) {
   return (
     <label className={`tv-field ${className}`}>
-      <span className="tv-label">{label}</span>
+      <span className="tv-label" title={label}>{label}</span>
       {children}
       {hint && <span className="tv-hint">{hint}</span>}
     </label>
