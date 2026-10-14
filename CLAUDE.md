@@ -113,6 +113,22 @@ atractivo y no invasivo (compacto, sin que la pantalla crezca).
   no escala los interlineados sin unidad y fabrica choques que en el aparato no existen; y `rem` no se
   escala dos veces (raíz y valor).
 
+## Regla de producto: pie de la tienda (un menú, sin cámara) y aviso de cookies
+
+Ordenado por el dueño (2026-10-14), vale para la web y la APK:
+
+- El pie (`src/components/store/PieDePagina.tsx`) tiene UN solo menú plegable, «Privacidad y soporte».
+  Adentro está la sección de ubicación con su razón: se pide para calcular y ofrecer precios o tarifas
+  aproximadas según dónde está la persona (el pedido al entrar y el botón de compartir siguen activos).
+  No volver a apilar un segundo plegable.
+- A la persona que compra NO se le pide la cámara desde el pie, ni hay aviso de «cámara en vivo». No agregar
+  ningún ícono, interruptor, texto o pedido de cámara a esa zona.
+- El aviso de cookies (`src/components/store/AvisoCookies.tsx`) es el estándar: informa del uso de cookies y
+  almacenamiento, y «Aceptar» o la X lo dan por conocido, guardan `technoverse_aviso_cookies_v1` en el aparato y
+  lo desmontan (no vuelve). NO es un consentimiento de supervisión disfrazado: no agrupa permisos del aparato
+  tras un «Aceptar» (el viejo modal tipo cookies se quitó a propósito, ver #115). Lo de supervisión y ubicación
+  se dice claro en el menú plegable del pie, al que lleva «Más información».
+
 ## Mapa del código de Javier
 
 Javier conoce el sistema por `supabase/functions/asistente-ia/mapa-codigo.ts`,

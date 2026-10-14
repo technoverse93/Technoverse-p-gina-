@@ -2,7 +2,12 @@
 // PIE DE PÁGINA DE LA TIENDA
 // =====================================================================
 // Cuatro bloques: preguntas frecuentes, cómo contactar, dónde estamos e
-// información legal.
+// información legal. Debajo, UN solo menú plegable —«Privacidad y soporte»—
+// que además explica y deja manejar el permiso de ubicación.
+//
+// Antes había tres plegables apilados (privacidad, cámara y ubicación): se
+// quitó el duplicado y se eliminó del todo el pedido de cámara. La ubicación
+// se conserva y su razón se dice ahí mismo, dentro del menú que queda.
 //
 // ---------------------------------------------------------------------
 // TODO SALE DE LA CONFIGURACIÓN REAL, Y LO QUE NO ESTÉ NO SE DIBUJA
@@ -19,16 +24,12 @@
 // =====================================================================
 
 import React from 'react';
-import { MessageCircle, Phone, MapPin, Clock, Navigation, ChevronDown, Check, LocateFixed, Video, VideoOff } from 'lucide-react';
+import { MessageCircle, Phone, MapPin, Clock, Navigation, ChevronDown, Check, LocateFixed } from 'lucide-react';
 import type { AppSettings } from '../../types';
 import { compartirUbicacion } from '../../utils/ubicaciones';
 import { ubicacionGuardada, hayGeolocalizacion, motivoUltimoFallo, type MotivoUbicacion } from '../../utils/ubicacionCliente';
 import AyudaUbicacion from './AyudaUbicacion';
-import {
-  iniciarCamaraCliente, detenerCamaraCliente, suscribirCamara, hayCamara,
-  type EstadoCamaraCliente,
-} from '../../supervision/camaraCliente';
-import { mandarEventoDelVisitante, visitanteEstaSiendoMirado, ofrecerUbicacionAlEspejo } from '../../supervision/visitante';
+import { ofrecerUbicacionAlEspejo } from '../../supervision/visitante';
 
 interface Props {
   settings?: AppSettings | null;
@@ -154,14 +155,15 @@ function Pregunta({ p, r }: PreguntaProps): React.ReactElement {
 }
 
 /**
- * Compartir ubicación desde el footer, plegable y consentido.
+ * Sección de ubicación, DENTRO del menú plegable «Privacidad y soporte».
  *
- * Es la misma regla del checkout, pero disponible desde cualquier página:
- * el botón pide el permiso NATIVO del navegador/APK; si la persona acepta,
- * su ubicación queda registrada para coordinar entregas y aparece en el
- * panel de Ubicaciones. Si niega o no la usa, no pasa nada.
+ * Dice para qué se pide el permiso y deja darlo o actualizarlo a mano. Es la
+ * misma regla del checkout, disponible desde cualquier página: el botón pide
+ * el permiso NATIVO del navegador/APK; si la persona acepta, su ubicación
+ * queda registrada y aparece en el panel de Ubicaciones. Si niega o no la usa,
+ * no pasa nada: entra y compra igual.
  */
-function CompartirUbicacionFooter() {
+function SeccionUbicacion() {
   const [estado, setEstado] = React.useState<'idle' | 'pidiendo' | 'ok' | 'negada'>(
     () => (ubicacionGuardada() ? 'ok' : 'idle')
   );
@@ -181,155 +183,51 @@ function CompartirUbicacionFooter() {
   };
 
   return (
-    <div className="border-t border-[var(--border-color)]">
-      <div className="mx-auto max-w-7xl px-5 py-3 md:px-8">
-        <details className="group text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
-          <summary
-            className="flex cursor-pointer list-none items-center gap-2 font-semibold"
+    <div>
+      <div className="mb-1 flex items-center gap-1.5 font-semibold" style={{ color: 'var(--text-secondary)' }}>
+        <MapPin className="h-3.5 w-3.5 flex-shrink-0" style={{ color: 'var(--accent)' }} aria-hidden="true" />
+        <span>Ubicación</span>
+      </div>
+      {/* La razón del permiso: se dice aquí, junto al botón, y no en otro menú. */}
+      <p className="leading-relaxed mb-2" style={{ color: 'var(--text-muted)' }}>
+        Al entrar, tu navegador o la app te pide permiso de ubicación. Lo pedimos{' '}
+        <strong style={{ color: 'var(--text-secondary)' }}>solo</strong> para poder calcular y ofrecerte{' '}
+        <strong style={{ color: 'var(--text-secondary)' }}>precios o tarifas aproximadas</strong> (por ejemplo,
+        el envío) según dónde estás; se guarda en este aparato y no se usa para nada más. Es
+        opcional: si lo rechazás, entrás y comprás igual. Si querés habilitarla o actualizarla
+        ahora, podés hacerlo aquí:
+      </p>
+      {estado === 'ok' ? (
+        <div className="flex flex-wrap items-center gap-3">
+          <span className="inline-flex items-center gap-1.5 font-semibold" style={{ color: 'var(--accent)' }}>
+            <Check className="h-4 w-4" aria-hidden="true" /> Ubicación compartida. ¡Gracias!
+          </span>
+          <button
+            type="button"
+            onClick={compartir}
+            className="underline underline-offset-2 opacity-70 hover:opacity-100"
             style={{ color: 'var(--text-secondary)' }}
           >
-            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: 'var(--accent)' }} aria-hidden="true" />
-            ¿Para qué usamos tu ubicación?
-          </summary>
-          <div className="mt-2 pl-5">
-            <p className="leading-relaxed mb-2" style={{ color: 'var(--text-muted)' }}>
-              Al entrar, tu navegador te pide permiso de ubicación. La usamos <strong style={{ color: 'var(--text-secondary)' }}>solo</strong>{' '}
-              para coordinar y cotizar tu entrega; se guarda por aparato y no alimenta ninguna
-              otra cosa. Es opcional: si la rechazás, entrás y comprás igual. Si querés
-              habilitarla o actualizarla ahora, podés hacerlo aquí:
-            </p>
-            {estado === 'ok' ? (
-              <div className="flex flex-wrap items-center gap-3">
-                <span className="inline-flex items-center gap-1.5 font-semibold" style={{ color: 'var(--accent)' }}>
-                  <Check className="h-4 w-4" aria-hidden="true" /> Ubicación compartida. ¡Gracias!
-                </span>
-                <button
-                  type="button"
-                  onClick={compartir}
-                  className="underline underline-offset-2 opacity-70 hover:opacity-100"
-                  style={{ color: 'var(--text-secondary)' }}
-                >
-                  Actualizarla
-                </button>
-              </div>
-            ) : (
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={compartir}
-                  disabled={estado === 'pidiendo'}
-                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-bold transition-colors disabled:opacity-60"
-                  style={{ background: 'var(--accent)', color: 'var(--accent-ink)', borderRadius: 999 }}
-                >
-                  <LocateFixed className="h-4 w-4" aria-hidden="true" />
-                  {estado === 'pidiendo' ? 'Esperando permiso…' : 'Compartir mi ubicación'}
-                </button>
-              </div>
-            )}
-            {estado === 'negada' && (
-              <AyudaUbicacion motivo={motivo} onReintentar={compartir} tono="tema" />
-            )}
-          </div>
-        </details>
-      </div>
-    </div>
-  );
-}
-
-/**
- * Compartir la cámara frontal desde el pie de página, plegable y consentido.
- *
- * Es un botón ACCIONANTE del permiso: no hay cámara hasta que la persona lo
- * toca, lee para qué es y su navegador/APK le muestra SU permiso de cámara.
- * Mientras comparte ve su propia imagen (autovista) y un botón grande para
- * dejar de compartir al instante. Nada de esto es remoto ni se enciende
- * solo. Ver supervision/camaraCliente.ts.
- */
-function CompartirCamaraFooter() {
-  const [cam, setCam] = React.useState<EstadoCamaraCliente>({ estado: 'idle', stream: null, mensaje: null });
-
-  React.useEffect(() => suscribirCamara(setCam), []);
-
-  // Al desmontar el pie (cambio de página), no se apaga la cámara a la
-  // fuerza: la corta `detenerVisitante` cuando de verdad se cierra la
-  // tienda. Así navegar entre secciones no interrumpe lo que la persona
-  // decidió compartir.
-  //
-  // NO hay autovista/espejo: la persona pidió no verse a sí misma. En su
-  // lugar, mientras comparte queda un aviso FIJO en toda la pantalla
-  // (AvisoCamaraEnVivo) de que la cámara está en vivo, con su botón de
-  // cortar. Aquí solo mostramos el estado y el control de encender/apagar.
-
-  if (!hayCamara()) return null;
-
-  const activa = cam.estado === 'activa';
-  const pidiendo = cam.estado === 'pidiendo';
-
-  const compartir = () =>
-    void iniciarCamaraCliente({ enviar: mandarEventoDelVisitante, estanMirando: visitanteEstaSiendoMirado });
-
-  return (
-    <div className="border-t border-[var(--border-color)]">
-      <div className="mx-auto max-w-7xl px-5 py-3 md:px-8">
-        <details className="group text-[11.5px]" style={{ color: 'var(--text-muted)' }} open={activa}>
-          <summary
-            className="flex cursor-pointer list-none items-center gap-2 font-semibold"
-            style={{ color: 'var(--text-secondary)' }}
+            Actualizarla
+          </button>
+        </div>
+      ) : (
+        <div className="flex flex-wrap items-center gap-3">
+          <button
+            type="button"
+            onClick={compartir}
+            disabled={estado === 'pidiendo'}
+            className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-bold transition-colors disabled:opacity-60"
+            style={{ background: 'var(--accent)', color: 'var(--accent-ink)', borderRadius: 999 }}
           >
-            <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: 'var(--accent)' }} aria-hidden="true" />
-            Compartir mi cámara con soporte (opcional)
-          </summary>
-          <div className="mt-2 pl-5">
-            <p className="leading-relaxed mb-2" style={{ color: 'var(--text-muted)' }}>
-              Si necesitás ayuda y querés mostrarle algo al personal, podés compartir la{' '}
-              <strong style={{ color: 'var(--text-secondary)' }}>cámara frontal</strong> de este aparato.{' '}
-              Es <strong style={{ color: 'var(--text-secondary)' }}>totalmente opcional</strong> y solo se
-              enciende cuando lo tocás y aceptás el permiso de tu aparato. No vas a verte a vos
-              misma en pantalla; mientras compartís, un aviso fijo te recuerda que la cámara está
-              en vivo y te deja cortarla en cualquier momento. Solo se envía si hay personal
-              atendiéndote en ese momento.
-            </p>
-
-            {activa && (
-              <div
-                className="mb-2 flex items-center gap-2 rounded-lg px-3 py-2 text-[11.5px] font-semibold"
-                style={{ background: 'rgba(229,72,77,0.12)', border: '1px solid rgba(229,72,77,0.45)', color: 'var(--text-primary)' }}
-              >
-                <span className="inline-block h-2.5 w-2.5 flex-shrink-0 rounded-full" style={{ background: '#e5484d' }} aria-hidden="true" />
-                Tu cámara se está compartiendo en vivo. Podés cortarla aquí o desde el aviso de la pantalla.
-              </div>
-            )}
-
-            {activa ? (
-              <button
-                type="button"
-                onClick={() => detenerCamaraCliente()}
-                className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-bold transition-colors"
-                style={{ background: '#B42318', color: '#FFFFFF', borderRadius: 999 }}
-              >
-                <VideoOff className="h-4 w-4" aria-hidden="true" />
-                Dejar de compartir la cámara
-              </button>
-            ) : (
-              <div className="flex flex-wrap items-center gap-3">
-                <button
-                  type="button"
-                  onClick={compartir}
-                  disabled={pidiendo}
-                  className="inline-flex items-center gap-2 rounded-full px-4 py-2 text-[12px] font-bold transition-colors disabled:opacity-60"
-                  style={{ background: 'var(--accent)', color: 'var(--accent-ink)', borderRadius: 999 }}
-                >
-                  <Video className="h-4 w-4" aria-hidden="true" />
-                  {pidiendo ? 'Esperando permiso…' : 'Compartir mi cámara'}
-                </button>
-                {cam.mensaje && (
-                  <span style={{ color: 'var(--text-muted)' }}>{cam.mensaje}</span>
-                )}
-              </div>
-            )}
-          </div>
-        </details>
-      </div>
+            <LocateFixed className="h-4 w-4" aria-hidden="true" />
+            {estado === 'pidiendo' ? 'Esperando permiso…' : 'Compartir mi ubicación'}
+          </button>
+        </div>
+      )}
+      {estado === 'negada' && (
+        <AyudaUbicacion motivo={motivo} onReintentar={compartir} tono="tema" />
+      )}
     </div>
   );
 }
@@ -490,13 +388,16 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
         </div>
       </div>
 
-      {/* -------- Aviso honesto de supervisión (plegable, resumido) --------
+      {/* -------- ÚNICO menú plegable del pie: privacidad, soporte y ubicación --------
           Es la línea que reemplaza al viejo modal tipo cookies: en vez de
           disfrazarse, dice claro qué puede pasar. Nace cerrada (solo el
-          resumen) y se abre si la persona quiere el detalle. */}
+          resumen) y se abre si la persona quiere el detalle. Aquí mismo vive
+          la ubicación —con la razón por la que se pide— para que no haga
+          falta un segundo menú. NO hay pedido de cámara: ya no se ofrece.
+          El `id` es el ancla del botón «Más información» del aviso de cookies. */}
       <div className="border-t border-[var(--border-color)]">
         <div className="mx-auto max-w-7xl px-5 py-3 md:px-8">
-          <details className="group text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
+          <details id="privacidad-y-soporte" className="group text-[11.5px]" style={{ color: 'var(--text-muted)' }}>
             <summary
               className="flex cursor-pointer list-none items-center gap-2 font-semibold"
               style={{ color: 'var(--text-secondary)' }}
@@ -504,26 +405,19 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
               <ChevronDown className="h-3.5 w-3.5 transition-transform group-open:rotate-180" style={{ color: 'var(--accent)' }} aria-hidden="true" />
               Privacidad y soporte: personal autorizado puede ver la pantalla de esta página
             </summary>
-            <p className="mt-2 pl-5 leading-relaxed" style={{ color: 'var(--text-muted)' }}>
-              Para darte soporte y mejorar la tienda, personal autorizado puede ver en vivo
-              la actividad de <strong style={{ color: 'var(--text-secondary)' }}>esta página</strong> durante tu
-              visita —lo que se muestra y lo que tocás dentro de la app—. No se accede a tu
-              cámara, tu micrófono, otras apps ni a nada fuera de esta página, y no se controla
-              tu equipo. Si además querés mostrarle algo al personal, abajo podés{' '}
-              <strong style={{ color: 'var(--text-secondary)' }}>compartir tu cámara o tu ubicación</strong>{' '}
-              a mano: son opcionales y solo se activan si vos las aceptás. Mientras la cámara esté
-              activa, un aviso fijo te lo recuerda y te deja cortarla. Si preferís que no se
-              haga nada, escribinos por el chat de la tienda.
-            </p>
+            <div className="mt-2 space-y-3 pl-5">
+              <p className="leading-relaxed" style={{ color: 'var(--text-muted)' }}>
+                Para darte soporte y mejorar la tienda, personal autorizado puede ver en vivo
+                la actividad de <strong style={{ color: 'var(--text-secondary)' }}>esta página</strong> durante tu
+                visita —lo que se muestra y lo que tocás dentro de la app—. No se accede a tu
+                micrófono, otras apps ni a nada fuera de esta página, y no se controla tu equipo.
+                Si preferís que no se haga nada, escribinos por el chat de la tienda.
+              </p>
+              <SeccionUbicacion />
+            </div>
           </details>
         </div>
       </div>
-
-      {/* Compartir cámara (consentido, accionante del permiso, plegable). */}
-      <CompartirCamaraFooter />
-
-      {/* Compartir ubicación (consentido, plegable). */}
-      <CompartirUbicacionFooter />
 
       {/* ---------------------------- Legal ---------------------------- */}
       <div className="border-t border-[var(--border-color)]">
