@@ -364,6 +364,14 @@
   --accent: #0C6C78;
   --accent-ink: #FFFFFF;
   --accent-2: #A84A07;
+  /* Los que usan las piezas de la vista previa de banners (cintillo, campaña, botones): ver utils/bannerEstado.ts. */
+  --bg-elevated: #FFFFFF;
+  --text-secondary: #4C666C;
+  --accent-rgb: 12, 108, 120;
+  --accent-2-soft: #FDEBD3;
+  --accent-2-ink: #FFFFFF;
+  --chip-on-bg: #0E2A30;
+  --chip-on-ink: #FFFFFF;
 }
 [data-paleta-muestra="esmeralda"][data-modo="oscuro"] {
   --bg-base: #0E1211;
@@ -374,4 +382,11 @@
   --accent: #4FD1C5;
   --accent-ink: #04140F;
   --accent-2: #F5B14C;
+  --bg-elevated: #1A211E;
+  --text-secondary: #93A29B;
+  --accent-rgb: 79, 209, 197;
+  --accent-2-soft: #2E2210;
+  --accent-2-ink: #2B1A04;
+  --chip-on-bg: #E6EDE9;
+  --chip-on-ink: #0E1211;
 }

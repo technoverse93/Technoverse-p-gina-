@@ -82,6 +82,8 @@ function pares(t) {
   sobre('acento 2 como texto', '--accent-2', ['--bg-base', '--bg-surface', '--bg-sunken', '--accent-2-soft'], 4.5);
   sobre('tinta sobre acento (botón)', '--accent-ink', ['--accent', '--accent-hover'], 4.5);
   sobre('tinta sobre acento 2 (insignia)', '--accent-2-ink', ['--accent-2'], 4.5);
+  sobre('texto sobre acento 2 suave (banner «suave»)', '--text-primary', ['--accent-2-soft'], 4.5);
+  sobre('texto secundario sobre acento 2 suave', '--text-secondary', ['--accent-2-soft'], 4.5);
   sobre('burbuja entrante', '--bubble-in-ink', ['--bubble-in'], 4.5);
   sobre('hora en burbuja entrante', '--bubble-in-meta', ['--bubble-in'], 4.5);
   sobre('burbuja saliente', '--bubble-out-ink', ['--bubble-out'], 4.5);

@@ -113,7 +113,10 @@ export function CustomSelect({
               aria-selected={opt.value === value}
               aria-disabled={opt.disabled}
               disabled={opt.disabled}
-              onClick={() => { if (opt.disabled) return; onChange(opt.value); setIsOpen(false); }}
+              // `preventDefault`: casi siempre el select vive dentro de un <label> (el `Field` del panel). Al elegir, la opción
+              // se desmonta ANTES de que el navegador termine el clic, y entonces el <label> «reclica» su primer control (el
+              // botón del propio select) y la lista volvía a abrirse sola. Cancelar el clic lo evita.
+              onClick={e => { e.preventDefault(); if (opt.disabled) return; onChange(opt.value); setIsOpen(false); }}
               className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition ${
                 opt.disabled
                   ? 'text-[var(--text-muted)] cursor-not-allowed'

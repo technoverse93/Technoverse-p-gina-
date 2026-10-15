@@ -74,3 +74,5 @@ jobs:
         run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/blindaje_seguridad.sql
       - name: Ajustes privados (webhook de Instagram)
         run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/ajustes_privados.sql
+      - name: Motor de banners (formatos, enlaces seguros y métricas)
+        run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/banners_motor.sql

@@ -38,7 +38,7 @@ import { TextoEditable } from '../cms/TextoEditable';
 import { ColorEditable } from '../cms/ColorEditable';
 import { IconoEditable } from '../cms/IconoEditable';
 import BannerPrincipal from './store/BannerPrincipal';
-import { BannerDivisor, TarjetasBannerGrid, PopupPromocional } from './store/BannersTienda';
+import { Cintillo, TarjetasCampana, BannerDivisor, TarjetasBannerGrid, PopupPromocional } from './store/BannersTienda';
 import PieDePagina from './store/PieDePagina';
 import AvisoCookies from './store/AvisoCookies';
 
@@ -1717,7 +1717,13 @@ export default function PublicStore({
                 y por encima de las categorías y del catálogo. Si no hay
                 banners cargados no ocupa ni un píxel — ver el `return null`
                 en el componente. */}
+            {/* Cintillo de ofertas (formato 'cintillo'): franja delgada de texto, lo primero de la vista. */}
+            <Cintillo banners={banners} />
+
             <BannerPrincipal banners={banners} />
+
+            {/* Tarjetas de campaña (formato 'campana'): hasta tres, con su botón. */}
+            <TarjetasCampana banners={banners} />
 
             {/* Franja divisora (formato 'divisor'): separador ancho entre
                 el cartel principal y el catálogo. Solo pinta si hay uno. */}

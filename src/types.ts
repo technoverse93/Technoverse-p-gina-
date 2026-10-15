@@ -254,13 +254,34 @@ export interface Banner {
    *   · 'popup'   — ventana emergente promocional (1 vez por sesión).
    * Un banner viejo sin este campo se trata como 'hero'.
    */
-  formato?: 'hero' | 'divisor' | 'grid' | 'popup';
+  formato?: FormatoBanner;
   /** Etiqueta de oferta, ej. "2x1", "-30%", "Envío gratis". Opcional. */
   oferta?: string;
+  /**
+   * Texto del botón de llamado a la acción («Ver ofertas», «Escribinos»). Opcional: sin él, un banner con
+   * enlace sigue siendo clicable entero y muestra el «Ver más» de siempre.
+   */
+  cta?: string;
+  /**
+   * Color del banner de texto (cintillo y tarjeta de campaña), SIEMPRE por tokens del tema para que siga a la
+   * paleta de marca y al modo claro/oscuro: 'acento', 'acento2' (el vivo), 'suave' o 'oscuro'.
+   */
+  variante?: VarianteBanner;
+  /** Orden dentro de su formato: el menor sale primero. Sin valor = 0. */
+  prioridad?: number;
   active: boolean;
   startDate?: string;
   endDate?: string;
 }
+
+/**
+ * Dónde se pinta un banner:
+ *   · 'hero'     carrusel principal · 'divisor' franja ancha entre secciones · 'grid' tarjeta en la cuadrícula
+ *   · 'popup'    emergente una vez por sesión
+ *   · 'cintillo' franja delgada de texto con la oferta (sin imagen) · 'campana' tarjeta de campaña con botón (imagen opcional)
+ */
+export type FormatoBanner = 'hero' | 'divisor' | 'grid' | 'popup' | 'cintillo' | 'campana';
+export type VarianteBanner = 'acento' | 'acento2' | 'suave' | 'oscuro';
 
 export interface LogisticsDelivery {
   id: string; // same as order/repair id

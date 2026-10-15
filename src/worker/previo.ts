@@ -47,6 +47,11 @@ export interface PrevioDelSitio {
    * pudo comprobar, no viene.
    */
   vacio?: true;
+  /**
+   * Filas de `banners` (cintillos, cartel principal, tarjetas…) tal cual de la base, para que el primer dibujo ya
+   * los tenga. No viene si no se pudo leer: el navegador cae a su copia guardada o a pedirlos.
+   */
+  b?: Record<string, unknown>[];
 }
 
 // Solo lo que ya ve cualquiera en la tienda. NO va `instagram_webhook_url`:
@@ -73,6 +78,12 @@ const TOPE_LECTURA_MS = 700;
 const VIGENCIA_MS = 4000;
 const RESPALDO_MS = 10 * 60 * 1000;
 
+// Los banners son públicos y pocos; los que traen la imagen incrustada (data:) pesarían cada visita: se omiten
+// aquí y el navegador los toma de su copia o de la base.
+const MAX_BANNERS = 40;
+const MAX_IMAGEN_BANNER_CARACTERES = 2_000;
+const RUTA_BANNERS = `banners?select=*&limit=${MAX_BANNERS}`;
+
 // Un logo gigante inflaría cada visita: por encima de esto se omite y el
 // navegador lo toma de su propia copia o de la base.
 const MAX_LOGO_CARACTERES = 60_000;
@@ -94,10 +105,11 @@ async function leer(base: string, llave: string): Promise<PrevioDelSitio | null>
   const abortar = new AbortController();
   const reloj = setTimeout(() => abortar.abort(), TOPE_LECTURA_MS);
   try {
-    const [filas, ajustes, catalogo] = await Promise.all([
+    const [filas, ajustes, catalogo, banners] = await Promise.all([
       pedir(base, llave, 'contenido_sitio?select=clave,valor', abortar.signal).catch(() => null),
       pedir(base, llave, `app_settings?select=${COLUMNAS_AJUSTES}&id=eq.true&limit=1`, abortar.signal).catch(() => null),
       pedir(base, llave, RUTA_CATALOGO, abortar.signal).catch(() => null),
+      pedir(base, llave, RUTA_BANNERS, abortar.signal).catch(() => null),
     ]);
     // Sin el contenido no hay nada que adelantar (la lista vacía SÍ vale: es
     // un sitio sin ediciones y el navegador sabrá que no debe esperar).
@@ -117,6 +129,11 @@ async function leer(base: string, llave: string): Promise<PrevioDelSitio | null>
     // Solo una lista VACÍA y bien formada prueba que no hay nada que mostrar;
     // un error o una respuesta rara no prueba nada.
     if (Array.isArray(catalogo) && catalogo.length === 0) previo.vacio = true;
+    if (Array.isArray(banners)) {
+      previo.b = (banners as Record<string, unknown>[]).filter(f =>
+        f && typeof f === 'object' && typeof f.id === 'string'
+        && !(typeof f.image_url === 'string' && f.image_url.length > MAX_IMAGEN_BANNER_CARACTERES));
+    }
     return previo;
   } catch {
     return null;
