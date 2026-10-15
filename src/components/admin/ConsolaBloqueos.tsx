@@ -258,7 +258,7 @@ export default function ConsolaBloqueos() {
             type="button" onClick={() => void bloquear()}
             disabled={guardando || !valor.trim()}
             className="ml-auto flex items-center gap-1.5 px-4 py-2 rounded-lg text-[12.5px] font-bold text-white transition disabled:opacity-45"
-            style={{ background: '#e5484d' }}
+            style={{ background: 'var(--danger-solid)' }}
           >
             <Ban className="w-4 h-4" /> Bloquear ahora
           </button>
@@ -360,7 +360,7 @@ export default function ConsolaBloqueos() {
            style={{ borderColor: 'rgba(229,72,77,0.45)', background: 'rgba(229,72,77,0.05)' }}>
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-               style={{ background: 'rgba(229,72,77,0.14)', color: '#e5484d' }}>
+               style={{ background: 'rgba(229,72,77,0.14)', color: 'var(--danger-text)' }}>
             <Trash2 className="w-4 h-4" />
           </div>
           <div className="min-w-0">

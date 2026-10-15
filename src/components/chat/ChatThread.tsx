@@ -297,7 +297,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                     <StickyNote className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                     <div>
                       {msg.text && <p className="tv-break whitespace-pre-wrap leading-[1.5]">{msg.text}</p>}
-                      <span className="block mt-1 text-[10.5px] font-semibold opacity-70">Nota interna &middot; {soloHora(msg.timestamp)}</span>
+                      <span className="block mt-1 text-[10.5px] font-semibold">Nota interna &middot; {soloHora(msg.timestamp)}</span>
                     </div>
                   </div>
                 </div>
@@ -362,7 +362,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                           siempre una línea entera, y en un mensaje corto como
                           "Gracias" eso estiraba la burbuja al ancho de la
                           hora y la dejaba descuadrada. */}
-                      <span className={`float-right ml-2.5 mt-[7px] text-[10px] tabular-nums whitespace-nowrap select-none inline-flex items-center gap-1 ${isSupport ? 'opacity-75' : 'opacity-55'}`}>
+                      <span className={`float-right ml-2.5 mt-[7px] text-[10px] tabular-nums whitespace-nowrap select-none inline-flex items-center gap-1 ${isSupport ? 'tv-hora--out' : 'tv-hora--in'}`}>
                         {soloHora(msg.timestamp)}
                         {/* Acuse de lectura, solo en los mensajes que el
                             personal ENVIÓ al cliente (las notas internas no
@@ -398,7 +398,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                       onClick={() => { setMenuMsgId(null); void borrarMensaje(msg.id); }}
                       disabled={borrandoId === msg.id}
                       className="w-full flex items-center gap-2 px-3 py-2.5 text-[12.5px] font-semibold hover:bg-[var(--bg-sunken)] disabled:opacity-50"
-                      style={{ color: '#e5484d' }}
+                      style={{ color: 'var(--danger-text)' }}
                     >
                       {borrandoId === msg.id
                         ? <RefreshCw className="w-4 h-4 animate-spin" />

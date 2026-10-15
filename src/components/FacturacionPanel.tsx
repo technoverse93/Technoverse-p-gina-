@@ -581,7 +581,7 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
           <div className="flex items-start gap-3">
             {ultimoCobro.ok
               ? <CheckCircle className="w-5 h-5 flex-shrink-0 text-[var(--ok)]" />
-              : <AlertTriangle className="w-5 h-5 flex-shrink-0 text-[#E5484D]" />}
+              : <AlertTriangle className="w-5 h-5 flex-shrink-0 text-[var(--danger-text)]" />}
             <div className="flex-1 min-w-0 space-y-2">
               <p className="text-[13px] text-[var(--text-primary)] leading-relaxed">{ultimoCobro.mensaje}</p>
               {(ultimoCobro.pdfUrl || ultimoCobro.invoiceId) && (
@@ -1020,7 +1020,7 @@ function ListaDeInsumos({
               </span>
               <button
                 type="button"
-                className="tv-icon-btn hover:!text-[#E5484D]"
+                className="tv-icon-btn hover:!text-[var(--danger-text)]"
                 onClick={() => alQuitar(i.productId)}
                 aria-label={`Quitar ${i.productName}`}
               >

@@ -107,7 +107,7 @@ export default function CambiarContrasenaModal({ open, onClose }: Props) {
               autoFocus
             />
           </Field>
-          {errorPin && <p className="text-[12.5px] font-semibold text-[#E5484D]">{errorPin}</p>}
+          {errorPin && <p className="text-[12.5px] font-semibold text-[var(--danger-text)]">{errorPin}</p>}
           <Btn type="submit" variant="primary" disabled={verificando} className="w-full justify-center">
             {verificando ? 'Verificando…' : 'Verificar token'}
           </Btn>
@@ -139,7 +139,7 @@ export default function CambiarContrasenaModal({ open, onClose }: Props) {
               onChange={e => setConfirmacion(e.target.value)}
             />
           </Field>
-          {errorContrasena && <p className="text-[12.5px] font-semibold text-[#E5484D]">{errorContrasena}</p>}
+          {errorContrasena && <p className="text-[12.5px] font-semibold text-[var(--danger-text)]">{errorContrasena}</p>}
           <Btn type="submit" variant="primary" disabled={guardando} className="w-full justify-center">
             {guardando ? 'Guardando…' : 'Cambiar contraseña'}
           </Btn>

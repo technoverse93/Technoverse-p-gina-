@@ -128,7 +128,7 @@ export default function ChatActionsMenu({ conversation, staffEmails, onClose, on
             type="button"
             onClick={() => setConfirmando(true)}
             className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[var(--bg-surface)] font-medium"
-            style={{ color: '#e5484d' }}
+            style={{ color: 'var(--danger-text)' }}
           >
             <Trash2 className="w-4 h-4" /> Cerrar y borrar conversación
           </button>

@@ -178,7 +178,7 @@ export default function ConfigurarDesbloqueoLocal({ email }: Props) {
                 />
               </Field>
               {pinConfirma.length > 0 && pinConfirma.length === pin.length && pin !== pinConfirma && (
-                <p className="text-[12.5px] font-semibold text-[#E5484D]">Los dos PIN no coinciden.</p>
+                <p className="text-[12.5px] font-semibold text-[var(--danger-text)]">Los dos PIN no coinciden.</p>
               )}
             </>
           ) : (
@@ -210,7 +210,7 @@ export default function ConfigurarDesbloqueoLocal({ email }: Props) {
             </div>
           )}
 
-          {error && <p className="text-[12.5px] font-semibold text-[#E5484D]" role="alert">{error}</p>}
+          {error && <p className="text-[12.5px] font-semibold text-[var(--danger-text)]" role="alert">{error}</p>}
 
           <div className="flex gap-2">
             <Btn type="submit" variant="primary" disabled={!puedeGuardar || guardando} className="flex-1 justify-center">

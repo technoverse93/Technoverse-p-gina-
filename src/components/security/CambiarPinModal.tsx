@@ -139,10 +139,10 @@ export default function CambiarPinModal({ open, onClose }: Props) {
           />
         </Field>
         {pinNuevo.length === 4 && confirmacion.length === 4 && pinNuevo !== confirmacion && (
-          <p className="text-[12.5px] font-semibold text-[#E5484D]">Los dos códigos nuevos no coinciden.</p>
+          <p className="text-[12.5px] font-semibold text-[var(--danger-text)]">Los dos códigos nuevos no coinciden.</p>
         )}
 
-        {error && <p className="text-[12.5px] font-semibold text-[#E5484D]">{error}</p>}
+        {error && <p className="text-[12.5px] font-semibold text-[var(--danger-text)]">{error}</p>}
 
         <Btn type="submit" variant="primary" disabled={!puedeGuardar || guardando} className="w-full justify-center">
           {guardando ? 'Guardando…' : 'Guardar'}

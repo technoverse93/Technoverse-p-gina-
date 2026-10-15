@@ -19,7 +19,7 @@
 .ep-seg { display: inline-flex; flex-wrap: wrap; gap: 4px; padding: 3px; border-radius: 12px; background: var(--bg-sunken); border: 1px solid var(--border-color); max-width: 100%; }
 .ep-seg button { min-height: 32px; padding: 0 12px; border: 0; border-radius: 9px; background: transparent; color: var(--text-secondary); font: 600 12.5px var(--font-sans, system-ui); cursor: pointer; white-space: nowrap; }
 .ep-seg button[data-on] { background: var(--bg-surface); color: var(--text-primary); box-shadow: var(--shadow-sm); }
-.ep-seg button:disabled { opacity: .4; cursor: not-allowed; }
+.ep-seg button:disabled { color: var(--text-muted); cursor: not-allowed; }
 .ep-seg-env { display: flex; }
 .ep-estilos { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 8px; }
 @media (max-width: 520px) { .ep-estilos { grid-template-columns: repeat(2, minmax(0, 1fr)); } }

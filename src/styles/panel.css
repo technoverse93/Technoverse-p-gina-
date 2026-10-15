@@ -59,7 +59,10 @@
   --tv-accent-soft: rgba(var(--accent-rgb), 0.12);
   --tv-accent-line: rgba(var(--accent-rgb), 0.32);
 
-  --tv-danger: #E5484D;
+  /* Rojo de TEXTO e íconos de peligro: el token global de index.css (`--danger-text`),
+     que da 6,5:1 sobre blanco. El #E5484D de antes daba 3,9:1 y 3,0:1 sobre su fondo suave.
+     (La insignia roja SÓLIDA con número usa `--danger-solid`.) */
+  --tv-danger: var(--danger-text);
   --tv-danger-soft: rgba(229, 72, 77, 0.12);
   --tv-ok: var(--ok);
   --tv-ok-soft: var(--ok-soft);
@@ -69,8 +72,8 @@
      "Iniciar conteo", azul en los iconos de acción, rosa en los
      títulos) y ninguno significaba nada. Aquí hay tres estados y solo
      tres: acento, correcto, aviso, peligro. */
-  --tv-warn: #9A5B14;
-  --tv-warn-soft: rgba(154, 91, 20, 0.12);
+  --tv-warn: #8A500F;
+  --tv-warn-soft: rgba(138, 80, 15, 0.12);
 
   /* Cristal Ligero: el panel comparte el degradado estático de toda la app
      (definido en index.css), con el color base de respaldo debajo. */
@@ -78,7 +81,6 @@
   background-image: var(--app-bg);
 }
 .dark #admin-panel-root {
-  --tv-danger: #F1746A;
   --tv-danger-soft: rgba(241, 116, 106, 0.14);
   --tv-warn: #E8A85C;
   --tv-warn-soft: rgba(232, 168, 92, 0.14);
@@ -659,7 +661,7 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 #admin-panel-root .ai-acc-ok{display:inline-flex;align-items:center;gap:7px;height:38px;padding:0 15px;border-radius:12px;font-weight:700;font-size:13px;background:var(--jv-peligro);color:var(--jv-peligro-ink);min-width:0!important;min-height:0!important;cursor:pointer;white-space:nowrap}
 #admin-panel-root .ai-acc-ok[data-tono="normal"]{background:var(--accent);color:var(--accent-ink)}
 #admin-panel-root .ai-acc-ok:hover{filter:brightness(1.07)}
-#admin-panel-root .ai-acc-ok:disabled{opacity:.5;cursor:default;filter:none}
+#admin-panel-root .ai-acc-ok:disabled{cursor:default;filter:grayscale(1)}
 #admin-panel-root .ai-acc .ai-chip{height:38px;cursor:pointer}
 .ai-acc-hecho{display:flex;align-items:center;gap:8px;flex-wrap:wrap;padding:10px 12px;border-top:1px solid var(--border-soft);font-size:13px;color:var(--text-secondary)}
 .ai-acc-hecho>span{flex:1 1 180px;min-width:0}
@@ -701,7 +703,7 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 .ai-escucha .ai-giro{color:var(--accent)}
 .ai-acc-error{margin:0;padding:8px 12px;background:var(--tv-danger-soft);color:var(--tv-danger);font-size:12.5px;font-weight:600;line-height:1.45}
 .ai-acc-hecho .ai-acc-error{flex-basis:100%;border-radius:10px}
-#admin-panel-root .ai-mas-op:disabled{opacity:.5;cursor:default}
+#admin-panel-root .ai-mas-op:disabled{color:var(--text-muted);cursor:default}
 @container (max-width:460px) {
 .ai-acc-cab{display:grid;grid-template-columns:34px minmax(0,1fr);column-gap:10px;row-gap:6px}
 .ai-acc-cab .ai-acc-chip{grid-column:2;justify-self:start}
@@ -778,7 +780,7 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 }
 .ai-seg-voz{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));margin:4px 14px 10px;border-radius:14px}
 .ai-seg-voz button{white-space:normal;line-height:1.25;text-align:center;padding:7px 6px;border-radius:11px}
-.ai-seg-voz button:disabled{opacity:.5}
+.ai-seg-voz button:disabled{color:var(--text-muted)}
 .ai-voz-prueba{margin:0 14px 12px}
 .ai-seg-dos{grid-template-columns:repeat(2,minmax(0,1fr))}
 .ai-voces{display:flex;flex-direction:column;gap:6px;margin:0 14px 10px}
@@ -808,7 +810,7 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
 .ai-oye-frases{display:flex;flex-wrap:wrap;gap:6px;padding:2px 14px 8px}
 .ai-oye-frase{display:inline-flex;align-items:center;gap:4px;max-width:100%;padding:4px 5px 4px 12px;border-radius:999px;background:var(--bg-sunken);font-size:12.5px;font-weight:600}
 .ai-oye-frase button{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:var(--text-secondary)}
-.ai-oye-frase button:disabled{opacity:.35}
+.ai-oye-frase button:disabled{color:var(--text-muted);cursor:default}
 .ai-oye-nueva{display:flex;gap:6px;padding:0 14px 8px}
 .ai-oye-nueva input{flex:1;min-width:0;height:34px;padding:0 12px;border-radius:999px;border:1px solid var(--border-color);background:var(--bg-surface);color:var(--text-primary);font-size:13px}
 .ai-oye-prueba{margin:0 14px 12px;padding:10px 12px;border-radius:12px;background:var(--bg-sunken);display:grid;gap:8px;font-size:12.5px;color:var(--text-secondary)}
@@ -883,3 +885,33 @@ html.sin-vidrio #admin-panel-root .tv-regleta { -webkit-backdrop-filter: none; b
   #admin-panel-root :is(.tv-regleta, .tv-carpetas-bar, .tv-tab-panel, .jv-hoja-cab, .jv-hoja-cuerpo, .tv-flotante-zoom),
   [data-tv-overlay] [data-overlay-panel] { zoom: .93; }
 }
+
+/* ---- Selector de paleta de marca (Configuración) ----
+   Las miniaturas llevan `data-paleta-muestra`: toman los tokens REALES de cada
+   paleta (ver styles/paletas.css), en claro y en oscuro. */
+.sp-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 176px), 1fr)); gap: 10px; }
+.sp-op {
+  display: grid; gap: 8px; min-width: 0; padding: 10px; text-align: left; cursor: pointer;
+  background: var(--bg-surface); border: 1.5px solid var(--border-color); border-radius: var(--tv-radius-sm);
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.sp-op:hover { border-color: rgba(var(--accent-rgb), .45); }
+.sp-op[aria-pressed='true'] { border-color: var(--accent); box-shadow: 0 0 0 3px rgba(var(--accent-rgb), .16); }
+.sp-op:disabled { cursor: progress; }
+.sp-vista { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 6px; }
+.sp-mini {
+  display: grid; gap: 5px; align-content: start; height: 50px; padding: 6px; border-radius: 8px;
+  background: var(--bg-base); border: 1px solid var(--border-color);
+}
+.sp-barra { height: 9px; border-radius: 4px; background: var(--accent); }
+.sp-fila { display: flex; align-items: center; gap: 4px; }
+.sp-chip { flex: none; width: 20px; height: 8px; border-radius: 999px; background: var(--accent-2); }
+.sp-linea { display: block; height: 5px; border-radius: 3px; background: var(--text-primary); }
+.sp-linea--corta { flex: 1; min-width: 0; background: var(--text-muted); }
+.sp-cab { display: flex; align-items: center; justify-content: space-between; gap: 6px; min-width: 0; }
+.sp-nombre { min-width: 0; font-weight: 700; font-size: 13.5px; color: var(--text-primary); }
+.sp-check { flex: none; width: 16px; height: 16px; color: var(--accent); }
+.sp-nota { min-width: 0; font-size: 11.5px; color: var(--text-muted); }
+
+/* Atribución del mapa (Leaflet): su azul de fábrica daba 3,3:1 sobre el fondo gris translúcido. */
+.leaflet-container .leaflet-control-attribution a { color: #005B80; }

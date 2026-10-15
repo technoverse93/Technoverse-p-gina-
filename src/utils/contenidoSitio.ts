@@ -232,6 +232,17 @@ function enviarBroadcast(clave: string, valor: string): void {
   }
 }
 
+/**
+ * Como `suscribirContenido`, pero SOLO escucha la caché de este aparato: no abre
+ * el canal de Realtime. Para lo que corre en el arranque de toda la app (la
+ * paleta de marca) y no debe abrir una conexión por sí solo; los cambios en
+ * vivo le llegan cuando algún componente editable ya la tiene abierta.
+ */
+export function alCambiarContenido(alCambiar: () => void): () => void {
+  window.addEventListener(EVENTO, alCambiar);
+  return () => window.removeEventListener(EVENTO, alCambiar);
+}
+
 export function suscribirContenido(alCambiar: () => void): () => void {
   window.addEventListener(EVENTO, alCambiar);
   suscriptores++;

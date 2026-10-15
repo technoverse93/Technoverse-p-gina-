@@ -128,7 +128,7 @@ export default function ResetPasswordView({ onListo }: Props) {
         {estado === 'invalido' && (
           <div className="space-y-4">
             <div className="flex items-start gap-3 rounded-xl border border-[#E5484D]/40 bg-[#E5484D]/10 p-3">
-              <ShieldAlert className="w-5 h-5 flex-shrink-0 text-[#E5484D]" />
+              <ShieldAlert className="w-5 h-5 flex-shrink-0 text-[var(--danger-text)]" />
               <p className="text-[12.5px] leading-relaxed text-[var(--text-secondary)]">
                 {errorUrl || 'Este enlace de recuperación ya no es válido: venció o ya se usó.'} Solicite un nuevo enlace desde la pantalla de inicio de sesión.
               </p>
@@ -168,7 +168,7 @@ export default function ResetPasswordView({ onListo }: Props) {
                 className="w-full bg-[var(--bg-surface)] border border-[var(--border-color)] focus:border-blue-500 focus:ring-1 focus:ring-blue-500 rounded-xl px-4 py-2.5 text-sm text-[var(--text-primary)] focus:outline-none transition"
               />
             </div>
-            {error && <p className="text-[12.5px] font-semibold text-[#E5484D]">{error}</p>}
+            {error && <p className="text-[12.5px] font-semibold text-[var(--danger-text)]">{error}</p>}
             <button
               type="submit"
               disabled={guardando}

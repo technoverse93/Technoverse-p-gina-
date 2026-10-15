@@ -4,12 +4,15 @@ import App from './App.tsx';
 import ErrorBoundaryRaiz from './components/ErrorBoundaryRaiz';
 import { instalarRegistroDeErrores } from './utils/erroresPantalla';
 import './index.css';
+// Paletas de marca (Océano, Atardecer, Orquídea): solo cambian los colores de los tokens de index.css.
+import './styles/paletas.css';
 // Clases `tv-` que comparten la tienda y el panel. Va DESPUÉS de
 // index.css para que sus reglas puedan afinar las de la marca. Lo que es
 // SOLO del panel (panel.css y jarvis.css) se carga con AdminPanel: la
 // tienda no lo descarga.
 import './styles/admin.css';
 import { iniciarTema } from './utils/tema';
+import { iniciarPaleta } from './utils/paleta';
 import { instalarAjusteGlobal } from './utils/ajustarTexto';
 
 // ANTES de montar React, no dentro de un efecto: un efecto corre después
@@ -17,6 +20,10 @@ import { instalarAjusteGlobal } from './utils/ajustarTexto';
 // producía un destello blanco de un cuadro. Aplicándolo aquí, el primer
 // pintado ya sale con el tema correcto.
 iniciarTema();
+
+// La paleta de la marca (la elige el dueño en Configuración): el Worker ya la dejó en el HTML; esto la
+// sincroniza con el contenido del sitio y la mantiene al día en vivo (ver utils/paleta.ts).
+iniciarPaleta();
 
 // Deja rastro de los errores sueltos (para verlos después en la bitácora).
 instalarRegistroDeErrores();
