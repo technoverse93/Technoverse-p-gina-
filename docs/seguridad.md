@@ -35,7 +35,8 @@ personal; falso para el servidor. Todo límite y toda validación de escrituras 
 ```bash
 npm run secretos       # sin secretos en el repo
 npm run paletas        # contraste AA de las paletas
-npm run probar-api     # con la llave pública: un anónimo no ve nada privado (solo lecturas)
+npm run probar-api     # con la llave pública: un anónimo no ve nada privado (solo lecturas; las funciones expuestas
+                       # NO se pueden listar con esa llave: se revisan con el asesor de seguridad de Supabase)
 # Migraciones de seguridad sobre un Postgres local (réplica mínima de la base):
 createdb prueba
 psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/replica_minima.sql

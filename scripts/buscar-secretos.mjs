@@ -25,6 +25,7 @@ const RAIZ = join(dirname(fileURLToPath(import.meta.url)), '..');
 const EXCLUIR = [
   /^package-lock\.json$/,
   /^supabase\/functions\/asistente-ia\/mapa-codigo\.ts$/, // generado: copia comentarios del código
+  /^supabase\/pruebas\//,                                  // datos de prueba con «secretos» inventados a propósito
   /\.(png|jpe?g|gif|webp|ico|svg|woff2?|ttf|otf|pdf|apk|aab|zip|gz|mp3|mp4|wasm|onnx|bin)$/i,
 ];
 

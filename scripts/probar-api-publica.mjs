@@ -9,7 +9,10 @@
 //   · ver, en el esquema público de la API, funciones de mantenimiento que solo debe llamar el servidor.
 //
 // NUNCA llama a una función (RPC): una función expuesta se EJECUTARÍA al probarla, y algunas borran datos.
-// Por eso lo del esquema se ve en la lista de funciones (OpenAPI), no llamándolas.
+// Por eso lo del esquema se ve en la lista de funciones (OpenAPI), no llamándolas. OJO: Supabase NO entrega
+// ese esquema con la llave publicable (responde 401, comprobado en el CI del 2026-10-15), así que esa
+// comprobación queda como aviso; las funciones expuestas se revisan con el asesor de seguridad de Supabase
+// (`get_advisors`) y con las pruebas SQL de supabase/pruebas/.
 //
 // Sin dependencias (fetch de Node 22). Variables opcionales: SUPABASE_URL y SUPABASE_ANON_KEY (si no,
 // se leen de src/supabaseClient.ts).
