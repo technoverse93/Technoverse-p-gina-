@@ -73,3 +73,42 @@
 .ep-esq i { height: 92px; border-radius: 12px; background: var(--bg-sunken); animation: ep-late 1.4s ease-in-out infinite; }
 @keyframes ep-late { 50% { opacity: .55; } }
 @media (prefers-reduced-motion: reduce) { .ep-esq i { animation: none; } }
+
+/* ---- Gestor de banners (Marketing): filtros, lista y vista previa ----
+   Cada fila lleva su miniatura (la imagen, o el color de su variante si es de texto), chips de formato / estado /
+   oferta, las métricas y los botones. Una sola línea de botones: los íconos no se encogen. */
+.gb-filtros { display: flex; flex-wrap: nowrap; gap: 6px; overflow-x: auto; padding-bottom: 2px; margin-bottom: 12px; scrollbar-width: none; }
+.gb-filtros::-webkit-scrollbar { display: none; }
+.gb-filtro { flex: none; display: inline-flex; align-items: center; gap: 6px; height: 30px; padding: 0 12px; border-radius: 999px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-secondary); font-size: 12.5px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.gb-filtro[aria-pressed='true'] { background: var(--chip-on-bg); border-color: var(--chip-on-bg); color: var(--chip-on-ink); }
+.gb-filtro-n { font-variant-numeric: tabular-nums; font-weight: 700; }
+.gb-lista { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 320px), 1fr)); gap: 12px; }
+.gb-item { display: flex; min-width: 0; border: 1px solid var(--border-color); border-radius: 14px; background: var(--bg-surface); overflow: hidden; }
+.gb-item[data-estado='pausado'], .gb-item[data-estado='vencido'] { background: var(--bg-sunken); }
+.gb-mini { flex: none; width: 96px; display: grid; place-items: center; background: var(--bg-sunken); }
+.gb-mini img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.gb-mini-txt { width: 100%; height: 100%; display: grid; place-items: center; padding: 6px; text-align: center; font-size: 11px; font-weight: 800; line-height: 1.2; overflow: hidden; }
+.gb-cuerpo { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 4px; padding: 10px 12px; }
+.gb-chips { display: flex; flex-wrap: nowrap; align-items: center; gap: 5px; min-width: 0; overflow: hidden; }
+.gb-tit { min-width: 0; font-size: 13px; font-weight: 700; color: var(--text-primary); }
+.gb-sub { min-width: 0; font-size: 11.5px; color: var(--text-secondary); }
+.gb-met { display: flex; align-items: center; gap: 10px; font-size: 11.5px; color: var(--text-secondary); font-variant-numeric: tabular-nums; }
+.gb-met span { display: inline-flex; align-items: center; gap: 4px; white-space: nowrap; }
+.gb-met svg { flex: none; width: 13px; height: 13px; }
+.gb-acc { display: flex; flex-wrap: nowrap; align-items: center; gap: 4px; margin-top: auto; padding-top: 6px; }
+.gb-acc .tv-btn { min-width: 0; }
+.gb-ico { flex: none; width: 32px; height: 32px; display: grid; place-items: center; border-radius: 9px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-secondary); cursor: pointer; }
+.gb-ico:disabled { color: var(--text-muted); cursor: default; background: var(--bg-sunken); }
+.gb-ico:not(:disabled):hover { color: var(--text-primary); border-color: rgba(var(--accent-rgb), .45); }
+.gb-ico svg { width: 15px; height: 15px; }
+.gb-aviso { border: 1px dashed var(--accent-2); border-radius: 12px; padding: 10px 12px; font-size: 12.5px; color: var(--text-primary); background: var(--accent-2-soft); margin-bottom: 12px; }
+
+.vp { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
+/* Las dos botoneras van siempre una sobre otra (no se reacomodan según el ancho ni la letra): cada una se desplaza dentro de sí misma si no cabe. */
+.vp-barra { display: grid; grid-template-columns: minmax(0, 1fr); justify-items: start; gap: 8px; }
+.vp-seg { display: inline-flex; padding: 3px; gap: 2px; border-radius: 10px; background: var(--bg-sunken); border: 1px solid var(--border-color); max-width: 100%; overflow-x: auto; scrollbar-width: none; }
+.vp-seg::-webkit-scrollbar { display: none; }
+.vp-seg button { flex: none; height: 28px; padding: 0 10px; border: 0; border-radius: 7px; background: transparent; color: var(--text-secondary); font-size: 12px; font-weight: 600; white-space: nowrap; cursor: pointer; }
+.vp-seg button[aria-pressed='true'] { background: var(--bg-surface); color: var(--text-primary); box-shadow: var(--shadow-sm); }
+.vp-lienzo { background: var(--bg-base); color: var(--text-primary); border: 1px solid var(--border-color); border-radius: 12px; padding: 12px; min-width: 0; overflow: hidden; }
+.vp-falta { margin: 0; padding: 18px 0; text-align: center; font-size: 12.5px; color: var(--text-muted); }

@@ -42,6 +42,7 @@ createdb prueba
 psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/replica_minima.sql
 psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/blindaje_seguridad.sql
 psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/ajustes_privados.sql
+psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/banners_motor.sql
 ```
 
 El flujo `.github/workflows/seguridad.yml` corre todo eso en cada PR, en cada push a `main` y cada lunes.
@@ -53,6 +54,11 @@ bucket, vaciado del catálogo con `adjust_stock`, quema de cupones, escribir com
 cualquier cliente en el bucket de marketing, saldo/reactivación en la ficha propia, escrituras anónimas sin tope,
 funciones «solo personal» abiertas, funciones de disparador expuestas, `search_path`, políticas «nadie» y el error de
 `admin_reset_security_pin`. `migracion_ajustes_privados.sql`: el webhook de Instagram ya no es legible por cualquiera.
+`migracion_banners_motor.sql` (no es un agujero, es defensa en profundidad del motor de banners): un banner no puede
+llevar un enlace `javascript:`/`data:`/`vbscript:`/`file:`/`blob:` ni textos gigantes (se aplica a lo que se guarde de ahora
+en adelante), y las métricas de vistas/clics solo se suman por `banner_evento()` (SECURITY DEFINER, con tope por
+persona/IP vía `limitar_uso` si el blindaje ya está aplicado); la tabla `banner_metricas` no admite escrituras desde la
+API ni siquiera del personal, y solo el personal la lee. No guarda nada de la persona. Las cifras son orientativas.
 
 ## Lo que queda (decisiones y trabajo pendiente)
 

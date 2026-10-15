@@ -34,46 +34,31 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Banner } from '../../types';
+import { estaVigente, ordenarBanners } from '../../utils/bannerEstado';
+import { marcarVistaEnSesion, registrarEventoBanner } from '../../utils/bannerMetricas';
 
 interface Props {
   banners: Banner[];
+  /** Vista previa del panel: no cuenta vistas ni clics. */
+  vista?: boolean;
 }
 
 /** Milisegundos que se queda cada cartel antes de pasar al siguiente. */
 const INTERVALO_MS = 6000;
 
-/**
- * ¿Este banner debe verse hoy?
- *
- * Se apoya en `active` y en la ventana de fechas. Las fechas son
- * opcionales: un banner sin fechas se considera siempre vigente, que es
- * lo que espera quien solo quiere dejarlo puesto.
- */
-export function estaVigente(b: Banner): boolean {
-  if (!b || b.active === false) return false;
-  const hoy = Date.now();
-  if (b.startDate) {
-    const desde = new Date(b.startDate).getTime();
-    if (Number.isFinite(desde) && hoy < desde) return false;
-  }
-  if (b.endDate) {
-    // Se toma el final del día indicado: un banner que "termina el 30"
-    // tiene que verse durante todo el 30, no apagarse a medianoche del 29.
-    const hasta = new Date(b.endDate).getTime();
-    if (Number.isFinite(hasta) && hoy > hasta + 24 * 60 * 60 * 1000 - 1) return false;
-  }
-  return true;
-}
+// La regla de vigencia (activo + ventana de fechas) vive en utils/bannerEstado.ts, junto con el estado que
+// muestra el panel. Se reexporta aquí porque otros componentes de la tienda la importan de este archivo.
+export { estaVigente };
 
-export default function BannerPrincipal({ banners }: Props) {
+export default function BannerPrincipal({ banners, vista = false }: Props) {
   const visibles = useMemo(
     // Solo los banners de formato "hero" (o los viejos sin formato, que se
     // tratan como hero). Los de divisor / grid / popup se pintan en su
     // propio lugar, no en este carrusel.
-    () => (banners || [])
+    () => ordenarBanners((banners || [])
       .filter(estaVigente)
       .filter(b => (b.formato || 'hero') === 'hero')
-      .filter(b => !!b.imageUrl),
+      .filter(b => !!b.imageUrl)),
     [banners]
   );
 
@@ -106,6 +91,12 @@ export default function BannerPrincipal({ banners }: Props) {
 
   const actual = visibles[Math.min(indice, visibles.length - 1)];
 
+  // Una vista por cartel y por sesión: se cuenta al mostrarse (el carrusel va pasando de uno a otro).
+  useEffect(() => {
+    if (vista || !actual) return;
+    if (marcarVistaEnSesion(actual.id)) registrarEventoBanner(actual.id, 'vista');
+  }, [actual?.id, vista]);
+
   const contenido = (
     <>
       <img
@@ -120,7 +111,7 @@ export default function BannerPrincipal({ banners }: Props) {
       {actual.oferta && (
         <span
           className="absolute top-3 left-3 sm:top-4 sm:left-4 rounded-full px-3 py-1 text-[11px] sm:text-[13px] font-black shadow-md"
-          style={{ background: 'var(--accent)', color: 'var(--accent-ink, #fff)' }}
+          style={{ background: 'var(--accent-2)', color: 'var(--accent-2-ink)' }}
         >
           {actual.oferta}
         </span>
@@ -152,6 +143,14 @@ export default function BannerPrincipal({ banners }: Props) {
               {actual.description}
             </p>
           )}
+          {actual.cta && (
+            <span
+              className="inline-flex self-start items-center gap-1.5 rounded-xl mt-2.5 px-4 py-1.5 text-[12.5px] sm:text-[13.5px] font-bold"
+              style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }}
+            >
+              <span className="tv-1l">{actual.cta}</span>
+            </span>
+          )}
         </div>
       )}
     </>
@@ -166,6 +165,7 @@ export default function BannerPrincipal({ banners }: Props) {
             target={/^https?:\/\//i.test(actual.link) ? '_blank' : undefined}
             rel="noopener noreferrer"
             className="absolute inset-0 block"
+            onClick={vista ? undefined : () => registrarEventoBanner(actual.id, 'clic')}
           >
             {contenido}
           </a>

@@ -1298,3 +1298,34 @@ html.vidrio-ligero .sg-riel { backdrop-filter: blur(4px); }
 .tv-inactivo > td { filter: grayscale(1); }
 .tv-hora--in { color: var(--bubble-in-meta); }
 .tv-hora--out { color: var(--bubble-out-meta); }
+
+
+/* ==========================================================================
+   BANNERS DE TEXTO: cintillo y tarjetas de campaña
+   --------------------------------------------------------------------------
+   Los colores los pone cada pieza con tokens del tema (utils/bannerEstado.ts: acento, vivo, suave,
+   oscuro), así que siguen a la paleta de marca y al modo claro/oscuro. Aquí solo va la forma.
+   Una sola línea de texto en el cintillo (`tv-1l` achica y, en último caso, corta con «…»); los
+   íconos y la insignia no se encogen (`flex: none`).
+   ========================================================================== */
+.tv-cintillo { position: relative; display: flex; align-items: center; gap: 6px; min-height: 38px; margin-bottom: 12px; padding: 0 4px 0 12px; border: 1px solid; border-radius: 12px; overflow: hidden; }
+.tv-cintillo-cuerpo { flex: 1; min-width: 0; display: flex; align-items: center; gap: 10px; min-height: 38px; color: inherit; text-decoration: none; }
+.tv-cintillo-ins { flex: none; border-radius: 999px; padding: 1px 9px; font-size: 11px; font-weight: 800; line-height: 1.6; white-space: nowrap; }
+.tv-cintillo-txt { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; }
+.tv-cintillo-cta { flex: none; display: inline-flex; align-items: center; gap: 4px; max-width: 40%; font-size: 12px; font-weight: 800; text-decoration: underline; text-underline-offset: 3px; }
+.tv-cintillo-n { flex: none; font-size: 10.5px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.tv-cintillo-x { flex: none; width: 30px; height: 30px; display: grid; place-items: center; border-radius: 8px; color: inherit; background: transparent; }
+.tv-cintillo-x:hover:not(:disabled) { background: rgba(127, 127, 127, .22); }
+.tv-cintillo-x:disabled { cursor: default; }
+@media (max-width: 480px) { .tv-cintillo-cta { display: none; } }
+
+.tv-campanas { display: grid; grid-template-columns: minmax(0, 1fr); gap: 12px; margin: 16px 0; }
+@media (min-width: 640px) { .tv-campanas { grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); } }
+.tv-campana { border: 1px solid; border-radius: 16px; overflow: hidden; min-width: 0; }
+.tv-campana-cuerpo { display: flex; min-width: 0; height: 100%; color: inherit; text-decoration: none; }
+.tv-campana-foto { flex: none; width: 38%; max-width: 160px; display: block; }
+.tv-campana-foto img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.tv-campana-txt { flex: 1; min-width: 0; display: flex; flex-direction: column; align-items: flex-start; gap: 6px; padding: 14px 16px; }
+.tv-campana-ins { border-radius: 999px; padding: 1px 10px; font-size: 11px; font-weight: 800; line-height: 1.6; }
+.tv-campana-tit { font-size: 16px; font-weight: 900; line-height: 1.2; text-wrap: balance; overflow-wrap: break-word; }
+.tv-campana-desc { font-size: 12.5px; line-height: 1.4; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }

@@ -24,6 +24,8 @@ interface Previo {
   ajustes: Partial<AppSettings> | null;
   /** El borde comprobó que la tienda pública no tiene nada que mostrar. */
   catalogoVacio: boolean;
+  /** Filas de `banners` tal cual de la base (se mapean en storage.ts), o null si el borde no las trajo. */
+  banners: Record<string, unknown>[] | null;
 }
 
 let leido: Previo | null | undefined;
@@ -59,7 +61,10 @@ function leer(): Previo | null {
       // el que ya hubiera en la copia del aparato.
       if (typeof s.store_logo === 'string' && s.store_logo) ajustes.storeLogo = s.store_logo;
     }
-    leido = { contenido, ajustes, catalogoVacio: j.vacio === true };
+    const banners = Array.isArray(j.b)
+      ? (j.b as unknown[]).filter((f): f is Record<string, unknown> => !!f && typeof f === 'object' && typeof (f as any).id === 'string')
+      : null;
+    leido = { contenido, ajustes, catalogoVacio: j.vacio === true, banners };
   } catch {
     leido = null;
   }
@@ -74,6 +79,11 @@ export function contenidoPrevio(): Record<string, string> | null {
 /** Configuración pública al abrir la página (sin el webhook de Instagram), o null. */
 export function ajustesPrevios(): Partial<AppSettings> | null {
   return leer()?.ajustes ?? null;
+}
+
+/** Los banners (filas crudas de la base) que el borde dejó en el HTML, o null si no los trajo. */
+export function bannersPrevios(): Record<string, unknown>[] | null {
+  return leer()?.banners ?? null;
 }
 
 /**

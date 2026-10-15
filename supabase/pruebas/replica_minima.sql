@@ -78,6 +78,10 @@ create table public.chat_messages (id text primary key, conversation_id text ref
 create table public.client_profiles (id text primary key, profile_id uuid, name text not null, email text not null, phone text, province text,
   address_detail text, cards_tokenized jsonb default '[]'::jsonb, balance numeric default 0, notes text, pickup_in_person boolean default false,
   created_at timestamptz not null default now(), activo boolean not null default true);
+create table public.banners (id text primary key, title text, description text, image_url text, link text, type text, active boolean default true,
+  start_date date, end_date date, formato text not null default 'hero', oferta text,
+  constraint banners_formato_check check (formato in ('hero', 'divisor', 'grid', 'popup')),
+  constraint banners_type_check check (type in ('Servicios', 'Repuestos', 'Soporte', 'General')));
 create table public.visitor_fingerprints (huella text primary key, ip text, email text, ultima_visita timestamptz not null default now(), visitas int default 1);
 create table public.blocked_users_list (email text, huella text, levantado_en timestamptz);
 create table public.ubicaciones_compartidas (id uuid primary key default gen_random_uuid(), rol text, nombre text, email text, lat double precision,
@@ -210,6 +214,11 @@ alter table public.ubicaciones_compartidas enable row level security;
 create policy ubic_insert on public.ubicaciones_compartidas for insert with check (true);
 alter table public.marketing_campaigns enable row level security;
 create policy marketing_staff_all on public.marketing_campaigns for all using (public.is_staff()) with check (public.is_staff());
+alter table public.banners enable row level security;
+create policy banners_public_read on public.banners for select using (true);
+create policy banners_staff_write on public.banners for insert with check (public.is_staff());
+create policy banners_staff_update on public.banners for update using (public.is_staff());
+create policy banners_staff_delete on public.banners for delete using (public.is_staff());
 alter table public.app_settings enable row level security;
 create policy settings_public_read on public.app_settings for select using (true);
 create policy settings_owner_write on public.app_settings for update using (public.is_owner());

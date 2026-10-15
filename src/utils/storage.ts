@@ -1,6 +1,6 @@
 import { agruparAvisos } from './agruparAvisos';
 import { supabase } from '../supabaseClient';
-import { ajustesPrevios, catalogoVacioPrevio } from './previoDelSitio';
+import { ajustesPrevios, bannersPrevios, catalogoVacioPrevio } from './previoDelSitio';
 import {
   User, Product, InventoryMovement, RepairOrder, Order,
   ChatConversation, ChatMessage,
@@ -192,6 +192,20 @@ function hidratarAjustesPrevios(): void {
   const mezcla: AppSettings = { ...(localCache.settings || DEFAULT_SETTINGS), ...previos };
   localCache.settings = mezcla;
   lastSyncedDb.settings = structuredClone(mezcla);
+}
+
+/**
+ * Los banners que el Worker dejó dentro del HTML (ver src/worker/previo.ts): son los más nuevos y evitan que el
+ * cintillo, el cartel principal o las tarjetas aparezcan DESPUÉS del primer dibujo empujando el catálogo (regla
+ * de la tienda: lo editado sale definitivo en el primer cuadro, también en una visita nueva). Se ponen en las
+ * DOS copias, por la misma razón que `hidratarCacheLocal`. Si no vinieron (APK, desarrollo) no se toca nada.
+ */
+function hidratarBannersPrevios(): void {
+  const filas = bannersPrevios();
+  if (!filas) return;
+  const banners = filas.map(bannerDesdeFila);
+  localCache.banners = banners;
+  lastSyncedDb.banners = structuredClone(banners);
 }
 
 /** Tablas cuya recarga debe refrescar la copia guardada en el aparato. */
@@ -873,6 +887,43 @@ interface TableConfig<T extends Record<string, any>> {
   columns: string;
   toRow: (item: T) => any;
   fromRow: (row: any) => T;
+  /**
+   * Respaldo para una base a la que todavía le faltan las columnas nuevas (una migración de supabase/ sin
+   * aplicar): se lee y se escribe con estas. Sin esto, agregar una columna al código ANTES de que el dueño
+   * aplique la migración tumbaba la lectura entera de la tabla (error 42703). Al primer error de columna
+   * inexistente la tabla pasa a «modo legacy» y se queda ahí hasta recargar la página.
+   */
+  legacy?: { columns: string; toRow: (item: T) => any };
+}
+
+/** Tablas que cayeron al respaldo porque la base aún no tiene sus columnas nuevas. */
+const modoLegacy: Record<string, boolean> = {};
+
+/** ¿Esta tabla está funcionando con el respaldo (a la base le faltan columnas)? */
+export function tablaEnModoLegacy(tabla: string): boolean {
+  return !!modoLegacy[tabla];
+}
+
+/** ¿El error de Supabase dice «esa columna no existe»? (42703 al leer; PGRST204 al escribir). */
+function esErrorDeColumna(error: any): boolean {
+  return /\b(42703|PGRST204)\b/.test(`${error?.code || ''} ${error?.message || ''}`);
+}
+
+/**
+ * Corre una escritura con la forma de fila de la tabla; si la base no tiene alguna columna nueva y la tabla
+ * tiene respaldo, repite UNA vez con la forma vieja y recuerda el modo.
+ */
+async function escribirConRespaldo(
+  cfg: TableConfig<any>,
+  operacion: (aFila: (item: any) => any) => PromiseLike<{ error: any }>,
+): Promise<{ error: any }> {
+  const aFila = (item: any) => (modoLegacy[cfg.table] && cfg.legacy ? cfg.legacy.toRow(item) : cfg.toRow(item));
+  const r = await operacion(aFila);
+  if (r.error && cfg.legacy && !modoLegacy[cfg.table] && esErrorDeColumna(r.error)) {
+    modoLegacy[cfg.table] = true;
+    return operacion(item => cfg.legacy!.toRow(item));
+  }
+  return r;
 }
 
 const genericReady: Record<string, boolean> = {};
@@ -880,6 +931,35 @@ const genericPending: Record<string, { added: any[]; modified: any[]; deleted: a
 
 function configFor<T extends Record<string, any>>(cfg: TableConfig<T>) {
   return cfg;
+}
+
+// ---- Banners: el mapeo vive en funciones sueltas porque lo usan la tabla genérica y el arranque rápido ----
+const COLUMNAS_BANNER_BASE = 'id,title,description,image_url,link,type,formato,oferta,active,start_date,end_date';
+const COLUMNAS_BANNER = `${COLUMNAS_BANNER_BASE},cta,variante,prioridad`;
+
+function bannerDesdeFila(r: any): Banner {
+  return {
+    id: r.id, title: r.title || '', description: r.description || '', imageUrl: r.image_url || undefined,
+    link: r.link || undefined, type: r.type,
+    formato: (r.formato as Banner['formato']) || 'hero', oferta: r.oferta || undefined,
+    cta: r.cta || undefined, variante: (r.variante as Banner['variante']) || undefined,
+    prioridad: Number(r.prioridad) || 0,
+    active: r.active !== false, startDate: r.start_date || undefined,
+    endDate: r.end_date || undefined
+  };
+}
+
+function bannerAFilaBase(b: Banner) {
+  return {
+    id: b.id, title: b.title || '', description: b.description || '', image_url: b.imageUrl || '',
+    link: b.link || null, type: b.type, formato: b.formato || 'hero', oferta: b.oferta || null,
+    active: b.active !== false, start_date: b.startDate || null,
+    end_date: b.endDate || null
+  };
+}
+
+function bannerAFila(b: Banner) {
+  return { ...bannerAFilaBase(b), cta: b.cta || null, variante: b.variante || null, prioridad: Math.round(Number(b.prioridad) || 0) };
 }
 
 const TABLE_CONFIGS: TableConfig<any>[] = [
@@ -1065,20 +1145,11 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
   }),
   configFor<Banner>({
     key: 'banners', table: 'banners', idKey: 'id',
-    columns: 'id,title,description,image_url,link,type,formato,oferta,active,start_date,end_date',
-    toRow: (b) => ({
-      id: b.id, title: b.title || '', description: b.description || '', image_url: b.imageUrl || '',
-      link: b.link || null, type: b.type, formato: b.formato || 'hero', oferta: b.oferta || null,
-      active: b.active !== false, start_date: b.startDate || null,
-      end_date: b.endDate || null
-    }),
-    fromRow: (r): Banner => ({
-      id: r.id, title: r.title || '', description: r.description || '', imageUrl: r.image_url || undefined,
-      link: r.link || undefined, type: r.type,
-      formato: (r.formato as Banner['formato']) || 'hero', oferta: r.oferta || undefined,
-      active: r.active !== false, startDate: r.start_date || undefined,
-      endDate: r.end_date || undefined
-    })
+    columns: COLUMNAS_BANNER,
+    toRow: bannerAFila,
+    fromRow: bannerDesdeFila,
+    // Sin supabase/migracion_banners_motor.sql la base no tiene cta/variante/prioridad: se sigue con lo de antes.
+    legacy: { columns: COLUMNAS_BANNER_BASE, toRow: bannerAFilaBase },
   }),
   configFor<HistoricalSku>({
     key: 'historical_skus', table: 'historical_skus', idKey: 'sku',
@@ -1095,7 +1166,12 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
 ];
 
 async function refreshTableFromSupabase(cfg: TableConfig<any>) {
-  const { data, error } = await supabase.from(cfg.table).select(cfg.columns);
+  let respuesta = await supabase.from(cfg.table).select(modoLegacy[cfg.table] && cfg.legacy ? cfg.legacy.columns : cfg.columns);
+  if (respuesta.error && cfg.legacy && !modoLegacy[cfg.table] && esErrorDeColumna(respuesta.error)) {
+    modoLegacy[cfg.table] = true;
+    respuesta = await supabase.from(cfg.table).select(cfg.legacy.columns);
+  }
+  const { data, error } = respuesta;
   if (error) {
     notifySyncError(`No se pudo leer "${cfg.table}": ${error.message}`);
     return;
@@ -1223,7 +1299,7 @@ async function syncTableToSupabase(cfg: TableConfig<any>, added: any[], modified
   const LOTE_INSERCION = 200;
   for (let i = 0; i < added.length; i += LOTE_INSERCION) {
     const lote = added.slice(i, i + LOTE_INSERCION);
-    const { error } = await supabase.from(cfg.table).insert(lote.map(cfg.toRow));
+    const { error } = await escribirConRespaldo(cfg, aFila => supabase.from(cfg.table).insert(lote.map(aFila)));
     if (!error) continue;
 
     // El lote completo falló (por ejemplo, una sola fila del lote choca con
@@ -1236,14 +1312,14 @@ async function syncTableToSupabase(cfg: TableConfig<any>, added: any[], modified
     // conflicto real. Una colisión real (código 23505) se trata como éxito
     // silencioso: la fila ya existe, que es justo lo que se quería lograr.
     for (const item of lote) {
-      const { error: errorFila } = await supabase.from(cfg.table).insert(cfg.toRow(item));
+      const { error: errorFila } = await escribirConRespaldo(cfg, aFila => supabase.from(cfg.table).insert(aFila(item)));
       if (errorFila && (errorFila as any).code !== '23505') {
         errors.push(`crear en ${cfg.table} (${item[cfg.idKey]}): ${errorFila.message}`);
       }
     }
   }
   for (const item of modified) {
-    const { error } = await supabase.from(cfg.table).update(cfg.toRow(item)).eq(cfg.idKey, item[cfg.idKey]);
+    const { error } = await escribirConRespaldo(cfg, aFila => supabase.from(cfg.table).update(aFila(item)).eq(cfg.idKey, item[cfg.idKey]));
     if (error) errors.push(`actualizar en ${cfg.table} (${item[cfg.idKey]}): ${error.message}`);
   }
   for (const item of deleted) {
@@ -2325,6 +2401,7 @@ let lastSyncedDb: Database = getDefaultDB();
 // ya está ahí.
 hidratarCacheLocal();
 hidratarAjustesPrevios();
+hidratarBannersPrevios();
 
 export async function saveDB(newDb: Database) {
   const oldDb = lastSyncedDb;
