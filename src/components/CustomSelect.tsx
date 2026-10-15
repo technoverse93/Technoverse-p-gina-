@@ -116,7 +116,7 @@ export function CustomSelect({
               onClick={() => { if (opt.disabled) return; onChange(opt.value); setIsOpen(false); }}
               className={`w-full text-left px-3 py-2.5 rounded-lg text-sm transition ${
                 opt.disabled
-                  ? 'text-[var(--text-muted)] opacity-50 cursor-not-allowed'
+                  ? 'text-[var(--text-muted)] cursor-not-allowed'
                   : opt.value === value
                     ? 'bg-[var(--brand-gold-mid)]/15 text-[var(--brand-navy)] font-bold'
                     : 'text-[var(--text-primary)] hover:bg-[var(--bg-base)]'

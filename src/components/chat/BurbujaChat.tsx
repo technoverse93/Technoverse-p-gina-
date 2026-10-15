@@ -213,7 +213,7 @@ export function BurbujaChatVista({ chat, oculto, elevada, ahoraInicial, pestana 
                   <span className="absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full bg-[var(--ok)] ring-2 ring-[var(--bg-surface)]" aria-hidden="true" />
                 )}
                 {(c.unreadCount || 0) > 0 && (
-                  <span className="absolute -top-1 -right-1 min-w-[1.5em] h-[1.5em] px-1 rounded-full bg-[#e5484d] text-white text-[10px] font-bold flex items-center justify-center tabular-nums ring-2 ring-[var(--bg-surface)]">
+                  <span className="absolute -top-1 -right-1 min-w-[1.5em] h-[1.5em] px-1 rounded-full bg-[var(--danger-solid)] text-[var(--danger-ink)] text-[10px] font-bold flex items-center justify-center tabular-nums ring-2 ring-[var(--bg-surface)]">
                     {c.unreadCount > 99 ? '99+' : c.unreadCount}
                   </span>
                 )}

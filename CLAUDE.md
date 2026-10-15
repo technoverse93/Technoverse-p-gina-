@@ -132,6 +132,26 @@ Ordenado por el dueño (2026-10-14), vale para la web y la APK:
   oscuro; en teléfono sobre el botón del chat y en pantalla grande en la esquina inferior izquierda. No
   agrandarlo con más texto, ícono ni segunda fila.
 
+## Regla de producto: el texto SIEMPRE se lee (sin opacidad) y paletas de marca
+
+Pedido del dueño (2026-10-15): «textos verdes traslúcidos que no se leen» y tres temas nuevos.
+
+- **Nada de `opacity` sobre texto** (ni `opacity-NN`, ni `disabled:opacity-NN` sobre un botón con texto). Un verde al
+  40-55 % sobre verde da 1,8-2,6:1. Lo deshabilitado va en gris opaco (`filter: grayscale`, o los colores «apagado»
+  del tema: `.tv-btn:disabled`), la hora de la burbuja usa `--bubble-in-meta`/`--bubble-out-meta`, lo inactivo
+  (`tv-inactivo`) va en gris. Un `disabled:opacity-NN` que quede por ahí lo cubre la regla global del final de index.css.
+- **Colores solo por token**, nunca un hex suelto para texto: `--text-muted` (≥ 4,5:1 sobre toda superficie),
+  `--danger-text` (rojo de texto/íconos), `--danger-solid` + `--danger-ink` (insignia roja con número), `--accent-2`
+  (acento SECUNDARIO: ofertas, insignias, piezas destacadas, banners).
+- **`npm run paletas`** lee index.css y styles/paletas.css, calcula el contraste de cada par y falla si alguno baja de
+  AA (4,5:1; 3:1 los bordes). Córrelo siempre que toques un color de tema.
+- **Paleta de marca** (Esmeralda de siempre, Océano, Atardecer, Orquídea): la elige el dueño en Configuración y vale
+  para tienda y panel, en claro y en oscuro (el claro/oscuro sigue siendo de cada aparato). Se activa con
+  `<html data-paleta>`; viaja en `contenido_sitio.paleta_marca` y el Worker (`previo.ts`) la deja YA puesta en el HTML,
+  así que no parpadea (regla de la tienda). Una paleta nueva = un bloque claro y uno oscuro en `styles/paletas.css`
+  con los MISMOS tokens, y alta en `utils/paleta.ts`. No pintar con colores de Tailwind sueltos (`text-blue-500`):
+  no siguen a la paleta.
+
 ## Mapa del código de Javier
 
 Javier conoce el sistema por `supabase/functions/asistente-ia/mapa-codigo.ts`,

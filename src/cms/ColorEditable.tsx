@@ -70,7 +70,7 @@ export function ColorEditable({ clave, children, defecto, prop = 'color', classN
         type="button"
         onClick={restablecer}
         title="Volver al color original"
-        className="text-[10px] font-bold underline opacity-60 hover:opacity-100"
+        className="text-[10px] font-bold underline hover:text-[var(--text-primary)]"
         style={{ color: 'var(--text-secondary)' }}
       >
         ↺

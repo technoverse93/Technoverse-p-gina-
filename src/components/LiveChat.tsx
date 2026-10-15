@@ -789,7 +789,7 @@ export default function LiveChat() {
               </div>
               <div className="min-w-0">
                 <h4 className="font-display font-bold text-[13.5px] truncate leading-tight">Soporte Technoverse CR</h4>
-                <p className="text-[10.5px] flex items-center gap-1.5 truncate opacity-90 mt-0.5">
+                <p className="text-[10.5px] flex items-center gap-1.5 truncate mt-0.5">
                   <span className="w-1.5 h-1.5 rounded-full bg-emerald-400 animate-pulse shrink-0" style={{ boxShadow: '0 0 0 2px rgba(255,255,255,.35)' }} />
                   En línea &middot; responde al instante
                 </p>
@@ -922,7 +922,7 @@ export default function LiveChat() {
                                     entera, y en un mensaje corto como
                                     "Gracias" eso estiraba la burbuja al ancho
                                     de la hora y la dejaba descuadrada. */}
-                                <span className={`float-right inline-flex items-center gap-1 ml-2.5 mt-[7px] text-[10px] tabular-nums whitespace-nowrap select-none ${isCustomer ? 'opacity-85' : 'opacity-55'}`}>
+                                <span className={`float-right inline-flex items-center gap-1 ml-2.5 mt-[7px] text-[10px] tabular-nums whitespace-nowrap select-none ${isCustomer ? 'tv-hora--out' : 'tv-hora--in'}`}>
                                   {soloHora(msg.timestamp)}
                                   {/* Un solo tic mientras el guardado va en
                                       camino, doble cuando el servidor ya lo

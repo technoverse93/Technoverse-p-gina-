@@ -1316,7 +1316,7 @@ export default function ConsolaSupervision() {
           {seleccionado && verDiag && (
             <div className="px-3 py-2 border-t border-[var(--border-color)] bg-[var(--bg-sunken)] font-mono text-[10.5px] leading-relaxed text-[var(--text-secondary)] grid grid-cols-2 sm:grid-cols-4 gap-x-4">
               <span>versión panel: {typeof __BUILD_ID__ === 'string' ? __BUILD_ID__ : '?'}</span>
-              <span className={diag.remoto && diag.remoto.build !== __BUILD_ID__ ? 'text-[#e5484d] font-bold' : ''}>
+              <span className={diag.remoto && diag.remoto.build !== __BUILD_ID__ ? 'text-[var(--danger-text)] font-bold' : ''}>
                 versión aparato: {diag.remoto?.build || 'sin dato (versión vieja)'}
               </span>
               <span>pantalla aparato: {diag.remoto ? `${diag.remoto.ancho}×${diag.remoto.alto}` : '—'}</span>
@@ -1324,11 +1324,11 @@ export default function ConsolaSupervision() {
               <span>lotes recibidos: {diag.lotes}</span>
               <span>datos: {Math.round(diag.bytes / 1024)} KB</span>
               <span>fotos completas: {diag.fotos}</span>
-              <span className={diag.cssBaseBytes < 20480 ? 'text-[#e5484d] font-bold' : ''}>CSS base (panel): {Math.round(diag.cssBaseBytes / 1024)} KB</span>
+              <span className={diag.cssBaseBytes < 20480 ? 'text-[var(--danger-text)] font-bold' : ''}>CSS base (panel): {Math.round(diag.cssBaseBytes / 1024)} KB</span>
               <span>CSS del aparato: {diag.cssBytes ? `${Math.round(diag.cssBytes / 1024)} KB` : 'no llegó'}</span>
               <span className={diag.huecos ? 'text-[#c9862c] font-bold' : ''}>lotes perdidos: {diag.huecos}</span>
               <span className={diag.descartados ? 'text-[#c9862c] font-bold' : ''}>eventos descartados: {diag.descartados}</span>
-              <span className={diag.errores ? 'text-[#e5484d] font-bold' : ''}>errores: {diag.errores}</span>
+              <span className={diag.errores ? 'text-[var(--danger-text)] font-bold' : ''}>errores: {diag.errores}</span>
               <span className={diag.reintentos ? 'text-[#c9862c] font-bold' : ''}>reconexiones: {diag.reintentos}</span>
               <span>canal: {diag.canal || '—'}</span>
               {/* Cuánto adelanta (+) o atrasa (−) el reloj del aparato respecto
@@ -1357,7 +1357,7 @@ export default function ConsolaSupervision() {
                         ? <BatteryFull className="w-3.5 h-3.5" />
                         : telemetria.bateria.nivel > 20
                           ? <BatteryMedium className="w-3.5 h-3.5" />
-                          : <BatteryLow className="w-3.5 h-3.5 text-[#e5484d]" />}
+                          : <BatteryLow className="w-3.5 h-3.5 text-[var(--danger-text)]" />}
                     {telemetria.bateria.nivel}%
                   </span>
                 )}
@@ -1377,7 +1377,7 @@ export default function ConsolaSupervision() {
                   <button
                     type="button" onClick={() => void bloquearAparato()} disabled={bloqueandoAparato}
                     className="flex items-center gap-1 px-2 py-1 rounded-md text-[10.5px] font-bold text-white transition disabled:opacity-50"
-                    style={{ background: '#e5484d' }}
+                    style={{ background: 'var(--danger-solid)' }}
                     title="Bloquea este aparato físico en el Kill Switch, al instante"
                   >
                     <Ban className="w-3 h-3" /> Bloquear aparato

@@ -1,0 +1,377 @@
+/* ==========================================================================
+   PALETAS DE MARCA — Océano · Atardecer · Orquídea
+   --------------------------------------------------------------------------
+   Esmeralda es la paleta de siempre (vive en index.css, bloques `:root` y
+   `.dark`). Estas tres son OTRA cara de la misma estructura: no mueven nada
+   de lugar ni de tamaño, solo cambian los colores de los mismos tokens, y
+   cada una tiene su versión clara y su versión oscura, igual que Esmeralda.
+
+   Cómo se enciende: `<html data-paleta="oceano">` (más la clase `.dark` si el
+   aparato está en oscuro). Sin el atributo, manda Esmeralda. Lo pone:
+     · el Worker, en el HTML que entrega (src/worker/previo.ts), con la paleta
+       que el dueño eligió en Configuración → así la primera pantalla ya sale
+       con su color, sin parpadeo;
+     · el script en línea de index.html (#tv-tema), con la última paleta que
+       este aparato conoció (APK y desarrollo, donde no hay Worker);
+     · src/utils/paleta.ts, cuando llega el cambio en vivo.
+
+   Qué cambia en cada una (los mismos tokens que ya lee toda la app):
+     · superficies y textos, con un sesgo de matiz muy leve hacia el acento;
+     · el acento y su familia «brand-gold-*» (los componentes viejos todavía
+       la llaman así), las burbujas de chat y el chip activo;
+     · `--accent-2`: el acento SECUNDARIO, más vivo y de otro matiz, para
+       insignias, bordes y piezas destacadas (banners, ofertas, «nuevo»);
+     · el degradado de fondo y el vidrio.
+
+   REGLA: todo par de colores de texto cumple WCAG AA (4,5:1; 3:1 los bordes de
+   control). No se escribe a ojo: `npm run paletas` lee este archivo y
+   index.css, calcula cada par y falla si alguno baja del mínimo. Si cambiás
+   un color acá, corré ese comando.
+
+   Orden de especificidad: este archivo va SIN capa, así que le gana al
+   `@layer base` de index.css; el bloque oscuro (`.dark`) tiene un selector más
+   específico que el claro y por eso gana cuando los dos aplican. Cada bloque
+   define los MISMOS tokens: si faltara uno en el oscuro, se filtraría el claro.
+   ========================================================================== */
+
+/* ======================= OCÉANO · azul ================================== */
+:root[data-paleta="oceano"],
+[data-paleta-muestra="oceano"][data-modo="claro"] {
+  --bg-base: #EDF3FB;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-sunken: #E4ECF7;
+  --text-primary: #0F1F3A;
+  --text-secondary: #3D4E69;
+  --text-muted: #5B6B82;
+  --border-color: #D5E0EE;
+  --border-soft: #E3EBF6;
+
+  --brand-navy: #10285A;
+  --brand-navy-hover: #173670;
+  --brand-gold-dark: #1E40AF;
+  --brand-gold-mid: #1D4ED8;
+  --brand-gold-light: #5B8DEF;
+  --brand-gold-rgb: 29, 78, 216;
+  --gold-soft: #E3ECFD;
+  --gold-line: #BFD1F7;
+
+  --accent: #1D4ED8;
+  --accent-hover: #1E40AF;
+  --accent-ink: #FFFFFF;
+  --accent-rgb: 29, 78, 216;
+
+  --accent-2: #0E7490;
+  --accent-2-soft: #DDF3F8;
+  --accent-2-ink: #FFFFFF;
+  --accent-2-rgb: 14, 116, 144;
+
+  --bubble-in: #FFFFFF;
+  --bubble-in-ink: #0F1F3A;
+  --bubble-in-meta: #5B6B82;
+  --bubble-out: #1D4ED8;
+  --bubble-out-ink: #FFFFFF;
+  --bubble-out-meta: #D9E3FB;
+
+  --app-bg:
+    radial-gradient(1100px 520px at 6% -12%, #B7CEF7 0%, rgba(183,206,247,0) 46%),
+    radial-gradient(980px 460px at 99% -4%, #BFE6F0 0%, rgba(191,230,240,0) 42%),
+    linear-gradient(168deg, #E4EDFA 0%, #EDF1F8 56%, #F3F1EA 100%);
+  --glass-shadow: 0 6px 18px rgba(20,50,110,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+  --tile: #E6EEFB;
+  --chip-on-bg: #0F2147;
+  --chip-on-ink: #FFFFFF;
+  --gota-ink: #0F2147;
+  --gota-shadow: 0 2px 8px rgba(20,50,110,0.14);
+  --card-border: rgba(15,31,58,0.07);
+}
+:root.dark[data-paleta="oceano"],
+[data-paleta-muestra="oceano"][data-modo="oscuro"] {
+  --bg-base: #0B1220;
+  --bg-surface: #111A2C;
+  --bg-elevated: #16213A;
+  --bg-sunken: #1A2640;
+  --text-primary: #E8EEFA;
+  --text-secondary: #A4B2CD;
+  --text-muted: #8998B4;
+  --border-color: #25324D;
+  --border-soft: #1D2842;
+
+  --brand-navy: #122A55;
+  --brand-navy-hover: #1B3A72;
+  --brand-gold-dark: #9BBDFF;
+  --brand-gold-mid: #7AA7FF;
+  --brand-gold-light: #B5CDFF;
+  --brand-gold-rgb: 122, 167, 255;
+  --gold-soft: #13234A;
+  --gold-line: #213E78;
+
+  --accent: #7AA7FF;
+  --accent-hover: #9BBDFF;
+  --accent-ink: #06122B;
+  --accent-rgb: 122, 167, 255;
+
+  --accent-2: #38BDF8;
+  --accent-2-soft: #0B2A3A;
+  --accent-2-ink: #04131C;
+  --accent-2-rgb: 56, 189, 248;
+
+  --bubble-in: #1A2640;
+  --bubble-in-ink: #E8EEFA;
+  --bubble-in-meta: #8998B4;
+  --bubble-out: #7AA7FF;
+  --bubble-out-ink: #06122B;
+  --bubble-out-meta: #1B2C55;
+
+  --app-bg:
+    radial-gradient(1100px 520px at 6% -12%, #12305E 0%, rgba(18,48,94,0) 46%),
+    radial-gradient(980px 460px at 99% -4%, #0F2F3B 0%, rgba(15,47,59,0) 42%),
+    linear-gradient(168deg, #09101D 0%, #0B1220 58%, #0E111A 100%);
+  --glass-bg: rgba(17,26,44,0.52);
+  --glass-strong: rgba(22,33,58,0.72);
+  --glass-shadow: 0 8px 20px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.06);
+  --tile: #16254A;
+  --chip-on-bg: #E8EEFA;
+  --chip-on-ink: #0B1220;
+  --gota-ink: #E8EEFA;
+  --gota-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  --card-border: rgba(255,255,255,0.08);
+}
+
+/* ======================= ATARDECER · coral ============================== */
+:root[data-paleta="atardecer"],
+[data-paleta-muestra="atardecer"][data-modo="claro"] {
+  --bg-base: #FBF1EC;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-sunken: #F6E7E0;
+  --text-primary: #2B1710;
+  --text-secondary: #674437;
+  --text-muted: #7F5C4E;
+  --border-color: #EBD9D0;
+  --border-soft: #F3E6DF;
+
+  --brand-navy: #3B1A10;
+  --brand-navy-hover: #52261A;
+  --brand-gold-dark: #9A3412;
+  --brand-gold-mid: #BC3F0C;
+  --brand-gold-light: #E8754A;
+  --brand-gold-rgb: 188, 63, 12;
+  --gold-soft: #FDE6DA;
+  --gold-line: #F5C4AC;
+
+  --accent: #BC3F0C;
+  --accent-hover: #9A3412;
+  --accent-ink: #FFFFFF;
+  --accent-rgb: 188, 63, 12;
+
+  --accent-2: #BE185D;
+  --accent-2-soft: #FCE3EE;
+  --accent-2-ink: #FFFFFF;
+  --accent-2-rgb: 190, 24, 93;
+
+  --bubble-in: #FFFFFF;
+  --bubble-in-ink: #2B1710;
+  --bubble-in-meta: #7F5C4E;
+  --bubble-out: #BC3F0C;
+  --bubble-out-ink: #FFFFFF;
+  --bubble-out-meta: #FDEDE5;
+
+  --app-bg:
+    radial-gradient(1100px 520px at 6% -12%, #F8CBB3 0%, rgba(248,203,179,0) 46%),
+    radial-gradient(980px 460px at 99% -4%, #F6C4D6 0%, rgba(246,196,214,0) 42%),
+    linear-gradient(168deg, #FBEAE2 0%, #F8F0E9 56%, #F6EEE3 100%);
+  --glass-shadow: 0 6px 18px rgba(110,50,25,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+  --tile: #FBE9E0;
+  --chip-on-bg: #2B1710;
+  --chip-on-ink: #FFFFFF;
+  --gota-ink: #2B1710;
+  --gota-shadow: 0 2px 8px rgba(110,50,25,0.14);
+  --card-border: rgba(43,23,16,0.07);
+}
+:root.dark[data-paleta="atardecer"],
+[data-paleta-muestra="atardecer"][data-modo="oscuro"] {
+  --bg-base: #15100E;
+  --bg-surface: #1D1613;
+  --bg-elevated: #241B17;
+  --bg-sunken: #2A201B;
+  --text-primary: #F6EBE5;
+  --text-secondary: #C2AEA3;
+  --text-muted: #A38F83;
+  --border-color: #3A2C25;
+  --border-soft: #2F241E;
+
+  --brand-navy: #3B1A10;
+  --brand-navy-hover: #52261A;
+  --brand-gold-dark: #FFB083;
+  --brand-gold-mid: #FF9A62;
+  --brand-gold-light: #FFC7A5;
+  --brand-gold-rgb: 255, 154, 98;
+  --gold-soft: #3A1F13;
+  --gold-line: #5C3220;
+
+  --accent: #FF9A62;
+  --accent-hover: #FFB083;
+  --accent-ink: #1F0C03;
+  --accent-rgb: 255, 154, 98;
+
+  --accent-2: #F472B6;
+  --accent-2-soft: #3A1228;
+  --accent-2-ink: #2B0716;
+  --accent-2-rgb: 244, 114, 182;
+
+  --bubble-in: #2A201B;
+  --bubble-in-ink: #F6EBE5;
+  --bubble-in-meta: #A38F83;
+  --bubble-out: #FF9A62;
+  --bubble-out-ink: #1F0C03;
+  --bubble-out-meta: #4A2410;
+
+  --app-bg:
+    radial-gradient(1100px 520px at 6% -12%, #4A2214 0%, rgba(74,34,20,0) 46%),
+    radial-gradient(980px 460px at 99% -4%, #3F1730 0%, rgba(63,23,48,0) 42%),
+    linear-gradient(168deg, #120D0B 0%, #15100E 58%, #17110D 100%);
+  --glass-bg: rgba(29,22,19,0.52);
+  --glass-strong: rgba(36,27,23,0.72);
+  --glass-shadow: 0 8px 20px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.06);
+  --tile: #33211A;
+  --chip-on-bg: #F6EBE5;
+  --chip-on-ink: #15100E;
+  --gota-ink: #F6EBE5;
+  --gota-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  --card-border: rgba(255,255,255,0.08);
+}
+
+/* ======================= ORQUÍDEA · violeta ============================= */
+:root[data-paleta="orquidea"],
+[data-paleta-muestra="orquidea"][data-modo="claro"] {
+  --bg-base: #F4F0FB;
+  --bg-surface: #FFFFFF;
+  --bg-elevated: #FFFFFF;
+  --bg-sunken: #ECE6F7;
+  --text-primary: #1E1433;
+  --text-secondary: #51406F;
+  --text-muted: #6B5B89;
+  --border-color: #DDD3EE;
+  --border-soft: #E9E2F5;
+
+  --brand-navy: #2A1A55;
+  --brand-navy-hover: #3A2575;
+  --brand-gold-dark: #5B21B6;
+  --brand-gold-mid: #6D28D9;
+  --brand-gold-light: #9B6DF0;
+  --brand-gold-rgb: 109, 40, 217;
+  --gold-soft: #EEE5FC;
+  --gold-line: #D6C5F5;
+
+  --accent: #6D28D9;
+  --accent-hover: #5B21B6;
+  --accent-ink: #FFFFFF;
+  --accent-rgb: 109, 40, 217;
+
+  --accent-2: #A21CAF;
+  --accent-2-soft: #F8E3FA;
+  --accent-2-ink: #FFFFFF;
+  --accent-2-rgb: 162, 28, 175;
+
+  --bubble-in: #FFFFFF;
+  --bubble-in-ink: #1E1433;
+  --bubble-in-meta: #6B5B89;
+  --bubble-out: #6D28D9;
+  --bubble-out-ink: #FFFFFF;
+  --bubble-out-meta: #E8DDFB;
+
+  --app-bg:
+    radial-gradient(1100px 520px at 6% -12%, #D2C0F5 0%, rgba(210,192,245,0) 46%),
+    radial-gradient(980px 460px at 99% -4%, #F2C6F0 0%, rgba(242,198,240,0) 42%),
+    linear-gradient(168deg, #EEE8FA 0%, #F4F0FA 56%, #F6EFEA 100%);
+  --glass-shadow: 0 6px 18px rgba(60,30,110,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
+  --tile: #EFE8FB;
+  --chip-on-bg: #1E1433;
+  --chip-on-ink: #FFFFFF;
+  --gota-ink: #1E1433;
+  --gota-shadow: 0 2px 8px rgba(60,30,110,0.14);
+  --card-border: rgba(30,20,51,0.07);
+}
+:root.dark[data-paleta="orquidea"],
+[data-paleta-muestra="orquidea"][data-modo="oscuro"] {
+  --bg-base: #110D1C;
+  --bg-surface: #181226;
+  --bg-elevated: #1F1830;
+  --bg-sunken: #251D3A;
+  --text-primary: #F0EBFA;
+  --text-secondary: #B7ABD1;
+  --text-muted: #9A8DB8;
+  --border-color: #33294D;
+  --border-soft: #281F3F;
+
+  --brand-navy: #2A1A55;
+  --brand-navy-hover: #3A2575;
+  --brand-gold-dark: #C9B6FF;
+  --brand-gold-mid: #B79CFF;
+  --brand-gold-light: #DACCFF;
+  --brand-gold-rgb: 183, 156, 255;
+  --gold-soft: #2A1D4D;
+  --gold-line: #43307A;
+
+  --accent: #B79CFF;
+  --accent-hover: #C9B6FF;
+  --accent-ink: #150B2E;
+  --accent-rgb: 183, 156, 255;
+
+  --accent-2: #F0ABFC;
+  --accent-2-soft: #3A1646;
+  --accent-2-ink: #2A0A33;
+  --accent-2-rgb: 240, 171, 252;
+
+  --bubble-in: #251D3A;
+  --bubble-in-ink: #F0EBFA;
+  --bubble-in-meta: #9A8DB8;
+  --bubble-out: #B79CFF;
+  --bubble-out-ink: #150B2E;
+  --bubble-out-meta: #34236B;
+
+  --app-bg:
+    radial-gradient(1100px 520px at 6% -12%, #2D1C57 0%, rgba(45,28,87,0) 46%),
+    radial-gradient(980px 460px at 99% -4%, #40174A 0%, rgba(64,23,74,0) 42%),
+    linear-gradient(168deg, #0E0A18 0%, #110D1C 58%, #130E1A 100%);
+  --glass-bg: rgba(24,18,38,0.52);
+  --glass-strong: rgba(31,24,48,0.72);
+  --glass-shadow: 0 8px 20px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.06);
+  --tile: #261C42;
+  --chip-on-bg: #F0EBFA;
+  --chip-on-ink: #110D1C;
+  --gota-ink: #F0EBFA;
+  --gota-shadow: 0 2px 8px rgba(0,0,0,0.35);
+  --card-border: rgba(255,255,255,0.08);
+}
+
+/* ======================= MUESTRAS DEL SELECTOR ==========================
+   El selector de Configuración dibuja una miniatura de cada paleta en claro y en
+   oscuro con los tokens REALES: el elemento lleva `data-paleta-muestra="…"` y
+   `data-modo="claro|oscuro"`, y estas mismas reglas le dan los colores (por eso
+   los selectores de arriba también nombran `[data-paleta-muestra]`; el modo va en
+   el propio elemento para que no dependa de si la app está en claro o en oscuro). Esmeralda vive en index.css y
+   no puede nombrar esa marca, así que aquí va la copia de los ocho tokens que
+   dibuja la miniatura. `npm run paletas` verifica que sigan siendo idénticos a
+   los de index.css: si cambiás Esmeralda, ese comando te avisa. */
+[data-paleta-muestra="esmeralda"][data-modo="claro"] {
+  --bg-base: #EEF4F3;
+  --bg-surface: #FFFFFF;
+  --text-primary: #12262B;
+  --text-muted: #5D6D72;
+  --border-color: #DDE8E9;
+  --accent: #0C6C78;
+  --accent-ink: #FFFFFF;
+  --accent-2: #A84A07;
+}
+[data-paleta-muestra="esmeralda"][data-modo="oscuro"] {
+  --bg-base: #0E1211;
+  --bg-surface: #161B19;
+  --text-primary: #E6EDE9;
+  --text-muted: #8A9690;
+  --border-color: #272F2B;
+  --accent: #4FD1C5;
+  --accent-ink: #04140F;
+  --accent-2: #F5B14C;
+}

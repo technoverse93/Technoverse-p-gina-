@@ -38,6 +38,14 @@
               if (telefono || (typeof mem === 'number' && mem > 0 && mem <= 2)) sinVidrio = true;
             }
           } catch (e) { /* sin señal: se queda con el vidrio */ }
+          // Paleta de la marca. Si el Worker ya dejó `data-paleta` en la etiqueta raíz, esa manda (es la
+          // más fresca); si no (APK, desarrollo), la última que este aparato conoció. Ver utils/paleta.ts.
+          try {
+            if (!raiz.getAttribute('data-paleta')) {
+              var pal = localStorage.getItem('technoverse_paleta');
+              if (pal === 'oceano' || pal === 'atardecer' || pal === 'orquidea') raiz.setAttribute('data-paleta', pal);
+            }
+          } catch (e) { /* sin paleta recordada: Esmeralda */ }
           raiz.classList.toggle('sin-vidrio', sinVidrio);
           var memoria = navigator.deviceMemory;
           raiz.classList.toggle('vidrio-ligero', !sinVidrio && typeof memoria === 'number' && memoria > 0 && memoria <= 4);

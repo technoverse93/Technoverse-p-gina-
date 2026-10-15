@@ -1695,7 +1695,7 @@ if (!m) return null;
                     </thead>
                     <tbody className="divide-y divide-slate-100">
                       {paginatedProducts.map((p, pIndex) => (
-                        <tr key={p.id || `prod-${pIndex}`} className={`hover:bg-[var(--bg-surface)] transition ${p.active === false ? 'opacity-50' : ''}`}>
+                        <tr key={p.id || `prod-${pIndex}`} className={`hover:bg-[var(--bg-surface)] transition ${p.active === false ? 'tv-inactivo' : ''}`}>
                           {activeSubTab === 'repuestos' ? (
                             <>
                               <td className="p-4">
@@ -2479,7 +2479,7 @@ if (!m) return null;
                           máximo y el correo se parte si hace falta. */}
                       <td className="p-3 text-[var(--text-secondary)] max-w-[150px]">
                         <span className="block tv-clamp-2">{m.notes}</span>
-                        <span className="block tv-break text-[9px] opacity-50">{m.userEmail}</span>
+                        <span className="block tv-break text-[10px] text-[var(--text-muted)]">{m.userEmail}</span>
                       </td>
                     </tr>
                   ))}

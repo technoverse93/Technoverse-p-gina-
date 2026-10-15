@@ -87,7 +87,7 @@ export const ProductCard = React.memo(function ProductCard({ prod, onClick, onAd
 
         {/* El descuento va abajo para no chocar con la garantía. */}
         {isDiscounted && (
-          <span className="tv-prod-insignia tv-prod-insignia--acento absolute bottom-2 left-2">
+          <span className="tv-prod-insignia tv-prod-insignia--oferta absolute bottom-2 left-2">
             −{discountPct}%
           </span>
         )}

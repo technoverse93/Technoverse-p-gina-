@@ -35,6 +35,7 @@ import AdminShell from './admin/AdminShell';
 import AdminDashboard from './admin/AdminDashboard';
 import GestorBanners from './admin/GestorBanners';
 import { PageHead, Card, Btn, Field, Chip, TableShell, Empty } from './admin/AdminKit';
+import SelectorPaleta from './admin/SelectorPaleta';
 import { resolverModulo, PESTANA_NUEVA } from './admin/adminNav';
 import NuevaPestana from './admin/NuevaPestana';
 import { usePestanas, useScrollPorPestana } from './admin/usePestanas';
@@ -1668,6 +1669,10 @@ export default function AdminPanel({
                   />
                 </Field>
               </div>
+            </Card>
+
+            <Card title="Paleta de colores de la marca">
+              <SelectorPaleta quien={currentUser?.email} />
             </Card>
 
             <Card title="Accesos administrativos">

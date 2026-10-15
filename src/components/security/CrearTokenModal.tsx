@@ -101,7 +101,7 @@ export default function CrearTokenModal({ open, onCreado }: Props) {
             />
           </Field>
 
-          {error && <p className="text-[12.5px] font-semibold text-[#E5484D]">{error}</p>}
+          {error && <p className="text-[12.5px] font-semibold text-[var(--danger-text)]">{error}</p>}
 
           <Btn type="submit" variant="primary" disabled={guardando} className="w-full justify-center text-[15px] py-3">
             {guardando ? 'Guardando…' : 'Guardar'}

@@ -205,7 +205,7 @@ function SeccionUbicacion() {
           <button
             type="button"
             onClick={compartir}
-            className="underline underline-offset-2 opacity-70 hover:opacity-100"
+            className="underline underline-offset-2 hover:text-[var(--text-primary)]"
             style={{ color: 'var(--text-secondary)' }}
           >
             Actualizarla

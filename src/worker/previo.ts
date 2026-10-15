@@ -157,16 +157,35 @@ function jsonParaHtml(previo: PrevioDelSitio): string {
     .replace(/\u2029/g, '\\u2029');
 }
 
+/** Paletas de marca válidas (utils/paleta.ts). Lo que no esté aquí no se escribe en el HTML. */
+const PALETAS_DE_MARCA = new Set(['esmeralda', 'oceano', 'atardecer', 'orquidea']);
+
 /**
- * Mete la etiqueta de datos justo antes de `</head>`. Devuelve null si el
- * HTML no tiene esa marca (no es la página que se esperaba): en ese caso se
- * entrega sin tocar.
+ * La paleta que el dueño eligió en Configuración (`contenido_sitio.paleta_marca`).
+ * Si nunca eligió, la de siempre. Como el contenido llegó FRESCO de la base, «nunca
+ * eligió» es una respuesta cierta, no un dato que falta: por eso se escribe también
+ * `esmeralda` (y se evita que el aparato pinte una paleta vieja que recordaba).
+ */
+function paletaDeMarca(previo: PrevioDelSitio): string {
+  const v = previo.c.paleta_marca;
+  return typeof v === 'string' && PALETAS_DE_MARCA.has(v) ? v : 'esmeralda';
+}
+
+/**
+ * Mete la etiqueta de datos justo antes de `</head>` y deja la paleta de la marca
+ * en `<html data-paleta>`, para que la primera pantalla ya salga con sus colores.
+ * Devuelve null si el HTML no tiene esa marca (no es la página que se esperaba):
+ * en ese caso se entrega sin tocar.
  */
 export function inyectarPrevio(html: string, previo: PrevioDelSitio): string | null {
   const i = html.indexOf('</head>');
   if (i < 0) return null;
   const etiqueta = `<script id="tv-previo" type="application/json">${jsonParaHtml(previo)}</script>`;
-  return html.slice(0, i) + etiqueta + html.slice(i);
+  let nuevo = html.slice(0, i) + etiqueta + html.slice(i);
+  // Solo si <html> no la trae ya. El valor viene de una lista cerrada: nada de lo que
+  // haya en la base se escribe tal cual dentro de una etiqueta.
+  nuevo = nuevo.replace(/<html(?![^>]*\sdata-paleta=)([^>]*)>/i, `<html data-paleta="${paletaDeMarca(previo)}"$1>`);
+  return nuevo;
 }
 
 /** ¿Es una página de la aplicación (y no un archivo suelto ni la ventanita de Jarvis)? */

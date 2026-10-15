@@ -226,7 +226,7 @@ function EntrenarJarvis() {
       <button type="button" className="ai-chip ai-voz-prueba" disabled={estado === 'armando'} onClick={() => void bajar()}>
         <Download className="w-4 h-4" />{estado === 'armando' ? 'Armando…' : 'Bajar datos (JSONL)'}
       </button>
-      {info && <p className="ai-voz-error" style={estado === 'error' ? undefined : { color: 'inherit', opacity: .8, margin: '0 14px 12px' }} role="status">{info}</p>}
+      {info && <p className="ai-voz-error" style={estado === 'error' ? undefined : { color: 'inherit', margin: '0 14px 12px' }} role="status">{info}</p>}
     </div>
   );
 }

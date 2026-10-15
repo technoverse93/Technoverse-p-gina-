@@ -53,7 +53,10 @@
     --bg-sunken: #EAF2F3;
     --text-primary: #12262B;
     --text-secondary: #4C666C;
-    --text-muted: #7B9096;
+    /* «Apagado» pero LEGIBLE: #5D6D72 da 4,7:1 sobre el fondo hundido (el
+       #7B9096 de antes daba 3,0:1 y es el color de casi todo rótulo
+       secundario de la app). Mínimo AA; lo comprueba `npm run paletas`. */
+    --text-muted: #5D6D72;
     --border-color: #DDE8E9;
     --border-soft: #E9F0F1;
 
@@ -82,6 +85,23 @@
     --accent-ink: #FFFFFF;
     --accent-rgb: 12, 108, 120;
 
+    /* Acento SECUNDARIO: de otro matiz y más vivo que el acento, para lo que
+       tiene que llamar la atención sin competir con los botones (insignias de
+       oferta y «nuevo», bordes de piezas destacadas, banners, cintillos).
+       Cada paleta (src/styles/paletas.css) trae el suyo. Con `-ink` sobre el
+       relleno y `-soft` como fondo suave; los pares cumplen AA. */
+    --accent-2: #A84A07;
+    --accent-2-soft: #FDEBD3;
+    --accent-2-ink: #FFFFFF;
+    --accent-2-rgb: 168, 74, 7;
+
+    /* Insignia roja SÓLIDA (contadores, alertas): blanco sobre #E5484D daba
+       3,9:1 y el número no se leía bien. Con este rojo da 4,9:1. */
+    --danger-solid: #D13438;
+    --danger-ink: #FFFFFF;
+    /* Rojo de TEXTO e íconos de peligro (6,5:1 sobre blanco; el #E5484D de antes daba 3,9:1). */
+    --danger-text: #B42328;
+
     /* Verde de ÉXITO. Se deja EXACTAMENTE como estaba: da 4,8:1 sobre
        `--ok-soft` y aclararlo para separarlo del acento lo bajaba a 3,7:1,
        por debajo del mínimo legible para las píldoras, que son de 10 px.
@@ -90,7 +110,7 @@
        "Pagado", "Resuelto") y el acento solo como relleno de botón. */
     --ok: #197A4B;
     --ok-soft: #E8F6EF;
-    --warn: #9A5B14;
+    --warn: #8A500F;
     --warn-soft: #FBF0DF;
 
     --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
@@ -110,6 +130,10 @@
     --bubble-in-ink: #12262B;
     --bubble-out: #0C6C78;
     --bubble-out-ink: #FFFFFF;
+    /* Hora y tics de la burbuja: un color SÓLIDO, no la tinta con opacidad (a
+       55-85 % el texto verde sobre verde no se leía). Ambos dan ≥ 4,5:1. */
+    --bubble-in-meta: #5D6D72;
+    --bubble-out-meta: #D3E4E7;
 
     /* ================= CRISTAL LIGERO (tema claro) =================
        El fondo de toda la plataforma es un degradado suave y ESTÁTICO:
@@ -162,7 +186,7 @@
     --bg-sunken: #1D2421;
     --text-primary: #E6EDE9;
     --text-secondary: #93A29B;
-    --text-muted: #6F7D77;
+    --text-muted: #8A9690;
     --border-color: #272F2B;
     --border-soft: #202724;
 
@@ -182,6 +206,15 @@
     --accent-ink: #04140F;
     --accent-rgb: 79, 209, 197;
 
+    --accent-2: #F5B14C;
+    --accent-2-soft: #2E2210;
+    --accent-2-ink: #2B1A04;
+    --accent-2-rgb: 245, 177, 76;
+
+    --danger-solid: #D13438;
+    --danger-ink: #FFFFFF;
+    --danger-text: #F1746A;
+
     --ok: #3FCB93;
     --ok-soft: #0F2A1E;
     --warn: #E8A85C;
@@ -198,6 +231,8 @@
     --bubble-in-ink: #E6EDE9;
     --bubble-out: #4FD1C5;
     --bubble-out-ink: #04140F;
+    --bubble-in-meta: #8A9690;
+    --bubble-out-meta: #12362F;
 
     /* ================= CRISTAL LIGERO (tema oscuro) =================
        Mismo esquema: manchas profundas (verde-azulado y cálida) sobre un
@@ -359,7 +394,8 @@ html.sin-vidrio *::after {
   border-color: var(--accent-hover);
 }
 .btn-glass-primary:active { transform: scale(0.96); }
-.btn-glass-primary:disabled { opacity: 0.45; pointer-events: none; }
+/* Deshabilitado LEGIBLE: gris opaco, no el mismo botón al 45 % (el texto se volvía translúcido). */
+.btn-glass-primary:disabled { opacity: 1; background: var(--bg-sunken); border-color: var(--border-color); color: var(--text-muted); pointer-events: none; }
 
 .glass-input {
   background: var(--bg-sunken);
@@ -585,6 +621,14 @@ button, a, [role="button"] { -webkit-tap-highlight-color: transparent; }
 .text-emerald-500,
 .text-emerald-600,
 .text-emerald-400 { color: var(--ok) !important; }
+
+/* Texto rojo suelto (errores, «Desactivada», «Inactivo») y botón rojo con letra blanca: el rojo de
+   texto del tema (AA en claro y oscuro) y la insignia sólida de 4,9:1. Los `rose-500/10`, de
+   fondo suave, no se tocan: son otra clase. */
+.text-rose-400,
+.text-rose-500,
+.text-rose-600 { color: var(--danger-text); }
+.bg-rose-500 { background-color: var(--danger-solid); }
 
 .border-emerald-200,
 .border-emerald-500,
@@ -1026,7 +1070,9 @@ input, select, textarea { max-width: 100%; }
   font-weight: 600;
 }
 .tv-pildora--on:hover { color: var(--chip-on-ink); border-color: var(--chip-on-bg); }
-.tv-pildora-n { font-size: 12px; opacity: 0.6; font-variant-numeric: tabular-nums; }
+/* El contador de la píldora: color sólido, sin opacidad (a 60 % daba 2,6:1). En la píldora activa hereda la tinta. */
+.tv-pildora-n { font-size: 12px; color: var(--text-muted); font-variant-numeric: tabular-nums; }
+.tv-pildora--on .tv-pildora-n { color: inherit; }
 
 /* ---- Tarjeta de producto ---- */
 .tv-prod {
@@ -1050,6 +1096,8 @@ input, select, textarea { max-width: 100%; }
 }
 .tv-prod-insignia--ok { background: var(--ok-soft); color: var(--ok); }
 .tv-prod-insignia--acento { background: var(--accent); color: var(--accent-ink); }
+/* Ofertas: el acento SECUNDARIO de la paleta (más vivo y de otro matiz que el de los botones). */
+.tv-prod-insignia--oferta { background: var(--accent-2); color: var(--accent-2-ink); }
 .tv-prod-insignia--neutra { background: var(--bg-surface); color: var(--text-muted); border: 1px solid var(--border-color); }
 .tv-prod-precio {
   font-size: 15.5px;
@@ -1230,3 +1278,23 @@ input::placeholder { text-overflow: ellipsis; }
    mismo cristal con un desenfoque de 4 px en vez de 10. */
 html.vidrio-ligero, html.vidrio-ligero.dark { --glass-blur: 4px; }
 html.vidrio-ligero .sg-riel { backdrop-filter: blur(4px); }
+
+
+/* ==========================================================================
+   TEXTO SIEMPRE LEGIBLE (sin opacidad en el texto)
+   --------------------------------------------------------------------------
+   Bajar la opacidad de un control o de un texto lo vuelve TRASLÚCIDO: un verde
+   al 40-55 % sobre verde da 1,8-2,6:1 y no se lee ni a pleno sol ni de noche.
+   Reglas de la casa:
+     · Lo deshabilitado se muestra en GRIS OPACO (`filter: grayscale`, que
+       conserva el contraste del par original) o con los colores de «apagado»
+       del tema, nunca con `opacity`.
+     · La hora y los tics de la burbuja usan colores sólidos del tema.
+     · Lo «inactivo» (una fila de producto dado de baja) va en gris, no al 50 %.
+   Va SIN capa a propósito: le gana a las utilidades de Tailwind (que viven en una
+   capa), así que cubre los `disabled:opacity-NN` que ya hay repartidos por la app.
+   ========================================================================== */
+:is(button, input, select, textarea):disabled[class*="disabled:opacity"] { opacity: 1; filter: grayscale(1); }
+.tv-inactivo > td { filter: grayscale(1); }
+.tv-hora--in { color: var(--bubble-in-meta); }
+.tv-hora--out { color: var(--bubble-out-meta); }

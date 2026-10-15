@@ -16,7 +16,7 @@
 
 .ai-root[data-jarvis], .jv-hoja[data-jarvis], .jv-fab[data-jarvis], .jv-cb-portal[data-jarvis] {
   --jv-fondo: #EDF3F3; --jv-sup: #FFFFFF; --jv-hundido: #E5EEEF; --jv-tile: #DFEFF0;
-  --jv-tinta: #12262B; --jv-tinta2: #4C666C; --jv-tenue: #7B9096; --jv-linea: #D3E1E2;
+  --jv-tinta: #12262B; --jv-tinta2: #4C666C; --jv-tenue: #5D6D72; --jv-linea: #D3E1E2;
   --jv-acento-rgb: 12, 108, 120; --jv-acento: #0C6C78; --jv-tinta-ac: #FFFFFF;
   --jv-oro: #A8761C; --jv-oro-suave: rgba(168, 118, 28, .12);
   --jv-cielo-1: #F7FBFB; --jv-cielo-2: #D6E5E8; --jv-polvo: 18, 38, 43; --jv-borde-txt: rgba(255, 255, 255, .9); --jv-eje: #7B9096; --jv-oscuro: 0;
@@ -28,7 +28,7 @@
 }
 .dark .ai-root[data-jarvis], .dark .jv-hoja[data-jarvis], .dark .jv-fab[data-jarvis], .dark .jv-cb-portal[data-jarvis] {
   --jv-fondo: #070B14; --jv-sup: #0E1422; --jv-hundido: #141C2E; --jv-tile: #1A2740;
-  --jv-tinta: #E8EDF7; --jv-tinta2: #A6B1C7; --jv-tenue: #7C88A2; --jv-linea: #22304A;
+  --jv-tinta: #E8EDF7; --jv-tinta2: #A6B1C7; --jv-tenue: #8794AE; --jv-linea: #22304A;
   --jv-acento-rgb: 127, 216, 207; --jv-acento: #7FD8CF; --jv-tinta-ac: #05201C;
   --jv-oro: #E8C27A; --jv-oro-suave: rgba(232, 194, 122, .13);
   --jv-cielo-1: #121C33; --jv-cielo-2: #04070D; --jv-polvo: 215, 225, 255; --jv-borde-txt: rgba(4, 7, 13, .85); --jv-eje: #7C88A2; --jv-oscuro: 1;

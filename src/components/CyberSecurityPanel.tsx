@@ -263,7 +263,12 @@ const PISTA_SECCION: Record<Seccion, string> = {
 const DURACION_NIVEL: Record<number, number> = { 0: 30, 1: 30, 2: 120, 3: 1440 };
 const POR_PAGINA_ACCESOS = 12;
 const POR_PAGINA_BITACORA = 10;
-const COLORES_MODULO = ['#2B7C86', '#6D5BD0', '#C07A1E', '#2B6CB0', '#B83280', '#2F7D63'];
+const COLORES_MODULO = ['#2B7C86', '#6D5BD0', '#A96510', '#2B6CB0', '#B83280', '#2F7D63'];
+/** Color del TEXTO de un chip de módulo: el matiz del módulo, empujado hacia el texto del tema
+ *  (oscuro en claro, claro en oscuro) para que se lea (≥ 4,5:1) sobre su fondo teñido. */
+function tintaModulo(color: string): string {
+  return `color-mix(in srgb, ${color} 55%, var(--text-primary))`;
+}
 function colorModulo(clave?: string | null): string {
   let h = 0;
   for (const ch of clave || '') h = (h * 31 + ch.charCodeAt(0)) >>> 0;
@@ -1229,7 +1234,7 @@ function CyberSecurityPanel({
               <b>aparato nuevo</b> que usted no reconoce, esa es la señal de alarma de verdad, mucho más confiable que la
               ubicación, porque la IP solo llega a decir la ciudad.
               <br />
-              <span style={{ fontSize: 12, opacity: 0.85 }}>
+              <span style={{ fontSize: 12 }}>
                 Si borra los datos del navegador o entra en modo incógnito, su propio aparato saldrá como nuevo. Y la marca
                 la manda el navegador, así que en teoría se puede falsear: tómelo como una alerta que vale la pena revisar,
                 no como una cerradura.
@@ -1307,7 +1312,7 @@ function CyberSecurityPanel({
                 const pct = b.permanente ? 100 : activo ? Math.max(4, Math.min(100, Math.round((restantes / total) * 100))) : 0;
                 const nivel = Math.min(3, Math.max(b.nivel || 0, b.permanente ? 3 : 0));
                 return (
-                  <div key={b.ip} className="sg-card sg-cuenta" style={activo ? undefined : { opacity: 0.7 }}>
+                  <div key={b.ip} className="sg-card sg-cuenta" style={activo ? undefined : { filter: 'grayscale(1)' }}>
                     <div className={`sg-dial ${activo ? '' : 'sg-fin'}`} style={{ ['--p' as any]: pct }}>
                       <b className="tabular-nums">
                         {b.permanente && activo ? '∞' : activo ? (restantes >= 120 ? Math.round(restantes / 60) : restantes) : '—'}
@@ -1438,10 +1443,10 @@ function CyberSecurityPanel({
                   <React.Fragment key={log.id}>
                     {nuevoDia && <div className="sg-dd">{dia}</div>}
                     <div className="sg-ev">
-                      <span className="sg-pt" style={{ background: `${color}22`, color }}>{(log.module || '?').charAt(0).toUpperCase()}</span>
+                      <span className="sg-pt" style={{ background: `${color}22`, color: tintaModulo(color) }}>{(log.module || '?').charAt(0).toUpperCase()}</span>
                       <div className="sg-tx" style={{ minWidth: 0 }}>
                         <b>{log.userEmail}</b> · {log.action}{' '}
-                        <span className="sg-badge" style={{ background: `${color}1f`, color }}>{log.module}</span>
+                        <span className="sg-badge" style={{ background: `${color}1f`, color: tintaModulo(color) }}>{log.module}</span>
                         <span className="sg-tm">{horaDe(log.timestamp)}</span>
                         {log.detail && <div className="sg-nota2" style={{ overflowWrap: 'anywhere' }}>{log.detail}</div>}
                       </div>
@@ -1615,7 +1620,7 @@ function CyberSecurityPanel({
               {aparatos.map(a => {
                 const vigente = !a.levantado_en;
                 return (
-                  <div key={a.device_uuid} className={`sg-et ${vigente ? 'sg-on' : ''}`} style={vigente ? undefined : { opacity: 0.75 }}>
+                  <div key={a.device_uuid} className={`sg-et ${vigente ? 'sg-on' : ''}`} style={vigente ? undefined : { filter: 'grayscale(1)' }}>
                     <div className="sg-code"><TextoMedio texto={a.device_uuid} fin={8} /></div>
                     <div className="sg-row" style={{ marginTop: 6 }}>
                       <span className="sg-badge" data-t={vigente ? 'ba' : undefined}>{vigente ? 'Bloqueado' : 'Liberado'}</span>

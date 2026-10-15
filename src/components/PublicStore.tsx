@@ -1575,7 +1575,7 @@ export default function PublicStore({
             >
               <ShoppingBag className="w-4 h-4" />
               {cart.length > 0 && (
-                <span className="absolute -top-1.5 -right-1.5 bg-[var(--accent)] text-[var(--accent-ink)] text-[9px] font-black min-w-[1.5em] h-[1.5em] rounded-full flex items-center justify-center border-2 border-[var(--bg-surface)] px-1 shadow-sm">
+                <span className="absolute -top-1.5 -right-1.5 bg-[var(--accent-2)] text-[var(--accent-2-ink)] text-[9px] font-black min-w-[1.5em] h-[1.5em] rounded-full flex items-center justify-center border-2 border-[var(--bg-surface)] px-1 shadow-sm">
                   {cart.reduce((sum, it) => sum + it.quantity, 0)}
                 </span>
               )}
@@ -1808,7 +1808,7 @@ export default function PublicStore({
                 {selectedCategory
                   ? `Explorando: ${selectedCategory}`
                   : <>
-                      <IconoEditable clave="tienda.titulo_icono" defecto="Sparkles" className="w-5 h-5 text-[var(--accent)]" />
+                      <IconoEditable clave="tienda.titulo_icono" defecto="Sparkles" className="w-5 h-5 text-[var(--accent-2)]" />
                       <ColorEditable clave="tienda.titulo_color" defecto="#0C6C78">
                         <TextoEditable clave="tienda.titulo_catalogo">Nuestros Productos Disponibles</TextoEditable>
                       </ColorEditable>
