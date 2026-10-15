@@ -32,7 +32,7 @@ import { supabase } from '../supabaseClient';
 import { getDB, saveDB, addAuditLog } from './storage';
 import { processSaleAtomic } from './transactions';
 import {
-  computeInvoiceTotals, buildInvoicePdfBlob, generateQrDataUrl,
+  computeInvoiceTotals, buildInvoicePdfBlob, generateQrDataUrl, nombreArchivoComprobante,
 } from './invoicePdf';
 import type { IdentificacionTipo, MedioPago, InvoiceData } from './invoicePdf';
 import type { Order } from '../types';
@@ -553,7 +553,7 @@ export async function cobrarServicio(datos: DatosDeCobro): Promise<ResultadoCobr
     const subirPdf = async (ruta: string) =>
       supabase.storage.from('invoices').upload(ruta, blob, { contentType: 'application/pdf' });
 
-    let rutaPdf = `${emitida.id}.pdf`;
+    let rutaPdf = nombreArchivoComprobante(emitida.id);
     let { error: errorSubida } = await subirPdf(rutaPdf);
 
     if (errorSubida) {

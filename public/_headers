@@ -35,6 +35,11 @@
   # y quedó desactualizado al agregarla. `(self)` permite la ubicación
   # únicamente a este dominio, que es exactamente lo que hace falta.
   Permissions-Policy: camera=(), microphone=(), geolocation=(self)
+  # HTTPS obligatorio durante un año (sin includeSubDomains ni preload: no se compromete ningún otro subdominio).
+  Strict-Transport-Security: max-age=31536000
+  # `frame-ancestors` solo existe como cabecera (en un <meta> se ignora): nadie puede incrustar la página.
+  # La política completa va en el <meta> de index.html (lleva la huella del script del tema).
+  Content-Security-Policy: frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'
 
 /assets/*
   Cache-Control: public, max-age=31536000, immutable

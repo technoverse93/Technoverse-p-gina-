@@ -36,6 +36,7 @@ import AdminDashboard from './admin/AdminDashboard';
 import GestorBanners from './admin/GestorBanners';
 import { PageHead, Card, Btn, Field, Chip, TableShell, Empty } from './admin/AdminKit';
 import SelectorPaleta from './admin/SelectorPaleta';
+import { leerWebhookInstagram, guardarWebhookInstagram } from '../utils/webhookInstagram';
 import { resolverModulo, PESTANA_NUEVA } from './admin/adminNav';
 import NuevaPestana from './admin/NuevaPestana';
 import { usePestanas, useScrollPorPestana } from './admin/usePestanas';
@@ -351,6 +352,7 @@ export default function AdminPanel({
   // URL del "Catch Hook" de Zapier que dispara el cron de publicaciones
   // programadas de Instagram (ver marketing_requests en storage.ts).
   const [instagramWebhookUrl, setInstagramWebhookUrl] = useState('');
+  const webhookOriginalRef = useRef('');
   const [storeLogo, setStoreLogo] = useState('');
   const [storeLogoPreview, setStoreLogoPreview] = useState<string | null>(null);
 
@@ -575,6 +577,13 @@ export default function AdminPanel({
       setCompanyAddress(db.settings.companyAddress || '');
       setPickupHours(db.settings.pickupHours || '');
       setInstagramWebhookUrl(db.settings.instagramWebhookUrl || '');
+      webhookOriginalRef.current = db.settings.instagramWebhookUrl || '';
+      // La dirección ya no viaja en los ajustes públicos: el dueño la pide aparte (utils/webhookInstagram.ts).
+      void leerWebhookInstagram().then(v => {
+        if (v === null) return;
+        webhookOriginalRef.current = v;
+        setInstagramWebhookUrl(actual => (actual === (db.settings?.instagramWebhookUrl || '') ? v : actual));
+      });
       setStoreLogo(db.settings.storeLogo || '');
     }
     setClients(db.clients || []);
@@ -705,7 +714,14 @@ export default function AdminPanel({
       db.settings.companyPhone = companyPhone;
       db.settings.companyAddress = companyAddress;
       db.settings.pickupHours = pickupHours;
-      db.settings.instagramWebhookUrl = instagramWebhookUrl.trim();
+      // El webhook es un secreto: se guarda por su función (solo el dueño) y no en los ajustes públicos.
+      // Solo si cambió; y si la función aún no existe (migración sin aplicar), por el camino de antes.
+      const webhookNuevo = instagramWebhookUrl.trim();
+      if (webhookNuevo !== (webhookOriginalRef.current || '').trim()) {
+        const via = await guardarWebhookInstagram(webhookNuevo);
+        if (via === 'legacy') db.settings.instagramWebhookUrl = webhookNuevo;
+        webhookOriginalRef.current = webhookNuevo;
+      }
 
       addAuditLog(currentUser?.email || 'admin', 'Configuración', 'Actualizar Ajustes', 'Ajustes fiscales, operativos y logo actualizados', db);
       await saveDB(db);

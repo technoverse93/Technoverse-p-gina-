@@ -18,6 +18,7 @@ import { Card, Btn, Field, Chip, Empty } from './AdminKit';
 import { CustomSelect } from '../CustomSelect';
 import { useToast, useConfirm } from '../ui/Overlays';
 import { getDB, saveDB, addAuditLog } from '../../utils/storage';
+import { webhookInstagramConfigurado } from '../../utils/webhookInstagram';
 import { aBlob, comprimirReferencia, miniaturaDe, renderizar } from '../../utils/pauta/compositor';
 import { ESTILOS, FORMATOS, OBJETIVOS, ORDEN_ESTILOS, ORDEN_FORMATOS, colones, formatoDeBanner, piezaNueva, textoPublicacion, type FondoModo, type FormatoId, type ObjetivoId, type Pieza } from '../../utils/pauta/modelo';
 import { aPautaGuardada, borrarPauta, guardarPauta, listarPautas, nuevaId, pedirCopy, pedirImagen, subirFondo, subirPieza, type PautaGuardada } from '../../utils/pauta/api';
@@ -283,7 +284,9 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
       await saveDB(db);
       setSolicitudes(getDB().marketing_requests || []);
       setProgramar(p => ({ ...p, abierto: false, requestId: null }));
-      toast.success(db.settings?.instagramWebhookUrl
+      // El webhook ya no está en los ajustes públicos: se consulta si hay uno configurado (sin verlo).
+      const hayWebhook = (await webhookInstagramConfigurado()) ?? !!db.settings?.instagramWebhookUrl;
+      toast.success(hayWebhook
         ? 'Programada: se publica sola en la fecha elegida.'
         : 'Programada, pero falta el webhook de Instagram (Zapier) en Configuración: sin él no sale.');
     } catch (e: any) { toast.error(e?.message || 'No se pudo programar.'); }

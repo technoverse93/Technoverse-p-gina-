@@ -97,6 +97,19 @@ export function computeInvoiceTotals(lines: InvoiceLineInput[]): {
   return { items, subtotal, ivaTotal, total };
 }
 
+/**
+ * Nombre del PDF de un comprobante en el bucket público `invoices`: el consecutivo MÁS un sufijo al
+ * azar de 64 bits. Los consecutivos van seguidos (…0001, …0002…), así que sin el sufijo cualquiera
+ * podía recorrerlos y bajar los PDF de todos los clientes (nombre, cédula, correo, artículos). Con el
+ * sufijo la dirección de cada PDF solo la conoce quien emitió el comprobante. La política de la base
+ * (migracion_blindaje_seguridad.sql) acepta exactamente `FE-<20 dígitos>[-<hasta 32 a-z0-9>].pdf`.
+ */
+export function nombreArchivoComprobante(id: string): string {
+  const bytes = new Uint8Array(8);
+  crypto.getRandomValues(bytes);
+  return `${id}-${Array.from(bytes, b => b.toString(16).padStart(2, '0')).join('')}.pdf`;
+}
+
 export interface InvoiceData {
   id: string;
   clave: string;
