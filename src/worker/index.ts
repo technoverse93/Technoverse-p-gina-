@@ -159,6 +159,18 @@ function conCabeceras(respuesta: Response, ruta: string): Response {
   // siquiera muestra el aviso de permiso: el GPS del Centro de
   // Ciberseguridad quedaba muerto sin ningún mensaje de error.
   h.set('Permissions-Policy', 'camera=(), microphone=(), geolocation=(self)');
+  // HSTS: el navegador no vuelve a abrir el sitio por http:// durante un año. Sin `includeSubDomains`
+  // ni `preload` a propósito: así no se compromete ningún otro subdominio del dueño.
+  h.set('Strict-Transport-Security', 'max-age=31536000');
+
+  if (esDocumento(ruta)) {
+    // La política de contenido COMPLETA va en el <meta> de index.html (lleva la huella del script
+    // del tema, que cambia en cada compilación). Pero un <meta> no puede impedir que OTRO sitio
+    // incruste esta página: `frame-ancestors` solo vale como cabecera HTTP. Esta cabecera suma eso
+    // (equivale al `X-Frame-Options: DENY` de arriba, que es lo que entienden los navegadores viejos)
+    // y repite lo que el <meta> ya prohíbe. El navegador aplica las dos políticas a la vez.
+    h.set('Content-Security-Policy', "frame-ancestors 'none'; base-uri 'self'; object-src 'none'; form-action 'self'");
+  }
 
   if (esAsset(ruta)) {
     // Llevan hash en el nombre: su contenido nunca cambia.

@@ -152,6 +152,20 @@ Pedido del dueño (2026-10-15): «textos verdes traslúcidos que no se leen» y 
   con los MISMOS tokens, y alta en `utils/paleta.ts`. No pintar con colores de Tailwind sueltos (`text-blue-500`):
   no siguen a la paleta.
 
+## Regla de seguridad: nada secreto en el navegador y nada abierto a un visitante
+
+Auditoría del dueño (2026-10-15). Detalle y estado en `docs/seguridad.md`; resumen de lo que no se negocia:
+
+- **Ninguna llave secreta en el navegador ni en el repo** (`npm run secretos` y el CI lo comprueban). Públicas por diseño:
+  la llave `sb_publishable_…` y el JWT `role: anon`. Llaves de IA, WhatsApp/Meta, Zapier…: secretos de Supabase/Edge.
+- **Toda función SECURITY DEFINER** lleva `set search_path = public`; si es solo del personal se le quita el acceso anónimo
+  (`revoke … from public, anon`), si es de mantenimiento solo `service_role`, y las de disparador no se exponen. Un
+  `insert` público (`with check (true)`) exige un disparador que valide y limite con `es_visitante()` + `limitar_uso()`.
+- **Buckets**: tamaño y tipos en el bucket, regex del nombre en la política de subida, y nombres NO adivinables en los
+  públicos (los PDF de comprobantes llevan sufijo aleatorio: `nombreArchivoComprobante`).
+- **Las migraciones de seguridad se escriben en `supabase/*.sql` con su prueba en `supabase/pruebas/` (réplica local +
+  CI) y NO se aplican a producción sin la confirmación expresa del dueño** (misma regla que cualquier SQL en producción).
+
 ## Mapa del código de Javier
 
 Javier conoce el sistema por `supabase/functions/asistente-ia/mapa-codigo.ts`,

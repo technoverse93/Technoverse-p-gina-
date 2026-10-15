@@ -23,7 +23,7 @@ import LiveChat from './LiveChat';
 import { useToast } from './ui/Overlays';
 import BotonTema from './ui/BotonTema';
 import {
-  IdentificacionTipo, TipoDoc, MedioPago, validateCedula, computeInvoiceTotals,
+  IdentificacionTipo, TipoDoc, MedioPago, validateCedula, computeInvoiceTotals, nombreArchivoComprobante,
   buildInvoicePdfBlob, generateQrDataUrl, InvoiceData
 } from '../utils/invoicePdf';
 
@@ -1171,7 +1171,7 @@ export default function PublicStore({
       // práctica; como storage.objects solo tenía política de INSERT para
       // el bucket "invoices", toda subida fallaba con "new row violates
       // row-level security policy" pese a que la venta ya se había cobrado.
-      const pdfPath = `${issued.id}.pdf`;
+      const pdfPath = nombreArchivoComprobante(issued.id);
       const { error: uploadErr } = await supabase.storage.from('invoices').upload(pdfPath, blob, { contentType: 'application/pdf' });
       if (uploadErr) throw uploadErr;
       const { data: pub } = supabase.storage.from('invoices').getPublicUrl(pdfPath);

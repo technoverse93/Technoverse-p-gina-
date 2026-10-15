@@ -1,0 +1,76 @@
+name: Seguridad
+
+# Corre en cada PR, en cada push a main y una vez por semana (por si cambia algo en la base sin pasar por el código).
+# Cuatro revisiones independientes: si una falla se ve cuál sin esperar a las demás.
+on:
+  pull_request: {}
+  push:
+    branches: [main]
+  schedule:
+    - cron: '17 9 * * 1'
+  workflow_dispatch: {}
+
+permissions:
+  contents: read
+
+jobs:
+  codigo:
+    # Tipos, contraste AA de las paletas y búsqueda de secretos en el repositorio.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Instalar dependencias
+        run: npm ci || npm install
+      - name: Tipos (tsc)
+        run: npm run lint
+      - name: Contraste de las paletas (WCAG AA)
+        run: npm run paletas
+      - name: Secretos en el repositorio
+        run: npm run secretos
+
+  api-publica:
+    # Con la llave pública del navegador (solo lecturas): un visitante anónimo no debe ver nada privado.
+    # No llama a ninguna función: una función expuesta se ejecutaría al probarla.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Qué ve un visitante anónimo
+        run: npm run probar-api
+
+  base-de-datos:
+    # Las migraciones de seguridad y sus pruebas, sobre un Postgres 16 limpio con una réplica mínima de
+    # la base (roles anon / authenticated / service_role, las tablas, funciones y políticas que tocan).
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 10
+    env:
+      PGHOST: localhost
+      PGUSER: postgres
+      PGPASSWORD: postgres
+    steps:
+      - uses: actions/checkout@v4
+      - name: Base de pruebas con la réplica
+        run: |
+          createdb prueba
+          psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/replica_minima.sql
+      - name: Blindaje de seguridad (antes y después)
+        run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/blindaje_seguridad.sql
+      - name: Ajustes privados (webhook de Instagram)
+        run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/ajustes_privados.sql

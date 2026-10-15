@@ -10,7 +10,9 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "mapa": "node scripts/mapa-codigo.mjs",
-    "paletas": "node scripts/validar-paletas.mjs"
+    "paletas": "node scripts/validar-paletas.mjs",
+    "secretos": "node scripts/buscar-secretos.mjs",
+    "probar-api": "node scripts/probar-api-publica.mjs"
   },
   "dependencies": {
     "@capacitor-community/privacy-screen": "^8.0.0",
