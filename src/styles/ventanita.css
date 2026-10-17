@@ -261,8 +261,8 @@ html.tv-ventanita #root { height: 100%; }
    a la vista es el mismo widget que se activa.
    --------------------------------------------------------------------- */
 .vj-recuadro {
-  --w-base: #EEF4F3; --w-sup: #FFFFFF; --w-hundido: #EAF2F3; --w-tile: #E7F3F4; --w-txt: #12262B; --w-txt2: #4C666C; --w-tenue: #5D6D72;
-  --w-borde: #DDE8E9; --w-acento: #0C6C78; --w-tinta-ac: #FFFFFF; --w-suave: rgba(12, 108, 120, .12);
+  --w-base: #E7ECEB; --w-sup: #F6F8F7; --w-hundido: #DDE5E4; --w-tile: #DAE8E9; --w-txt: #0E2126; --w-txt2: #3A5157; --w-tenue: #4B5D62;
+  --w-borde: #C3D0D1; --w-acento: #0C6C78; --w-tinta-ac: #FFFFFF; --w-suave: rgba(12, 108, 120, .12);
   position: fixed; z-index: 2; display: flex; flex-direction: column; overflow: hidden;
   border-radius: 24px; background: var(--w-sup); border: 1px solid var(--w-borde); color: var(--w-txt);
   font-family: "Inter", system-ui, sans-serif;
@@ -271,8 +271,8 @@ html.tv-ventanita #root { height: 100%; }
   animation: vj-rc-entra .16s ease-out both;
 }
 .vj-recuadro[data-tema="oscuro"] {
-  --w-base: #0E1211; --w-sup: #161B19; --w-hundido: #1D2421; --w-tile: #1A2A2B; --w-txt: #E6EDE9; --w-txt2: #93A29B; --w-tenue: #8A9690;
-  --w-borde: #272F2B; --w-acento: #4FD1C5; --w-tinta-ac: #04140F; --w-suave: rgba(79, 209, 197, .14);
+  --w-base: #14181B; --w-sup: #1C2125; --w-hundido: #20262A; --w-tile: #232D30; --w-txt: #E4EAE9; --w-txt2: #A5B1B1; --w-tenue: #98A4A5;
+  --w-borde: #313A3F; --w-acento: #72BFB7; --w-tinta-ac: #0A1918; --w-suave: rgba(114, 191, 183, .14);
 }
 .vj-recuadro[data-activo] { box-shadow: 0 0 0 2px var(--w-acento), 0 16px 40px rgba(0, 0, 0, .35); }
 @keyframes vj-rc-entra { from { opacity: .4; transform: scale(.99); } }

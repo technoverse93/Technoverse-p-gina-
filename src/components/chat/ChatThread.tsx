@@ -334,7 +334,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                       color de la burbuja. */}
                   {/* Los colores salen de --bubble-in/--bubble-out, que
                       existen para esto y ya están afinados en los dos temas:
-                      en oscuro la burbuja entrante (#1D2421) se despega del
+                      en oscuro la burbuja entrante (#252C31) se despega del
                       fondo por tono, que es como se marca elevación ahí,
                       porque una sombra negra sobre fondo negro no se ve. */}
                   <div

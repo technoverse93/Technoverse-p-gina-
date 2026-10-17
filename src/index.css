@@ -47,18 +47,18 @@
 
 @layer base {
   :root {
-    --bg-base: #EEF4F3;
-    --bg-surface: #FFFFFF;
-    --bg-elevated: #FFFFFF;
-    --bg-sunken: #EAF2F3;
-    --text-primary: #12262B;
-    --text-secondary: #4C666C;
+    --bg-base: #E7ECEB;
+    --bg-surface: #F6F8F7;
+    --bg-elevated: #FAFBFA;
+    --bg-sunken: #DDE5E4;
+    --text-primary: #0E2126;
+    --text-secondary: #3A5157;
     /* «Apagado» pero LEGIBLE: #5D6D72 da 4,7:1 sobre el fondo hundido (el
        #7B9096 de antes daba 3,0:1 y es el color de casi todo rótulo
        secundario de la app). Mínimo AA; lo comprueba `npm run paletas`. */
-    --text-muted: #5D6D72;
-    --border-color: #DDE8E9;
-    --border-soft: #E9F0F1;
+    --text-muted: #4B5D62;
+    --border-color: #C3D0D1;
+    --border-soft: #D3DEDE;
 
     --brand-navy: #14243F;
     --brand-navy-hover: #1D3357;
@@ -72,8 +72,8 @@
     --brand-gold-mid: #0C6C78;
     --brand-gold-light: #3FA0AD;
     --brand-gold-rgb: 12, 108, 120;
-    --gold-soft: #E2F0F2;
-    --gold-line: #BEDEE2;
+    --gold-soft: #D9E9EB;
+    --gold-line: #AECFD3;
 
     /* Acento funcional: lo que pinta botones, focos y estados activos.
        Verde botella. Se escoge un tono profundo a propósito: sobre fondo
@@ -90,10 +90,10 @@
        oferta y «nuevo», bordes de piezas destacadas, banners, cintillos).
        Cada paleta (src/styles/paletas.css) trae el suyo. Con `-ink` sobre el
        relleno y `-soft` como fondo suave; los pares cumplen AA. */
-    --accent-2: #A84A07;
+    --accent-2: #9C4306;
     --accent-2-soft: #FDEBD3;
     --accent-2-ink: #FFFFFF;
-    --accent-2-rgb: 168, 74, 7;
+    --accent-2-rgb: 156, 67, 6;
 
     /* Insignia roja SÓLIDA (contadores, alertas): blanco sobre #E5484D daba
        3,9:1 y el número no se leía bien. Con este rojo da 4,9:1. */
@@ -126,13 +126,13 @@
        diferencia, que en un teléfono al sol no se distinguen. Se veían
        cajas planas flotando sobre el mismo tono en vez de mensajes. En
        blanco, con la sombra suave, la burbuja se despega de verdad. */
-    --bubble-in: #FFFFFF;
-    --bubble-in-ink: #12262B;
+    --bubble-in: #F6F8F7;
+    --bubble-in-ink: #0E2126;
     --bubble-out: #0C6C78;
     --bubble-out-ink: #FFFFFF;
     /* Hora y tics de la burbuja: un color SÓLIDO, no la tinta con opacidad (a
        55-85 % el texto verde sobre verde no se leía). Ambos dan ≥ 4,5:1. */
-    --bubble-in-meta: #5D6D72;
+    --bubble-in-meta: #4B5D62;
     --bubble-out-meta: #D3E4E7;
 
     /* ================= CRISTAL LIGERO (tema claro) =================
@@ -144,26 +144,26 @@
     --app-bg:
       radial-gradient(1100px 520px at 6% -12%, #A9DCE6 0%, rgba(169,220,230,0) 46%),
       radial-gradient(980px 460px at 99% -4%, #F7CDAD 0%, rgba(247,205,173,0) 42%),
-      linear-gradient(168deg, #E6F2F3 0%, #F1F4EA 56%, #F8F0E7 100%);
+      linear-gradient(168deg, #DCE9EA 0%, #E6EAE1 56%, #ECE5DA 100%);
     /* Vidrio: relleno translúcido + borde de luz. El blur se mantiene
        chico (10 px) y NUNCA se anima; el respaldo sólido está más abajo. */
-    --glass-bg: rgba(255,255,255,0.56);
-    --glass-strong: rgba(255,255,255,0.74);
-    --glass-border: rgba(255,255,255,0.90);
+    --glass-bg: rgba(250,252,251,0.58);
+    --glass-strong: rgba(250,252,251,0.76);
+    --glass-border: rgba(250,252,251,0.85);
     --glass-blur: 10px;
     --glass-shadow: 0 6px 18px rgba(30,70,80,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
     /* Baldosa tintada (imagen de producto, ícono de módulo, avatar de fila). */
-    --tile: #E7F3F4;
+    --tile: #DAE8E9;
     /* Chip / pestaña ACTIVA: tinta oscura sobre claro, como en la maqueta. */
     --chip-on-bg: #0E2A30;
     --chip-on-ink: #FFFFFF;
     /* "Gota" de la pestaña activa. */
-    --gota-bg: rgba(255,255,255,0.97);
+    --gota-bg: rgba(250,252,251,0.97);
     --gota-ink: #0E2A30;
     --gota-shadow: 0 2px 8px rgba(30,70,80,0.14);
     /* Superficie de chips inactivos y buscador. */
-    --pill-bg: rgba(255,255,255,0.72);
-    --card-border: rgba(18,38,43,0.07);
+    --pill-bg: rgba(250,252,251,0.74);
+    --card-border: rgba(18,38,43,0.13);
   }
 
   /* ======================================================================
@@ -180,45 +180,45 @@
      no alcanza contraste sobre fondo oscuro.
      ====================================================================== */
   .dark {
-    --bg-base: #0E1211;
-    --bg-surface: #161B19;
-    --bg-elevated: #1A211E;
-    --bg-sunken: #1D2421;
-    --text-primary: #E6EDE9;
-    --text-secondary: #93A29B;
-    --text-muted: #8A9690;
-    --border-color: #272F2B;
-    --border-soft: #202724;
+    --bg-base: #14181B;
+    --bg-surface: #1C2125;
+    --bg-elevated: #232A2E;
+    --bg-sunken: #20262A;
+    --text-primary: #E4EAE9;
+    --text-secondary: #A5B1B1;
+    --text-muted: #98A4A5;
+    --border-color: #313A3F;
+    --border-soft: #292F34;
 
     --brand-navy: #16283C;
     --brand-navy-hover: #1E3550;
     /* Mismo criterio que en claro: `-dark` es el hover, así que debe ser
        MÁS claro que `-mid` en tema oscuro (el hover aclara, no oscurece). */
-    --brand-gold-dark: #5AD3CA;
-    --brand-gold-mid: #4FD1C5;
-    --brand-gold-light: #7FE6DE;
-    --brand-gold-rgb: 79, 209, 197;
-    --gold-soft: #0E2A2C;
-    --gold-line: #1E4247;
+    --brand-gold-dark: #86C9C2;
+    --brand-gold-mid: #72BFB7;
+    --brand-gold-light: #A3D9D3;
+    --brand-gold-rgb: 114, 191, 183;
+    --gold-soft: #1B2B2D;
+    --gold-line: #2F4749;
 
-    --accent: #4FD1C5;
-    --accent-hover: #5AD3CA;
-    --accent-ink: #04140F;
-    --accent-rgb: 79, 209, 197;
+    --accent: #72BFB7;
+    --accent-hover: #86C9C2;
+    --accent-ink: #0A1918;
+    --accent-rgb: 114, 191, 183;
 
-    --accent-2: #F5B14C;
-    --accent-2-soft: #2E2210;
+    --accent-2: #E1B363;
+    --accent-2-soft: #2C2518;
     --accent-2-ink: #2B1A04;
-    --accent-2-rgb: 245, 177, 76;
+    --accent-2-rgb: 225, 179, 99;
 
     --danger-solid: #D13438;
     --danger-ink: #FFFFFF;
-    --danger-text: #F1746A;
+    --danger-text: #EF8B82;
 
-    --ok: #3FCB93;
-    --ok-soft: #0F2A1E;
-    --warn: #E8A85C;
-    --warn-soft: #2B2113;
+    --ok: #62C79E;
+    --ok-soft: #19292A;
+    --warn: #E0AB66;
+    --warn-soft: #2A2418;
 
     /* En oscuro una sombra no se ve: la elevación se marca subiendo el
        tono de la superficie. Se conservan sombras muy tenues solo para
@@ -227,31 +227,31 @@
     --float-shadow: 0 2px 6px rgba(0, 0, 0, 0.45), 0 12px 28px -16px rgba(0, 0, 0, 0.7);
     --float-shadow-lg: 0 4px 10px rgba(0, 0, 0, 0.5), 0 22px 48px -22px rgba(0, 0, 0, 0.8);
 
-    --bubble-in: #1D2421;
-    --bubble-in-ink: #E6EDE9;
-    --bubble-out: #4FD1C5;
-    --bubble-out-ink: #04140F;
-    --bubble-in-meta: #8A9690;
-    --bubble-out-meta: #12362F;
+    --bubble-in: #252C31;
+    --bubble-in-ink: #E4EAE9;
+    --bubble-out: #72BFB7;
+    --bubble-out-ink: #0A1918;
+    --bubble-in-meta: #98A4A5;
+    --bubble-out-meta: #16403C;
 
     /* ================= CRISTAL LIGERO (tema oscuro) =================
        Mismo esquema: manchas profundas (verde-azulado y cálida) sobre un
        carbón casi negro, nunca negro puro. El vidrio toma tinte oscuro y
        el borde de luz se vuelve apenas visible. */
     --app-bg:
-      radial-gradient(1100px 520px at 6% -12%, #113A40 0%, rgba(17,58,64,0) 46%),
-      radial-gradient(980px 460px at 99% -4%, #2B2420 0%, rgba(43,36,32,0) 42%),
-      linear-gradient(168deg, #0C1413 0%, #0E1211 58%, #121311 100%);
-    --glass-bg: rgba(22,27,25,0.52);
-    --glass-strong: rgba(26,33,30,0.72);
+      radial-gradient(1100px 520px at 6% -12%, #1C3338 0%, rgba(28,51,56,0) 46%),
+      radial-gradient(980px 460px at 99% -4%, #2B2823 0%, rgba(43,40,35,0) 42%),
+      linear-gradient(168deg, #12181A 0%, #14181B 58%, #171A19 100%);
+    --glass-bg: rgba(28,33,37,0.55);
+    --glass-strong: rgba(35,42,46,0.74);
     --glass-border: rgba(255,255,255,0.09);
     --glass-blur: 10px;
     --glass-shadow: 0 8px 20px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.06);
-    --tile: #1A2A2B;
-    --chip-on-bg: #E6EDE9;
-    --chip-on-ink: #0E1211;
+    --tile: #232D30;
+    --chip-on-bg: #E4EAE9;
+    --chip-on-ink: #14181B;
     --gota-bg: rgba(255,255,255,0.12);
-    --gota-ink: #E6EDE9;
+    --gota-ink: #E4EAE9;
     --gota-shadow: 0 2px 8px rgba(0,0,0,0.35);
     --pill-bg: rgba(255,255,255,0.06);
     --card-border: rgba(255,255,255,0.08);
