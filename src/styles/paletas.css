@@ -38,14 +38,14 @@
 :root[data-paleta="oceano"],
 [data-paleta-muestra="oceano"][data-modo="claro"] {
   --bg-base: #EDF3FB;
-  --bg-surface: #FFFFFF;
-  --bg-elevated: #FFFFFF;
+  --bg-surface: #F6F8FC;
+  --bg-elevated: #FAFBFE;
   --bg-sunken: #E4ECF7;
   --text-primary: #0F1F3A;
   --text-secondary: #3D4E69;
   --text-muted: #5B6B82;
-  --border-color: #D5E0EE;
-  --border-soft: #E3EBF6;
+  --border-color: #C6D3E5;
+  --border-soft: #D6E0EE;
 
   --brand-navy: #10285A;
   --brand-navy-hover: #173670;
@@ -66,7 +66,7 @@
   --accent-2-ink: #FFFFFF;
   --accent-2-rgb: 14, 116, 144;
 
-  --bubble-in: #FFFFFF;
+  --bubble-in: #F6F8FC;
   --bubble-in-ink: #0F1F3A;
   --bubble-in-meta: #5B6B82;
   --bubble-out: #1D4ED8;
@@ -142,14 +142,14 @@
 :root[data-paleta="atardecer"],
 [data-paleta-muestra="atardecer"][data-modo="claro"] {
   --bg-base: #FBF1EC;
-  --bg-surface: #FFFFFF;
-  --bg-elevated: #FFFFFF;
+  --bg-surface: #FBF7F4;
+  --bg-elevated: #FDFAF8;
   --bg-sunken: #F6E7E0;
   --text-primary: #2B1710;
   --text-secondary: #674437;
   --text-muted: #7F5C4E;
-  --border-color: #EBD9D0;
-  --border-soft: #F3E6DF;
+  --border-color: #DDC8BD;
+  --border-soft: #EAD9CF;
 
   --brand-navy: #3B1A10;
   --brand-navy-hover: #52261A;
@@ -170,7 +170,7 @@
   --accent-2-ink: #FFFFFF;
   --accent-2-rgb: 190, 24, 93;
 
-  --bubble-in: #FFFFFF;
+  --bubble-in: #FBF7F4;
   --bubble-in-ink: #2B1710;
   --bubble-in-meta: #7F5C4E;
   --bubble-out: #BC3F0C;
@@ -246,14 +246,14 @@
 :root[data-paleta="orquidea"],
 [data-paleta-muestra="orquidea"][data-modo="claro"] {
   --bg-base: #F4F0FB;
-  --bg-surface: #FFFFFF;
-  --bg-elevated: #FFFFFF;
+  --bg-surface: #F9F7FD;
+  --bg-elevated: #FBFAFE;
   --bg-sunken: #ECE6F7;
   --text-primary: #1E1433;
   --text-secondary: #51406F;
   --text-muted: #6B5B89;
-  --border-color: #DDD3EE;
-  --border-soft: #E9E2F5;
+  --border-color: #CEC2E3;
+  --border-soft: #DDD3EE;
 
   --brand-navy: #2A1A55;
   --brand-navy-hover: #3A2575;
@@ -274,7 +274,7 @@
   --accent-2-ink: #FFFFFF;
   --accent-2-rgb: 162, 28, 175;
 
-  --bubble-in: #FFFFFF;
+  --bubble-in: #F9F7FD;
   --bubble-in-ink: #1E1433;
   --bubble-in-meta: #6B5B89;
   --bubble-out: #6D28D9;
@@ -356,17 +356,17 @@
    dibuja la miniatura. `npm run paletas` verifica que sigan siendo idénticos a
    los de index.css: si cambiás Esmeralda, ese comando te avisa. */
 [data-paleta-muestra="esmeralda"][data-modo="claro"] {
-  --bg-base: #EEF4F3;
-  --bg-surface: #FFFFFF;
-  --text-primary: #12262B;
-  --text-muted: #5D6D72;
-  --border-color: #DDE8E9;
+  --bg-base: #E7ECEB;
+  --bg-surface: #F6F8F7;
+  --text-primary: #0E2126;
+  --text-muted: #4B5D62;
+  --border-color: #C3D0D1;
   --accent: #0C6C78;
   --accent-ink: #FFFFFF;
-  --accent-2: #A84A07;
+  --accent-2: #9C4306;
   /* Los que usan las piezas de la vista previa de banners (cintillo, campaña, botones): ver utils/bannerEstado.ts. */
-  --bg-elevated: #FFFFFF;
-  --text-secondary: #4C666C;
+  --bg-elevated: #FAFBFA;
+  --text-secondary: #3A5157;
   --accent-rgb: 12, 108, 120;
   --accent-2-soft: #FDEBD3;
   --accent-2-ink: #FFFFFF;
@@ -374,19 +374,19 @@
   --chip-on-ink: #FFFFFF;
 }
 [data-paleta-muestra="esmeralda"][data-modo="oscuro"] {
-  --bg-base: #0E1211;
-  --bg-surface: #161B19;
-  --text-primary: #E6EDE9;
-  --text-muted: #8A9690;
-  --border-color: #272F2B;
-  --accent: #4FD1C5;
-  --accent-ink: #04140F;
-  --accent-2: #F5B14C;
-  --bg-elevated: #1A211E;
-  --text-secondary: #93A29B;
-  --accent-rgb: 79, 209, 197;
-  --accent-2-soft: #2E2210;
+  --bg-base: #14181B;
+  --bg-surface: #1C2125;
+  --text-primary: #E4EAE9;
+  --text-muted: #98A4A5;
+  --border-color: #313A3F;
+  --accent: #72BFB7;
+  --accent-ink: #0A1918;
+  --accent-2: #E1B363;
+  --bg-elevated: #232A2E;
+  --text-secondary: #A5B1B1;
+  --accent-rgb: 114, 191, 183;
+  --accent-2-soft: #2C2518;
   --accent-2-ink: #2B1A04;
-  --chip-on-bg: #E6EDE9;
-  --chip-on-ink: #0E1211;
+  --chip-on-bg: #E4EAE9;
+  --chip-on-ink: #14181B;
 }
