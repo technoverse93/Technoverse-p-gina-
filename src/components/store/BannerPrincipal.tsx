@@ -84,18 +84,20 @@ export default function BannerPrincipal({ banners, vista = false }: Props) {
     return () => clearInterval(t);
   }, [visibles.length]);
 
-  // Sin banners cargados no se reserva NADA de alto. Es deliberado: dejar
-  // un hueco vacío del tamaño del cartel correría el catálogo hacia abajo
-  // en toda tienda que todavía no haya subido ninguno.
-  if (visibles.length === 0) return null;
-
   const actual = visibles[Math.min(indice, visibles.length - 1)];
 
   // Una vista por cartel y por sesión: se cuenta al mostrarse (el carrusel va pasando de uno a otro).
+  // Va ANTES del `return null` de abajo: un hook después de un return condicional
+  // cambia el orden de hooks entre renders y tumba toda la app (error #310).
   useEffect(() => {
     if (vista || !actual) return;
     if (marcarVistaEnSesion(actual.id)) registrarEventoBanner(actual.id, 'vista');
   }, [actual?.id, vista]);
+
+  // Sin banners cargados no se reserva NADA de alto. Es deliberado: dejar
+  // un hueco vacío del tamaño del cartel correría el catálogo hacia abajo
+  // en toda tienda que todavía no haya subido ninguno.
+  if (!actual) return null;
 
   const contenido = (
     <>
