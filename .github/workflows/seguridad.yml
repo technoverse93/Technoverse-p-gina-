@@ -31,6 +31,8 @@ jobs:
         run: npm run paletas
       - name: Secretos en el repositorio
         run: npm run secretos
+      - name: Lógica del CRM (embudo, seguimiento, segmentos y métricas)
+        run: npm run probar-crm
 
   api-publica:
     # Con la llave pública del navegador (solo lecturas): un visitante anónimo no debe ver nada privado.
@@ -76,3 +78,5 @@ jobs:
         run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/ajustes_privados.sql
       - name: Motor de banners (formatos, enlaces seguros y métricas)
         run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/banners_motor.sql
+      - name: CRM interno (captación, embudo, permisos y función pública)
+        run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/crm.sql

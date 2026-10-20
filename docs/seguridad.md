@@ -43,6 +43,7 @@ psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/replica_minima.sql
 psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/blindaje_seguridad.sql
 psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/ajustes_privados.sql
 psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/banners_motor.sql
+psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/crm.sql
 ```
 
 El flujo `.github/workflows/seguridad.yml` corre todo eso en cada PR, en cada push a `main` y cada lunes.
@@ -59,6 +60,13 @@ llevar un enlace `javascript:`/`data:`/`vbscript:`/`file:`/`blob:` ni textos gig
 en adelante), y las métricas de vistas/clics solo se suman por `banner_evento()` (SECURITY DEFINER, con tope por
 persona/IP vía `limitar_uso` si el blindaje ya está aplicado); la tabla `banner_metricas` no admite escrituras desde la
 API ni siquiera del personal, y solo el personal la lee. No guarda nada de la persona. Las cifras son orientativas.
+`migracion_crm.sql` (CRM interno, también defensa por diseño): los datos de contacto (nombre, correo, teléfono, provincia)
+quedan en tablas `crm_*` que SOLO lee y escribe el personal (borrar contactos: solo el dueño); un visitante únicamente
+puede llamar a `crm_registrar_contacto()`, que no devuelve nada (no revela si un correo ya existe), solo admite 3 canales,
+filtra las llaves del origen, tiene tope por persona/IP y nunca adelanta una etapa. La captación del chat, los pedidos, el
+registro y el taller la hacen disparadores del servidor que atrapan sus errores (un fallo del CRM no frena la venta) e
+ignoran al personal y a las cuentas anonimizadas; anonimizar una ficha (Ley 8968) borra su contacto del CRM. La firma de
+notas y recordatorios la pone la base, no el navegador.
 
 ## Lo que queda (decisiones y trabajo pendiente)
 

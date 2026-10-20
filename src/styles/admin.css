@@ -1673,7 +1673,8 @@ html.sin-vidrio .sg-riel, html.sin-vidrio .sg-seg { backdrop-filter: none; backg
 /* Contenedor de un rótulo «curado»: puede encogerse por debajo de lo que mide su línea (si no, se sale de su caja). */
 [data-tv-min0] { min-width: 0; }
 /* Un ícono jamás se encoge ni se aplasta junto a su texto. */
-svg.lucide { flex-shrink: 0; }
+/* Y tampoco se aplasta por el `max-width: 100%` global de los svg: en un contenedor que se achica, el ícono quedaba de 3 px. */
+svg.lucide { flex-shrink: 0; max-width: none; }
 .tv-field > .tv-hint { display: block; }
 .tv-stat-label > svg { flex: none; }
 .tv-stat-value { line-height: 1.15; }

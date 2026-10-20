@@ -49,6 +49,8 @@ import { esSoloSupremo } from './admin/adminNav';
 const TallerKanban = lazy(() => import('./TallerKanban'));
 const InventarioControl = lazy(() => import('./InventarioControl'));
 const ChatCRM = lazy(() => import('./chat/ChatCRM'));
+// El CRM interno (embudo, seguimiento, segmentos, respuestas rápidas y métricas) se trae aparte: nadie fuera de su pestaña lo paga.
+const CrmModulo = lazy(() => import('./admin/crm/CrmModulo'));
 const BurbujaChat = lazy(() => import('./chat/BurbujaChat'));
 const JarvisFlotante = lazy(() => import('./admin/JarvisFlotante'));
 const EstudioPauta = lazy(() => import('./admin/EstudioPauta'));
@@ -1256,6 +1258,12 @@ export default function AdminPanel({
         {tab === 'chat' && (
           <Suspense fallback={<TabLoadingFallback />}>
             <ChatCRM currentUser={currentUser} onDataChanged={loadAllAdminData} />
+          </Suspense>
+        )}
+
+        {tab.startsWith('crm_') && (
+          <Suspense fallback={<TabLoadingFallback />}>
+            <CrmModulo tab={tab} currentUser={currentUser} onAbrirModulo={irAModulo} />
           </Suspense>
         )}
 

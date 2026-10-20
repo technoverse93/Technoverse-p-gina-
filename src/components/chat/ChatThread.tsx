@@ -9,6 +9,10 @@ import { compressImage } from '../../utils/storage';
 import { supabase } from '../../supabaseClient';
 import ChatActionsMenu from './ChatActionsMenu';
 import AdjuntarMenu from './AdjuntarMenu';
+import RespuestasRapidasMenu, { useRespuestasRapidas, type OpcionRespuesta } from './RespuestasRapidasMenu';
+import { filtrarRespuestas, plantillaConNombre } from '../../utils/crmLogica';
+import { buscarLeadPorCorreo, pedirAbrirLead } from '../../utils/crm';
+import { pedirModulo } from '../../mobile/jarvisAtajo';
 import { useToast } from '../ui/Overlays';
 import { etiquetaDeDia, abreDiaNuevo, soloHora, estaEnLinea, haceCuanto, inicialDe, colorDe } from './formatoChat';
 import VideoMensaje from './VideoMensaje';
@@ -51,6 +55,33 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
   useEffect(() => {
     if (inputText.trim()) setMenuAdjuntoAbierto(false);
   }, [inputText]);
+
+  // RESPUESTAS RÁPIDAS (ver RespuestasRapidasMenu.tsx): se abren con «Respuesta rápida» del menú del clip o escribiendo «/» y el atajo al
+  // principio del cuadro. `rrDescartado` es el texto exacto con el que se cerró (Esc o un toque afuera): al seguir escribiendo vuelven.
+  const [rrAbierto, setRrAbierto] = useState(false);
+  const [rrDescartado, setRrDescartado] = useState<string | null>(null);
+  const [rrIndice, setRrIndice] = useState(0);
+  const campoRef = useRef<HTMLInputElement>(null);
+  const consultaAtajo = !noteMode && /^\/[^\s/]*$/.test(inputText) && rrDescartado !== inputText ? inputText.slice(1) : null;
+  const rr = useRespuestasRapidas(rrAbierto || consultaAtajo !== null);
+  const rrOpciones = consultaAtajo !== null ? filtrarRespuestas(rr.lista, consultaAtajo) : rr.lista;
+  // Un «/algo» que no coincide con nada no estorba: el menú se esconde y Enter manda el texto tal cual.
+  const rrMostrar = rrAbierto || (consultaAtajo !== null && (rrOpciones.length > 0 || rr.origen === 'cargando'));
+  const rrActiva = Math.min(rrIndice, Math.max(0, rrOpciones.length - 1));
+  useEffect(() => { if (inputText) setRrAbierto(false); }, [inputText]);
+  const cerrarRespuestas = () => { setRrAbierto(false); setRrDescartado(inputText); };
+  const elegirRespuesta = (o: OpcionRespuesta) => {
+    setInputText(plantillaConNombre(o.texto, conversation.customerName));
+    setRrAbierto(false);
+    setRrIndice(0);
+    campoRef.current?.focus();
+  };
+  const alTeclear = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (!rrMostrar || rrOpciones.length === 0 || e.nativeEvent.isComposing) return;
+    if (e.key === 'ArrowDown') { e.preventDefault(); setRrIndice((rrActiva + 1) % rrOpciones.length); }
+    else if (e.key === 'ArrowUp') { e.preventDefault(); setRrIndice((rrActiva - 1 + rrOpciones.length) % rrOpciones.length); }
+    else if (e.key === 'Enter' || (e.key === 'Tab' && consultaAtajo !== null)) { e.preventDefault(); elegirRespuesta(rrOpciones[rrActiva]); }
+  };
   const [borrandoId, setBorrandoId] = useState<string | null>(null);
   /** Mensaje cuyo menú de acciones está abierto (se abre al tocarlo). */
   const [menuMsgId, setMenuMsgId] = useState<string | null>(null);
@@ -177,6 +208,14 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
     }
   };
 
+  /** Abre la ficha de esta persona en el CRM (la crea sola el servidor cuando alguien escribe, se registra o compra). */
+  const verEnCrm = async () => {
+    const lead = await buscarLeadPorCorreo(conversation.customerEmail);
+    if (!lead) { toast.info('Esta persona todavía no aparece en el CRM.'); return; }
+    pedirAbrirLead(lead.id);
+    pedirModulo('crm_embudo');
+  };
+
   /** Cierra y borra ESTA conversación, para todos y al instante. */
   const cerrarYBorrar = async () => {
     setShowMenu(false);
@@ -260,6 +299,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
               onResolve={() => onResolve(conversation.id)}
               onCerrarYBorrar={() => void cerrarYBorrar()}
               onExclusivo={onExclusivo ? (x) => void onExclusivo(conversation.id, x) : undefined}
+              onVerEnCrm={() => void verEnCrm()}
             />
           )}
         </div>
@@ -445,11 +485,25 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
             de separación), el menú necesita ese mismo desplazamiento para
             seguir quedando debajo del botón correcto: `anchorOffsetClass`
             en vez del `left-0` por defecto (ver AdjuntarMenu.tsx). */}
+        {rrMostrar && (
+          <RespuestasRapidasMenu
+            opciones={rrOpciones}
+            origen={rr.origen}
+            consulta={consultaAtajo}
+            activa={rrActiva}
+            nombreCliente={conversation.customerName}
+            onElegir={elegirRespuesta}
+            onResaltar={setRrIndice}
+            onClose={cerrarRespuestas}
+          />
+        )}
         <div className="tv-chat-pildora">
         <input
+          ref={campoRef}
           type="text"
           value={inputText}
-          onChange={(e) => setInputText(e.target.value)}
+          onChange={(e) => { setInputText(e.target.value); setRrIndice(0); }}
+          onKeyDown={alTeclear}
           placeholder={noteMode ? 'Nota interna (solo el equipo la ve)' : 'Responder…'}
           className="tv-chat-campo"
         />
@@ -473,8 +527,8 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
                 type="button"
                 onClick={() => setMenuAdjuntoAbierto(v => !v)}
                 disabled={uploading}
-                title="Adjuntar"
-                aria-label="Adjuntar"
+                title="Adjuntar o respuesta rápida"
+                aria-label="Adjuntar o respuesta rápida"
                 className="tv-chat-herr shrink-0 disabled:opacity-40"
               >
                 {uploading ? <RefreshCw className="w-4 h-4 animate-spin" /> : <Paperclip className="w-4 h-4" />}
@@ -499,6 +553,7 @@ export default function ChatThread({ conversation, staffEmails, onBack, onSendMe
               onClose={() => setMenuAdjuntoAbierto(false)}
               onCamara={() => void handleCamara()}
               onGaleria={() => fileInputRef.current?.click()}
+              onRespuestas={() => { setRrIndice(0); setRrAbierto(true); }}
               anchorOffsetClass="right-0"
             />
           )}

@@ -30,6 +30,7 @@ import {
   Cpu, Boxes, LayoutGrid,
   MessageSquare, CreditCard, Megaphone, ShieldAlert, Settings, Receipt,
   UserCog, ShieldCheck, Ban, MapPin, MonitorPlay,
+  Handshake, Kanban, CalendarCheck, Filter, Zap, BarChart3,
 } from 'lucide-react';
 import type { LucideIcon } from 'lucide-react';
 
@@ -149,11 +150,31 @@ export const NAV_GROUPS: AdminNavGroup[] = [
     items: [
       {
         id: 'chat',
-        label: 'Chat y CRM',
+        label: 'Chat',
         short: 'Chat',
         icon: MessageSquare,
-        descripcion: 'Conversaciones con clientes en tiempo real y seguimiento comercial.',
-        buscar: ['chat', 'crm', 'mensajes', 'soporte', 'conversaciones', 'whatsapp'],
+        descripcion: 'Conversaciones con clientes en tiempo real.',
+        buscar: ['chat', 'mensajes', 'soporte', 'conversaciones', 'respuestas rapidas', 'whatsapp'],
+      },
+      {
+        // El CRM interno: UN módulo con cinco carpetas (como Inventario). Los contactos los arma solo el servidor con lo que
+        // pasa en el chat, los registros, los pedidos y el taller; aquí se les da seguimiento.
+        id: 'crm_embudo',
+        label: 'CRM',
+        short: 'CRM',
+        icon: Handshake,
+        descripcion: 'Contactos, embudo de ventas, seguimientos, segmentos para promociones y métricas de conversión.',
+        buscar: [
+          'crm', 'contactos', 'prospectos', 'leads', 'embudo', 'pipeline', 'ventas', 'seguimiento', 'recordatorios', 'etiquetas',
+          'segmentos', 'promociones', 'respuestas rapidas', 'plantillas', 'metricas', 'conversion', 'oportunidades', 'cotizaciones',
+        ],
+        carpetas: [
+          { id: 'embudo', label: 'Embudo', tab: 'crm_embudo', icon: Kanban, buscar: ['embudo', 'pipeline', 'tablero', 'etapas', 'prospectos', 'contactos', 'leads'] },
+          { id: 'seguimiento', label: 'Seguimiento', tab: 'crm_seguimiento', icon: CalendarCheck, buscar: ['seguimiento', 'recordatorios', 'pendientes', 'agenda', 'llamar'] },
+          { id: 'segmentos', label: 'Segmentos', tab: 'crm_segmentos', icon: Filter, buscar: ['segmentos', 'promociones', 'filtros', 'correos', 'listas', 'csv'] },
+          { id: 'respuestas', label: 'Respuestas', tab: 'crm_respuestas', icon: Zap, buscar: ['respuestas rapidas', 'plantillas', 'atajos', 'mensajes'] },
+          { id: 'metricas', label: 'Métricas', tab: 'crm_metricas', icon: BarChart3, buscar: ['metricas', 'conversion', 'embudo', 'ventas', 'origen', 'campanas'] },
+        ],
       },
       {
         id: 'taller',
@@ -169,7 +190,7 @@ export const NAV_GROUPS: AdminNavGroup[] = [
         short: 'Clientes',
         icon: CreditCard,
         descripcion: 'Fichas de clientes, historial de compras y gestión de accesos.',
-        buscar: ['clientes', 'crm', 'fichas', 'compradores', 'contactos', 'usuarios'],
+        buscar: ['clientes', 'fichas', 'compradores', 'usuarios', 'derecho al olvido'],
       },
     ],
   },

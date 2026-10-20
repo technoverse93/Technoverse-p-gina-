@@ -34,6 +34,7 @@ import {
 } from '../utils/ubicacionCliente';
 import AyudaUbicacion from './store/AyudaUbicacion';
 import { registrarUbicacionEnServidor, pedirUbicacionAlEntrar } from '../utils/ubicaciones';
+import { capturarOrigenDeVisita, registrarContactoCrm } from '../utils/crmCaptura';
 import { TextoEditable } from '../cms/TextoEditable';
 import { ColorEditable } from '../cms/ColorEditable';
 import { IconoEditable } from '../cms/IconoEditable';
@@ -132,6 +133,8 @@ export default function PublicStore({
   // ¿Ya se sabe qué hay en el catálogo? Hasta que se sepa no se dice «no hay
   // nada» (se muestra un esqueleto): decirlo antes es mentirle al cliente.
   const [catalogoCargado, setCatalogoCargado] = useState<boolean>(() => catalogoListo());
+  // De dónde llegó la persona (campaña y sitio de origen), para el CRM interno: se anota una vez en este aparato.
+  useEffect(() => { capturarOrigenDeVisita(); }, []);
   useEffect(() => {
     if (catalogoCargado) return;
     const yaLlego = () => setCatalogoCargado(true);
@@ -681,6 +684,9 @@ export default function PublicStore({
       return;
     }
 
+    // Para el CRM: el origen (campaña / sitio) de quien se acaba de registrar. El contacto ya lo creó la base.
+    void registrarContactoCrm({ nombre: regName.trim(), email: cleanEmail, telefono: regPhone.trim(), canal: 'registro', provincia: regProvince });
+
     const clientUser: User = {
       id: authData.user.id,
       email: cleanEmail,
@@ -1090,6 +1096,14 @@ export default function PublicStore({
     freshDb.deliveries = db.deliveries;
     if (!freshDb.orders) freshDb.orders = [];
     freshDb.orders.push(newOrder);
+
+    // CRM: la ficha de comprador sin cuenta lleva un correo inventado; el REAL (el del comprobante) y el teléfono viajan
+    // aquí, para que la persona sea UN solo contacto. Se espera un instante (nunca más de 1,5 s) para que llegue antes
+    // que el pedido; si falla, el pedido y su contacto se crean igual (lo hace la base).
+    await registrarContactoCrm({
+      nombre: recipientName.trim(), email: fiscalEmail.trim(), telefono: recipientPhone.trim(), canal: 'tienda_form',
+      provincia: ubicacionEnvio?.provincia, detalle: `Compra: ${cart.length === 1 ? cart[0].product.name : `${cart.length} artículos`}`,
+    });
 
     try {
       await saveDB(freshDb);

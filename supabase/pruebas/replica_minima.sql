@@ -82,6 +82,8 @@ create table public.banners (id text primary key, title text, description text, 
   start_date date, end_date date, formato text not null default 'hero', oferta text,
   constraint banners_formato_check check (formato in ('hero', 'divisor', 'grid', 'popup')),
   constraint banners_type_check check (type in ('Servicios', 'Repuestos', 'Soporte', 'General')));
+create table public.repair_orders (id text primary key, ticket text, customer_id text, customer_name text, customer_email text, customer_phone text,
+  device text, status text not null default 'Pendiente', created_at timestamptz not null default now());
 create table public.visitor_fingerprints (huella text primary key, ip text, email text, ultima_visita timestamptz not null default now(), visitas int default 1);
 create table public.blocked_users_list (email text, huella text, levantado_en timestamptz);
 create table public.ubicaciones_compartidas (id uuid primary key default gen_random_uuid(), rol text, nombre text, email text, lat double precision,

@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { UserCog, CheckCircle2, AlertTriangle, RotateCcw, Trash2, Lock, LockOpen } from 'lucide-react';
+import { UserCog, CheckCircle2, AlertTriangle, RotateCcw, Trash2, Lock, LockOpen, Handshake } from 'lucide-react';
 import { ChatConversation } from '../../types';
 
 interface ChatActionsMenuProps {
@@ -13,9 +13,11 @@ interface ChatActionsMenuProps {
   onCerrarYBorrar: () => void;
   /** Solo llega cuando quien mira es superadmin; si no, el botón no existe. */
   onExclusivo?: (exclusivo: boolean) => void;
+  /** Abre la ficha de esta persona en el CRM (etapa, notas, seguimientos). */
+  onVerEnCrm?: () => void;
 }
 
-export default function ChatActionsMenu({ conversation, staffEmails, onClose, onAssign, onChangeStatus, onResolve, onCerrarYBorrar, onExclusivo }: ChatActionsMenuProps) {
+export default function ChatActionsMenu({ conversation, staffEmails, onClose, onAssign, onChangeStatus, onResolve, onCerrarYBorrar, onExclusivo, onVerEnCrm }: ChatActionsMenuProps) {
   const [confirmando, setConfirmando] = useState(false);
   const isResolved = conversation.status === 'resuelto';
   const rootRef = useRef<HTMLDivElement>(null);
@@ -31,6 +33,17 @@ export default function ChatActionsMenu({ conversation, staffEmails, onClose, on
 
   return (
     <div ref={rootRef} className="absolute right-0 top-full mt-1.5 tv-chat-pop w-64 z-[70] text-xs" id="chat-actions-menu">
+      {onVerEnCrm && (
+        <div className="p-2 border-b border-[var(--border-color)]/50">
+          <button
+            type="button"
+            onClick={() => { onClose(); onVerEnCrm(); }}
+            className="w-full flex items-center gap-2 px-2 py-2 rounded-lg hover:bg-[var(--bg-surface)] text-[var(--text-primary)] font-medium"
+          >
+            <Handshake className="w-4 h-4" /> Ver en el CRM
+          </button>
+        </div>
+      )}
       <div className="p-2 border-b border-[var(--border-color)]/50">
         <button
           type="button"
