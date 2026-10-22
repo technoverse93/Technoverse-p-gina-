@@ -143,6 +143,32 @@ for (const [id, modos] of Object.entries(PALETAS)) {
   }
 }
 
+// El acento escrito sobre su PROPIO tinte (chips «acento», contadores, insignias): el fondo no es un token sino el acento al
+// 14 % sobre cada superficie (`rgba(var(--accent-rgb), .12–.14)`), así que se calcula la mezcla. Usa --accent-texto.
+const mezclar = (fg, bg, a) => fg.map((v, i) => v * a + bg[i] * (1 - a));
+for (const [id, modos] of Object.entries(PALETAS)) {
+  for (const [modo, t] of Object.entries(modos)) {
+    const ac = hex(t['--accent']); const txt = hex(t['--accent-texto']);
+    if (!ac || !txt) { console.error(`✗ ${id}/${modo}: falta --accent o --accent-texto como #RRGGBB`); fallos++; continue; }
+    for (const s of ['--bg-base', '--bg-surface', '--bg-sunken', '--bg-elevated']) {
+      const bg = hex(t[s]); if (!bg) continue;
+      const r = ratio(txt, mezclar(ac, bg, 0.14));
+      comprobados++;
+      if (r < 4.5) { fallos++; console.error(`✗ ${id}/${modo}: acento como texto sobre su tinte → --accent-texto ${t['--accent-texto']} sobre tinte de ${s} = ${r.toFixed(2)}:1 (mínimo 4.5:1)`); }
+    }
+    // Lo mismo para el rojo: la etiqueta «alerta» (Vencido, Error…) es --danger-text sobre rgba(229,72,77,.12) en claro y
+    // rgba(241,116,106,.14) en oscuro (ver --tv-danger-soft en styles/panel.css).
+    const rojo = hex(t['--danger-text']);
+    const [tinteRojo, alfa] = modo === 'claro' ? [[229, 72, 77], 0.12] : [[241, 116, 106], 0.14];
+    for (const s of ['--bg-base', '--bg-surface', '--bg-sunken', '--bg-elevated']) {
+      const bg = hex(t[s]); if (!bg || !rojo) continue;
+      const r = ratio(rojo, mezclar(tinteRojo, bg, alfa));
+      comprobados++;
+      if (r < 4.5) { fallos++; console.error(`✗ ${id}/${modo}: rojo de alerta sobre su tinte → --danger-text ${t['--danger-text']} sobre tinte de ${s} = ${r.toFixed(2)}:1 (mínimo 4.5:1)`); }
+    }
+  }
+}
+
 console.log(tabla.join('\n'));
 if (fallos) {
   console.error(`\n${fallos} par(es) por debajo del mínimo AA de ${comprobados} comprobados.`);

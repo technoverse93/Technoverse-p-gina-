@@ -82,6 +82,8 @@
        como de color de texto. */
     --accent: #0C6C78;
     --accent-hover: #0A5862;
+    /* El acento escrito SOBRE su propio tinte (chips e insignias «acento»): ≥ 4,5:1 sobre ese tinte. */
+    --accent-texto: #0B636E;
     --accent-ink: #FFFFFF;
     --accent-rgb: 12, 108, 120;
 
@@ -99,8 +101,8 @@
        3,9:1 y el número no se leía bien. Con este rojo da 4,9:1. */
     --danger-solid: #D13438;
     --danger-ink: #FFFFFF;
-    /* Rojo de TEXTO e íconos de peligro (6,5:1 sobre blanco; el #E5484D de antes daba 3,9:1). */
-    --danger-text: #B42328;
+    /* Rojo de TEXTO e íconos de peligro (6,9:1 sobre blanco y ≥ 4,5:1 sobre su tinte en las etiquetas «alerta»; el #E5484D de antes daba 3,9:1). */
+    --danger-text: #AD2226;
 
     /* Verde de ÉXITO. Se deja EXACTAMENTE como estaba: da 4,8:1 sobre
        `--ok-soft` y aclararlo para separarlo del acento lo bajaba a 3,7:1,
@@ -203,6 +205,8 @@
 
     --accent: #72BFB7;
     --accent-hover: #86C9C2;
+    /* El acento escrito SOBRE su propio tinte (chips e insignias «acento»): ≥ 4,5:1 sobre ese tinte. */
+    --accent-texto: #72BFB7;
     --accent-ink: #0A1918;
     --accent-rgb: 114, 191, 183;
 
