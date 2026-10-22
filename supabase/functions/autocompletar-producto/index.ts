@@ -1,8 +1,10 @@
 // =====================================================================
 // AUTO-COMPLETADO DE DESCRIPCIONES DE PRODUCTO
 // =====================================================================
-// Recibe el nombre de un producto y devuelve entre 5 y 7 BENEFICIOS, ya
+// Recibe el nombre de un producto y devuelve entre 3 y 5 BENEFICIOS, ya
 // formateados para pegarse tal cual en el campo "Descripción" del panel.
+// Pocos y específicos a propósito (2026-10-22): lo que vende no es la
+// cantidad de líneas, es que cada una diga algo real de ESTE producto.
 //
 // Beneficios y no especificaciones: quien lee la ficha en la tienda no
 // sabe qué es la RAM ni cuántos mAh necesita. "8 GB de memoria" no dice
@@ -66,9 +68,16 @@ const CORS = {
   'Access-Control-Allow-Methods': 'POST, OPTIONS',
 };
 
-/** Mínimo y máximo de viñetas que se devuelven, según la orden. */
-const MIN_CARACTERISTICAS = 5;
-const MAX_CARACTERISTICAS = 7;
+/**
+ * Mínimo y máximo de viñetas que se devuelven.
+ *
+ * Bajado de 5-7 a 3-5 (2026-10-22, pedido del dueño): muchas viñetas no es
+ * mejor venta, es ruido — a nadie le interesa leer siete líneas de un
+ * cargador. Lo que vende es poco y específico de ESTE producto, no
+ * relleno genérico de la familia completa.
+ */
+const MIN_CARACTERISTICAS = 3;
+const MAX_CARACTERISTICAS = 5;
 
 /** Ninguna llamada externa puede colgar la respuesta del panel. */
 const TOPE_RED_MS = 6000;
@@ -323,7 +332,13 @@ function caracteristicasDelNombre(_nombre: string, d: DatosNombre): string[] {
     out.push(`Producto original de la marca ${d.marca}`);
   }
 
-  out.push(...porFamilia[d.familia]);
+  // Las dos frases de la familia son genéricas (la misma para CUALQUIER
+  // cargador, CUALQUIER funda...), así que ya no se imponen siempre:
+  // solo entran si de verdad faltan viñetas para llegar al mínimo, y
+  // nunca desplazan a las que sí son específicas de este producto.
+  if (out.length < MIN_CARACTERISTICAS) {
+    out.push(...porFamilia[d.familia].slice(0, MIN_CARACTERISTICAS - out.length));
+  }
   return out;
 }
 
@@ -578,14 +593,17 @@ Deno.serve(async (req: Request) => {
       if (deWikipedia.length > 0) fuente = 'nombre del producto + Wikipedia (es)';
     }
 
-    // Wikipedia aporta como mucho 3 viñetas: por encima de eso la
-    // descripción deja de parecer una ficha de producto y empieza a
-    // parecer un artículo de enciclopedia pegado.
+    // Wikipedia aporta como mucho 2 viñetas (antes 3, bajado junto con
+    // el máximo general): por encima de eso la descripción deja de
+    // parecer una ficha de producto y empieza a parecer un artículo de
+    // enciclopedia pegado. Además va DESPUÉS de lo específico del
+    // nombre, así que si sobra algo del recorte final, es lo primero
+    // en caer.
     //
     // El filtro comercial se pasa AQUÍ, sobre la lista ya unida, y no en
     // cada fuente por separado: así vale para lo que salga del nombre,
     // de Wikipedia y de cualquier fuente que se agregue después.
-    const unidas = sinRepetidas([...propias, ...deWikipedia.slice(0, 3)])
+    const unidas = sinRepetidas([...propias, ...deWikipedia.slice(0, 2)])
       .filter(c => !esRuidoComercial(c));
     const finales = unidas.slice(0, MAX_CARACTERISTICAS);
 
