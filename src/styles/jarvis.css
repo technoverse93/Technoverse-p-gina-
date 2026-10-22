@@ -40,7 +40,7 @@
   --bg-base: var(--jv-fondo); --bg-surface: var(--jv-sup); --bg-sunken: var(--jv-hundido); --tile: var(--jv-tile);
   --text-primary: var(--jv-tinta); --text-secondary: var(--jv-tinta2); --text-muted: var(--jv-tenue);
   --border-color: var(--jv-linea); --border-soft: var(--jv-linea);
-  --accent: var(--jv-acento); --accent-rgb: var(--jv-acento-rgb); --accent-ink: var(--jv-tinta-ac);
+  --accent: var(--jv-acento); --accent-rgb: var(--jv-acento-rgb); --accent-ink: var(--jv-tinta-ac); --accent-texto: var(--jv-acento);
   --tv-accent-soft: rgba(var(--jv-acento-rgb), .12); --tv-accent-line: rgba(var(--jv-acento-rgb), .4);
   /* Colores de las constelaciones del cerebro. */
   --jv-n-centro: var(--jv-a-neg); --jv-n-temas: var(--jv-a-dis); --jv-n-datos: var(--jv-a-tal); --jv-n-internet: var(--jv-a-int); --jv-n-vos: var(--jv-a-vos);
