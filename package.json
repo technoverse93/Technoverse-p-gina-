@@ -12,7 +12,8 @@
     "mapa": "node scripts/mapa-codigo.mjs",
     "paletas": "node scripts/validar-paletas.mjs",
     "secretos": "node scripts/buscar-secretos.mjs",
-    "probar-api": "node scripts/probar-api-publica.mjs"
+    "probar-api": "node scripts/probar-api-publica.mjs",
+    "probar-crm": "node scripts/probar-crm.mjs"
   },
   "dependencies": {
     "@capacitor-community/privacy-screen": "^8.0.0",

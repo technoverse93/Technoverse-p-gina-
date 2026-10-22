@@ -3,6 +3,7 @@ import { MessageSquare, Send, X, Bot, Plus, Check, CheckCheck, Loader2, Mic, Pap
 import { ChatConversation, ChatMessage } from '../types';
 import { getDB, saveDB, ensureCustomerChatToken, marcarMensajeEnVuelo, confirmarMensajeEnVuelo, recargarChatDelServidor } from '../utils/storage';
 import { supabase } from '../supabaseClient';
+import { registrarContactoCrm } from '../utils/crmCaptura';
 import { etiquetaDeDia, abreDiaNuevo, soloHora } from './chat/formatoChat';
 import VideoMensaje from './chat/VideoMensaje';
 import ImagenMensaje from './chat/ImagenMensaje';
@@ -307,6 +308,8 @@ export default function LiveChat() {
     const email = clientEmail.trim();
     writeLS(NAME_KEY, name);
     writeLS(EMAIL_KEY, email);
+    // CRM: de dónde llegó quien abre el chat (el contacto en sí lo crea la base al nacer la conversación).
+    void registrarContactoCrm({ nombre: name, email, canal: 'chat_web' });
 
     // ¿Ya existe una conversación abierta para este correo? Reusarla.
     const db = getDB();

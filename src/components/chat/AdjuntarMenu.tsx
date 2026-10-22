@@ -1,10 +1,15 @@
 import React, { useEffect, useRef } from 'react';
-import { Camera, ImagePlus } from 'lucide-react';
+import { Camera, ImagePlus, Zap } from 'lucide-react';
 
 interface Props {
   onClose: () => void;
   onCamara: () => void;
   onGaleria: () => void;
+  /**
+   * Solo el panel del personal: suma «Respuesta rápida» al menú (las respuestas guardadas en CRM → Respuestas). Va aquí y no
+   * como un botón más de la barra porque en un teléfono angosto la barra ya no tiene sitio: cada botón le quita ancho al texto.
+   */
+  onRespuestas?: () => void;
   /**
    * Clase de posición horizontal (`left-0`, `left-11`, …). El menú se
    * ancla al contenedor `position: relative` más cercano que NO tenga
@@ -58,7 +63,7 @@ interface Props {
  * quien llama a este componente debe ponerlo como HERMANO del contenedor
  * `overflow-hidden`, dentro de un `relative` que quede AFUERA de él.
  */
-export default function AdjuntarMenu({ onClose, onCamara, onGaleria, anchorOffsetClass = 'left-0' }: Props) {
+export default function AdjuntarMenu({ onClose, onCamara, onGaleria, onRespuestas, anchorOffsetClass = 'left-0' }: Props) {
   const rootRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -100,6 +105,18 @@ export default function AdjuntarMenu({ onClose, onCamara, onGaleria, anchorOffse
         </span>
         Elegir de la galería
       </button>
+      {onRespuestas && (
+        <button
+          type="button"
+          onClick={() => { onRespuestas(); onClose(); }}
+          className="w-full flex items-center gap-2.5 px-3 py-2.5 text-[12.5px] font-semibold text-[var(--text-primary)] hover:bg-[var(--bg-sunken)] transition border-t border-[var(--border-color)]/60"
+        >
+          <span className="w-7 h-7 rounded-[9px] bg-[rgba(var(--accent-rgb),0.14)] text-[var(--accent)] flex items-center justify-center shrink-0">
+            <Zap className="w-3.5 h-3.5" />
+          </span>
+          Respuesta rápida
+        </button>
+      )}
     </div>
   );
 }

@@ -1269,6 +1269,23 @@ html.sin-vidrio .tv-chat-pildora { backdrop-filter: none; -webkit-backdrop-filte
 .tv-chat-pop button:has(> svg.lucide) { min-height: 40px; }
 .tv-chat-etq--excl { background: rgba(var(--accent-rgb), .14); color: var(--accent); }
 
+/* ---- respuestas rápidas del chat (RespuestasRapidasMenu.tsx): flotan sobre el hilo, a todo el ancho del cuadro de respuesta ---- */
+.tv-chat-red { position: relative; }
+.tv-rr { position: absolute; left: 12px; right: 12px; bottom: calc(100% - 4px); z-index: 70; display: flex; flex-direction: column; max-height: min(320px, 46vh); }
+.tv-rr-cab { flex: none; display: flex; align-items: center; gap: 8px; min-width: 0; padding: 9px 12px; border-bottom: 1px solid var(--border-color); font-size: 12px; font-weight: 700; color: var(--text-primary); }
+.tv-rr-cab > svg { color: var(--accent); }
+.tv-rr-pista { margin-left: auto; flex: 0 1 auto; font-weight: 500; color: var(--text-muted); }
+.tv-rr-lista { position: relative; min-height: 0; margin: 0; padding: 4px; list-style: none; overflow-y: auto; overscroll-behavior: contain; }
+.tv-rr-op { width: 100%; min-width: 0; display: grid; grid-template-columns: minmax(0, 1fr); gap: 2px; padding: 8px 10px; border: 0; border-radius: 12px; background: transparent; color: var(--text-primary); }
+.tv-rr-op[data-activa] { background: var(--bg-sunken); }
+.tv-rr-fila { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.tv-rr-t { flex: 1; min-width: 0; font-size: 12.5px; font-weight: 700; }
+.tv-rr-atajo { flex: none; padding: 1px 6px; border-radius: 6px; background: var(--bg-sunken); color: var(--text-secondary); font-size: 11px; }
+.tv-rr-op[data-activa] .tv-rr-atajo { background: var(--bg-surface); }
+.tv-rr-x { min-width: 0; font-size: 12px; color: var(--text-secondary); }
+.tv-rr-nada, .tv-rr-pie { flex: none; margin: 0; padding: 10px 12px; font-size: 12px; color: var(--text-muted); }
+.tv-rr-pie { border-top: 1px solid var(--border-color); padding-top: 8px; padding-bottom: 8px; }
+
 /* Ningún texto de ejemplo (placeholder) ni valor largo se sale de su caja:
    se corta con «…». La explicación larga va como ayuda debajo del campo. */
 input:not([type="checkbox"]):not([type="radio"]):not([type="range"]) { text-overflow: ellipsis; }

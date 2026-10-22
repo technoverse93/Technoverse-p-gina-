@@ -44,6 +44,16 @@ export function manejar(url: string | undefined | null): void {
   window.dispatchEvent(new CustomEvent(EVENTO_JARVIS, { detail: pedido }));
 }
 
+/**
+ * Lleva el panel a un módulo desde cualquier pantalla (por ejemplo, del chat a la ficha del CRM). Es la misma vía que usa el
+ * «Ir a…» de la ventanita del widget: el panel ya la escucha, así que no hace falta pasarle funciones de navegación a nadie.
+ */
+export function pedirModulo(modulo: string): void {
+  const pedido: PedidoJarvis = { voz: false, en: Date.now(), modulo };
+  try { sessionStorage.setItem(CLAVE, JSON.stringify(pedido)); } catch { /* sin almacenamiento: va solo el evento */ }
+  window.dispatchEvent(new CustomEvent(EVENTO_JARVIS, { detail: pedido }));
+}
+
 /** Lo que haya pendiente (y lo consume). */
 export function tomarPedidoJarvis(): PedidoJarvis | null {
   try {
