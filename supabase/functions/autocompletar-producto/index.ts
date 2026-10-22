@@ -200,7 +200,11 @@ function leerNombre(nombre: string): DatosNombre {
   // error es peor que no decir nada, porque se publica al catálogo.
   const modelo = nombre
     .replace(/\b(cargador|adaptador|charger|cubo|bater[ií]a|battery|pila|temperado|templado|mica|protector|glass|vidrio|hidrogel|funda|case|carcasa|estuche|cover|cable|cord[oó]n|pantalla|display|lcd|oled|t[aá]ctil|touch|memoria|microsd|aud[ií]fonos?|auriculares?|parlante|bocina)\b/gi, ' ')
-    .replace(/\b(silicona|silicon|gel|tpu|acr[ií]lico|cuero|transparente|mate|brillante|inal[aá]mbricos?|bluetooth|original|nuevo|nueva|para|de|con|carga|r[aá]pida|negro|blanco|azul|rojo|verde|rosado|dorado|gris)\b/gi, ' ')
+    // "rápida"/"rapida" (de "carga rápida") es la forma correcta, pero en
+    // la práctica también se escribe "rápido"/"rapido" mal concordado
+    // ("Cargador rápido"); sin el masculino, esa palabra sobraba del
+    // recorte y terminaba sola en "Compatible con rapido".
+    .replace(/\b(silicona|silicon|gel|tpu|acr[ií]lico|cuero|transparente|mate|brillante|inal[aá]mbricos?|bluetooth|original|nuevo|nueva|para|de|con|carga|r[aá]pid[oa]s?|negro|blanco|azul|rojo|verde|rosado|dorado|gris)\b/gi, ' ')
     // El conector ya tiene su propia viñeta. Si además se quedaba dentro
     // del modelo, la descripción decía "Conexión USB-C" y justo debajo
     // "Compatible con USB-C": la misma cosa dos veces.
