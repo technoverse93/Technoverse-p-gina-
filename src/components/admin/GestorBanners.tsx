@@ -278,12 +278,6 @@ export default function GestorBanners({ currentUser }: { currentUser: User | nul
         <Btn variant="primary" icon={Plus} onClick={abrirNuevo}>Nuevo banner</Btn>
       }
     >
-      {sinMotor && (
-        <div className="gb-aviso" role="status">
-          Para usar <b>cintillos</b>, <b>campañas</b>, botones, orden y métricas falta aplicar{' '}
-          <code>supabase/migracion_banners_motor.sql</code> en la base. Mientras tanto funcionan los cuatro formatos de siempre.
-        </div>
-      )}
 
       {/* Generación automática desde un producto */}
       <div className="rounded-xl border border-[var(--border-color)] bg-[var(--bg-sunken)] p-3 mb-4 flex flex-col sm:flex-row sm:items-end gap-2">

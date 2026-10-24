@@ -8,7 +8,7 @@ import { enviarErroresPendientes } from './utils/erroresPantalla';
 import { OverlayProvider, useToast } from './components/ui/Overlays';
 import { conexionBloqueada, detalleDeBloqueo, conTope } from './utils/adminLogin';
 import { registrarVisita, leerDatosDelAparato } from './utils/huella';
-import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada, capacidadesDeDesbloqueo, entrarConBiometria, type CapacidadesDesbloqueo } from './utils/biometria';
+import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada } from './utils/biometria';
 import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO, UMBRAL_REINGRESO_RAPIDO_MS } from './mobile/appLock';
 import { marcarBloqueo, esAplicacionNativa } from './utils/biometriaNativa';
 import { supabase } from './supabaseClient';
@@ -55,14 +55,6 @@ function guardarPerfil(u: User): void {
   try { localStorage.setItem(CLAVE_PERFIL, JSON.stringify({ id: u.id, email: u.email, name: u.name, role: u.role })); } catch { /* sin almacenamiento */ }
 }
 const mismoPerfil = (a: User, b: User) => a.id === b.id && a.role === b.role && a.email === b.email && a.name === b.name;
-
-/** Devuelve `valor` si `promesa` no responde (o falla) a tiempo. */
-function conLimite<T>(promesa: Promise<T>, ms: number, valor: T): Promise<T> {
-  return new Promise<T>(resolver => {
-    const t = setTimeout(() => resolver(valor), ms);
-    promesa.then(v => { clearTimeout(t); resolver(v); }, () => { clearTimeout(t); resolver(valor); });
-  });
-}
 
 // Mientras llega el código del panel NO se dibuja ningún aro de carga (el dueño
 // no lo quiere al entrar, 2026-10-14: el navegador ya indica la carga): solo el
@@ -142,35 +134,18 @@ function resolverVistaDesdeRuta(pathname: string): 'store' | 'admin' | 'reset-pa
   return 'store';
 }
 
-// ¿Esta persona es del personal? Se recuerda en este aparato para que, al
-// abrir la app instalada, se entre directo al panel y no se vea un instante
-// la tienda pública (con su lápiz de «Editar la página») antes del panel.
+// ¿Esta persona es del personal? Se recuerda en este aparato (lo usan otras partes de la app).
 const CLAVE_PERSONAL = 'technoverse_es_personal';
-const leerPersonal = () => { try { return localStorage.getItem(CLAVE_PERSONAL) === '1'; } catch { return false; } };
 const guardarPersonal = (v: boolean) => { try { if (v) localStorage.setItem(CLAVE_PERSONAL, '1'); else localStorage.removeItem(CLAVE_PERSONAL); } catch { /* sin almacenamiento */ } };
-/** ¿Abierta como app (APK o instalada en la pantalla de inicio) y no en una pestaña del navegador? */
-function abiertaComoApp(): boolean {
-  if (esAplicacionNativa()) return true;
-  try { return window.matchMedia?.('(display-mode: standalone)').matches || (navigator as any).standalone === true; } catch { return false; }
-}
 
 /**
- * Dónde se arranca. En `/` (la tienda) todos veían primero la tienda —el
- * personal también, con el lápiz de edición—, aunque venían por el panel.
- * Ahora, abierta como app y siendo del personal, se entra directo al panel:
- *   · la APK (es la app del panel): siempre;
- *   · la web instalada: si en este aparato ya entró personal (los clientes
- *     que instalen la tienda siguen entrando a la tienda).
- * Sin sesión válida, el panel manda al acceso como siempre.
+ * Dónde se arranca: donde diga la dirección. En `/` (lo que abre la APK) es la TIENDA, también para el
+ * personal. Pedido del dueño (2026-10-24): «inicia siempre desde el panel y el inicio se siente forzado; si yo
+ * quiero iniciar sesión lo hago». Antes la APK saltaba sola al panel y lanzaba el diálogo de huella apenas se
+ * abría; ahora se entra cuando uno quiere: «Cuenta» → huella (o correo y contraseña) → panel.
  */
 function vistaInicial(): 'store' | 'admin' | 'reset-password' {
-  const v = resolverVistaDesdeRuta(window.location.pathname);
-  if (v !== 'store' || window.location.pathname !== '/') return v;
-  if (abiertaComoApp() && (esAplicacionNativa() || leerPersonal())) {
-    try { window.history.replaceState(null, '', '/admin'); } catch { /* el estado alcanza */ }
-    return 'admin';
-  }
-  return v;
+  return resolverVistaDesdeRuta(window.location.pathname);
 }
 
 function AppInner() {
@@ -716,59 +691,12 @@ function AppInner() {
   }, [toast]);
 
   // ---------------------------------------------------------------------
-  // HUELLA AL ABRIR LA APK: SOLO EL DIÁLOGO DEL TELÉFONO
+  // HUELLA EN LA APK: SOLO CUANDO SE PIDE
   // ---------------------------------------------------------------------
-  // Pedido del dueño: «no quiero imágenes ni pantallas de solicitud, solo que pida la huella el dispositivo;
-  // si es reconocida, que ingrese a la sesión; si no es reconocida o no tiene huella, no se pide». Por eso en
-  // la APK no se dibuja ningún candado: se lanza el diálogo de huella del sistema y
-  //   · huella reconocida → se entra al panel (al instante si este aparato ya conoce el perfil);
-  //   · cancelada, no reconocida o sin lector → queda la tienda; para entrar: menú de sesión → huella
-  //     (la sesión sigue cerrada con llave, nadie entra sin el dedo).
-  // Solo si el teléfono no tiene lector pero sí un PIN/patrón propio de la app se muestra el candado con el
-  // teclado (es la única forma de abrirlo). En la web sigue el candado de siempre.
-  // Va aquí, antes de cualquier `return`: un hook debajo de un `return` apaga toda la app (ver AdminPanel).
-  const candadoArranqueActivo = !accesoBloqueado && sesionVerificada && !currentUser && sesionBloqueada() && !(candadoOmitido && currentView === 'store');
-  const [candadoConTeclado, setCandadoConTeclado] = useState(false);
-  const huellaEnCurso = useRef(false);
-  useEffect(() => {
-    if (!candadoArranqueActivo || !esAplicacionNativa() || huellaEnCurso.current) return;
-    huellaEnCurso.current = true;
-    let vigente = true;
-    const irALaTienda = () => {
-      setCandadoOmitido(true);
-      try { window.history.replaceState(null, '', '/'); } catch { /* el estado alcanza */ }
-      setCurrentView('store');
-    };
-    void (async () => {
-      try {
-        const alterno: CapacidadesDesbloqueo = { biometria: true, metodoLocal: null, hayAlguno: true };
-        const c = await conLimite(capacidadesDeDesbloqueo(), 3500, alterno);
-        if (!vigente) return;
-        if (!c.hayAlguno) {
-          // Sin ninguna forma de abrir el cerrojo en este teléfono: no se pide nada y se entra (como antes).
-          const { data } = await conTope(supabase.auth.getSession(), 8000);
-          if (await entrarConPerfil(data?.session?.user?.id, () => vigente)) { marcarBloqueo(false); return; }
-          irALaTienda();
-          return;
-        }
-        if (!c.biometria) { setCandadoConTeclado(true); return; }
-        let correo = '';
-        try { correo = localStorage.getItem(CLAVE_ULTIMO_CORREO) || ''; } catch { /* sin almacenamiento */ }
-        const r = await entrarConBiometria(correo);
-        if (!vigente) return;
-        if (r.ok && await entrarConPerfil(r.userId, () => vigente)) { marcarBloqueo(false); return; }
-        if (r.ok) marcarBloqueo(true);   // dedo aprobado pero sin perfil (sin red): la llave sigue puesta
-        if (!r.ok && !r.cancelado && r.mensaje) toast.warning(r.mensaje);
-        irALaTienda();
-      } catch {
-        if (vigente) irALaTienda();
-      } finally {
-        huellaEnCurso.current = false;
-      }
-    })();
-    return () => { vigente = false; };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [candadoArranqueActivo]);
+  // Antes, al abrir la APK con la sesión cerrada con llave, se lanzaba solo el diálogo de huella del sistema.
+  // El dueño lo sentía forzado (2026-10-24): ahora la APK abre la tienda y la huella se usa desde el acceso
+  // («Cuenta» → «Entrar con huella»); si no se reconoce, se entra con correo y contraseña como siempre. La sesión
+  // sigue cerrada con llave hasta entonces: nadie entra sin el dedo o la contraseña.
 
   if (accesoBloqueado) {
     return <PantallaBloqueada porCuenta={bloqueoPorCuenta} />;
@@ -899,7 +827,7 @@ function AppInner() {
           porque este candado nunca usó ese estado — se apaga solo en
           cuanto `currentUser` deja de ser null (o `handleLogout` limpia
           `sesionBloqueada`, lo que ocurra). */}
-      {arranqueFrioBloqueado && (!esAplicacionNativa() || candadoConTeclado) && (
+      {arranqueFrioBloqueado && !esAplicacionNativa() && (
         <ReautenticacionRapidaOverlay
           variante="arranque"
           email={(() => { try { return localStorage.getItem(CLAVE_ULTIMO_CORREO) || ''; } catch { return ''; } })()}

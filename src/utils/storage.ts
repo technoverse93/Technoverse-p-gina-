@@ -228,6 +228,48 @@ if (typeof window !== 'undefined') {
 const CHAT_TOKEN_KEY = 'technoverse_chat_token';
 let authedSession: any = null;
 
+// ===================== Lecturas de arranque sin repetir =====================
+// Al abrir con la sesión guardada, supabase-js avisa INITIAL_SESSION y SIGNED_IN casi juntos, y cada aviso
+// relanzaba la lectura de TODAS las tablas encima de la carga inicial: el catálogo, el chat y la configuración
+// bajaban 3 veces y el resto 2 (46 pedidos para abrir el panel). Cada bajada repintaba la pantalla, y eso era
+// el «refresca solo» y los tirones al abrir. Ahora esas lecturas «de arranque» se unen a la que ya está en
+// camino o se saltan si la misma persona leyó esa tabla hace menos de 3 s. Lo que llega por Realtime, la
+// vuelta del segundo plano y las lecturas explícitas siguen leyendo siempre.
+const VENTANA_LECTURA_MS = 3000;
+const lecturasRecientes: Record<string, { quien: string; fin: number; promesa: Promise<unknown> }> = {};
+
+function quienLee(): string {
+  if (authedSession?.user?.id) return authedSession.user.id;
+  // Antes del primer aviso de supabase-js la sesión ya está guardada en el aparato.
+  try {
+    for (let i = 0; i < localStorage.length; i++) {
+      const clave = localStorage.key(i);
+      if (clave && /^sb-.+-auth-token$/.test(clave)) return JSON.parse(localStorage.getItem(clave) || 'null')?.user?.id || 'anon';
+    }
+  } catch { /* sin almacenamiento: se lee como visitante */ }
+  return 'anon';
+}
+
+function leerSinRepetir<T>(clave: string, leer: () => Promise<T>, forzar = false): Promise<T | void> {
+  const quien = quienLee();
+  const previa = lecturasRecientes[clave];
+  if (!forzar && previa && previa.quien === quien && (previa.fin === 0 || Date.now() - previa.fin < VENTANA_LECTURA_MS)) {
+    return previa.promesa as Promise<T>;
+  }
+  const entrada = { quien, fin: 0, promesa: Promise.resolve() as Promise<unknown> };
+  entrada.promesa = leer().then(
+    r => {
+      // Una lectura que falló no cuenta como «al día»: la próxima vuelve a intentar.
+      if (r === false) { if (lecturasRecientes[clave] === entrada) delete lecturasRecientes[clave]; }
+      else entrada.fin = Date.now();
+      return r;
+    },
+    () => { if (lecturasRecientes[clave] === entrada) delete lecturasRecientes[clave]; },
+  );
+  lecturasRecientes[clave] = entrada;
+  return entrada.promesa as Promise<T | void>;
+}
+
 const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 // Genera un UUID v4 VÁLIDO en cualquier navegador. crypto.randomUUID() solo
@@ -896,8 +938,29 @@ interface TableConfig<T extends Record<string, any>> {
   legacy?: { columns: string; toRow: (item: T) => any };
 }
 
-/** Tablas que cayeron al respaldo porque la base aún no tiene sus columnas nuevas. */
-const modoLegacy: Record<string, boolean> = {};
+/**
+ * Tablas que cayeron al respaldo porque la base aún no tiene sus columnas nuevas. Se recuerda en el aparato
+ * unas horas: sin eso, CADA apertura volvía a pedir las columnas nuevas, la base respondía 400 y recién ahí
+ * se usaba el respaldo (el dueño lo veía como «un error de los banners siempre que entro», 2026-10-24).
+ * Pasado el plazo se prueba otra vez, así que aplicar la migración se nota solo.
+ */
+const CLAVE_COLUMNAS_FALTANTES = 'tv_columnas_faltantes_v1';
+const VIGENCIA_COLUMNAS_FALTANTES_MS = 12 * 3_600_000;
+const modoLegacy: Record<string, boolean> = (() => {
+  try {
+    const guardado = JSON.parse(localStorage.getItem(CLAVE_COLUMNAS_FALTANTES) || '{}') as Record<string, number>;
+    const ahora = Date.now();
+    return Object.fromEntries(Object.entries(guardado).filter(([, t]) => typeof t === 'number' && ahora - t < VIGENCIA_COLUMNAS_FALTANTES_MS).map(([k]) => [k, true]));
+  } catch { return {}; }
+})();
+function marcarModoLegacy(tabla: string): void {
+  modoLegacy[tabla] = true;
+  try {
+    const guardado = JSON.parse(localStorage.getItem(CLAVE_COLUMNAS_FALTANTES) || '{}');
+    guardado[tabla] = Date.now();
+    localStorage.setItem(CLAVE_COLUMNAS_FALTANTES, JSON.stringify(guardado));
+  } catch { /* sin almacenamiento: se recuerda solo mientras la página siga abierta */ }
+}
 
 /** ¿Esta tabla está funcionando con el respaldo (a la base le faltan columnas)? */
 export function tablaEnModoLegacy(tabla: string): boolean {
@@ -917,10 +980,11 @@ async function escribirConRespaldo(
   cfg: TableConfig<any>,
   operacion: (aFila: (item: any) => any) => PromiseLike<{ error: any }>,
 ): Promise<{ error: any }> {
-  const aFila = (item: any) => (modoLegacy[cfg.table] && cfg.legacy ? cfg.legacy.toRow(item) : cfg.toRow(item));
+  const conColumnasNuevas = !(modoLegacy[cfg.table] && cfg.legacy);
+  const aFila = (item: any) => (conColumnasNuevas ? cfg.toRow(item) : cfg.legacy!.toRow(item));
   const r = await operacion(aFila);
-  if (r.error && cfg.legacy && !modoLegacy[cfg.table] && esErrorDeColumna(r.error)) {
-    modoLegacy[cfg.table] = true;
+  if (r.error && cfg.legacy && conColumnasNuevas && esErrorDeColumna(r.error)) {
+    marcarModoLegacy(cfg.table);
     return operacion(item => cfg.legacy!.toRow(item));
   }
   return r;
@@ -1166,15 +1230,19 @@ const TABLE_CONFIGS: TableConfig<any>[] = [
 ];
 
 async function refreshTableFromSupabase(cfg: TableConfig<any>) {
-  let respuesta = await supabase.from(cfg.table).select(modoLegacy[cfg.table] && cfg.legacy ? cfg.legacy.columns : cfg.columns);
-  if (respuesta.error && cfg.legacy && !modoLegacy[cfg.table] && esErrorDeColumna(respuesta.error)) {
-    modoLegacy[cfg.table] = true;
+  // Se anota con qué columnas salió ESTE pedido: dos lecturas que salen a la vez pueden volver con el mismo
+  // 400; la primera activa el respaldo y la segunda, que llega después, también tiene que reintentar (antes
+  // veía el respaldo ya activo, no reintentaba y mostraba «No se pudo leer "banners"» al entrar).
+  const conColumnasNuevas = !(modoLegacy[cfg.table] && cfg.legacy);
+  let respuesta = await supabase.from(cfg.table).select(conColumnasNuevas ? cfg.columns : cfg.legacy!.columns);
+  if (respuesta.error && cfg.legacy && conColumnasNuevas && esErrorDeColumna(respuesta.error)) {
+    marcarModoLegacy(cfg.table);
     respuesta = await supabase.from(cfg.table).select(cfg.legacy.columns);
   }
   const { data, error } = respuesta;
   if (error) {
     notifySyncError(`No se pudo leer "${cfg.table}": ${error.message}`);
-    return;
+    return false;
   }
   const items = (data || []).map(cfg.fromRow);
   (localCache as any)[cfg.key] = items;
@@ -1196,7 +1264,12 @@ async function refreshTableFromSupabase(cfg: TableConfig<any>) {
   }
 
   notifyUpdate();
+  return true;
 }
+
+/** Lectura de arranque de una tabla: se une a la que ya va en camino (ver `leerSinRepetir`). */
+const leerTablaDeArranque = (cfg: TableConfig<any>) =>
+  leerSinRepetir(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg));
 
 /**
  * Aplica UNA fila recibida por Realtime directamente sobre la caché local.
@@ -1242,7 +1315,7 @@ function aplicarFilaEnCache(cfg: TableConfig<any>, payload: any): boolean {
 }
 
 function initTableRealtimeSync(cfg: TableConfig<any>) {
-  refreshTableFromSupabase(cfg).then(() => {
+  leerTablaDeArranque(cfg).then(() => {
     genericReady[cfg.key as string] = true;
     flushGenericPending(cfg);
     // La tienda espera este aviso para dejar de mostrar el esqueleto del
@@ -1439,7 +1512,7 @@ async function refreshChatFromSupabase() {
     const { data, error } = await supabase.rpc('get_customer_chat', { p_token: token });
     if (error) {
       notifySyncError(`No se pudo leer el chat: ${error.message}`);
-      return;
+      return false;
     }
     const conversations = ((data as any[]) || []).map((r: any): ChatConversation => ({
       id: r.id, customerName: r.customer_name || '', customerEmail: r.customer_email || '',
@@ -1474,12 +1547,12 @@ async function refreshChatFromSupabase() {
   const { data: convRows, error: convError } = await supabase.from('chat_conversations').select('*');
   if (convError) {
     notifySyncError(`No se pudo leer chat_conversations: ${convError.message}`);
-    return;
+    return false;
   }
   const { data: msgRows, error: msgError } = await supabase.from('chat_messages').select('id,conversation_id,sender,text,created_at,image_url,video_url,audio_url,is_internal_note').order('created_at', { ascending: true });
   if (msgError) {
     notifySyncError(`No se pudo leer chat_messages: ${msgError.message}`);
-    return;
+    return false;
   }
 
   const messagesByConv: Record<string, ChatMessage[]> = {};
@@ -1663,7 +1736,7 @@ function sincronizarCanalesDeDifusion(): void {
 }
 
 function initChatRealtimeSync() {
-  refreshChatFromSupabase().then(() => {
+  leerSinRepetir('chat', refreshChatFromSupabase).then(() => {
     chatReady = true;
     flushChatPending();
     sincronizarCanalesDeDifusion();
@@ -1813,7 +1886,7 @@ async function refreshSettingsFromSupabase() {
   const { data, error } = await supabase.from('app_settings').select('*').eq('id', true).maybeSingle();
   if (error) {
     notifySyncError(`No se pudo leer app_settings: ${error.message}`);
-    return;
+    return false;
   }
   if (data) {
     const settings = settingsFromRow(data);
@@ -1827,7 +1900,7 @@ async function refreshSettingsFromSupabase() {
 }
 
 function initSettingsRealtimeSync() {
-  refreshSettingsFromSupabase().then(() => { settingsReady = true; });
+  leerSinRepetir('settings', refreshSettingsFromSupabase).then(() => { settingsReady = true; });
 }
 
 /**
@@ -2158,7 +2231,7 @@ function montarCanal() {
       // aún sin cargar), se cae a la recarga completa de siempre: es más
       // lenta pero nunca deja los datos desincronizados.
       if (aplicarFilaEnCache(cfg, payload)) return;
-      coalesce(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg));
+      coalesce(`table:${cfg.key as string}`, () => leerSinRepetir(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg), true));
     });
   });
 
@@ -2223,7 +2296,7 @@ function initRealtimeChannel() {
     // pedidos, o TODOS si es el dueño). Sin esta recarga habría que
     // esperar al primer cambio para verlas.
     if (evento === 'SIGNED_IN') {
-      TABLE_CONFIGS.forEach(cfg => coalesce(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg), 400));
+      TABLE_CONFIGS.forEach(cfg => coalesce(`table:${cfg.key as string}`, () => leerTablaDeArranque(cfg), 400));
     }
   });
 
@@ -2271,8 +2344,8 @@ function resincronizarTodo(): void {
   montarCanal();
 
   TABLE_CONFIGS.forEach(cfg =>
-    coalesce(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg), 250));
-  coalesce('settings', () => refreshSettingsFromSupabase(), 250);
+    coalesce(`table:${cfg.key as string}`, () => leerSinRepetir(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg), true), 250));
+  coalesce('settings', () => leerSinRepetir('settings', refreshSettingsFromSupabase, true), 250);
 }
 
 function instalarResincronizacion(): void {
@@ -2319,10 +2392,10 @@ async function syncSettingsToSupabase(newSettings: AppSettings) {
 // autenticada; si no, el panel muestra "No hay registros" pese a existir datos.
 function refreshAllTables() {
   TABLE_CONFIGS.forEach((cfg) => {
-    coalesce(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg));
+    coalesce(`table:${cfg.key as string}`, () => leerTablaDeArranque(cfg));
   });
-  coalesce('chat', () => refreshChatFromSupabase());
-  coalesce('settings', () => refreshSettingsFromSupabase());
+  coalesce('chat', () => leerSinRepetir('chat', refreshChatFromSupabase));
+  coalesce('settings', () => leerSinRepetir('settings', refreshSettingsFromSupabase));
 }
 
 let started = false;
