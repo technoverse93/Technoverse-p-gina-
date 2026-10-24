@@ -101,7 +101,6 @@
 .gb-ico:disabled { color: var(--text-muted); cursor: default; background: var(--bg-sunken); }
 .gb-ico:not(:disabled):hover { color: var(--text-primary); border-color: rgba(var(--accent-rgb), .45); }
 .gb-ico svg { width: 15px; height: 15px; }
-.gb-aviso { border: 1px dashed var(--accent-2); border-radius: 12px; padding: 10px 12px; font-size: 12.5px; color: var(--text-primary); background: var(--accent-2-soft); margin-bottom: 12px; }
 
 .vp { display: grid; grid-template-columns: minmax(0, 1fr); gap: 8px; }
 /* Las dos botoneras van siempre una sobre otra (no se reacomodan según el ancho ni la letra): cada una se desplaza dentro de sí misma si no cabe. */

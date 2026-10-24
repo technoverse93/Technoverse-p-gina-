@@ -192,7 +192,7 @@ export default function PublicStore({
   // Se ofrece automáticamente UNA sola vez por apertura de la aplicación.
   // Si la persona cancela, no se le vuelve a insistir: quedaría atrapada
   // en un aviso que reaparece sin poder llegar al formulario.
-  const yaSeOfrecio = useRef(false);
+  const correoAccesoRef = useRef<HTMLInputElement>(null);
   
   const [regName, setRegName] = useState('');
   const [regEmail, setRegEmail] = useState('');
@@ -407,51 +407,8 @@ export default function PublicStore({
     return () => { vigente = false; };
   }, []);
 
-  /**
-   * Lanza el aviso de huella solo, al abrir el acceso.
-   *
-   * Solo si este teléfono ya la tenía activada: a quien nunca la configuró
-   * no se le muestra nada. Y una sola vez por apertura, para que cancelar
-   * no deje a la persona dando vueltas en el mismo aviso.
-   */
-  useEffect(() => {
-    if (currentUser) return;   // ya está dentro
-    // FALLO CORREGIDO: antes también exigía `hayBiometria` (un chequeo de
-    // hardware en vivo) además de `biometriaLista` (la marca guardada). En
-    // sensores en pantalla con detección intermitente, un `hayBiometria`
-    // en falso apagaba el intento automático aunque la huella SÍ estuviera
-    // activada — el aviso simplemente nunca aparecía, sin ningún error que
-    // explicara por qué. Ahora se intenta siempre que esté activada; si el
-    // sensor de verdad no responde en este momento, `entrarConBiometria`
-    // (dentro de `accederConBiometria`) lo dice con un error claro, en vez
-    // de fallar en silencio antes de intentarlo siquiera.
-    if (!biometriaLista) return;  // no configurada en este aparato
-    if (yaSeOfrecio.current) return;
-
-    // El acceso se abre por DOS caminos: el modal y el desplegable de
-    // "Cuenta". Gatear solo por el modal dejaba fuera el camino que la
-    // gente usa de verdad, y el aviso nunca aparecía.
-    const accesoALaVista = (isLoginModalOpen && !isRegisterMode) || isAccountDropdownOpen;
-    if (!accesoALaVista) return;
-
-    // Pequeña espera para que la pantalla termine de pintarse: si el aviso
-    // del sistema se superpone a medio render, en algunos Android se cierra
-    // solo.
-    //
-    // FALLO CORREGIDO: la marca `yaSeOfrecio` se ponía AQUÍ, antes de que
-    // el temporizador llegara a disparar. Cualquier cambio en las
-    // dependencias dentro de esos 350 ms —cerrar el desplegable de
-    // "Cuenta" al tocar el formulario, por ejemplo— ejecutaba la limpieza
-    // y cancelaba el temporizador, pero la marca ya estaba puesta: el
-    // aviso de huella no salía nunca, y tampoco volvía a intentarse.
-    // Ahora se marca DENTRO del temporizador, es decir, solo cuando el
-    // aviso se lanza de verdad.
-    const t = setTimeout(() => {
-      yaSeOfrecio.current = true;
-      void accederConBiometria();
-    }, 350);
-    return () => clearTimeout(t);
-  }, [isLoginModalOpen, isRegisterMode, isAccountDropdownOpen, hayBiometria, biometriaLista, currentUser]);
+  // La huella se usa SOLO con su botón (pedido del dueño, 2026-10-24: «si estaba asociada la huella le doy al
+  // botón de la huella»). Antes el aviso del sistema se lanzaba solo al abrir el acceso y se sentía forzado.
 
   /**
    * Entrada con Face ID / huella.
@@ -468,7 +425,9 @@ export default function PublicStore({
       if (!r.ok) {
         // Cancelar no es un error: no tiene sentido regañar a quien
         // simplemente cerró el aviso de Face ID.
-        if (!r.cancelado) toast.error(r.mensaje || 'No se pudo entrar con biometría.');
+        // Si no se reconoce, se entra como siempre: correo y contraseña (el cursor ya queda en el correo).
+        if (!r.cancelado) toast.error(`${r.mensaje || 'No se reconoció la huella.'} Entrá con tu correo y contraseña.`);
+        setTimeout(() => correoAccesoRef.current?.focus(), 50);
         // El botón se queda visible aunque haya fallado: si el pase caducó,
         // basta con entrar una vez con la contraseña y se rearma solo.
         return;
@@ -1450,6 +1409,7 @@ export default function PublicStore({
                             Correo Electrónico
                           </label>
                           <input
+                            ref={correoAccesoRef}
                             type="email"
                             required
                             value={loginEmail}
