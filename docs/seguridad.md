@@ -44,6 +44,7 @@ psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/blindaje_seguridad.sql
 psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/ajustes_privados.sql
 psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/banners_motor.sql
 psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/crm.sql
+psql prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/avisos.sql
 ```
 
 El flujo `.github/workflows/seguridad.yml` corre todo eso en cada PR, en cada push a `main` y cada lunes.
@@ -67,6 +68,13 @@ filtra las llaves del origen, tiene tope por persona/IP y nunca adelanta una eta
 registro y el taller la hacen disparadores del servidor que atrapan sus errores (un fallo del CRM no frena la venta) e
 ignoran al personal y a las cuentas anonimizadas; anonimizar una ficha (Ley 8968) borra su contacto del CRM. La firma de
 notas y recordatorios la pone la base, no el navegador.
+`migracion_chat_push.sql` y `migracion_avisos_web.sql` (avisos de chat con la app o el navegador cerrados): los teléfonos
+(`dispositivos_push`) y navegadores (`avisos_web`) suscritos solo los anota el personal para su propia sesión y nadie los
+lee desde la API (solo la función, con `service_role`). Un navegador solo puede anotar una dirección de los servicios de
+avisos conocidos (Google, Mozilla, Microsoft, Apple), así la función nunca le manda pedidos a otro sitio; hasta 10 por
+persona. El gatillo del chat solo pasa el id del mensaje (no el texto) por `jarvis_llamar`, que no se puede llamar desde la
+API, y si avisar falla el mensaje del cliente se guarda igual. Los avisos web viajan cifrados para cada navegador
+(RFC 8291): el servicio de avisos no puede leerlos. La llave privada VAPID es el secreto `VAPID_PRIVADA` de la función.
 
 ## Lo que queda (decisiones y trabajo pendiente)
 

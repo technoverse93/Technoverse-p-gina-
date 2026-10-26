@@ -21,7 +21,7 @@ import { getDB, saveDB, addAuditLog, marcarMensajeEnVuelo, confirmarMensajeEnVue
 import { esSuperadmin } from '../../utils/roles';
 import { supabase } from '../../supabaseClient';
 import { useToast, useConfirm } from '../ui/Overlays';
-import { pedirPermisoNotificaciones, notificarMensajeChat } from '../../mobile/notificaciones';
+import { pedirPermisoNotificaciones } from '../../mobile/notificaciones';
 import { limpiarNotificacion } from '../../mobile/pushNativo';
 import { CLAVE_ABRIR_CONV, EVENTO_ABRIR_CONV } from '../../mobile/jarvisAtajo';
 
@@ -35,10 +35,10 @@ export const RESOLVED_RANGE_MS: Record<ResolvedRange, number> = {
 };
 
 /**
- * `avisar`: si este uso del hook es el que dispara la notificación al
- * personal por un mensaje nuevo del cliente. Solo debe hacerlo UNO —si no,
- * la pestaña y la burbuja avisarían por duplicado—, así que lo hace la
- * pestaña Chat (siempre montada de fondo) y la burbuja no.
+ * `avisar`: si este uso del hook es el que atiende el toque de una
+ * notificación (abre esa conversación y la quita) y pide el permiso de
+ * avisos. Solo debe hacerlo UNO —la pestaña Chat—; la burbuja no. (El aviso
+ * en sí lo da el vigía del chat, mobile/vigiaChat.ts.)
  */
 export function useChatAdmin(currentUser: User | null, onDataChanged?: () => void, avisar = true) {
   const toast = useToast();
@@ -55,26 +55,8 @@ export function useChatAdmin(currentUser: User | null, onDataChanged?: () => voi
     return () => { isMountedRef.current = false; };
   }, []);
 
-  const vistosRef = useRef<Set<string>>(new Set());
-  const sembradoRef = useRef(false);
-
-  const detectarMensajesDeClientes = useCallback((convs: ChatConversation[]) => {
-    if (!avisar) return;
-    const entrantes = convs.flatMap(c => c.messages.filter(m => m && m.sender === 'customer'));
-    if (!sembradoRef.current) {
-      entrantes.forEach(m => vistosRef.current.add(m.id));
-      sembradoRef.current = true;
-      return;
-    }
-    const nuevos = entrantes.filter(m => !vistosRef.current.has(m.id));
-    nuevos.forEach(m => vistosRef.current.add(m.id));
-    if (nuevos.length === 0) return;
-    const ultimo = nuevos[nuevos.length - 1];
-    const deQuien = convs.find(c => c.messages.some(m => m.id === ultimo.id))?.customerName || 'un cliente';
-    const cuerpo = (ultimo.text || '').trim()
-      || (ultimo.imageUrl ? '📷 Imagen' : ultimo.audioUrl ? '🎤 Nota de voz' : ultimo.videoUrl ? '🎬 Video' : 'Mensaje nuevo');
-    void notificarMensajeChat(`${deQuien} — Technoverse`, cuerpo);
-  }, [avisar]);
+  // El aviso de «te escribieron» ya no sale de aquí: lo da el vigía del chat (mobile/vigiaChat.ts) para
+  // toda la app, esté abierta la pestaña que esté.
 
   const soySuper = esSuperadmin(currentUser?.role);
   const loadConversations = useCallback(() => {
@@ -84,8 +66,7 @@ export function useChatAdmin(currentUser: User | null, onDataChanged?: () => voi
     // marca uno y llega la relectura.
     const lista = (db.chat_conversations || []).filter(c => soySuper || !c.exclusivoSuperadmin);
     setConversations(lista);
-    detectarMensajesDeClientes(lista);
-  }, [detectarMensajesDeClientes, soySuper]);
+  }, [soySuper]);
 
   useEffect(() => {
     loadConversations();

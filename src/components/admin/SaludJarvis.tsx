@@ -11,6 +11,7 @@ import { useEffect, useState } from 'react';
 import { HeartPulse, RefreshCw, BellRing } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { ESTADO_PENDIENTE, estadoPush, iniciarPush, TEXTO_ESTADO, type EstadoPush } from '../../mobile/pushNativo';
+import { activarAvisosWeb, estadoAvisosWeb, soportaAvisosWeb, TEXTO_ESTADO_WEB, type EstadoWeb } from '../../utils/avisosWeb';
 
 type PruebaInfo = { ok: boolean; ms: number; detalle: string; modelo?: string | null; cuando: string };
 type Ia = { id: string; nombre: string; respondio: number; fallos: number; ms: number | null; ultimoError: string; ultimoErrorEn: string | null; prueba: PruebaInfo | null };
@@ -64,6 +65,27 @@ export default function SaludJarvis() {
         : 'Google rechazó el envío: revisá el secreto FCM_SERVICE_ACCOUNT y el registro (log) de la función.');
     }
     setPushOcupado(false);
+  };
+
+  // Avisos en este navegador (Chrome, Edge, Firefox, Safari): sin Firebase, llegan con el navegador cerrado.
+  const [web, setWeb] = useState<EstadoWeb | null>(null);
+  const [webNota, setWebNota] = useState('');
+  const [webOcupado, setWebOcupado] = useState(false);
+  useEffect(() => { if (soportaAvisosWeb()) void estadoAvisosWeb().then(setWeb); }, []);
+  const probarWeb = async () => {
+    setWebOcupado(true); setWebNota('');
+    const e = web === 'activo' ? 'activo' : await activarAvisosWeb(); setWeb(e);
+    if (e === 'activo') {
+      const { data, error: er } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'push_prueba' } });
+      const w = data?.web as { enviados: number; suscripciones: number; sinConfig?: boolean } | undefined;
+      setWebNota(er || !data?.ok ? 'No se pudo pedir la prueba al servidor.'
+        : !w ? 'El servidor todavía no manda avisos web (falta desplegar la función asistente-ia).'
+        : w.sinConfig ? 'Al servidor le falta el secreto VAPID_PRIVADA (Supabase → Edge Functions → Secrets).'
+        : !w.suscripciones ? 'El servidor todavía no tiene este navegador. Probá de nuevo en unos segundos.'
+        : w.enviados > 0 ? 'Enviado. En unos segundos te tiene que llegar el aviso de prueba.'
+        : 'El servicio de avisos rechazó el envío: revisá el registro (log) de la función.');
+    }
+    setWebOcupado(false);
   };
 
   const hoy = inf?.hoy;
@@ -174,6 +196,17 @@ export default function SaludJarvis() {
           </span>
           <span className="jv-sd-ms"><button type="button" className="ai-chip" disabled={pushOcupado} onClick={() => void probarPush()}><BellRing className="w-4 h-4" />{pushOcupado ? 'Probando…' : 'Enviar prueba'}</button></span>
         </li>
+        {web && web !== 'sin_soporte' && (
+          <li>
+            <i className="jv-sd-luz" data-ok={web === 'activo' ? 'si' : web === 'apagado' ? undefined : 'no'} aria-label={web === 'activo' ? 'Activos' : 'Sin activar'} />
+            <span className="jv-sd-tx">
+              <b>Este navegador: {web === 'activo' ? 'activos' : 'sin activar'}</b>
+              <span className={web !== 'activo' && web !== 'apagado' ? 'jv-sd-error' : undefined}>{TEXTO_ESTADO_WEB[web]}</span>
+              {webNota && <span className="jv-sd-pie" role="status">{webNota}</span>}
+            </span>
+            <span className="jv-sd-ms"><button type="button" className="ai-chip" disabled={webOcupado || web === 'bloqueado'} onClick={() => void probarWeb()}><BellRing className="w-4 h-4" />{webOcupado ? 'Probando…' : web === 'activo' ? 'Enviar prueba' : 'Activar'}</button></span>
+          </li>
+        )}
       </ul>
 
       <div className="jv-salud-pie">

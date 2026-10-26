@@ -1228,6 +1228,20 @@ input, select, textarea { max-width: 100%; }
 .tv-chat-filtro { flex: none; display: inline-flex; align-items: center; gap: 6px; padding: 6px 12px; border-radius: 999px; font-size: 12px; font-weight: 600; color: var(--text-secondary); border: 1px solid var(--border-color); background: transparent; white-space: nowrap; }
 .tv-chat-filtro[data-on] { background: var(--text-primary); color: var(--bg-surface); border-color: var(--text-primary); }
 .tv-chat-rango { display: flex; gap: 4px; align-items: center; padding: 0 12px 8px; color: var(--text-muted); }
+.tv-chat-avisos { display: flex; align-items: center; gap: 8px; margin: 0 12px 8px; padding: 6px 6px 6px 12px; min-height: 38px; border-radius: 14px; background: var(--tile); color: var(--text-secondary); font-size: 12.5px; }
+.tv-chat-avisos > svg { flex: none; color: var(--accent-texto); }
+.tv-chat-avisos > span { flex: 1; min-width: 0; }
+.tv-chat-avisos-si { flex: none; padding: 5px 12px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 12.5px; white-space: nowrap; }
+.tv-chat-avisos-si:disabled { filter: grayscale(1); }
+.tv-chat-avisos-x { flex: none; width: 28px; height: 28px; border-radius: 9px; display: inline-grid; place-items: center; color: var(--text-muted); }
+.tv-chat-avisos-x:hover { background: var(--bg-sunken); color: var(--text-primary); }
+/* Aviso en pantalla de un mensaje nuevo (vigía del chat): una fila, el «Ver» siempre a la vista. */
+/* Dos renglones de UNA línea cada uno (quién / qué): con un nombre largo el mensaje igual se ve. */
+.tv-aviso-chat { display: flex; align-items: center; gap: 10px; min-width: 0; }
+.tv-aviso-chat > span { flex: 1; min-width: 0; display: grid; gap: 1px; }
+.tv-aviso-chat > span > * { display: block; min-width: 0; }
+.tv-aviso-chat > span > b { color: var(--text-primary); }
+.tv-aviso-chat > button { flex: none; padding: 4px 12px; border-radius: 999px; background: var(--accent); color: var(--accent-ink); font-weight: 700; font-size: 12.5px; }
 .tv-chat-rango button { font-size: 12px; padding: 3px 10px; border-radius: 999px; background: var(--bg-sunken); color: var(--text-secondary); }
 .tv-chat-rango button[data-on] { background: rgba(var(--accent-rgb), .14); color: var(--accent); font-weight: 700; }
 

@@ -80,3 +80,5 @@ jobs:
         run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/banners_motor.sql
       - name: CRM interno (captación, embudo, permisos y función pública)
         run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/crm.sql
+      - name: Avisos de chat (gatillo, teléfonos y navegadores)
+        run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/avisos.sql

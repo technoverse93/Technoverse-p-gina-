@@ -45,6 +45,9 @@ export function iniciarNotificaciones(): void {
       LocalNotifications.addListener('localNotificationActionPerformed', (a) => {
         // Un recordatorio de la agenda de Javier abre Javier, no el chat.
         if (a?.notification?.extra?.jarvis) { void import('./jarvisAtajo').then(m => m.manejar('technoverse://jarvis')); return; }
+        // Un mensaje de un cliente (aviso del personal): esa conversación, en el panel.
+        const conv = a?.notification?.extra?.conv;
+        if (typeof conv === 'string' && conv) { abrirConversacion(conv); return; }
         try { window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_CHAT)); } catch { /* nada */ }
       });
     } catch { /* sin plugin todavía: se activa al recompilar la APK */ }
@@ -72,14 +75,25 @@ export async function pedirPermisoNotificaciones(): Promise<void> {
   } catch { /* si el permiso falla, la app sigue igual */ }
 }
 
+/** Lleva al panel, a esa conversación (la misma vía que el toque de un aviso push). */
+export function abrirConversacion(conv: string): void {
+  void import('./jarvisAtajo').then(m => m.manejar(`technoverse://jarvis?modulo=chat&conv=${encodeURIComponent(conv)}`));
+}
+
+/** Un número estable por conversación: sus mensajes se juntan en UNA notificación (como WhatsApp). */
+const idDeConversacion = (conv: string) => { let h = 7; for (const ch of conv) h = (h * 31 + ch.charCodeAt(0)) % 2_000_000_000; return h + 1000; };
+
 /**
  * Dispara la notificación de un mensaje nuevo, SOLO si la persona no está
- * en primer plano (regla anti-duplicado). El clic/toque abre el chat.
+ * en primer plano (regla anti-duplicado). El clic/toque abre el chat; con
+ * `conv` (avisos del personal), esa conversación en el panel.
  */
-export async function notificarMensajeChat(titulo: string, cuerpo: string): Promise<void> {
+export async function notificarMensajeChat(titulo: string, cuerpo: string, conv?: string): Promise<void> {
   if (estaEnPrimerPlano()) return;
   // Con los avisos push del servidor ya funcionando, el teléfono avisa solo:
-  // este aviso local sería un duplicado.
+  // este aviso local sería un duplicado. (En el navegador no hace falta: el
+  // aviso web de la misma conversación lleva la MISMA etiqueta y la
+  // reemplaza en silencio en vez de sumar otra.)
   if (pushActivo()) return;
 
   try {
@@ -89,17 +103,19 @@ export async function notificarMensajeChat(titulo: string, cuerpo: string): Prom
       if (permiso.display !== 'granted') return;
       await LocalNotifications.schedule({
         notifications: [{
-          id: Date.now() % 2147483000,
+          id: conv ? idDeConversacion(conv) : Date.now() % 2147483000,
           title: titulo,
           body: cuerpo,
+          ...(conv ? { extra: { conv } } : {}),
         }],
       });
     } else {
       if (typeof Notification === 'undefined' || Notification.permission !== 'granted') return;
-      const n = new Notification(titulo, { body: cuerpo, tag: 'technoverse-chat' });
+      const n = new Notification(titulo, { body: cuerpo, tag: conv ? `tv-chat-${conv}` : 'technoverse-chat' });
       n.onclick = () => {
         try { window.focus(); } catch { /* nada */ }
-        try { window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_CHAT)); } catch { /* nada */ }
+        if (conv) abrirConversacion(conv);
+        else try { window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_CHAT)); } catch { /* nada */ }
         n.close();
       };
     }

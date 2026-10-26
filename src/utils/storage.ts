@@ -126,6 +126,11 @@ export function lecturaRapida(): { products: Product[]; banners: Banner[]; setti
   return { products: localCache.products, banners: localCache.banners, settings: localCache.settings };
 }
 
+/** Las conversaciones del chat que hay en memoria, SIN copiarlas (para el vigía del chat). De SOLO LECTURA. */
+export function lecturaDelChat(): readonly ChatConversation[] {
+  return localCache.chat_conversations || [];
+}
+
 function guardarCacheLocal(): void {
   if (cacheDeshabilitada || typeof window === 'undefined') return;
   try {
@@ -1267,6 +1272,16 @@ async function refreshTableFromSupabase(cfg: TableConfig<any>) {
   return true;
 }
 
+/**
+ * La clave de la lectura del chat dice CÓMO se va a leer ahora: como cliente de la tienda (con su token, sin
+ * sesión) o directo (con la sesión). FALLO CORREGIDO (2026-10-26, «el chat que tenía abierto tardó en salir como
+ * si no existiera»): la primera lectura sale antes de que supabase-js avise la sesión; en un aparato donde antes
+ * se abrió el chat de la tienda como cliente, iba por el camino del cliente y solo traía esa conversación. La
+ * relectura con la sesión ya avisada se saltaba por «reciente» (misma persona, misma clave `chat`) y el panel se
+ * quedaba sin las conversaciones hasta el siguiente mensaje o la vuelta a la app.
+ */
+const claveLecturaChat = () => `chat:${getCustomerChatToken() && !authedSession ? 'cliente' : 'directo'}`;
+
 /** Lectura de arranque de una tabla: se une a la que ya va en camino (ver `leerSinRepetir`). */
 const leerTablaDeArranque = (cfg: TableConfig<any>) =>
   leerSinRepetir(`table:${cfg.key as string}`, () => refreshTableFromSupabase(cfg));
@@ -1736,7 +1751,7 @@ function sincronizarCanalesDeDifusion(): void {
 }
 
 function initChatRealtimeSync() {
-  leerSinRepetir('chat', refreshChatFromSupabase).then(() => {
+  leerSinRepetir(claveLecturaChat(), refreshChatFromSupabase).then(() => {
     chatReady = true;
     flushChatPending();
     sincronizarCanalesDeDifusion();
@@ -2394,7 +2409,7 @@ function refreshAllTables() {
   TABLE_CONFIGS.forEach((cfg) => {
     coalesce(`table:${cfg.key as string}`, () => leerTablaDeArranque(cfg));
   });
-  coalesce('chat', () => leerSinRepetir('chat', refreshChatFromSupabase));
+  coalesce('chat', () => leerSinRepetir(claveLecturaChat(), refreshChatFromSupabase));
   coalesce('settings', () => leerSinRepetir('settings', refreshSettingsFromSupabase));
 }
 

@@ -24,7 +24,9 @@ import { activarFlagSecure, fijarFlagSecureSegunCorreo } from './seguridad/flagS
 import { iniciarAntiCaptura, fijarExencionAntiCaptura } from './seguridad/antiCaptura';
 import { obtenerHuellaAparato } from './utils/fingerprint';
 import { iniciarAvisoDePurga } from './seguridad/avisoPurgaChat';
-import { iniciarNotificaciones } from './mobile/notificaciones';
+import { iniciarNotificaciones, abrirConversacion } from './mobile/notificaciones';
+import { iniciarVigiaChat, detenerVigiaChat, type AvisoEnPantalla } from './mobile/vigiaChat';
+import { iniciarAvisosWeb, renovarAvisosWeb, apagarAvisosWeb } from './utils/avisosWeb';
 import CrearTokenModal from './components/security/CrearTokenModal';
 import ReautenticacionRapidaOverlay from './components/security/ReautenticacionRapidaOverlay';
 import ResetPasswordView from './components/ResetPasswordView';
@@ -136,6 +138,7 @@ function resolverVistaDesdeRuta(pathname: string): 'store' | 'admin' | 'reset-pa
 
 // ¿Esta persona es del personal? Se recuerda en este aparato (lo usan otras partes de la app).
 const CLAVE_PERSONAL = 'technoverse_es_personal';
+const leerPersonal = () => { try { return localStorage.getItem(CLAVE_PERSONAL) === '1'; } catch { return false; } };
 const guardarPersonal = (v: boolean) => { try { if (v) localStorage.setItem(CLAVE_PERSONAL, '1'); else localStorage.removeItem(CLAVE_PERSONAL); } catch { /* sin almacenamiento */ } };
 
 /**
@@ -398,6 +401,45 @@ function AppInner() {
   // Se recuerda si quien entró es del personal (ver `vistaInicial`).
   useEffect(() => { if (currentUser) guardarPersonal(esStaff(currentUser.role)); }, [currentUser]);
 
+  // ---------------------------------------------------------------------
+  // AVISOS DEL CHAT PARA EL PERSONAL, en cualquier pantalla
+  // ---------------------------------------------------------------------
+  // Antes solo avisaba la pestaña Chat del panel mientras estaba abierta (y la APK abre en la tienda): un
+  // mensaje que llegaba con la app en otra pantalla o en segundo plano no avisaba nada. El vigía corre
+  // mientras en este aparato hay una sesión del personal, también con la sesión cerrada con llave (la sesión
+  // sigue viva; solo la pantalla pide la huella), como avisaría el teléfono con la app cerrada.
+  const personalEnAparato = esStaff(currentUser?.role) || (!currentUser && sesionBloqueada() && leerPersonal());
+  const verAvisoChat = useRef<(a: AvisoEnPantalla) => void>(() => { /* se fija abajo */ });
+  verAvisoChat.current = (a: AvisoEnPantalla) => {
+    toast.info(
+      <span className="tv-aviso-chat">
+        <span>
+          <b className="tv-1l">{a.cliente}{a.cuantos > 1 ? ` · ${a.cuantos} mensajes` : ''}</b>
+          <span className="tv-1l">{a.texto}</span>
+        </span>
+        <button type="button" onClick={() => abrirConversacion(a.conv)}>Ver</button>
+      </span>,
+      7000,
+    );
+  };
+  useEffect(() => {
+    if (!personalEnAparato) { detenerVigiaChat(); return; }
+    iniciarVigiaChat(a => verAvisoChat.current(a));
+  }, [personalEnAparato]);
+
+  // AVISOS CON LA APP CERRADA: este teléfono (APK, Firebase) y este navegador (avisos web) se anotan en el
+  // servidor para que les avise de cada chat. Va aquí y no en el panel: la APK abre en la tienda y quien
+  // no entra al panel también tiene que recibirlos. Se reintenta al volver a la app (token renovado,
+  // permiso dado en Ajustes del teléfono).
+  useEffect(() => {
+    if (!esStaff(currentUser?.role)) return;
+    const arrancar = () => { void import('./mobile/pushNativo').then(m => m.iniciarPush(currentUser?.role)).catch(() => { /* sin push */ }); };
+    const t = setTimeout(() => { arrancar(); void renovarAvisosWeb(); }, 2500);
+    const alVolver = () => { if (document.visibilityState === 'visible') arrancar(); };
+    document.addEventListener('visibilitychange', alVolver);
+    return () => { clearTimeout(t); document.removeEventListener('visibilitychange', alVolver); };
+  }, [currentUser?.role]);
+
   // Si la pantalla se rompió antes en este aparato, el rastro (solo el mensaje y el sitio) pasa a la
   // bitácora del sistema cuando entra alguien del personal, para poder verlo y arreglarlo.
   useEffect(() => {
@@ -514,6 +556,8 @@ function AppInner() {
     // así el admin en el panel también los tiene, sin depender de que
     // LiveChat esté montado (no lo está dentro del panel).
     iniciarNotificaciones();
+    // Tocar un aviso web (Chrome con el navegador cerrado) abre esa conversación del panel.
+    iniciarAvisosWeb();
     // La huella (aparato físico) y el modelo alimentan el bloqueo por
     // dispositivo. Su lectura es asíncrona —nativa en la APK— y se entrega
     // en cuanto está, para que ese modo de bloqueo funcione.
@@ -538,7 +582,12 @@ function AppInner() {
     // la sesión de Supabase, así que el aparato seguía autenticado aunque la
     // aplicación dijera lo contrario. Ahora se cierra de verdad — y en la
     // APK con alcance local, para no invalidar el pase que guarda la huella.
-    void cerrarSesionConservandoBiometria();
+    // Antes, con la sesión todavía viva: este aparato deja de recibir los avisos de la cuenta.
+    detenerVigiaChat();
+    void Promise.allSettled([
+      import('./mobile/pushNativo').then(m => m.cerrarPush()),
+      apagarAvisosWeb(true),
+    ]).finally(() => { void cerrarSesionConservandoBiometria(); });
     guardarPersonal(false);
     setCurrentUser(null);
     window.dispatchEvent(new CustomEvent('technoverse_auth_sync', { detail: { currentUser: null } }));
