@@ -81,6 +81,7 @@ import { normalizarDictado, restaurarPrivados, separarPrivados } from './privado
 import { esCron, tareaCron } from './proactivo.ts';
 import { eventoDePrueba, informe, nombreComponente, registrar, type Prueba } from './salud.ts';
 import { empujarAviso, empujarChat, enviarPrueba, responderDesdePush } from './push.ts';
+import { llavesVapid } from './avisosWeb.ts';
 import { crearTarea, procesarTareas, purgarTareas, type MotorTareas, type PasoPlan, type ResultadoCrear, type Tarea } from './tareas.ts';
 import { MAPA_CODIGO } from './mapa-codigo.ts';
 import { archivosDeEstudio, estudiarRepo, type PedirEstudio } from './estudio-repo.ts';
@@ -2004,6 +2005,13 @@ export async function atender(req: Request): Promise<Response> {
       if (!esSuper) return responder({ ok: false, error: 'Solo el superadmin.' }, 403);
       const tarea = ['resumen', 'vigilar'].includes(String(cuerpo?.tarea)) ? String(cuerpo.tarea) : 'resumen';
       return responder(await tareaCron(admin, tarea, redactar, uid));
+    }
+
+    // AVISOS WEB: la llave pública con la que el navegador se suscribe (la crea la primera vez).
+    if (accion === 'avisos_web_llave') {
+      if (!['superadmin', 'admin', 'empleado'].includes(String(rol))) return responder({ ok: false, error: 'Solo el personal.' }, 403);
+      const l = await llavesVapid(admin);
+      return responder(l ? { ok: true, publica: l.publica } : { ok: false, falta: 'sql' });
     }
 
     // AVISOS AL TELÉFONO: «Probar» manda un chat de mentira a los teléfonos de quien lo pide.
