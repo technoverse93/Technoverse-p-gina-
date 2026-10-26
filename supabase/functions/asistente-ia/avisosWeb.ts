@@ -12,10 +12,10 @@
 //   service worker (public/sw-avisos.js) muestra el aviso.
 // · Las suscripciones viven en `avisos_web` (supabase/migracion_avisos_web.sql):
 //   solo el personal, solo servicios de avisos conocidos.
-// Secreto necesario (Supabase → Edge Functions → Secrets):
-//   VAPID_PRIVADA  la llave privada P-256 en formato JWK (JSON). La pública
-//                  va en src/utils/avisosWeb.ts; tienen que ser el mismo par.
-// Si falta, no pasa nada: no se manda (y se dice en el log).
+// La llave VAPID la genera esta función la primera vez que hace falta y la
+// guarda en `avisos_web_llave` (nadie la lee desde la API): no hay que pegar
+// ningún secreto a mano. El panel pide la PÚBLICA (accion «avisos_web_llave»).
+// Si existe el secreto VAPID_PRIVADA (JWK de una llave P-256), se usa ese.
 // =====================================================================
 
 type Db = any;
@@ -74,20 +74,39 @@ export async function cifrarAviso(texto: string, p256dh: string, auth: string, f
 }
 
 // ------------------------------ VAPID (RFC 8292) ------------------------------
-let vapid: { privada: CryptoKey; publica: string } | null | undefined;
-async function llavesVapid(): Promise<{ privada: CryptoKey; publica: string } | null> {
-  if (vapid !== undefined) return vapid;
+type Llaves = { privada: CryptoKey; publica: string };
+let vapid: Llaves | null = null;
+
+async function importar(jwk: { x: string; y: string; d: string }): Promise<Llaves> {
+  const privada = await crypto.subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, d: jwk.d, ext: true },
+    { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
+  return { privada, publica: aB64u(unir(new Uint8Array([4]), deB64u(jwk.x), deB64u(jwk.y))) };
+}
+
+/**
+ * El par VAPID de este servidor: el secreto VAPID_PRIVADA si existe; si no, el guardado en `avisos_web_llave`,
+ * que se crea la primera vez (si dos pedidos lo crean a la vez, gana el primero y el otro usa ese).
+ */
+export async function llavesVapid(admin: Db): Promise<Llaves | null> {
+  if (vapid) return vapid;
   const crudo = Deno.env.get('VAPID_PRIVADA');
-  if (!crudo) return (vapid = null);
-  try {
-    const jwk = JSON.parse(crudo);
-    const privada = await crypto.subtle.importKey('jwk', { kty: 'EC', crv: 'P-256', x: jwk.x, y: jwk.y, d: jwk.d, ext: true },
-      { name: 'ECDSA', namedCurve: 'P-256' }, false, ['sign']);
-    return (vapid = { privada, publica: aB64u(unir(new Uint8Array([4]), deB64u(jwk.x), deB64u(jwk.y))) });
-  } catch {
-    console.log('avisos web: VAPID_PRIVADA no es una llave P-256 en JWK');
-    return (vapid = null);
+  if (crudo) {
+    try { return (vapid = await importar(JSON.parse(crudo))); }
+    catch { console.log('avisos web: VAPID_PRIVADA no es una llave P-256 en JWK; se usa la guardada'); }
   }
+  const leer = async () => (await admin.from('avisos_web_llave').select('privada').eq('id', 1).maybeSingle()) as { data: { privada: any } | null; error: unknown };
+  let { data, error } = await leer();
+  if (error) { console.log('avisos web: falta la tabla avisos_web_llave (migracion_avisos_web.sql)'); return null; }
+  if (!data) {
+    const par = await crypto.subtle.generateKey({ name: 'ECDSA', namedCurve: 'P-256' }, true, ['sign', 'verify']) as CryptoKeyPair;
+    const jwk = await crypto.subtle.exportKey('jwk', par.privateKey);
+    const nuevo = { x: jwk.x!, y: jwk.y!, d: jwk.d! };
+    const publica = aB64u(unir(new Uint8Array([4]), deB64u(nuevo.x), deB64u(nuevo.y)));
+    await admin.from('avisos_web_llave').upsert({ id: 1, publica, privada: nuevo }, { onConflict: 'id', ignoreDuplicates: true });
+    ({ data } = await leer());
+    if (!data) return null;
+  }
+  return (vapid = await importar(data.privada));
 }
 
 export async function cabeceraVapid(endpoint: string, l: { privada: CryptoKey; publica: string }, ahora = Date.now()): Promise<string> {
@@ -109,8 +128,8 @@ export async function enviarAvisosWeb(admin: Db, porPersona: Map<string, Record<
   if (error) return { enviados: 0, fallidos: 0, suscripciones: 0 }; // sin la migración todavía
   const subs = (filas || []) as { endpoint: string; p256dh: string; auth: string; user_id: string }[];
   if (!subs.length) return { enviados: 0, fallidos: 0, suscripciones: 0 };
-  const l = await llavesVapid();
-  if (!l) { console.log('avisos web: sin VAPID_PRIVADA, no se manda nada'); return { enviados: 0, fallidos: 0, suscripciones: subs.length, sinConfig: true }; }
+  const l = await llavesVapid(admin);
+  if (!l) { console.log('avisos web: sin llave VAPID, no se manda nada'); return { enviados: 0, fallidos: 0, suscripciones: subs.length, sinConfig: true }; }
   let enviados = 0, fallidos = 0;
   await Promise.all(subs.map(async s => {
     const datos = porPersona.get(s.user_id);

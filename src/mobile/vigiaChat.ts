@@ -23,7 +23,8 @@
 // =====================================================================
 
 import type { ChatConversation, ChatMessage } from '../types';
-import { esperarDatosListos, lecturaDelChat } from '../utils/storage';
+import { supabase } from '../supabaseClient';
+import { addAuditLog, esperarDatosListos, lecturaDelChat, recargarChatDelServidor } from '../utils/storage';
 import { estaEnPrimerPlano, notificarMensajeChat } from './notificaciones';
 
 /** Hasta qué mensaje de cliente ya se avisó en este aparato (marca de tiempo en ms). */
@@ -116,4 +117,27 @@ export function detenerVigiaChat(): void {
   activo = false;
   if (pendiente) { clearTimeout(pendiente); pendiente = null; }
   window.removeEventListener('technoverse_db_updated', alCambiar);
+}
+
+/**
+ * «Responder» desde la notificación (APK): manda lo escrito a esa conversación como el personal, la deja leída y
+ * quita la notificación; si no se pudo, avisa con otra notificación (lo escrito no se pierde en silencio).
+ */
+export async function responderDesdeAviso(conv: string, texto: string, idNotificacion?: number): Promise<void> {
+  const t = texto.trim().slice(0, 2000);
+  if (!t) return;
+  const { error } = await supabase.from('chat_messages').insert({
+    id: `MSG-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, conversation_id: conv, sender: 'support', text: t,
+    created_at: new Date().toISOString(), image_url: null, video_url: null, audio_url: null, is_internal_note: false,
+  });
+  try {
+    const { LocalNotifications } = await import('@capacitor/local-notifications');
+    if (typeof idNotificacion === 'number') await LocalNotifications.cancel({ notifications: [{ id: idNotificacion }] });
+    if (error) await LocalNotifications.schedule({ notifications: [{ id: Date.now() % 2147483000, title: 'No se pudo enviar la respuesta', body: `«${t.slice(0, 80)}». Abrí el chat para contestar.`, extra: { conv } }] });
+  } catch { /* sin el complemento: no hay notificación que quitar */ }
+  if (error) return;
+  await supabase.from('chat_conversations').update({ unread_count: 0 }).eq('id', conv);
+  const { data } = await supabase.auth.getSession();
+  addAuditLog(data.session?.user?.email || 'admin', 'Soporte', 'Respuesta Chat', `Conversación ${conv} (desde la notificación)`);
+  void recargarChatDelServidor(true);
 }

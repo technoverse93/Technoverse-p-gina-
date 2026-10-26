@@ -13,6 +13,8 @@
 --     (Google, Mozilla, Microsoft, Apple) para que la función nunca le mande pedidos a otro sitio; hasta 10
 --     navegadores por persona (el más viejo se descarta).
 --   · quitar_avisos_web(endpoint): al apagarlos o cerrar sesión; cada quien solo los suyos.
+--   · avisos_web_llave: el par VAPID con que la función firma los avisos. Lo genera la propia función la
+--     primera vez (así nadie tiene que pegar un secreto a mano) y nadie lo lee desde la API.
 --
 -- CÓMO SE APLICA. Después de migracion_chat_push.sql (usa la misma puerta jarvis_llamar y el mismo gatillo:
 -- este archivo no toca ninguno de los dos). Idempotente; es estructura, no toca datos existentes.
@@ -71,6 +73,16 @@ as $$
   delete from public.avisos_web where endpoint = p_endpoint and user_id = auth.uid();
 $$;
 
+-- El par VAPID del servidor (una sola fila). La función lo crea con WebCrypto la primera vez que hace falta.
+create table if not exists public.avisos_web_llave (
+  id        smallint primary key default 1 check (id = 1),
+  publica   text not null check (publica ~ '^[A-Za-z0-9_-]{87}$'),
+  privada   jsonb not null,
+  creado_en timestamptz not null default now()
+);
+alter table public.avisos_web_llave enable row level security; -- sin políticas: solo service_role
+revoke all on public.avisos_web_llave from anon, authenticated;
+
 revoke all on function public.registrar_avisos_web(text, text, text, text) from public, anon;
 revoke all on function public.quitar_avisos_web(text) from public, anon;
 grant execute on function public.registrar_avisos_web(text, text, text, text) to authenticated;
@@ -80,3 +92,4 @@ grant execute on function public.quitar_avisos_web(text) to authenticated;
 --   drop function if exists public.quitar_avisos_web(text);
 --   drop function if exists public.registrar_avisos_web(text, text, text, text);
 --   drop table if exists public.avisos_web;
+--   drop table if exists public.avisos_web_llave;

@@ -45,9 +45,15 @@ export function iniciarNotificaciones(): void {
       LocalNotifications.addListener('localNotificationActionPerformed', (a) => {
         // Un recordatorio de la agenda de Javier abre Javier, no el chat.
         if (a?.notification?.extra?.jarvis) { void import('./jarvisAtajo').then(m => m.manejar('technoverse://jarvis')); return; }
-        // Un mensaje de un cliente (aviso del personal): esa conversación, en el panel.
+        // Un mensaje de un cliente (aviso del personal): «Responder» manda lo escrito sin pasar por el panel;
+        // tocar la notificación abre esa conversación.
         const conv = a?.notification?.extra?.conv;
-        if (typeof conv === 'string' && conv) { abrirConversacion(conv); return; }
+        if (typeof conv === 'string' && conv) {
+          const texto = (a.inputValue || '').trim();
+          if (a.actionId === 'responder' && texto) { void import('./vigiaChat').then(m => m.responderDesdeAviso(conv, texto, a.notification.id)); return; }
+          abrirConversacion(conv);
+          return;
+        }
         try { window.dispatchEvent(new CustomEvent(EVENTO_ABRIR_CHAT)); } catch { /* nada */ }
       });
     } catch { /* sin plugin todavía: se activa al recompilar la APK */ }
@@ -80,6 +86,39 @@ export function abrirConversacion(conv: string): void {
   void import('./jarvisAtajo').then(m => m.manejar(`technoverse://jarvis?modulo=chat&conv=${encodeURIComponent(conv)}`));
 }
 
+// ---------------------------------------------------------------------
+// CANAL «MENSAJES DEL CHAT» (APK): como WhatsApp
+// ---------------------------------------------------------------------
+// El canal por defecto de Android tiene importancia normal: el aviso entra
+// callado a la barra, sin asomarse arriba de la pantalla. Este canal es de
+// importancia ALTA (se asoma arriba, con sonido y vibración) y la
+// notificación trae «Responder» para contestar sin abrir el chat. El canal no
+// se puede subir de importancia una vez creado: por eso es uno nuevo.
+// En la pantalla bloqueada se ve que hay un mensaje, sin mostrar lo que dice.
+// ---------------------------------------------------------------------
+const CANAL_CHAT = 'chat_mensajes';
+const ACCION_CHAT = 'CHAT_RESPONDER';
+let canalListo: Promise<boolean> | null = null;
+function prepararCanalChat(): Promise<boolean> {
+  if (!canalListo) {
+    canalListo = (async () => {
+      try {
+        const { LocalNotifications } = await import('@capacitor/local-notifications');
+        await LocalNotifications.createChannel({
+          id: CANAL_CHAT, name: 'Mensajes del chat', description: 'Cuando un cliente te escribe en la tienda',
+          importance: 4, visibility: 0, vibration: true, lights: true,
+        });
+        await LocalNotifications.registerActionTypes({ types: [{
+          id: ACCION_CHAT,
+          actions: [{ id: 'responder', title: 'Responder', input: true, inputButtonTitle: 'Enviar', inputPlaceholder: 'Escribí tu respuesta' }],
+        }] });
+        return true;
+      } catch { canalListo = null; return false; }
+    })();
+  }
+  return canalListo;
+}
+
 /** Un número estable por conversación: sus mensajes se juntan en UNA notificación (como WhatsApp). */
 const idDeConversacion = (conv: string) => { let h = 7; for (const ch of conv) h = (h * 31 + ch.charCodeAt(0)) % 2_000_000_000; return h + 1000; };
 
@@ -101,12 +140,14 @@ export async function notificarMensajeChat(titulo: string, cuerpo: string, conv?
       const { LocalNotifications } = await import('@capacitor/local-notifications');
       const permiso = await LocalNotifications.checkPermissions();
       if (permiso.display !== 'granted') return;
+      const conCanal = conv ? await prepararCanalChat() : false;
       await LocalNotifications.schedule({
         notifications: [{
           id: conv ? idDeConversacion(conv) : Date.now() % 2147483000,
           title: titulo,
           body: cuerpo,
-          ...(conv ? { extra: { conv } } : {}),
+          ...(conv ? { extra: { conv }, largeBody: cuerpo, autoCancel: true } : {}),
+          ...(conCanal ? { channelId: CANAL_CHAT, actionTypeId: ACCION_CHAT } : {}),
         }],
       });
     } else {

@@ -17,8 +17,17 @@
 import { supabase } from '../supabaseClient';
 import { CLAVE_ABRIR_CONV } from '../mobile/jarvisAtajo';
 
-/** La llave PÚBLICA VAPID (la privada es el secreto VAPID_PRIVADA de la función). Pública por diseño. */
-const LLAVE_PUBLICA = 'BFWk-FYiJsuTcRN0ZKrZxrCgvxQO4YRnXRXNdCRukv-I7qwcxdGsHgsuTL4vppUYC2gjGROcMXeiVErj6-xRJms';
+/**
+ * La llave PÚBLICA VAPID del servidor (pública por diseño). La función la crea la primera vez y guarda la
+ * privada donde nadie la lee; se pide al activar o renovar, así nunca queda una suscripción con otra llave.
+ */
+async function llavePublica(): Promise<string | 'sin_sql' | null> {
+  try {
+    const { data, error } = await supabase.functions.invoke('asistente-ia', { body: { accion: 'avisos_web_llave' } });
+    if (!error && data?.ok && typeof data.publica === 'string') return data.publica;
+    return data?.falta === 'sql' ? 'sin_sql' : null;
+  } catch { return null; }
+}
 const SW = '/sw-avisos.js';
 const K_ACTIVO = 'tv_avisos_web';
 
@@ -85,12 +94,15 @@ export async function activarAvisosWeb(): Promise<EstadoWeb> {
   try {
     const permiso = Notification.permission === 'default' ? await Notification.requestPermission() : Notification.permission;
     if (permiso !== 'granted') return permiso === 'denied' ? 'bloqueado' : 'apagado';
+    const publica = await llavePublica();
+    if (publica === 'sin_sql') return 'sin_sql';
+    if (!publica) return 'error';
     const r = await registro();
     let s = await r.pushManager.getSubscription();
     // Una suscripción hecha con otra llave (si un día se cambia el par VAPID) ya no sirve: se rehace.
     const llave = s?.options?.applicationServerKey ? b64u(s.options.applicationServerKey) : null;
-    if (s && llave && llave !== LLAVE_PUBLICA) { await s.unsubscribe().catch(() => false); s = null; }
-    if (!s) s = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: deB64u(LLAVE_PUBLICA) });
+    if (s && llave && llave !== publica) { await s.unsubscribe().catch(() => false); s = null; }
+    if (!s) s = await r.pushManager.subscribe({ userVisibleOnly: true, applicationServerKey: deB64u(publica) });
     const e = await guardarEnServidor(s);
     escribir(K_ACTIVO, e === 'activo' ? '1' : null);
     return e;
@@ -102,12 +114,8 @@ export async function activarAvisosWeb(): Promise<EstadoWeb> {
 /** Al entrar de nuevo con la sesión: si ya estaban activos aquí, se vuelven a anotar (otra cuenta, suscripción renovada). */
 export async function renovarAvisosWeb(): Promise<void> {
   if (!soportaAvisosWeb() || Notification.permission !== 'granted' || leer(K_ACTIVO) !== '1') return;
-  try {
-    const r = await registro();
-    const s = await r.pushManager.getSubscription();
-    if (!s) { escribir(K_ACTIVO, null); return; }
-    await guardarEnServidor(s);
-  } catch { /* se reintenta la próxima vez */ }
+  // Con el permiso ya dado no pregunta nada: rehace la suscripción si cambió la llave y la vuelve a anotar.
+  await activarAvisosWeb();
 }
 
 /** Apaga los avisos en este navegador (botón) o al cerrar sesión (`soloServidor`: la suscripción queda para la próxima cuenta). */

@@ -143,6 +143,13 @@ select public._v('P3', '…quedan 10 y se fue el más viejo',
 select public._v('P3', 'el tope es por persona: los de otros no se tocan',
   (select count(*) from public.avisos_web where user_id = '00000000-0000-0000-0000-0000000000a3') = 3);
 
+-- ---- P3b · la llave VAPID del servidor ----
+select public._t('P3b', 'nadie lee la llave del servidor desde la API (ni el dueño)', 'authenticated', :S, $q$ select privada from public.avisos_web_llave $q$, 'permission denied');
+select public._t('P3b', 'ni un visitante', 'anon', :A, $q$ select privada from public.avisos_web_llave $q$, 'permission denied');
+insert into public.avisos_web_llave (publica, privada) values (:K, '{"x":"a","y":"b","d":"c"}');
+select public._t('P3b', 'la función (service_role) sí la lee', 'service_role', null, $q$ select 1 / (select count(*)::int from public.avisos_web_llave) $q$);
+select public._t('P3b', 'una segunda llave no entra', 'service_role', null, $q$ insert into public.avisos_web_llave (id, publica, privada) values (2, 'B' || repeat('Q', 86), '{}') $q$, 'avisos_web_llave_id_check');
+
 -- ---- P4 · se puede aplicar dos veces ----
 \i supabase/migracion_chat_push.sql
 \i supabase/migracion_avisos_web.sql
