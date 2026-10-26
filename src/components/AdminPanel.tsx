@@ -227,18 +227,8 @@ export default function AdminPanel({
     return () => clearTimeout(t);
   }, [currentUser?.email]);
 
-  // AVISOS PUSH: este teléfono se registra para que el servidor le avise de
-  // los mensajes del chat (con «Responder» en la propia notificación) y de
-  // lo que vigila Javier, aunque la app esté cerrada. Se reintenta al volver
-  // a la app (token renovado, permiso dado en Ajustes del teléfono).
-  useEffect(() => {
-    if (!esStaff(currentUser?.role)) return;
-    const arrancar = () => { void import('../mobile/pushNativo').then(m => m.iniciarPush(currentUser?.role)).catch(() => { /* sin push */ }); };
-    const t = setTimeout(arrancar, 2500);
-    const alVolver = () => { if (document.visibilityState === 'visible') arrancar(); };
-    document.addEventListener('visibilitychange', alVolver);
-    return () => { clearTimeout(t); document.removeEventListener('visibilitychange', alVolver); };
-  }, [currentUser?.role]);
+  // AVISOS PUSH: el registro de este teléfono (y de este navegador) se hace en App.tsx, para toda la app:
+  // la APK abre en la tienda y quien no entra al panel también tiene que recibirlos.
 
   // «OYE PHILL»: si estaba activado en este teléfono y el servicio no corre (se reinició el
   // teléfono o Android lo cerró), se vuelve a prender al abrir la app. Con otra cuenta que
@@ -746,6 +736,7 @@ export default function AdminPanel({
     // Este teléfono deja de recibir los avisos de la cuenta (volverá a
     // recibirlos cuando se entre otra vez).
     await import('../mobile/pushNativo').then(m => m.cerrarPush()).catch(() => { /* sin push */ });
+    await import('../utils/avisosWeb').then(m => m.apagarAvisosWeb(true)).catch(() => { /* sin avisos web */ });
     // «Oye Javier» también se apaga: otra persona no puede llamar a Javier del dueño en este teléfono.
     await import('../mobile/oyePhill').then(m => m.detenerOyePhill()).catch(() => { /* sin Oye Javier */ });
     await cerrarSesionConservandoBiometria();

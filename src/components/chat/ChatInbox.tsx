@@ -2,6 +2,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import { Clock, Search } from 'lucide-react';
 import { ChatConversation } from '../../types';
 import { selloDeLista, estaEnLinea, inicialDe, colorDe } from './formatoChat';
+import ActivarAvisos from './ActivarAvisos';
 import type { ChatStatusFilter, ResolvedRange } from './ChatCRM';
 
 interface ChatInboxProps {
@@ -92,6 +93,7 @@ export default function ChatInbox({
             </button>
           ))}
         </div>
+        <ActivarAvisos />
         {statusFilter === 'resueltos' && (
           <div className="tv-chat-rango" id="chat-resolved-range">
             <Clock className="w-3.5 h-3.5 shrink-0" />

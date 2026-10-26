@@ -126,6 +126,11 @@ export function lecturaRapida(): { products: Product[]; banners: Banner[]; setti
   return { products: localCache.products, banners: localCache.banners, settings: localCache.settings };
 }
 
+/** Las conversaciones del chat que hay en memoria, SIN copiarlas (para el vigía del chat). De SOLO LECTURA. */
+export function lecturaDelChat(): readonly ChatConversation[] {
+  return localCache.chat_conversations || [];
+}
+
 function guardarCacheLocal(): void {
   if (cacheDeshabilitada || typeof window === 'undefined') return;
   try {

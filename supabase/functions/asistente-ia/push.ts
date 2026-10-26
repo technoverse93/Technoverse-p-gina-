@@ -13,10 +13,14 @@
 //   leer nada ni para otra conversación.
 // · También avisa lo que Javier vigila (chats esperando, existencias,
 //   seguridad…), para que lleguen con la app cerrada.
+// · Lo mismo va a los navegadores con los avisos web activos (avisosWeb.ts),
+//   que no necesitan Firebase.
 // Secreto necesario (Supabase → Edge Functions → Secrets):
 //   FCM_SERVICE_ACCOUNT  el JSON de la cuenta de servicio de Firebase.
 // Si falta, no pasa nada: simplemente no se manda (y se dice en el log).
 // =====================================================================
+
+import { enviarAvisosWeb, type ResultadoWeb } from './avisosWeb.ts';
 
 type Db = any;
 export type DatosPush = Record<string, string>;
@@ -96,10 +100,23 @@ async function accesoFcm(): Promise<{ token: string; proyecto: string } | null> 
   return { token: tokenCache.valor, proyecto: tokenCache.proyecto };
 }
 
-/** Manda `datos` a todos los teléfonos de esas personas. Borra los que ya no existen. */
-export async function enviarPush(admin: Db, porPersona: Map<string, DatosPush>): Promise<{ enviados: number; fallidos: number; sinConfig?: boolean; sinTelefonos?: boolean }> {
+type ResultadoPush = { enviados: number; fallidos: number; sinConfig?: boolean; sinTelefonos?: boolean; web?: ResultadoWeb };
+
+/**
+ * Manda `datos` a todos los teléfonos (APK, por Firebase) y navegadores (avisos web) de esas personas. Borra los
+ * que ya no existen. `enviados`, `sinConfig` y `sinTelefonos` son de los teléfonos; lo de los navegadores va en `web`.
+ */
+export async function enviarPush(admin: Db, porPersona: Map<string, DatosPush>): Promise<ResultadoPush> {
   const ids = [...porPersona.keys()];
   if (!ids.length) return { enviados: 0, fallidos: 0 };
+  const web = enviarAvisosWeb(admin, porPersona).catch((e): ResultadoWeb => {
+    console.log(`avisos web: ${e instanceof Error ? e.message : e}`);
+    return { enviados: 0, fallidos: 0, suscripciones: 0 };
+  });
+  return { ...(await enviarATelefonos(admin, porPersona, ids)), web: await web };
+}
+
+async function enviarATelefonos(admin: Db, porPersona: Map<string, DatosPush>, ids: string[]): Promise<ResultadoPush> {
   const { data: filas } = await admin.from('dispositivos_push').select('token,user_id').in('user_id', ids).limit(200);
   const telefonos = (filas || []) as { token: string; user_id: string }[];
   if (!telefonos.length) return { enviados: 0, fallidos: 0, sinTelefonos: true };
