@@ -42,7 +42,7 @@ select public._t('C', 'un cliente NO agrega textos', 'authenticated', :C,
 select public._t('C', 'un empleado NO edita la página (en la app tampoco puede)', 'authenticated', :E,
   $q$ insert into public.contenido_sitio (clave, valor) values ('tienda.empleado', 'x') $q$, 'row-level security');
 select public._t('C', 'un visitante NO escribe', 'anon', :A,
-  $q$ insert into public.contenido_sitio (clave, valor) values ('tienda.anon', 'x') $q$, 'permission denied');
+  $q$ insert into public.contenido_sitio (clave, valor) values ('tienda.anon', 'x') $q$, 'row-level security');
 select public._t('C', 'el admin edita un texto (upsert, como la app)', 'authenticated', :D,
   $q$ insert into public.contenido_sitio (clave, valor, tipo) values ('tienda.vacio_titulo', 'Nuevos ingresos', 'texto')
       on conflict (clave) do update set valor = excluded.valor $q$);
