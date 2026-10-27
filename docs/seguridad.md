@@ -75,6 +75,10 @@ avisos conocidos (Google, Mozilla, Microsoft, Apple), así la función nunca le 
 persona. El gatillo del chat solo pasa el id del mensaje (no el texto) por `jarvis_llamar`, que no se puede llamar desde la
 API, y si avisar falla el mensaje del cliente se guarda igual. Los avisos web viajan cifrados para cada navegador
 (RFC 8291): el servicio de avisos no puede leerlos. La llave privada VAPID es el secreto `VAPID_PRIVADA` de la función.
+`migracion_contenido_y_ubicaciones.sql` (auditoría del 2026-10-27): `contenido_sitio` dejaba escribir a **cualquier cuenta**
+(`with check (true)`), y como el registro está abierto y confirma el correo solo, un extraño podía reescribir los textos de
+la tienda en vivo. Ahora escribir exige `is_owner()` (superadmin y admin, lo mismo que `esGestion` en la app); leer sigue
+siendo público. Y un visitante ya no puede anotar ubicaciones como «administrador» (queda «cliente»).
 
 ## Lo que queda (decisiones y trabajo pendiente)
 
