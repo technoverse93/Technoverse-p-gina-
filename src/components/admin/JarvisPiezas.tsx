@@ -11,6 +11,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { Ban, Unlock, LogOut, Timer, KeyRound, Undo2, CircleCheck, CircleX, Clock, ArrowUpRight, BarChart3, Table2, Lock, Receipt, Brain, FileText, MessageSquare, Wrench, Package } from 'lucide-react';
 import { supabase } from '../../supabaseClient';
 import { avisarCambioDeBloqueos, avisarCierreDeSesion } from '../../seguridad/killSwitch';
+import { colones as colonesFmt } from '../../utils/dinero';
 
 export type OpcionTarjeta =
   | { id: string; tipo: 'elegir'; etiqueta: string; valores: { valor: string; texto: string; ayuda?: string }[]; defecto: string }
@@ -346,7 +347,7 @@ export function TarjetaIr({ titulo, destino, onAbrir }: { titulo: string; destin
 }
 
 export interface Grafico { titulo: string; subtitulo: string; etiquetas: string[]; fechas: string[]; fechasAnt: string[]; series: { nombre: string; valores: number[] }[] }
-const colones = (n: number) => '₡' + Math.round(n).toLocaleString('es-CR');
+const colones = (n: number) => colonesFmt(n);
 const pct = (a: number, b: number) => (b ? `${a >= b ? '+' : '−'}${Math.abs((a / b - 1) * 100).toFixed(0)} %` : '—');
 
 /** Barras agrupadas: este período (acento) contra el anterior (gris de contexto). */

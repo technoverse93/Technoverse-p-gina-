@@ -13,6 +13,7 @@ import { tomarFotoNativa, hayCamaraNativa } from '../utils/camara';
 import { grabarNotaDeVoz, puedeGrabarVoz, type GrabacionEnCurso } from '../utils/grabadorVoz';
 import AudioMensaje from './chat/AudioMensaje';
 import { pedirPermisoNotificaciones, notificarMensajeChat, EVENTO_ABRIR_CHAT } from '../mobile/notificaciones';
+import { avisarPanel, alCambiarPanel } from '../utils/panelTienda';
 
 // ---------------------------------------------------------------------
 // DECISIÓN TOMADA: el chat funciona COMPLETO en los dos lados
@@ -99,6 +100,10 @@ function yaEscribioElCliente(conv: ChatConversation | undefined): boolean {
 
 export default function LiveChat() {
   const [isOpen, setIsOpen] = useState(false);
+  // Un panel a la vez: si se abre el carrito o la cuenta, el chat se aparta (antes quedaba encima
+  // del carrito y tapaba el botón de pagar); y al abrirse, el chat les avisa a ellos.
+  useEffect(() => { avisarPanel('chat', isOpen); }, [isOpen]);
+  useEffect(() => alCambiarPanel((panel, abierto) => { if (panel !== 'chat' && abierto) setIsOpen(false); }), []);
   const [conversations, setConversations] = useState<ChatConversation[]>([]);
   const [activeConvId, setActiveConvId] = useState<string | null>(null);
   const [inputText, setInputText] = useState('');

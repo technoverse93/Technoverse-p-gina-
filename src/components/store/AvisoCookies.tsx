@@ -28,7 +28,8 @@
 // enorme solo crece el texto (que se desplaza); el botón queda siempre a la vista.
 // =====================================================================
 
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
+import { alCambiarPanel } from '../../utils/panelTienda';
 import { X } from 'lucide-react';
 
 /** Dónde se recuerda, en este aparato, que la persona ya vio el aviso. */
@@ -52,8 +53,12 @@ function verMasInformacion(): void {
 
 export default function AvisoCookies() {
   const [visible, setVisible] = useState(() => !yaLoVio());
+  // Mientras el chat está abierto el aviso se aparta (sin darse por visto): antes tapaba el botón
+  // «Iniciar chat seguro». Al cerrar el chat vuelve.
+  const [chatAbierto, setChatAbierto] = useState(false);
+  useEffect(() => alCambiarPanel((panel, abierto) => { if (panel === 'chat') setChatAbierto(abierto); }), []);
 
-  if (!visible) return null;
+  if (!visible || chatAbierto) return null;
 
   // Aceptar y cerrar son lo mismo: se da por conocido, se guarda y se desmonta.
   const cerrar = () => {

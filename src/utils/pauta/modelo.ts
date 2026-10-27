@@ -8,6 +8,7 @@
 // =====================================================================
 
 import type { Banner } from '../../types';
+import { colones as colonesFmt } from '../dinero';
 
 export type FormatoId = 'cuadrado' | 'retrato' | 'historia' | 'horizontal' | 'banner';
 export type EstiloId = 'premium' | 'claro' | 'vibrante' | 'oferta';
@@ -95,7 +96,7 @@ export function formatoDeBanner(f: FormatoId): NonNullable<Banner['formato']> {
   return f === 'banner' ? 'hero' : f === 'horizontal' ? 'divisor' : 'grid';
 }
 
-export const colones = (n: number) => `₡${Math.round(n || 0).toLocaleString('es-CR')}`;
+export const colones = (n: number) => colonesFmt(n);
 
 /** El texto completo para pegar en la red: la publicación y sus hashtags. */
 export function textoPublicacion(caption: string, hashtags: string[]): string {

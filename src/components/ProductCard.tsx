@@ -1,6 +1,7 @@
 import React from 'react';
 import { Smartphone } from 'lucide-react';
 import { Product } from '../types';
+import { miles } from '../utils/dinero';
 
 interface ProductCardProps {
   key?: any;
@@ -113,11 +114,11 @@ export const ProductCard = React.memo(function ProductCard({ prod, onClick, onAd
         <div className="mt-auto flex min-w-0 flex-col gap-0.5">
           <div className="flex min-w-0 flex-wrap items-baseline gap-x-1.5">
             <span className="tv-prod-precio">
-              <span className="tv-prod-moneda">₡</span>{discountedPrice.toLocaleString()}
+              <span className="tv-prod-moneda">₡</span>{miles(discountedPrice)}
             </span>
             {isDiscounted && (
               <span className="tv-prod-tachado">
-                ₡{prod.price.toLocaleString()}
+                ₡{miles(prod.price)}
               </span>
             )}
           </div>

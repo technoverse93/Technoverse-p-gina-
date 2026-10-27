@@ -7,6 +7,7 @@
 // =====================================================================
 
 import type { Banner, Product } from '../types';
+import { colones as colonesFmt } from './dinero';
 
 function idNuevo(): string {
   try {
@@ -17,7 +18,7 @@ function idNuevo(): string {
 
 /** Precio formateado en colones. */
 function colones(n: number): string {
-  return `₡${Math.round(n || 0).toLocaleString('es-CR')}`;
+  return colonesFmt(n);
 }
 
 /**
