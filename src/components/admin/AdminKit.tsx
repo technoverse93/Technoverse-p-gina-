@@ -23,6 +23,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 import type { LucideIcon } from 'lucide-react';
 import { useAjusteDeTextos } from '../../utils/ajustarTexto';
+import { colones as colonesFmt } from '../../utils/dinero';
 
 // =====================================================================
 // PUENTES HACIA LA REGLETA
@@ -395,5 +396,5 @@ export function Empty({
 
 /** Colones con separador de miles y sin decimales. */
 export function colones(monto: number): string {
-  return `₡${Math.round(monto || 0).toLocaleString('es-CR')}`;
+  return colonesFmt(monto);
 }

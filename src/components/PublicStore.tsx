@@ -42,6 +42,8 @@ import BannerPrincipal from './store/BannerPrincipal';
 import { Cintillo, TarjetasCampana, BannerDivisor, TarjetasBannerGrid, PopupPromocional } from './store/BannersTienda';
 import PieDePagina from './store/PieDePagina';
 import AvisoCookies from './store/AvisoCookies';
+import { avisarPanel, alCambiarPanel } from '../utils/panelTienda';
+import { miles } from '../utils/dinero';
 
 const DEFAULT_CAABYS = '8399000000000';
 
@@ -365,6 +367,14 @@ export default function PublicStore({
     window.addEventListener('resize', handleDropdownPosition);
     return () => window.removeEventListener('resize', handleDropdownPosition);
   }, [isAccountDropdownOpen, isCartDropdownOpen]);
+
+  // Un panel flotante a la vez (ver utils/panelTienda): abrir el carrito o la cuenta aparta el chat,
+  // y abrir el chat cierra estos menús.
+  useEffect(() => { if (isCartDropdownOpen) avisarPanel('carrito', true); }, [isCartDropdownOpen]);
+  useEffect(() => { if (isAccountDropdownOpen) avisarPanel('cuenta', true); }, [isAccountDropdownOpen]);
+  useEffect(() => alCambiarPanel((panel, abierto) => {
+    if (panel === 'chat' && abierto) { setIsCartDropdownOpen(false); setIsAccountDropdownOpen(false); }
+  }), []);
 
   // Real-time Cart bounce engine (200ms scale feedback)
   const prevCartCount = React.useRef(0);
@@ -1072,7 +1082,7 @@ export default function PublicStore({
       return;
     }
 
-    addAuditLog('cliente@technoverse.com', 'Ventas', 'Crear Compra', `Factura ${invoiceId} emitida por un monto de ₡${cartTotal.toLocaleString()} para ${recipientName}`);
+    addAuditLog('cliente@technoverse.com', 'Ventas', 'Crear Compra', `Factura ${invoiceId} emitida por un monto de ₡${miles(cartTotal)} para ${recipientName}`);
 
     // Comprobante fiscal v4.3 (registro interno): la venta y el stock ya
     // quedaron confirmados arriba, así que un fallo aquí NUNCA debe revertir
@@ -1606,10 +1616,10 @@ export default function PublicStore({
                             </div>
                             <div className="flex justify-between items-end mt-1">
                               <div className="text-[11px] font-bold text-[var(--text-muted)]">
-                                {it.quantity} x ₡{getProductDiscountedPrice(it.product).toLocaleString()}
+                                {it.quantity} x ₡{miles(getProductDiscountedPrice(it.product))}
                               </div>
                               <div className="text-sm font-black text-blue-600 font-mono">
-                                ₡{(getProductDiscountedPrice(it.product) * it.quantity).toLocaleString()}
+                                ₡{miles((getProductDiscountedPrice(it.product) * it.quantity))}
                               </div>
                             </div>
                           </div>
@@ -1623,7 +1633,7 @@ export default function PublicStore({
                       <div className="flex justify-between items-center px-1">
                         <span className="text-xs font-bold text-[var(--text-muted)] uppercase">Subtotal</span>
                         <span className="text-lg font-black text-[var(--text-secondary)] font-mono">
-                          ₡{cart.reduce((sum, it) => sum + (getProductDiscountedPrice(it.product) * it.quantity), 0).toLocaleString()}
+                          ₡{miles(cart.reduce((sum, it) => sum + (getProductDiscountedPrice(it.product) * it.quantity), 0))}
                         </span>
                       </div>
                       <button
@@ -2050,7 +2060,7 @@ export default function PublicStore({
                         </div>
 
                         <div className="flex flex-col items-end justify-between">
-                          <span className="font-mono font-bold text-[var(--text-primary)]">₡{getProductDiscountedPrice(it.product).toLocaleString()}</span>
+                          <span className="font-mono font-bold text-[var(--text-primary)]">₡{miles(getProductDiscountedPrice(it.product))}</span>
                           
                           <div className="flex items-center gap-2 mt-1">
                             <button 
@@ -2321,10 +2331,10 @@ export default function PublicStore({
 
                   <div className="bg-[var(--bg-surface)] p-4 rounded-2xl border border-[var(--border-color)] space-y-1.5 text-sm text-[var(--text-primary)] shadow-sm">
                     <div>Orden: <strong className="text-emerald-600 font-mono">{confirmedOrder.id}</strong></div>
-                    <div>Fecha: <span className="font-mono text-[var(--text-secondary)]">{new Date(confirmedOrder.timestamp).toLocaleString()}</span></div>
+                    <div>Fecha: <span className="font-mono text-[var(--text-secondary)]">{new Date(confirmedOrder.timestamp).toLocaleString('es-CR')}</span></div>
                     <div>Receptor: <strong className="text-[var(--text-primary)]">{confirmedOrder.customerName}</strong></div>
-                    <div>Impuesto IVA (13%): <strong className="font-mono text-[var(--text-primary)]">₡{confirmedOrder.taxAmount.toLocaleString()}</strong></div>
-                    <div className="text-sm font-bold border-t border-[var(--border-color)] pt-2 mt-2">Total Pagado: <span className="text-emerald-600 font-mono">₡{confirmedOrder.total.toLocaleString()}</span></div>
+                    <div>Impuesto IVA (13%): <strong className="font-mono text-[var(--text-primary)]">₡{miles(confirmedOrder.taxAmount)}</strong></div>
+                    <div className="text-sm font-bold border-t border-[var(--border-color)] pt-2 mt-2">Total Pagado: <span className="text-emerald-600 font-mono">₡{miles(confirmedOrder.total)}</span></div>
                   </div>
 
                   {invoiceInfo && (
@@ -2365,7 +2375,7 @@ export default function PublicStore({
                   <div className="space-y-1.5 text-sm">
                     <div className="flex justify-between gap-2 text-[var(--text-secondary)] min-w-0">
                       <span className="truncate">Subtotal:</span>
-                      <span className="font-mono flex-shrink-0">₡{cartSubtotal.toLocaleString()}</span>
+                      <span className="font-mono flex-shrink-0">₡{miles(cartSubtotal)}</span>
                     </div>
                     {/* Coupon UI */}
                     {checkoutStep === 0 && (
@@ -2397,19 +2407,19 @@ export default function PublicStore({
                         <span className="truncate">Cupón ({appliedCoupon.code}):</span>
                         <span className="font-mono flex-shrink-0">-₡{
                           appliedCoupon.type === 'Porcentaje' 
-                            ? Math.round(discountedSubtotal * (appliedCoupon.value / 100)).toLocaleString() 
-                            : appliedCoupon.value.toLocaleString()
+                            ? miles(Math.round(discountedSubtotal * (appliedCoupon.value / 100))) 
+                            : miles(appliedCoupon.value)
                         }</span>
                       </div>
                     )}
 
                     <div className="flex justify-between gap-2 text-[var(--text-secondary)] font-mono mt-2 border-t border-[var(--border-color)] pt-2 min-w-0">
                       <span className="truncate">IVA Desglosado (13%):</span>
-                      <span className="flex-shrink-0">₡{cartTax.toLocaleString()}</span>
+                      <span className="flex-shrink-0">₡{miles(cartTax)}</span>
                     </div>
                     <div className="flex justify-between gap-2 text-[var(--text-primary)] font-extrabold text-sm border-t border-[var(--border-color)] pt-2 min-w-0">
                       <span className="truncate">Total a Pagar:</span>
-                      <span className="font-mono text-blue-600 flex-shrink-0">₡{cartTotal.toLocaleString()}</span>
+                      <span className="font-mono text-blue-600 flex-shrink-0">₡{miles(cartTotal)}</span>
                     </div>
                   </div>
 
@@ -2716,15 +2726,15 @@ export default function PublicStore({
                       return isDiscounted ? (
                         <>
                           <span className="tv-prod-precio" style={{ fontSize: 24, color: 'var(--accent)' }}>
-                            ₡{discountedPrice.toLocaleString()}
+                            ₡{miles(discountedPrice)}
                           </span>
                           <span className="tv-prod-tachado" style={{ fontSize: 13 }}>
-                            ₡{selectedProductDetail.price.toLocaleString()}
+                            ₡{miles(selectedProductDetail.price)}
                           </span>
                         </>
                       ) : (
                         <span className="tv-prod-precio" style={{ fontSize: 24 }}>
-                          ₡{selectedProductDetail.price.toLocaleString()}
+                          ₡{miles(selectedProductDetail.price)}
                         </span>
                       );
                     })()}
