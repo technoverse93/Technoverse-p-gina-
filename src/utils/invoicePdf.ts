@@ -57,6 +57,7 @@ export interface InvoiceLineInput {
   qty: number;
   unitPrice: number; // precio unitario FINAL, el mismo que se anuncia en la tienda (IVA incluido)
   warranty?: string; // ej. "12 meses"; se muestra en la columna de garantía cuando aplica
+  discount?: number; // descuento de la línea (IVA incluido), p. ej. su parte de un cupón: se resta del total de la línea
 }
 
 export interface InvoiceLineComputed extends InvoiceLineInput {
@@ -81,12 +82,16 @@ export function computeInvoiceTotals(lines: InvoiceLineInput[]): {
   subtotal: number;
   ivaTotal: number;
   total: number;
+  descuentoTotal: number;
 } {
   let subtotal = 0;
   let ivaTotal = 0;
   let total = 0;
+  let descuentoTotal = 0;
   const items: InvoiceLineComputed[] = lines.map(l => {
-    const lineTotal = round2(l.qty * l.unitPrice);
+    const descuento = round2(Math.max(0, l.discount || 0));
+    descuentoTotal = round2(descuentoTotal + descuento);
+    const lineTotal = round2(Math.max(0, l.qty * l.unitPrice - descuento));
     const lineSubtotal = round2(lineTotal / (1 + IVA_RATE));
     const lineIva = round2(lineTotal - lineSubtotal);
     subtotal = round2(subtotal + lineSubtotal);
@@ -94,7 +99,27 @@ export function computeInvoiceTotals(lines: InvoiceLineInput[]): {
     total = round2(total + lineTotal);
     return { ...l, lineSubtotal, lineIva, lineTotal };
   });
-  return { items, subtotal, ivaTotal, total };
+  return { items, subtotal, ivaTotal, total, descuentoTotal };
+}
+
+/**
+ * Reparte un descuento global (un cupón, IVA incluido) entre las líneas, en proporción a lo que pesa cada
+ * una. La última absorbe los céntimos del redondeo, así el total del comprobante queda EXACTAMENTE igual a
+ * lo cobrado. Antes la factura ignoraba el cupón y salía por más de lo que el cliente pagó.
+ */
+export function repartirDescuento(lines: InvoiceLineInput[], monto: number): InvoiceLineInput[] {
+  const bruto = lines.map(l => round2(l.qty * l.unitPrice));
+  const totalBruto = round2(bruto.reduce((a, b) => a + b, 0));
+  const descuento = round2(Math.min(Math.max(0, monto || 0), totalBruto));
+  if (descuento <= 0 || totalBruto <= 0) return lines;
+  let repartido = 0;
+  return lines.map((l, i) => {
+    const parte = i === lines.length - 1
+      ? round2(descuento - repartido)
+      : round2(descuento * (bruto[i] / totalBruto));
+    repartido = round2(repartido + parte);
+    return { ...l, discount: round2((l.discount || 0) + parte) };
+  });
 }
 
 /**
@@ -129,6 +154,7 @@ export interface InvoiceData {
   subtotal: number;
   ivaTotal: number;
   total: number;
+  descuentoTotal?: number; // cupón aplicado (IVA incluido); ya está restado del total
 }
 
 /** Texto plano codificado en el QR: respaldo interno, NO un enlace oficial de Hacienda. */
@@ -414,7 +440,8 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
 
   const boxW = 68;
   const boxX = pageWidth - marginX - boxW;
-  const boxH = 34;
+  const conDescuento = (data.descuentoTotal || 0) > 0;
+  const boxH = conDescuento ? 40 : 34;
   doc.setFillColor(...PANEL);
   doc.setDrawColor(...LINE);
   doc.roundedRect(boxX, qrY, boxW, boxH, 2, 2, 'FD');
@@ -428,6 +455,11 @@ async function buildInvoicePdfProfesional(data: InvoiceData): Promise<{ blob: Bl
   ty += 6;
   doc.text('IVA (13%)', boxX + padBox, ty);
   drawColones(doc, data.ivaTotal, boxX + boxW - padBox, ty, { align: 'right', color: INK_SOFT });
+  if (conDescuento) {
+    ty += 6;
+    doc.text('Descuento aplicado', boxX + padBox, ty);
+    drawColones(doc, -(data.descuentoTotal || 0), boxX + boxW - padBox, ty, { align: 'right', color: INK_SOFT });
+  }
   ty += 4;
   doc.setDrawColor(...LINE);
   doc.line(boxX + padBox, ty, boxX + boxW - padBox, ty);

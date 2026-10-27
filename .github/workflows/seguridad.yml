@@ -84,3 +84,5 @@ jobs:
         run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/avisos.sql
       - name: Contenido de la tienda y ubicaciones (solo la gestión edita, sin rol falso)
         run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/contenido_y_ubicaciones.sql
+      - name: Comprobantes inmutables (nadie borra ni edita una factura desde la API)
+        run: psql -d prueba -v ON_ERROR_STOP=1 -q -f supabase/pruebas/facturas_inmutables.sql
