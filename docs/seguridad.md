@@ -80,6 +80,15 @@ API, y si avisar falla el mensaje del cliente se guarda igual. Los avisos web vi
 la tienda en vivo. Ahora escribir exige `is_owner()` (superadmin y admin, lo mismo que `esGestion` en la app); leer sigue
 siendo público. Y un visitante ya no puede anotar ubicaciones como «administrador» (queda «cliente»).
 
+`migracion_facturas_inmutables.sql` (2026-10-27): cualquier miembro del personal podía BORRAR o EDITAR un comprobante
+fiscal desde el navegador (así faltan los comprobantes 1 a 5 de la serie 01). Ahora nadie escribe en `invoices` desde la
+API: se emite con `issue_invoice()`, el PDF con `set_invoice_pdf()` y el estado del correo lo anota la función con
+`service_role`. Un comprobante se anula con nota de crédito, no se borra.
+La función `send-invoice-email` (ahora en el repo, `supabase/functions/send-invoice-email`): su modo de prueba dejaba a
+cualquiera mandar correos con asunto y PDF a elección DESDE el Gmail del negocio; ahora exige sesión del personal, el
+asunto es fijo, un visitante solo dispara el primer envío de su comprobante, el PDF solo se baja del bucket `invoices`
+del proyecto y el nombre del cliente se escapa en el HTML.
+
 ## Lo que queda (decisiones y trabajo pendiente)
 
 - **Pedido servidor-autoritativo** (recomendado, aún no hecho): hoy el navegador calcula precios, IVA, cupón y stock y los

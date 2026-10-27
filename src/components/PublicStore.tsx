@@ -23,7 +23,7 @@ import LiveChat from './LiveChat';
 import { useToast } from './ui/Overlays';
 import BotonTema from './ui/BotonTema';
 import {
-  IdentificacionTipo, TipoDoc, MedioPago, validateCedula, computeInvoiceTotals, nombreArchivoComprobante,
+  IdentificacionTipo, TipoDoc, MedioPago, validateCedula, computeInvoiceTotals, repartirDescuento, nombreArchivoComprobante,
   buildInvoicePdfBlob, generateQrDataUrl, InvoiceData
 } from '../utils/invoicePdf';
 
@@ -1089,14 +1089,19 @@ export default function PublicStore({
     // ni bloquear la compra — solo se informa y queda pendiente de soporte.
     try {
       const medioPago: MedioPago = '04'; // SINPE Móvil: el único método real del checkout.
-      const { items: invoiceItems, subtotal: invSubtotal, ivaTotal: invIva, total: invTotal } = computeInvoiceTotals(
-        cart.map(it => ({
-          caabys: it.product.caabys || DEFAULT_CAABYS,
-          description: it.product.name,
-          qty: it.quantity,
-          unitPrice: getProductDiscountedPrice(it.product),
-          warranty: it.product.warranty || undefined
-        }))
+      // El cupón se reparte entre las líneas: antes la factura ignoraba el cupón y salía por MÁS de lo que
+      // el cliente pagó (el pedido sí lo descontaba). Ahora el total del comprobante = lo cobrado.
+      const { items: invoiceItems, subtotal: invSubtotal, ivaTotal: invIva, total: invTotal, descuentoTotal: invDescuento } = computeInvoiceTotals(
+        repartirDescuento(
+          cart.map(it => ({
+            caabys: it.product.caabys || DEFAULT_CAABYS,
+            description: it.product.name,
+            qty: it.quantity,
+            unitPrice: getProductDiscountedPrice(it.product),
+            warranty: it.product.warranty || undefined
+          })),
+          couponDiscountAmount
+        )
       );
       const { data: issued, error: issueErr } = await supabase.rpc('issue_invoice', {
         p_order_id: invoiceId,
@@ -1142,7 +1147,8 @@ export default function PublicStore({
         items: invoiceItems,
         subtotal: invSubtotal,
         ivaTotal: invIva,
-        total: invTotal
+        total: invTotal,
+        descuentoTotal: invDescuento
       };
 
       const { blob, qrText } = await buildInvoicePdfBlob(invoiceData);
