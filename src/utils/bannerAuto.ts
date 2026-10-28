@@ -21,6 +21,13 @@ function colones(n: number): string {
   return colonesFmt(n);
 }
 
+/** La descripción del producto en una línea: sus viñetas («- 256 GB…- Original…») pasan a «256 GB… · Original…». */
+function descripcionCorta(texto?: string): string {
+  const partes = (texto || '').split(/\s*(?:^|\n|\s-\s|-\s(?=[A-ZÁÉÍÓÚÑ0-9]))\s*|\s*[•·]\s*/).map(t => t.replace(/^[-–•·\s]+/, '').trim()).filter(Boolean);
+  const linea = partes.join(' · ');
+  return linea.length > 120 ? linea.slice(0, 117).replace(/\s+\S*$/, '').replace(/[\s·,;:]+$/, '') + '…' : linea;
+}
+
 /**
  * Construye un banner de cuadrícula desde un producto. La etiqueta de
  * oferta es el descuento si lo hay; si no, el precio, que siempre es un
@@ -32,7 +39,7 @@ export function generarBannerDeProducto(p: Product, formato: Banner['formato'] =
   return {
     id: idNuevo(),
     title: p.name || 'Nuevo producto',
-    description: (p.description || '').trim().slice(0, 120) || 'Ya disponible en Technoverse.',
+    description: descripcionCorta(p.description) || 'Ya disponible en Technoverse.',
     imageUrl: p.imageUrl,
     link: undefined,
     type: 'General',

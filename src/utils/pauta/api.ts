@@ -43,8 +43,11 @@ export const pedirImagen = (o: { fondo: string; formato: FormatoId; estilo: Esti
 
 /** Sube la pieza final (JPEG) y devuelve su dirección pública. */
 export async function subirPieza(blob: Blob, id: string): Promise<string> {
-  const ruta = `pautas/${id}.jpg`;
-  const { error } = await supabase.storage.from('marketing').upload(ruta, blob, { contentType: 'image/jpeg', upsert: true, cacheControl: '31536000' });
+  // Un nombre NUEVO en cada subida y sin `upsert`: reemplazar un archivo exige poder LEER el bucket, y desde el
+  // blindaje (migracion_blindaje_seguridad.sql) nadie lista `marketing`. Con `upsert: true` y el mismo nombre,
+  // «Usar de banner» fallaba con «new row violates row-level security policy».
+  const ruta = `pautas/${id}-${Date.now().toString(36)}.jpg`;
+  const { error } = await supabase.storage.from('marketing').upload(ruta, blob, { contentType: 'image/jpeg', upsert: false, cacheControl: '31536000' });
   if (error) throw new Error(`No se pudo subir la imagen: ${error.message}`);
   const { data } = supabase.storage.from('marketing').getPublicUrl(ruta);
   if (!data?.publicUrl) throw new Error('La imagen se subió pero no tiene dirección pública.');
@@ -129,8 +132,8 @@ export function aPautaGuardada(o: {
 export async function subirFondo(dataUrl: string, id: string): Promise<string | null> {
   try {
     const blob = await (await fetch(dataUrl)).blob();
-    const ruta = `pautas/${id}-fondo.jpg`;
-    const { error } = await supabase.storage.from('marketing').upload(ruta, blob, { contentType: blob.type || 'image/jpeg', upsert: true, cacheControl: '31536000' });
+    const ruta = `pautas/${id}-fondo-${Date.now().toString(36)}.jpg`;
+    const { error } = await supabase.storage.from('marketing').upload(ruta, blob, { contentType: blob.type || 'image/jpeg', upsert: false, cacheControl: '31536000' });
     if (error) return null;
     return supabase.storage.from('marketing').getPublicUrl(ruta).data?.publicUrl || null;
   } catch { return null; }

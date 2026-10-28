@@ -29,6 +29,8 @@ import VistaPreviaBanner from './VistaPreviaBanner';
 import { useToast, useConfirm } from '../ui/Overlays';
 import { getDB, saveDB, addAuditLog, tablaEnModoLegacy } from '../../utils/storage';
 import { generarBannerDeProducto } from '../../utils/bannerAuto';
+import { esRepuesto, esInsumo } from '../../utils/categorias';
+import { colones } from '../../utils/dinero';
 import { estadoDeBanner, estiloDe, formatoRequiereImagen, ordenarBanners, VARIANTES, type EstadoBanner } from '../../utils/bannerEstado';
 import { leerMetricasBanners, type MetricasBanner } from '../../utils/bannerMetricas';
 import type { Banner, FormatoBanner, Product, User, VarianteBanner } from '../../types';
@@ -244,9 +246,10 @@ export default function GestorBanners({ currentUser }: { currentUser: User | nul
 
   const opcionesProducto = useMemo(
     () => productos
-      .filter(p => p && p.name && p.imageUrl)
+      // Solo lo que se vende en la tienda: los repuestos e insumos del taller (₡0, sin foto real) no van en un banner.
+      .filter(p => p && p.name && p.imageUrl && p.active !== false && !esRepuesto(p.category) && !esInsumo(p.category) && p.category !== 'Repuestos')
       .slice(0, 300)
-      .map(p => ({ value: p.id, label: `${p.name} — ₡${(p.price || 0).toLocaleString('es-CR')}` })),
+      .map(p => ({ value: p.id, label: `${p.name} — ${colones(p.price || 0)}` })),
     [productos]
   );
 

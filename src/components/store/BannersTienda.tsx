@@ -300,32 +300,26 @@ export function TarjetasBannerGrid({ banners, vista = false }: { banners: Banner
 
 function TarjetaGrid({ b, vista }: { b: Banner; vista: boolean }) {
   const ref = useVistaUnaVez(b.id, !vista);
+  // Se arma como una tarjeta de producto más (mismo fondo, borde y baldosa de foto), ocupando dos lugares:
+  // foto a la izquierda y texto a la derecha (foto arriba en el teléfono). Antes la foto iba con `object-cover`
+  // —el producto salía recortado— y el texto encima con un velo negro que sobre una foto clara se veía como
+  // una sombra sucia; además no medía lo mismo que las tarjetas de al lado.
   return (
-    <div ref={ref as React.RefObject<HTMLDivElement>} className="col-span-2">
-      <Envoltura
-        link={b.link}
-        contar={vista ? undefined : b.id}
-        className="relative block overflow-hidden rounded-2xl bg-[var(--bg-surface)] border border-[var(--border-color)] group"
-      >
-        <div className="relative w-full aspect-square sm:aspect-[2/1]">
-          <img
-            src={b.imageUrl}
-            alt={b.title || 'Promoción'}
-            className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.04]"
-            loading="lazy"
-            decoding="async"
-          />
-          {b.oferta && <Insignia texto={b.oferta} className="absolute top-2 left-2 px-2 py-0.5 text-[10px]" />}
-          {(b.title || b.description || b.cta) && (
-            <div className="absolute inset-x-0 bottom-0 p-2.5 bg-gradient-to-t from-black/75 to-transparent">
-              {b.title && <div className="font-bold text-[13px] leading-tight" style={{ color: '#fff' }}>{b.title}</div>}
-              {b.description && <div className="text-white/85 text-[11px] line-clamp-1">{b.description}</div>}
-              {b.cta && (
-                <BotonCta texto={b.cta} className="mt-1.5 px-2.5 py-0.5 text-[11px]" style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }} />
-              )}
-            </div>
-          )}
+    <div ref={ref as React.RefObject<HTMLDivElement>} className="col-span-2 min-w-0">
+      <Envoltura link={b.link} contar={vista ? undefined : b.id} className="tv-prod tv-grid-banner group">
+        <div className="tv-prod-foto tv-grid-banner-foto">
+          <img src={b.imageUrl} alt={b.title || 'Promoción'} loading="lazy" decoding="async" />
+          {b.oferta && <Insignia texto={b.oferta} className="absolute top-2 left-2 px-2 py-0.5 text-[11px]" />}
         </div>
+        {(b.title || b.description || b.cta) && (
+          <div className="tv-grid-banner-txt">
+            {b.title && <div className="tv-grid-banner-tit">{b.title}</div>}
+            {b.description && <div className="tv-grid-banner-desc">{b.description}</div>}
+            {b.cta && (
+              <BotonCta texto={b.cta} className="mt-auto px-3 py-1.5 text-[12px]" style={{ background: 'var(--accent)', color: 'var(--accent-ink)' }} />
+            )}
+          </div>
+        )}
       </Envoltura>
     </div>
   );
