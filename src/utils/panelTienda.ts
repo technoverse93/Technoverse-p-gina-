@@ -7,7 +7,7 @@
 // Cada uno avisa aquí cuando se abre o se cierra, y los demás se apartan solos.
 // =====================================================================
 
-export type PanelTienda = 'chat' | 'carrito' | 'cuenta';
+export type PanelTienda = 'chat' | 'carrito' | 'cuenta' | 'pago';
 
 const EVENTO = 'technoverse_panel_tienda';
 

@@ -374,6 +374,7 @@ export default function PublicStore({
   // Se avisa al abrir Y al cerrar: el aviso de cookies se aparta mientras hay un panel abierto y vuelve después.
   useEffect(() => { avisarPanel('carrito', isCartDropdownOpen); }, [isCartDropdownOpen]);
   useEffect(() => { avisarPanel('cuenta', isAccountDropdownOpen); }, [isAccountDropdownOpen]);
+  useEffect(() => { avisarPanel('pago', isCartOpen); }, [isCartOpen]);
   useEffect(() => alCambiarPanel((panel, abierto) => {
     if (panel === 'chat' && abierto) { setIsCartDropdownOpen(false); setIsAccountDropdownOpen(false); }
   }), []);
