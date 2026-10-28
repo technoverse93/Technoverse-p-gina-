@@ -95,8 +95,17 @@ export default function PanelUbicaciones({ currentUser }: { currentUser: User | 
       zoom: 8,
       zoomControl: true,
       attributionControl: true,
+      // La rueda y el dedo son de la PÁGINA: con ellos encima del mapa, la página no bajaba y el mapa se alejaba
+      // hasta mostrar el mundo repetido con franjas grises. Zoom con + / − (o pellizco); en táctil se arrastra
+      // con dos dedos.
+      scrollWheelZoom: false,
+      dragging: !L.Browser.mobile,
+      minZoom: 3,
+      maxBounds: [[-85, -180], [85, 180]],
+      maxBoundsViscosity: 1,
     });
     L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
+      noWrap: true,
       maxZoom: 19,
       attribution: '&copy; OpenStreetMap',
     }).addTo(mapa);

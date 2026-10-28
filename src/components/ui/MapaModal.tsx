@@ -43,8 +43,12 @@ export default function MapaModal({ abierto, onClose, lat, lon, precisionM, titu
       if (!vivo || !contenedorRef.current || mapaRef.current) return;
 
       const centro: [number, number] = [lat, lon];
-      const mapa = L.map(contenedorRef.current, { center: centro, zoom: 16, zoomControl: true, attributionControl: true });
-      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(mapa);
+      const mapa = L.map(contenedorRef.current, {
+        center: centro, zoom: 16, zoomControl: true, attributionControl: true,
+        // Igual que en Ubicaciones: la rueda no aleja el mapa hasta el mundo repetido (zoom con + / −).
+        scrollWheelZoom: false, minZoom: 3, maxBounds: [[-85, -180], [85, 180]], maxBoundsViscosity: 1,
+      });
+      L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', { noWrap: true, maxZoom: 19, attribution: '&copy; OpenStreetMap' }).addTo(mapa);
 
       if (precisionM && precisionM > 0 && precisionM < 5000) {
         L.circle(centro, { radius: precisionM, color: '#0C6C78', weight: 1, opacity: 0.4, fillColor: '#0C6C78', fillOpacity: 0.1 }).addTo(mapa);

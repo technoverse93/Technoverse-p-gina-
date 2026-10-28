@@ -26,6 +26,7 @@ import { CLAVE_PEDIDO_PAUTA, EVENTO_PEDIDO_PAUTA, type PedidoPauta } from '../..
 import { compartirImagen, guardarImagen } from '../../utils/guardarImagen';
 import type { Banner, MarketingRequest, Product, User } from '../../types';
 import '../../styles/estudio.css';
+import { esRepuesto, esInsumo } from '../../utils/categorias';
 
 
 const FONDOS: { id: FondoModo; nombre: string }[] = [
@@ -314,7 +315,8 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
   };
 
   const pendientes = solicitudes.filter(s => s.status === 'pendiente_imagen');
-  const opcionesProducto = useMemo(() => productos.slice(0, 700).map(p => ({
+  // Solo lo que se vende: los repuestos e insumos del taller (₡0, foto de relleno) no se publicitan.
+  const opcionesProducto = useMemo(() => productos.filter(p => !esRepuesto(p.category) && !esInsumo(p.category) && p.category !== 'Repuestos').slice(0, 700).map(p => ({
     value: p.id, label: `${p.name} — ${colones(Number(p.price) || 0)}`, searchText: `${p.sku || ''} ${p.category || ''}`,
   })), [productos]);
 

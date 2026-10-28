@@ -1091,6 +1091,19 @@ input, select, textarea { max-width: 100%; }
 }
 .tv-prod:focus-visible { outline: 3px solid rgba(var(--accent-rgb), 0.5); outline-offset: 2px; }
 .tv-prod-foto { background: var(--tile); border-radius: 10px; }
+/* Banner «tarjeta en la cuadrícula»: una tarjeta de producto de dos lugares (ver BannersTienda.tsx). */
+.tv-grid-banner { display: flex; flex-direction: column; gap: 8px; height: 100%; color: var(--text-primary); text-decoration: none; }
+.tv-grid-banner-foto { position: relative; flex: 1 1 auto; min-height: 140px; overflow: hidden; }
+.tv-grid-banner-foto img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; padding: 10px; transition: transform .2s ease; }
+@media (hover: hover) { .tv-grid-banner:hover .tv-grid-banner-foto img { transform: scale(1.04); } }
+.tv-grid-banner-txt { display: flex; flex-direction: column; align-items: flex-start; gap: 4px; min-width: 0; padding: 2px 4px 4px; }
+.tv-grid-banner-tit { font-size: 15px; font-weight: 800; line-height: 1.25; color: var(--text-primary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.tv-grid-banner-desc { font-size: 12.5px; line-height: 1.4; color: var(--text-secondary); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@media (min-width: 640px) {
+  .tv-grid-banner { flex-direction: row; align-items: stretch; }
+  .tv-grid-banner-foto { flex: 0 0 52%; min-height: 0; }
+  .tv-grid-banner-txt { flex: 1; justify-content: center; padding: 8px 6px; }
+}
 .tv-prod-insignia {
   padding: 2px 8px;
   border-radius: 999px;
