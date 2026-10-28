@@ -2225,9 +2225,9 @@ if (!m) return null;
                                   <p className="text-[10px] text-amber-500 flex items-start gap-1">
                                     <AlertTriangle className="w-3 h-3 flex-shrink-0 mt-px" />
                                     <span>
-                                      Esta imagen no tiene transparencia: el fondo forma parte
-                                      del archivo. Si ves un damero gris, descargaste la vista
-                                      previa en vez del PNG real.
+                                      Foto con fondo. Si es blanco no hace falta quitarlo: la
+                                      tienda lo funde con la vitrina. Solo si ves un damero gris,
+                                      descargaste la vista previa en vez del PNG real.
                                     </span>
                                   </p>
                                   <button

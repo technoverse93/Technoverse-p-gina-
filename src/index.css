@@ -156,6 +156,10 @@
     --glass-shadow: 0 6px 18px rgba(30,70,80,0.12), inset 0 1px 0 rgba(255,255,255,0.9);
     /* Baldosa tintada (imagen de producto, ícono de módulo, avatar de fila). */
     --tile: #DAE8E9;
+    /* Vitrina de la foto de producto: SIEMPRE clara (también en oscuro), porque las fotos de fábrica vienen sobre
+       blanco y se funden con ella (`mix-blend-mode: multiply`, ver .tv-prod-foto). */
+    --vitrina-centro: #FFFFFF;
+    --vitrina-borde: #E9EFEF;
     /* Chip / pestaña ACTIVA: tinta oscura sobre claro, como en la maqueta. */
     --chip-on-bg: #0E2A30;
     --chip-on-ink: #FFFFFF;
@@ -252,6 +256,8 @@
     --glass-blur: 10px;
     --glass-shadow: 0 8px 20px rgba(0,0,0,0.42), inset 0 1px 0 rgba(255,255,255,0.06);
     --tile: #232D30;
+    --vitrina-centro: #F4F6F6;
+    --vitrina-borde: #DCE3E4;
     --chip-on-bg: #E4EAE9;
     --chip-on-ink: #14181B;
     --gota-bg: rgba(255,255,255,0.12);
@@ -1090,14 +1096,15 @@ input, select, textarea { max-width: 100%; }
   .tv-prod:hover { border-color: rgba(var(--accent-rgb), 0.45); transform: translateY(-2px); }
 }
 .tv-prod:focus-visible { outline: 3px solid rgba(var(--accent-rgb), 0.5); outline-offset: 2px; }
-/* Vitrina de estudio: centro claro y luminoso que se funde hacia el tono de la paleta en el borde, y el producto
-   «apoyado» con una sombra suave. Antes era una placa plana gris verdosa: las fotos se veían apagadas y pegadas, y
-   el borde que deja «Quitar fondo» se notaba sobre el gris. */
+/* Vitrina de estudio, SIEMPRE clara (también en modo oscuro), como la de las tiendas grandes. La foto se funde con
+   ella (`multiply`): el blanco de una foto de fábrica se vuelve exactamente el color de la vitrina, así que no hace
+   falta «Quitar fondo». Ese recorte dejaba parches blancos en los huecos que encierra el producto (el lazo del cable
+   del JBL, el interior de la almohadilla) y un halo en el contorno, muy visibles en modo oscuro. */
 .tv-prod-foto {
-  background: radial-gradient(120% 95% at 50% 36%, var(--bg-elevated) 0%, var(--bg-elevated) 40%, var(--tile) 100%);
+  background: radial-gradient(120% 95% at 50% 36%, var(--vitrina-centro) 0%, var(--vitrina-centro) 45%, var(--vitrina-borde) 100%);
   border-radius: 12px;
 }
-.tv-prod-foto img { filter: drop-shadow(0 10px 12px rgba(15, 30, 35, 0.14)) drop-shadow(0 2px 3px rgba(15, 30, 35, 0.10)); }
+.tv-prod-foto img { mix-blend-mode: multiply; }
 /* Banner «tarjeta en la cuadrícula»: una tarjeta de producto de dos lugares (ver BannersTienda.tsx). */
 .tv-grid-banner { display: flex; flex-direction: column; gap: 8px; height: 100%; color: var(--text-primary); text-decoration: none; }
 .tv-grid-banner-foto { position: relative; flex: 1 1 auto; min-height: 140px; overflow: hidden; }
