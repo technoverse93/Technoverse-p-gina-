@@ -8,6 +8,7 @@ import { CATEGORIAS_INSUMO, esInsumo, CATEGORIAS_TIENDA, CATEGORIAS_REPUESTO, co
 import { CustomSelect } from './CustomSelect';
 import { useToast } from './ui/Overlays';
 import { ProductImage } from './ProductImage';
+import { colones } from '../utils/dinero';
 import { 
   Package, Plus, Edit, Trash2, Search, Filter, History, MapPin,
   Box, FileText, AlertTriangle, ArrowRightLeft, CheckCircle2, ChevronRight, X, Image as ImageIcon, Save, Download,
@@ -1453,7 +1454,7 @@ if (!m) return null;
                   <div className="flex items-center justify-between gap-2">
                     <div className="min-w-0 flex-1">
                       <p className="text-xs font-semibold text-[var(--text-primary)] truncate">{req.productName}</p>
-                      <p className="tv-1l text-[10px] font-mono text-[var(--text-muted)]">₡{req.price.toLocaleString()} · Programado para {fecha}</p>
+                      <p className="tv-1l text-[10px] font-mono text-[var(--text-muted)]">{colones(req.price)} · Programado para {fecha}</p>
                     </div>
                     <div className="flex items-center gap-2 flex-shrink-0">
                       <span className={`px-2 py-0.5 rounded-full text-[10px] font-semibold border ${b.cls}`}>{b.label}</span>
@@ -1714,7 +1715,7 @@ if (!m) return null;
                                 </span>
                               </td>
                               <td className="p-4 text-right text-[var(--text-primary)] font-mono font-bold">
-                                ₡{(p.cost || 0).toLocaleString()}
+                                {colones(p.cost || 0)}
                               </td>
                               <td className="p-4 text-center text-[var(--text-secondary)] text-[10px]">
                                 {p.warranty || GARANTIAS_PRODUCTO[1]}
@@ -1775,8 +1776,8 @@ if (!m) return null;
                               <td className="p-4 text-[var(--text-secondary)] font-mono">{p.sku}</td>
                               <td className="p-4 text-[var(--text-secondary)]">{p.category}</td>
                               <td className="p-4">
-                                <div className="text-emerald-500 font-bold ">₡{(p.price || 0).toLocaleString()}</div>
-                                <div className="text-[var(--text-secondary)] text-[10px]">Costo: ₡{(p.cost || 0).toLocaleString()}</div>
+                                <div className="text-emerald-500 font-bold ">{colones(p.price || 0)}</div>
+                                <div className="text-[var(--text-secondary)] text-[10px]">Costo: {colones(p.cost || 0)}</div>
                               </td>
                               <td className="p-4">
                                 <div className="flex items-center gap-2">
@@ -2134,7 +2135,7 @@ if (!m) return null;
                       )}
                       <div className={(sparePartCategories.includes(prodCategory) || prodCategory === 'Repuestos') ? 'col-span-2' : ''}>
                         <label className="block text-[10px] uppercase font-bold text-[var(--text-secondary)] mb-1">
-                          Costo Adquisición (₡) {prodLinkedSparePartSku ? '(Vinculado)' : ''}
+                          Costo Adquisición (₡) * {prodLinkedSparePartSku ? '(Vinculado)' : ''}
                         </label>
                         <input 
                           type="number" 
@@ -2203,7 +2204,7 @@ if (!m) return null;
                                 reader.readAsDataURL(file);
                               }
                             }}
-                            className="w-full text-xs text-[var(--text-secondary)] file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-semibold file:bg-sky-500 file:text-sky-400 hover:file:bg-sky-500 cursor-pointer"
+                            className="w-full text-xs text-[var(--text-secondary)] file:mr-3 file:py-1.5 file:px-3 file:rounded-xl file:border-0 file:text-[11px] file:font-semibold file:bg-[var(--accent)] file:text-[var(--accent-ink)] hover:file:opacity-90 cursor-pointer"
                           />
 
                           {/* Diagnóstico de transparencia.
@@ -2602,11 +2603,11 @@ if (!m) return null;
                 </div>
                 <div className="flex justify-between items-center pb-2 border-b border-[var(--border-color)]/50">
                   <span className="text-xs text-[var(--text-secondary)]">Valor a Costo</span>
-                  <span className="font-mono text-sky-400 font-bold">₡{products.reduce((a, b) => a + (b ? ((b.cost || 0) * (b.stock || 0)) : 0), 0).toLocaleString()}</span>
+                  <span className="font-mono text-sky-400 font-bold">{colones(products.reduce((a, b) => a + (b ? ((b.cost || 0) * (b.stock || 0)) : 0), 0))}</span>
                 </div>
                 <div className="flex justify-between items-center">
                   <span className="text-xs text-[var(--text-secondary)]">Valor a Precio Venta</span>
-                  <span className="font-mono text-emerald-400 font-bold">₡{products.reduce((a, b) => a + (b ? ((b.price || 0) * (b.stock || 0)) : 0), 0).toLocaleString()}</span>
+                  <span className="font-mono text-emerald-400 font-bold">{colones(products.reduce((a, b) => a + (b ? ((b.price || 0) * (b.stock || 0)) : 0), 0))}</span>
                 </div>
               </div>
             </div>
@@ -2956,11 +2957,11 @@ if (!m) return null;
                                             <div className="grid grid-cols-2 gap-2 text-[10px] font-mono bg-[var(--bg-surface)] p-2 rounded">
                                               <div>
                                                 <span className="text-[var(--text-secondary)] block text-[9px]">Costo Hist.</span>
-                                                <span className="text-sky-400 font-bold">₡{row.historicalData.cost?.toLocaleString()}</span>
+                                                <span className="text-sky-400 font-bold">{colones(row.historicalData.cost || 0)}</span>
                                               </div>
                                               <div>
                                                 <span className="text-[var(--text-secondary)] block text-[9px]">Precio Hist.</span>
-                                                <span className="text-emerald-400 font-bold">₡{row.historicalData.price?.toLocaleString()}</span>
+                                                <span className="text-emerald-400 font-bold">{colones(row.historicalData.price || 0)}</span>
                                               </div>
                                             </div>
                                             <button
@@ -3039,7 +3040,7 @@ if (!m) return null;
                                 </td>
 
                                 <td className="p-3 text-right font-mono text-[11px] text-sky-400 ">
-                                  ₡{(row.cost || 0).toLocaleString()}
+                                  {colones(row.cost || 0)}
                                 </td>
 
                                 <td className="p-3">

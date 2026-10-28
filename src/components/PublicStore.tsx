@@ -371,8 +371,9 @@ export default function PublicStore({
 
   // Un panel flotante a la vez (ver utils/panelTienda): abrir el carrito o la cuenta aparta el chat,
   // y abrir el chat cierra estos menús.
-  useEffect(() => { if (isCartDropdownOpen) avisarPanel('carrito', true); }, [isCartDropdownOpen]);
-  useEffect(() => { if (isAccountDropdownOpen) avisarPanel('cuenta', true); }, [isAccountDropdownOpen]);
+  // Se avisa al abrir Y al cerrar: el aviso de cookies se aparta mientras hay un panel abierto y vuelve después.
+  useEffect(() => { avisarPanel('carrito', isCartDropdownOpen); }, [isCartDropdownOpen]);
+  useEffect(() => { avisarPanel('cuenta', isAccountDropdownOpen); }, [isAccountDropdownOpen]);
   useEffect(() => alCambiarPanel((panel, abierto) => {
     if (panel === 'chat' && abierto) { setIsCartDropdownOpen(false); setIsAccountDropdownOpen(false); }
   }), []);
@@ -1874,7 +1875,7 @@ export default function PublicStore({
                   {/* Tarjetas promocionales (formato 'grid'): se mezclan en
                       la MISMA rejilla, así miden como un producto. Solo en la
                       vista general, no cuando se está filtrando una categoría. */}
-                  {!selectedCategory && <TarjetasBannerGrid banners={banners} />}
+                  {!selectedCategory && !busqueda.trim() && <TarjetasBannerGrid banners={banners} />}
                   {paginatedProducts.map(prod => prod && (
                     <ProductCard
                       key={prod.id}
