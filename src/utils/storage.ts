@@ -525,6 +525,43 @@ export function compressImage(dataUrl: string, maxWidth = 500, maxHeight = 500, 
   });
 }
 
+/**
+ * Recorta el espacio vacío alrededor del producto (transparente, o blanco liso si la foto es opaca) y le deja un
+ * margen chico parejo. Así todos los productos ocupan lo mismo en su vitrina: antes uno con mucho aire alrededor
+ * (el iPhone) salía diminuto al lado de otro sin margen (los Sony). Si no encuentra qué recortar, devuelve la misma.
+ */
+export function recortarMargenes(dataUrl: string, margen = 0.04): Promise<string> {
+  return new Promise((resolve) => {
+    if (!dataUrl || !dataUrl.startsWith('data:')) { resolve(dataUrl); return; }
+    const img = new Image();
+    img.onload = () => {
+      try {
+        const w = img.width, h = img.height;
+        const c = document.createElement('canvas'); c.width = w; c.height = h;
+        const ctx = c.getContext('2d'); if (!ctx) { resolve(dataUrl); return; }
+        ctx.drawImage(img, 0, 0);
+        const px = ctx.getImageData(0, 0, w, h).data;
+        const tieneAlfa = canvasHasTransparency(ctx, w, h);
+        const vacio = (i: number) => tieneAlfa ? px[i + 3] < 12 : (px[i] > 245 && px[i + 1] > 245 && px[i + 2] > 245);
+        let x0 = w, y0 = h, x1 = -1, y1 = -1;
+        for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+          if (!vacio((y * w + x) * 4)) { if (x < x0) x0 = x; if (x > x1) x1 = x; if (y < y0) y0 = y; if (y > y1) y1 = y; }
+        }
+        if (x1 < 0 || (x1 - x0 + 1) * (y1 - y0 + 1) > w * h * 0.92) { resolve(dataUrl); return; }
+        const m = Math.round(Math.max(x1 - x0, y1 - y0) * margen);
+        const cx0 = Math.max(0, x0 - m), cy0 = Math.max(0, y0 - m);
+        const cw = Math.min(w, x1 + m + 1) - cx0, ch = Math.min(h, y1 + m + 1) - cy0;
+        const out = document.createElement('canvas'); out.width = cw; out.height = ch;
+        const octx = out.getContext('2d'); if (!octx) { resolve(dataUrl); return; }
+        octx.drawImage(c, cx0, cy0, cw, ch, 0, 0, cw, ch);
+        resolve(encodeCanvas(out, tieneAlfa, 0.85));
+      } catch { resolve(dataUrl); }
+    };
+    img.onerror = () => resolve(dataUrl);
+    img.src = dataUrl;
+  });
+}
+
 /** Lado máximo, en píxeles, de una imagen de catálogo ya procesada. */
 const SALIDA_MAX = 500;
 

@@ -1090,7 +1090,14 @@ input, select, textarea { max-width: 100%; }
   .tv-prod:hover { border-color: rgba(var(--accent-rgb), 0.45); transform: translateY(-2px); }
 }
 .tv-prod:focus-visible { outline: 3px solid rgba(var(--accent-rgb), 0.5); outline-offset: 2px; }
-.tv-prod-foto { background: var(--tile); border-radius: 10px; }
+/* Vitrina de estudio: centro claro y luminoso que se funde hacia el tono de la paleta en el borde, y el producto
+   «apoyado» con una sombra suave. Antes era una placa plana gris verdosa: las fotos se veían apagadas y pegadas, y
+   el borde que deja «Quitar fondo» se notaba sobre el gris. */
+.tv-prod-foto {
+  background: radial-gradient(120% 95% at 50% 36%, var(--bg-elevated) 0%, var(--bg-elevated) 40%, var(--tile) 100%);
+  border-radius: 12px;
+}
+.tv-prod-foto img { filter: drop-shadow(0 10px 12px rgba(15, 30, 35, 0.14)) drop-shadow(0 2px 3px rgba(15, 30, 35, 0.10)); }
 /* Banner «tarjeta en la cuadrícula»: una tarjeta de producto de dos lugares (ver BannersTienda.tsx). */
 .tv-grid-banner { display: flex; flex-direction: column; gap: 8px; height: 100%; color: var(--text-primary); text-decoration: none; }
 .tv-grid-banner-foto { position: relative; flex: 1 1 auto; min-height: 140px; overflow: hidden; }
