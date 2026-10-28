@@ -253,7 +253,12 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
       const bannerId = `banner-${Date.now()}`;
       const { imagenUrl } = await guardarEnGaleria('banner', { bannerId });
       const db = getDB();
-      const b: Banner = { id: bannerId, title: pieza.titular, description: pieza.subtitulo, imageUrl: imagenUrl, link: undefined, type: 'General', formato, oferta: pieza.etiqueta || undefined, active: true };
+      // El texto, el sello y el botón ya están DIBUJADOS en la pieza: la tienda no les encima nada (ver
+      // `esPiezaDisenada` en utils/bannerEstado.ts). El título queda para el panel y como texto alternativo.
+      // Si la pieza invita a escribir por WhatsApp, el banner lleva a ese WhatsApp (antes no llevaba a ningún lado).
+      const digitos = String(pieza.telefono || '').replace(/\D/g, '');
+      const link = digitos.length >= 8 ? `https://wa.me/${digitos.length === 8 ? '506' + digitos : digitos}` : undefined;
+      const b: Banner = { id: bannerId, title: pieza.titular, description: pieza.subtitulo, imageUrl: imagenUrl, link, type: 'General', formato, active: true };
       if (!db.banners) db.banners = [];
       db.banners.push(b);
       addAuditLog(currentUser?.email || '', 'Marketing', 'Crear banner', `Desde el Estudio de pauta: ${formato} · ${b.title}`, db);

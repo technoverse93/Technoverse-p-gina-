@@ -24,7 +24,7 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { X, ArrowRight } from 'lucide-react';
 import type { Banner } from '../../types';
-import { estaVigente, estiloDe, ordenarBanners } from '../../utils/bannerEstado';
+import { estaVigente, estiloDe, ordenarBanners, esPiezaDisenada } from '../../utils/bannerEstado';
 import { marcarVistaEnSesion, registrarEventoBanner } from '../../utils/bannerMetricas';
 
 export { estaVigente };
@@ -247,16 +247,16 @@ export function BannerDivisor({ banners, vista = false }: { banners: Banner[]; v
       <Envoltura
         link={b.link}
         contar={vista ? undefined : b.id}
-        className="relative block w-full overflow-hidden rounded-2xl aspect-[16/5] sm:aspect-[21/5] bg-[var(--bg-surface)] group"
+        className={`relative block w-full overflow-hidden rounded-2xl ${esPiezaDisenada(b) ? 'aspect-[16/9]' : 'aspect-[16/5] sm:aspect-[21/5]'} bg-[var(--bg-surface)] group`}
       >
         <img
           src={b.imageUrl}
           alt={b.title || 'Promoción'}
-          className="absolute inset-0 w-full h-full object-cover transition-transform duration-500 group-hover:scale-[1.03]"
+          className={`absolute inset-0 w-full h-full ${esPiezaDisenada(b) ? 'object-contain' : 'object-cover transition-transform duration-500 group-hover:scale-[1.03]'}`}
           loading="lazy"
           decoding="async"
         />
-        {(b.title || b.description || b.oferta) && (
+        {!esPiezaDisenada(b) && (b.title || b.description || b.oferta) && (
           <div className="absolute inset-0 flex flex-col justify-center gap-1 p-4 sm:p-6 md:p-8 bg-gradient-to-r from-black/70 via-black/30 to-transparent">
             {b.oferta && <Insignia texto={b.oferta} className="self-start px-2.5 py-0.5 text-[11px] mb-1" />}
             {b.title && (
@@ -307,11 +307,11 @@ function TarjetaGrid({ b, vista }: { b: Banner; vista: boolean }) {
   return (
     <div ref={ref as React.RefObject<HTMLDivElement>} className="col-span-2 min-w-0">
       <Envoltura link={b.link} contar={vista ? undefined : b.id} className="tv-prod tv-grid-banner group">
-        <div className="tv-prod-foto tv-grid-banner-foto">
+        <div className="tv-prod-foto tv-grid-banner-foto" data-pieza={esPiezaDisenada(b) || undefined}>
           <img src={b.imageUrl} alt={b.title || 'Promoción'} loading="lazy" decoding="async" />
-          {b.oferta && <Insignia texto={b.oferta} className="absolute top-2 left-2 px-2 py-0.5 text-[11px]" />}
+          {b.oferta && !esPiezaDisenada(b) && <Insignia texto={b.oferta} className="absolute top-2 left-2 px-2 py-0.5 text-[11px]" />}
         </div>
-        {(b.title || b.description || b.cta) && (
+        {!esPiezaDisenada(b) && (b.title || b.description || b.cta) && (
           <div className="tv-grid-banner-txt">
             {b.title && <div className="tv-grid-banner-tit">{b.title}</div>}
             {b.description && <div className="tv-grid-banner-desc">{b.description}</div>}

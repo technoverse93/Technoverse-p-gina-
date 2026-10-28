@@ -154,6 +154,8 @@ export default function GestorBanners({ currentUser }: { currentUser: User | nul
     if ((form.cta || '').trim().length > 24) { toast.error('El texto del botón es muy largo (máximo 24 letras).'); return; }
     const enlace = enlaceValido(form.link || '');
     if (enlace === null) { toast.error('El enlace tiene que empezar con https://, wa.me/, tel:, mailto: o con / (una ruta de la tienda).'); return; }
+    // «/» (o «/tienda») es la misma portada donde ya está el banner: el botón no llevaba a ningún lado.
+    if (enlace && /^\/(tienda)?\/?$/.test(enlace)) { toast.error('Ese enlace lleva a la misma portada donde ya está el banner. Usá un WhatsApp, una red o dejalo vacío.'); return; }
     if (form.startDate && form.endDate && form.endDate < form.startDate) { toast.error('La fecha «Hasta» es anterior a «Desde».'); return; }
 
     setGuardando(true);
@@ -232,6 +234,7 @@ export default function GestorBanners({ currentUser }: { currentUser: User | nul
     addAuditLog(currentUser?.email || '', 'Marketing', 'Quitar banner', b.title || b.id, db);
     await saveDB(db);
     setBanners(getDB().banners || []);
+    toast.success('Banner quitado de la tienda.');
   };
 
   const generarAutomatico = async () => {
@@ -360,7 +363,7 @@ export default function GestorBanners({ currentUser }: { currentUser: User | nul
               <input type="text" className="tv-input" value={form.cta || ''} placeholder="Ver ofertas" maxLength={24}
                 disabled={sinMotor} onChange={e => setForm({ ...form, cta: e.target.value })} />
             </Field>
-            <Field label="Enlace (WhatsApp, red o categoría)" hint="Ej: https://wa.me/506… o /tienda" className="md:col-span-2">
+            <Field label="Enlace (WhatsApp, red o categoría)" hint="Ej: https://wa.me/506… o el enlace de una red" className="md:col-span-2">
               <input type="text" className="tv-input" value={form.link || ''} placeholder="https://wa.me/50688888888"
                 onChange={e => setForm({ ...form, link: e.target.value })} />
             </Field>
@@ -389,11 +392,11 @@ export default function GestorBanners({ currentUser }: { currentUser: User | nul
               </div>
             )}
 
-            <Field label="Desde (opcional)">
+            <Field label="Desde (opcional)" hint="Vacío: se ve desde ya. Tocá para elegir el día.">
               <input type="date" className="tv-input" value={form.startDate || ''}
                 onChange={e => setForm({ ...form, startDate: e.target.value || undefined })} />
             </Field>
-            <Field label="Hasta (opcional)">
+            <Field label="Hasta (opcional)" hint="Vacío: se ve hasta que lo pausés.">
               <input type="date" className="tv-input" value={form.endDate || ''}
                 onChange={e => setForm({ ...form, endDate: e.target.value || undefined })} />
             </Field>
