@@ -68,7 +68,7 @@ export const ProductCard = React.memo(function ProductCard({ prod, onClick, onAd
             alt={prod.name}
             loading="lazy"
             decoding="async"
-            className="absolute inset-0 h-full w-full object-contain p-2 transition-transform duration-200 group-hover:scale-105"
+            className="absolute inset-0 h-full w-full object-contain p-[9%] transition-transform duration-200 group-hover:scale-105"
             referrerPolicy="no-referrer"
             onError={() => setImagenRota(true)}
           />

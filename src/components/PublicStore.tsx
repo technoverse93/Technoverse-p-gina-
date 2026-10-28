@@ -820,7 +820,7 @@ export default function PublicStore({
 
     const item = cart[idx];
     if (newQty > item.product.stock) {
-      toast.warning(`Únicamente hay ${item.product.stock} unidades disponibles en stock.`);
+      toast.warning(item.product.stock === 1 ? 'Únicamente queda 1 unidad disponible.' : `Únicamente hay ${item.product.stock} unidades disponibles.`);
       return;
     }
 

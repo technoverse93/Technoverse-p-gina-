@@ -2193,8 +2193,8 @@ if (!m) return null;
                                 reader.onloadend = async () => {
                                   const rawBase64 = reader.result as string;
                                   try {
-                                    const { compressImage } = await import('../utils/storage');
-                                    const compressed = await compressImage(rawBase64, 500, 500, 0.7);
+                                    const { compressImage, recortarMargenes } = await import('../utils/storage');
+                                    const compressed = await compressImage(await recortarMargenes(rawBase64), 500, 500, 0.7);
                                     setProdImage(compressed);
                                   } catch (err) {
                                     console.error('Error compressing product image:', err);
@@ -2236,8 +2236,8 @@ if (!m) return null;
                                     onClick={async () => {
                                       setRemovingBg(true);
                                       try {
-                                        const { removeFlatBackground, imageHasTransparency } = await import('../utils/storage');
-                                        const limpia = await removeFlatBackground(prodImage);
+                                        const { removeFlatBackground, imageHasTransparency, recortarMargenes } = await import('../utils/storage');
+                                        const limpia = await recortarMargenes(await removeFlatBackground(prodImage));
                                         const quedoAlfa = await imageHasTransparency(limpia);
                                         if (quedoAlfa) {
                                           setProdImage(limpia);
