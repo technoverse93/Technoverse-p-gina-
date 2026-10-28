@@ -17,6 +17,7 @@ import { getDB, getDBVersion, saveDB, addAuditLog, lecturaRapida, catalogoListo 
 import { catalogoVacioPrevio } from '../utils/previoDelSitio';
 import { iniciarSesionVigilada, conTope } from '../utils/adminLogin';
 import { soportaBiometria, entrarConBiometria, biometriaYaActivada } from '../utils/biometria';
+import { esAplicacionNativa } from '../utils/biometriaNativa';
 import { CATEGORIAS_CON_TODOS, CATEGORIAS_REPUESTO, coincideCategoria, esRepuesto, esInsumo } from '../utils/categorias';
 import { processSaleAtomic } from '../utils/transactions';
 import LiveChat from './LiveChat';
@@ -1463,7 +1464,8 @@ export default function PublicStore({
                           vivo falló de forma transitoria (sensores en
                           pantalla). Si de verdad no responde, el intento en
                           sí lo dice con un error claro. */}
-                      {(hayBiometria || biometriaLista) && (
+                      {/* Solo en la APK: en el navegador se entra siempre con correo y contraseña. */}
+                      {esAplicacionNativa() && (hayBiometria || biometriaLista) && (
                         <button
                           type="button"
                           onClick={accederConBiometria}

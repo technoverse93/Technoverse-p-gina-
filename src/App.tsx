@@ -9,7 +9,7 @@ import { OverlayProvider, useToast } from './components/ui/Overlays';
 import { conexionBloqueada, detalleDeBloqueo, conTope } from './utils/adminLogin';
 import { registrarVisita, leerDatosDelAparato } from './utils/huella';
 import { iniciarSincronizacionBiometrica, cerrarSesionConservandoBiometria, sesionBloqueada } from './utils/biometria';
-import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO, UMBRAL_REINGRESO_RAPIDO_MS } from './mobile/appLock';
+import { iniciarBloqueoPorInactividad, EVENTO_FORZAR_REINGRESO } from './mobile/appLock';
 import { marcarBloqueo, esAplicacionNativa } from './utils/biometriaNativa';
 import { supabase } from './supabaseClient';
 import { tieneTokenSeguridad, esAdminSupremo } from './utils/securityPin';
@@ -345,6 +345,14 @@ function AppInner() {
         // detecta exactamente esta combinación —sesión bloqueada,
         // `currentUser` nulo, ya verificado— y levanta el prompt biométrico
         // en su lugar, sin pasar por aquí otra vez.
+        // WEB: el navegador entra SIEMPRE con correo y contraseña (orden del dueño, 2026-10-28: «no patrones ni
+        // huellas en navegador»). Un cerrojo que haya quedado puesto de antes no se abre con huella: se cierra
+        // esa sesión y se entra como visitante, con el acceso disponible.
+        if (sesionBloqueada() && !esAplicacionNativa()) {
+          marcarBloqueo(false);
+          try { await supabase.auth.signOut({ scope: 'local' }); } catch { /* sin red: igual queda sin cerrojo */ }
+          return;
+        }
         if (sesionBloqueada()) return;
 
         // CON TOPE DE TIEMPO, igual que el formulario de acceso.
@@ -629,31 +637,19 @@ function AppInner() {
   // candado; 5 minutos de inactividad real sí piden iniciar sesión de
   // nuevo (una pestaña de navegador no es un teléfono que se presta).
   useEffect(() => {
-    const alForzarReingreso = (evento: Event) => {
+    const alForzarReingreso = () => {
       if (!currentUser) return; // nadie con sesión abierta, no hay nada que bloquear
-      const ausenteMs = (evento as CustomEvent<{ ausenteMs?: number }>).detail?.ausenteMs;
-
       // APK: siempre el candado, sesión perpetua.
       if (esAplicacionNativa()) {
         setRequiereReautenticacionRapida(true);
         return;
       }
 
-      // WEB — CAMBIO: la inactividad ya NO cierra la sesión.
-      //
-      // Antes, 5 minutos sin tocar nada hacían `handleLogout()` y había
-      // que reescribir correo y contraseña — el "la sesión se cierra sola"
-      // reportado. Ahora se echa el CERROJO: la sesión sigue guardada y
-      // se vuelve a abrir con huella, PIN o patrón. `marcarBloqueo(true)`
-      // es lo que hace que recargar la página tampoco la abra sola (ver
-      // `arranqueFrioBloqueado` más abajo).
-      //
-      // Si este navegador no tiene ningún método para abrir el cerrojo, el
-      // propio candado lo detecta y cae al cierre con contraseña de
-      // siempre (`onSinMetodo`), que sigue siendo el comportamiento
-      // seguro cuando no hay otra cosa.
-      if (typeof ausenteMs === 'number' && ausenteMs > UMBRAL_REINGRESO_RAPIDO_MS) marcarBloqueo(true);
-      setRequiereReautenticacionRapida(true);
+      // WEB: sin huella, PIN ni patrón en el navegador (orden del dueño, 2026-10-28). La inactividad cierra la
+      // sesión y se vuelve a entrar con correo y contraseña. La huella o la cara quedan solo para la APK.
+      marcarBloqueo(false);
+      handleLogout();
+      setAutoOpenLogin(true);
     };
     window.addEventListener(EVENTO_FORZAR_REINGRESO, alForzarReingreso);
     return () => window.removeEventListener(EVENTO_FORZAR_REINGRESO, alForzarReingreso);
