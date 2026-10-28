@@ -229,6 +229,17 @@ function fechaCorta(iso?: string | null): string {
   try { return new Date(iso).toLocaleString('es-CR'); } catch { return String(iso); }
 }
 
+/** La última visita en una columna angosta: la hora si fue hoy, si no el día («27/10/26»). La completa va en `title`. */
+function cuandoCorto(iso?: string | null): string {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return String(iso);
+  const hoy = new Date();
+  return d.toDateString() === hoy.toDateString()
+    ? d.toLocaleTimeString('es-CR', { hour: 'numeric', minute: '2-digit' })
+    : d.toLocaleDateString('es-CR', { day: 'numeric', month: 'numeric', year: '2-digit' });
+}
+
 /** Fecha y hora cortas para tarjetas apretadas («24/9/26, 7:21 p. m.»): sin segundos ni siglo, así cabe en UNA línea. La completa va en `title`. */
 function fechaCompacta(iso?: string | null): string {
   if (!iso) return '—';
@@ -469,9 +480,14 @@ function CyberSecurityPanel({
     () => accesosFiltrados.slice((paginaAccesos - 1) * POR_PAGINA_ACCESOS, paginaAccesos * POR_PAGINA_ACCESOS),
     [accesosFiltrados, paginaAccesos]);
   const [paginaBitacora, setPaginaBitacora] = useState(1);
+  // Lo más nuevo primero. La base devuelve `audit_logs` sin orden (en la práctica, el de inserción), y la
+  // primera página mostraba lo MÁS VIEJO: lo que se hizo hoy quedaba al fondo de la última página.
+  const bitacora = useMemo(
+    () => [...auditLog].sort((a, b) => (Date.parse(b.timestamp) || 0) - (Date.parse(a.timestamp) || 0)),
+    [auditLog]);
   const bitacoraPagina = useMemo(
-    () => auditLog.slice((paginaBitacora - 1) * POR_PAGINA_BITACORA, paginaBitacora * POR_PAGINA_BITACORA),
-    [auditLog, paginaBitacora]);
+    () => bitacora.slice((paginaBitacora - 1) * POR_PAGINA_BITACORA, paginaBitacora * POR_PAGINA_BITACORA),
+    [bitacora, paginaBitacora]);
 
   /** Las últimas 24 horas en 24 casillas (la última es la hora en curso).
    *  Cada casilla toma el color de lo peor que pasó en ella. */
@@ -952,7 +968,8 @@ function CyberSecurityPanel({
       { id: 'bitacora',     label: 'Bitácora',     icono: BookOpen,   contador: auditLog.length },
     ],
     trafico: [
-      { id: 'visitantes',  label: 'Visitantes',  icono: Users, contador: visitantes.length },
+      // Aparatos (agrupados), igual que el «Aparatos» de la propia vista; `visitantes` son identidades.
+      { id: 'visitantes',  label: 'Visitantes',  icono: Users, contador: visitantesAgrupados.length },
       { id: 'penalizados', label: 'Penalizados', icono: UserX, contador: penalizados.filter(x => !x.levantado_en).length },
       { id: 'aparatos',    label: 'Aparatos bloqueados', icono: Movil, contador: aparatos.filter(x => !x.levantado_en).length },
     ],
@@ -1511,7 +1528,7 @@ function CyberSecurityPanel({
                       </div>
                       <div className="sg-c4">
                         <div className="sg-nv tabular-nums">{g.visitas}</div>
-                        <span style={{ fontSize: 12, color: 'var(--text-muted)' }}>{fechaCorta(g.ultima)}</span>
+                        <span className="sg-1l" title={fechaCorta(g.ultima)} style={{ fontSize: 12, color: 'var(--text-muted)' }}>{cuandoCorto(g.ultima)}</span>
                       </div>
                       <div className="sg-acc">
                         <button type="button" className="sg-ib" onClick={() => setVisitanteDetalle(g.reciente)} title="Ver ficha" aria-label="Ver ficha">

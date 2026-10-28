@@ -1527,6 +1527,9 @@ textarea.tv-input { height: auto; padding: 10px 12px; line-height: 1.5; resize: 
 .sg-dir{padding:0;overflow:hidden}
 .sg-dh,.sg-dr{display:grid;grid-template-columns:minmax(0,1.6fr) minmax(0,1.2fr) 86px 76px auto;gap:12px;align-items:center;padding:10px 14px}
 .sg-dh{font-size:12px;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--text-muted);background:var(--tile)}
+/* La última columna del encabezado mide lo mismo que la de acciones de cada fila: con `auto` vacía medía 0 y las
+   columnas «Frecuencia» y «Visitas» del encabezado quedaban corridas encima de los botones. */
+.sg-dh>span:last-child{width:226px;max-width:100%;justify-self:end}
 .sg-dr+.sg-dr{border-top:1px solid var(--bg-sunken)}
 .sg-dr .sg-who{display:flex;gap:10px;align-items:center;min-width:0}
 .sg-mono2{width:36px;height:36px;border-radius:12px;display:grid;place-items:center;font:700 13px var(--font-display, inherit);color:#fff;flex:none}
