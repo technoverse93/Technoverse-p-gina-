@@ -56,8 +56,11 @@ export default function AvisoCookies() {
   const [visible, setVisible] = useState(() => !yaLoVio());
   // Mientras el chat está abierto el aviso se aparta (sin darse por visto): antes tapaba el botón
   // «Iniciar chat seguro». Al cerrar el chat vuelve.
-  const [chatAbierto, setChatAbierto] = useState(false);
-  useEffect(() => alCambiarPanel((panel, abierto) => { if (panel === 'chat') setChatAbierto(abierto); }), []);
+  // Lo mismo con el carrito y la cuenta: el aviso vive en un portal sobre `body` y quedaba ENCIMA del fondo
+  // oscuro del resumen de compra.
+  const [abiertos, setAbiertos] = useState<Record<string, boolean>>({});
+  useEffect(() => alCambiarPanel((panel, abierto) => setAbiertos(a => ({ ...a, [panel]: abierto }))), []);
+  const chatAbierto = Object.values(abiertos).some(Boolean);
 
   if (!visible || chatAbierto) return null;
 
