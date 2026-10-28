@@ -94,3 +94,12 @@ export const VARIANTES: Record<VarianteBanner, EstiloVariante> = {
 export function estiloDe(b: Pick<Banner, 'variante'>): EstiloVariante {
   return VARIANTES[b.variante && VARIANTES[b.variante] ? b.variante : 'acento2'];
 }
+
+/**
+ * ¿La imagen es una pieza del Estudio de pauta? Esas ya traen titular, sello, precio y botón dibujados, con su
+ * propia tipografía: la tienda no les encima velo, título ni insignia (salía todo DOS veces, con una sombra oscura
+ * encima) y las muestra enteras, en su proporción (recortadas a 4:3 en el teléfono se cortaba el texto).
+ */
+export function esPiezaDisenada(b: Pick<Banner, 'imageUrl'>): boolean {
+  return /\/storage\/v1\/object\/public\/marketing\/pautas\//.test(b.imageUrl || '');
+}

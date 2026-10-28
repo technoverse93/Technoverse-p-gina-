@@ -34,7 +34,7 @@
 
 import React, { useEffect, useMemo, useState } from 'react';
 import type { Banner } from '../../types';
-import { estaVigente, ordenarBanners } from '../../utils/bannerEstado';
+import { estaVigente, ordenarBanners, esPiezaDisenada } from '../../utils/bannerEstado';
 import { marcarVistaEnSesion, registrarEventoBanner } from '../../utils/bannerMetricas';
 
 interface Props {
@@ -99,18 +99,20 @@ export default function BannerPrincipal({ banners, vista = false }: Props) {
   // en toda tienda que todavía no haya subido ninguno.
   if (!actual) return null;
 
+  const pieza = esPiezaDisenada(actual);
+
   const contenido = (
     <>
       <img
         src={actual.imageUrl}
         alt={actual.title || 'Promoción'}
-        className="absolute inset-0 w-full h-full object-cover"
+        className={`absolute inset-0 w-full h-full ${pieza ? 'object-contain' : 'object-cover'}`}
         /* El primer cartel es lo más grande que se ve al abrir: se pide
            con prioridad para que no llegue después del catálogo. */
         loading="eager"
         decoding="async"
       />
-      {actual.oferta && (
+      {actual.oferta && !pieza && (
         <span
           className="absolute top-3 left-3 sm:top-4 sm:left-4 rounded-full px-3 py-1 text-[11px] sm:text-[13px] font-black shadow-md"
           style={{ background: 'var(--accent-2)', color: 'var(--accent-2-ink)' }}
@@ -121,7 +123,7 @@ export default function BannerPrincipal({ banners, vista = false }: Props) {
       {/* Solo se dibuja el velo y el texto si hay texto que poner. Un
           cartel diseñado con su propia tipografía no necesita que se le
           encime nada. */}
-      {(actual.title || actual.description) && (
+      {!pieza && (actual.title || actual.description) && (
         <div className="absolute inset-0 flex flex-col justify-end p-4 sm:p-6 md:p-8 bg-gradient-to-t from-black/70 via-black/25 to-transparent">
           {/* El color va en `style` y no en una clase `text-white`, y no es
               capricho: medido sobre la tienda compilada, el título salía en
@@ -160,7 +162,7 @@ export default function BannerPrincipal({ banners, vista = false }: Props) {
 
   return (
     <section aria-label="Promociones" className="w-full">
-      <div className="relative w-full overflow-hidden rounded-2xl aspect-[4/3] md:aspect-[16/5] bg-[var(--bg-surface)]">
+      <div className={`relative w-full overflow-hidden rounded-2xl ${pieza ? 'aspect-[16/5]' : 'aspect-[4/3] md:aspect-[16/5]'} bg-[var(--bg-surface)]`}>
         {actual.link ? (
           <a
             href={actual.link}

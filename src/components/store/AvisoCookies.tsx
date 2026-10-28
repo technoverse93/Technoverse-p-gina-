@@ -29,6 +29,7 @@
 // =====================================================================
 
 import { useEffect, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { alCambiarPanel } from '../../utils/panelTienda';
 import { X } from 'lucide-react';
 
@@ -66,7 +67,10 @@ export default function AvisoCookies() {
     setVisible(false);
   };
 
-  return (
+  // En un portal sobre `body`: dentro de la tienda quedaba en el contexto de apilado de su contenedor y el lápiz
+  // «Editar la página» (z-44, del personal) le ganaba aunque el aviso dijera z-60: en el teléfono, tocar la X del
+  // aviso tocaba el lápiz.
+  return createPortal(
     // El contenedor no captura toques (`pointer-events-none`): solo la tarjeta. En teléfono sube por encima del botón
     // flotante del chat (que vive abajo a la derecha); desde `md` va en la esquina inferior izquierda, chica.
     <div className="pointer-events-none fixed inset-x-0 bottom-[calc(5.25rem+env(safe-area-inset-bottom,0px))] z-[60] px-3 md:bottom-5 md:right-auto md:px-0 md:pl-5">
@@ -106,5 +110,5 @@ export default function AvisoCookies() {
         </button>
       </div>
     </div>
-  );
+  , document.body);
 }
