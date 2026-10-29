@@ -120,6 +120,20 @@ Xiaomi Redmi Pad (MIUI), Android con **Termux** → **Ubuntu 26.04 en PRoot** �
   reactiva con el icono «Activar conexion adb». **Nunca uses `adb reverse`** (hace un bucle en PRoot).
 - Poca memoria (3,8 GB): usá `timeout` en todo. La pantalla gira (1920×1200 ↔ 1200×1920): medí antes de tocar.
 - Node 22, `gh` logueado; **no hay** `psql`, `supabase` CLI ni `wrangler` global (usar `npx`).
+- **Escritorio (fuera del repo, en `/usr/local/bin`)**: X de 1536×907 escalado ×1,25 a la pantalla (1920×1134 +
+  barra de teclas de Termux:X11 abajo). Pantalla = X × 1,25. Termux:X11 en «Direct touch».
+  - `ventana izq|der|max|centro [id]`: botones IZQ/DER/MAX/AJUSTAR (Ctrl+Alt+flechas). Usa `area-util`.
+  - `area-util`: imprime el área útil REAL (pantalla menos franja de arriba y barra de tareas). **No uses
+    `_NET_WORKAREA`**: xfwm4 a veces lo deja viejo (sin la barra de abajo) y las ventanas quedaban debajo de ella,
+    con el borde inferior tapado: por eso «no se podía cambiar el tamaño» (arreglado 29-oct).
+  - `ajuste-teclado` (autoarranque): achica la ventana cuando abre el teclado de Android; crea la franja de 40 px
+    de arriba y una capa azul de fondo; y su `vigia()` cada 1,5 s baja la capa al fondo, revive `xfwm4` si murió y
+    encaja en el área útil toda ventana nueva (y todas tras girar la tablet o cerrar el teclado).
+  - Con el dedo: el primer toque sobre un borde solo coloca el puntero; tocar y luego arrastrar sí redimensiona.
+  - **Nunca pruebes un arrastre con `xdotool mousedown`**: con `box_resize` xfwm4 toma el servidor X (todo se
+    congela, `xwininfo` se cuelga). Usá `adb shell input swipe`. Si pasa: `pkill -x xfwm4` (el vigía lo revive),
+    `xdotool mouseup 1`. Tampoco `pkill -f "...ajuste-teclado"` desde un comando que contenga ese texto: se mata
+    a sí mismo.
 
 ## 8. Errores que ya se cometieron (no los repitas)
 
@@ -132,3 +146,4 @@ Xiaomi Redmi Pad (MIUI), Android con **Termux** → **Ubuntu 26.04 en PRoot** �
 - Mostrar errores crudos de la base (en inglés): traducilos (`mensajeDeError` en `utils/crm.ts`).
 - Creer que algo «no tiene enlace» sin mirar la base: verificá con datos.
 - Escribir en inglés al dueño.
+- Probar el escritorio con `xdotool mousedown`: congeló el servidor X (ver §7).

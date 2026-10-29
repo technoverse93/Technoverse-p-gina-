@@ -98,6 +98,21 @@ Quién puede qué en el panel:
 | **LibreOffice** | Documentos, hojas de cálculo. |
 | **VLC** | Videos y música. |
 | **Instalar programas** | Tienda de programas de Linux (Synaptic). |
+
+### 3.3 Acomodar y agrandar ventanas con el dedo
+
+- **Mover**: arrastrá la barra de título (la franja de arriba de la ventana, donde está el nombre).
+- **Cambiar el tamaño**: tocá **una vez** la esquina de abajo a la derecha (la marquita ◢) o un borde, y **después**
+  arrastralo. Termux:X11 funciona así: el primer toque solo pone el puntero en ese lugar; el arrastre siguiente es
+  el que cambia el tamaño. La esquina es lo más fácil de agarrar (el borde de los lados es finito).
+- **Botones de la barra negra de abajo** (los de Termux:X11): **IZQ** pone la ventana en la mitad izquierda,
+  **DER** en la derecha, **MAX** la agranda a toda la pantalla (otra vez MAX la devuelve) y **AJUSTAR** la deja
+  centrada y mediana. Siempre quedan enteras, arriba de la barra de tareas.
+- Si una ventana se ve cortada o se sale de la pantalla: tocá su nombre en la barra de tareas y después **IZQ**,
+  **DER** o **AJUSTAR**.
+- El escritorio se cuida solo: ninguna ventana nueva queda debajo de la barra de tareas ni fuera de la pantalla
+  (también al girar la tablet o cerrar el teclado), y si el «dibujante» de las ventanas se cae, se vuelve a abrir
+  solo a los pocos segundos.
 | **Guía: instalar programas** / **Guía Kali** | Guías escritas antes. |
 | **Herramientas de seguridad** | Menú de herramientas de seguridad (Kali). |
 | **Liberar memoria** | Cierra apps de Android en segundo plano para que todo vaya más fluido. |
@@ -298,7 +313,8 @@ Panel → **Ciberseguridad** → **Resumen** (intentos de las últimas 24 h). Si
 | La tablet está lentísima | **Liberar memoria**; cargarla; cerrar apps que no uses. |
 | Un cambio no se ve en la página | Esperá 3 minutos y recargá. En la app: mandala a segundo plano y volvé. |
 | OpenCode no responde | Ctrl+C; si no, cerrar la ventana y tocar el icono de nuevo. |
-| Las ventanas en Termux:X11 no se pueden achicar/agrandar | Problema reportado el 29-oct, **pendiente de revisar** (está en la bitácora). |
+| Una ventana no se deja achicar/agrandar | Tocá una vez la esquina ◢ (o el borde) y después arrastrala (ver 3.3). O usá IZQ, DER, MAX o AJUSTAR. |
+| Una ventana se ve cortada, sin título o la pantalla quedó toda azul | Esperá 3 segundos (el escritorio se repara solo). Si sigue: widget → `tasks/Salir de Linux` y volvé a abrir `tasks/Escritorio`. |
 
 ---
 
@@ -327,7 +343,6 @@ Panel → **Ciberseguridad** → **Resumen** (intentos de las últimas 24 h). Si
 6. **Banners de prueba del iPhone**: ¿se quedan?
 7. **Traer al código 6 funciones del servidor** que hoy solo están en Supabase (lo puede hacer la IA).
 8. Dominio propio, doble factor, cédula automática en la compra de la tienda.
-9. Revisar el problema de las ventanas en Termux:X11.
 
 ---
 

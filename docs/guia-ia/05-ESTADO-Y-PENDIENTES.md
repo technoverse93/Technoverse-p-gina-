@@ -15,6 +15,8 @@
 | Fotos | Toda foto de producto se limpia sola al subirla (quitar fondo + márgenes + compresión). |
 | APK | 1.578 instalada en la tablet, con OTA `53ee732` (WhatsApp nativo). |
 | Widget de Termux | Arreglado (no mata un escritorio abierto; avisa en pantalla). |
+| Ventanas de Termux:X11 | Arreglado 29-oct: IZQ/DER ya no las meten bajo la barra; el vigía encaja ventanas nuevas, baja la capa azul y revive xfwm4. Redimensionar: tocar la esquina ◢ y arrastrar. |
+| OpenCode | `opencode.json` con la guía, `/inicio` `/cierre` `/estado`; probado en la ventana real (icono OpenCode). |
 
 ## 2. Pendientes, ordenados por riesgo (las decisiones marcadas ⚑ son del dueño)
 
@@ -32,7 +34,7 @@
 5. ⚑ **Notas de crédito fiscales**: hoy existe «Nota de crédito» en Contabilidad (`handleIssueCreditNote` en `AdminPanel.tsx`): marca la venta como `Devuelto`, reintegra el stock y crea un pedido `NC-…` en `orders`, pero **no** emite un comprobante fiscal (no pasa por `issue_invoice` ni crea fila en `invoices` ni PDF). Falta la nota de crédito fiscal con consecutivo propio para anular una factura.
 6. ⚑ **Datos de los audífonos**: stock 1 y costo = 75 % del precio son estimados. Teclado Marvo y audífonos RM-560
    tienen costo = precio. iPhone 17 está en «Accesorios» y el teclado en «Audio» (categorías mal puestas).
-7. **Termux:X11**: el dueño reporta que las ventanas no se pueden redimensionar y a veces no se ven bien. Sin revisar.
+7. ~~Termux:X11~~: resuelto el 29-oct (ver `BITACORA.md`). Si el dueño vuelve a reportarlo, preguntale qué ventana y en qué momento (al abrirla, al girar la tablet, después del teclado).
 8. ⚑ Dominio propio (correo de facturas que no cae en spam, acceso remoto a la tablet por Cloudflare Access).
 9. ⚑ Doble factor (TOTP) para el personal; 2FA en la cuenta de Cloudflare.
 10. ⚑ Cédula automática (Hacienda) también en la compra de la tienda, con `limitar_uso()`.
