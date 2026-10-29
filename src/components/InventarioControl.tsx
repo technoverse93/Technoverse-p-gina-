@@ -649,7 +649,8 @@ function InventarioControl({ currentUser, onDataChanged, defaultSubTab = 'produc
         reader.onerror = reject;
         reader.readAsDataURL(file);
       });
-      const compressed = await compressImage(rawBase64, 600, 600, 0.75);
+      const { prepararFotoProducto } = await import('../utils/storage');
+      const compressed = await prepararFotoProducto(rawBase64, 600);
       setExtractedProducts(prev => {
         const copy = [...prev];
         copy[index] = {
@@ -2193,9 +2194,9 @@ if (!m) return null;
                                 reader.onloadend = async () => {
                                   const rawBase64 = reader.result as string;
                                   try {
-                                    const { compressImage, recortarMargenes } = await import('../utils/storage');
-                                    const compressed = await compressImage(await recortarMargenes(rawBase64), 500, 500, 0.7);
-                                    setProdImage(compressed);
+                                    // Quitar el fondo, recortar márgenes y comprimir: automático para toda foto de producto.
+                                    const { prepararFotoProducto } = await import('../utils/storage');
+                                    setProdImage(await prepararFotoProducto(rawBase64));
                                   } catch (err) {
                                     console.error('Error compressing product image:', err);
                                     setProdImage(rawBase64);

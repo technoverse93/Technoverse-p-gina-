@@ -563,6 +563,24 @@ export function recortarMargenes(dataUrl: string, margen = 0.04): Promise<string
   });
 }
 
+/**
+ * Lo que se hace con TODA foto de producto que se sube (pedido del dueño, 2026-10-28: «quiero eso para cualquier foto
+ * de producto que yo suba»): si tiene un fondo liso (blanco de estudio, damero), se le quita con el recorte preciso
+ * de utils/quitarFondo.ts; después se recorta el espacio vacío alrededor y se comprime. Una foto sin fondo liso (un
+ * producto fotografiado en una mesa, por ejemplo) se deja como está: solo se recorta y se comprime.
+ */
+export async function prepararFotoProducto(dataUrl: string, lado = 500): Promise<string> {
+  if (!dataUrl || !dataUrl.startsWith('data:')) return dataUrl;
+  let foto = dataUrl;
+  try {
+    if (!(await imageHasTransparency(foto))) {
+      const sinFondo = await removeFlatBackground(foto);
+      if (sinFondo !== foto && await imageHasTransparency(sinFondo)) foto = sinFondo;
+    }
+  } catch { /* si algo falla, sigue con la foto tal cual */ }
+  return compressImage(await recortarMargenes(foto), lado, lado, 0.8);
+}
+
 /** Lado máximo, en píxeles, de una imagen de catálogo ya procesada. */
 const SALIDA_MAX = 500;
 
