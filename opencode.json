@@ -1,0 +1,10 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "instructions": [
+    "CLAUDE.md",
+    "docs/guia-ia/00-LEEME-PRIMERO.md",
+    "docs/guia-ia/01-REGLAS-QUE-NO-SE-ROMPEN.md",
+    "docs/guia-ia/02-COMO-PROBAR-EN-LA-TABLET.md",
+    "docs/guia-ia/03-HISTORIAL-DE-CAMBIOS.md"
+  ]
+}
