@@ -257,7 +257,10 @@ export default function EstudioPauta({ currentUser }: { currentUser: User | null
       // `esPiezaDisenada` en utils/bannerEstado.ts). El título queda para el panel y como texto alternativo.
       // Si la pieza invita a escribir por WhatsApp, el banner lleva a ese WhatsApp (antes no llevaba a ningún lado).
       const digitos = String(pieza.telefono || '').replace(/\D/g, '');
-      const link = digitos.length >= 8 ? `https://wa.me/${digitos.length === 8 ? '506' + digitos : digitos}` : undefined;
+      // Con el mensaje ya escrito sobre el producto: el cliente solo toca «Enviar» y se sabe de qué banner viene.
+      const producto = productos.find(p => p.id === productoId);
+      const saludo = `Hola Technoverse, vi el banner de la tienda y me interesa ${producto?.name || pieza.titular}${producto?.price ? ` (${colones(producto.price)})` : ''}.`;
+      const link = digitos.length >= 8 ? `https://wa.me/${digitos.length === 8 ? '506' + digitos : digitos}?text=${encodeURIComponent(saludo)}` : undefined;
       const b: Banner = { id: bannerId, title: pieza.titular, description: pieza.subtitulo, imageUrl: imagenUrl, link, type: 'General', formato, active: true };
       if (!db.banners) db.banners = [];
       db.banners.push(b);
