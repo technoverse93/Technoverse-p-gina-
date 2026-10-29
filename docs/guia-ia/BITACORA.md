@@ -48,7 +48,9 @@ Resumen de lo hecho (el detalle de cada PR está en `03-HISTORIAL-DE-CAMBIOS.md`
 - **Audífonos**: 5 productos cargados desde el panel con foto, descripción y precio competitivo frente a Intelec y
   Extreme Tech (stock y costo ESTIMADOS: el dueño debe corregirlos).
 - **Tablet**: widget de Termux arreglado (`escritorio` con cerrojo por PID y avisos); APK 1.578 instalada y probada.
-- **Guía para IA y OpenCode**: `docs/guia-ia/` + `opencode.json` (PR #300) y esta bitácora.
+- **Guía para IA y OpenCode**: `docs/guia-ia/` + `opencode.json` (PR #300); guías completas para IA y para el dueño,
+  esta bitácora y comandos `/inicio`, `/cierre` y `/estado` de OpenCode (PR #301). Copia en el escritorio:
+  `/root/Desktop/Guia-para-IA/` (`para-la-IA/` y `para-el-dueno/`).
 
 Probado: todo lo de tienda, banners, WhatsApp y CRM se probó con **toques reales en la tablet** (Chrome y APK),
 sin enviar mensajes, sin cobrar y sin emitir facturas; borradores y datos de prueba eliminados.
