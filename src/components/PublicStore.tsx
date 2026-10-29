@@ -1659,6 +1659,17 @@ export default function PublicStore({
                       >
                         Finalizar Compra <ArrowRight className="w-4 h-4" />
                       </button>
+                      {/* Discreto: una línea de texto, no otro botón. Manda el carrito armado por WhatsApp. */}
+                      {telefonoTienda && (
+                        <button
+                          type="button"
+                          onClick={() => abrirWhatsApp(enlaceWhatsApp(telefonoTienda,
+                            `Hola Technoverse, quiero comprar por WhatsApp:\n${cart.map(it => `• ${it.quantity} × ${it.product.name} (${colones(getProductDiscountedPrice(it.product))}) Ref: ${it.product.sku || it.product.id}`).join('\n')}\nTotal: ${colones(cart.reduce((sum, it) => sum + getProductDiscountedPrice(it.product) * it.quantity, 0))}`)!)}
+                          className="w-full mt-2 inline-flex items-center justify-center gap-1.5 text-[12.5px] font-semibold text-[var(--text-secondary)] hover:text-[var(--accent)] underline underline-offset-4 decoration-[var(--border-color)] cursor-pointer"
+                        >
+                          <MessageCircle className="w-3.5 h-3.5 flex-none" aria-hidden="true" /> ¿Preferís comprar por WhatsApp?
+                        </button>
+                      )}
                     </div>
                   )}
                 </motion.div>
@@ -2446,17 +2457,6 @@ export default function PublicStore({
                       className="tv-cta w-full bg-[var(--brand-gold-mid)] hover:bg-[var(--accent-hover)] disabled:bg-slate-200 disabled:text-[var(--text-primary)] text-[var(--accent-ink)] font-bold text-sm py-3 rounded-full transition cursor-pointer"
                     >
                       Continuar a Contacto <ArrowRight className="w-4 h-4" />
-                    </button>
-                  )}
-                  {/* Discreto: una línea de texto, no otro botón. Manda el carrito armado por WhatsApp. */}
-                  {checkoutStep === 0 && cart.length > 0 && telefonoTienda && (
-                    <button
-                      type="button"
-                      onClick={() => abrirWhatsApp(enlaceWhatsApp(telefonoTienda,
-                        `Hola Technoverse, quiero comprar por WhatsApp:\n${cart.map(it => `• ${it.quantity} × ${it.product.name} (${colones(getProductDiscountedPrice(it.product))}) Ref: ${it.product.sku || it.product.id}`).join('\n')}\nTotal: ${colones(cartTotal)}`)!)}
-                      className="w-full mt-2 inline-flex items-center justify-center gap-1.5 text-[12.5px] font-semibold text-[var(--text-secondary)] hover:text-[var(--accent)] underline underline-offset-4 decoration-[var(--border-color)] cursor-pointer"
-                    >
-                      <MessageCircle className="w-3.5 h-3.5 flex-none" aria-hidden="true" /> ¿Preferís comprar por WhatsApp?
                     </button>
                   )}
 
