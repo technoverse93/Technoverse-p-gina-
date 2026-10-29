@@ -32,6 +32,7 @@ export function mensajeDeError(e: any): string {
   if (/23505|duplicate key/i.test(t)) {
     return /email/i.test(t) ? 'Ya hay un contacto con ese correo.' : /tel/i.test(t) ? 'Ya hay un contacto con ese teléfono.' : 'Ese contacto ya existe.';
   }
+  if (/crm_leads_canal_check/i.test(t)) return 'El canal WhatsApp todavía no está activado en la base: falta aplicar supabase/migracion_crm_whatsapp.sql.';
   if (/crm_leads_tiene_contacto/i.test(t)) return 'Hace falta al menos un correo o un teléfono.';
   if (/crm_leads_email_check/i.test(t)) return 'El correo no tiene un formato válido.';
   if (/crm_leads_etiquetas_check/i.test(t)) return 'Máximo 20 etiquetas de hasta 30 letras.';
