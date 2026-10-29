@@ -1,6 +1,7 @@
 import { agruparAvisos } from './agruparAvisos';
 import { supabase } from '../supabaseClient';
 import { ajustesPrevios, bannersPrevios, catalogoVacioPrevio } from './previoDelSitio';
+import { quitarFondoEnPixeles } from './quitarFondo';
 import {
   User, Product, InventoryMovement, RepairOrder, Order,
   ChatConversation, ChatMessage,
@@ -771,7 +772,8 @@ async function subirImagenesEmbebidas(db: Database): Promise<void> {
  * nada que preservar al guardarlo — el damero se ve tal cual sobre la tarjeta
  * del producto. Esta función recupera la transparencia real.
  *
- * Cómo trabaja:
+ * Cómo trabaja: ver utils/quitarFondo.ts (rehecho el 2026-10-28: los huecos que encierra el producto ya no quedan
+ * como parches blancos y el contorno sale sin halo). Lo de abajo es la historia del primer recorte:
  *   1. Recorre el borde de la imagen y se queda con los colores que ocupan más
  *      del 5 % de ese contorno (hasta cuatro). Un damero aporta dos tonos; un
  *      fondo blanco liso, uno solo.
@@ -800,125 +802,8 @@ export function removeFlatBackground(dataUrl: string, tolerance = 26): Promise<s
       ctx.drawImage(img, 0, 0);
       let imageData: ImageData;
       try { imageData = ctx.getImageData(0, 0, w, h); } catch { resolve(dataUrl); return; }
-      const d = imageData.data;
-      const idx = (x: number, y: number) => (y * w + x) * 4;
-
-      const conteo = new Map();
-      const anotar = (x: number, y: number) => {
-        const i = idx(x, y);
-        const clave = `${d[i] >> 3},${d[i + 1] >> 3},${d[i + 2] >> 3}`;
-        conteo.set(clave, (conteo.get(clave) || 0) + 1);
-      };
-      for (let x = 0; x < w; x++) { anotar(x, 0); anotar(x, h - 1); }
-      for (let y = 0; y < h; y++) { anotar(0, y); anotar(w - 1, y); }
-
-      const totalBorde = 2 * (w + h);
-      const fondo = [...conteo.entries()]
-        .filter(([, n]) => n / totalBorde > 0.05)
-        .sort((a, b) => b[1] - a[1])
-        .slice(0, 4)
-        .map(([k]) => k.split(',').map(v => (parseInt(v, 10) << 3) + 4) as number[]);
-
-      if (fondo.length === 0) { resolve(dataUrl); return; }
-
-      /** Distancia (en el canal que más difiera) al color de fondo más parecido. */
-      const difAlFondo = (i: number) => {
-        let mejor = 255;
-        for (const [r, g, b] of fondo) {
-          const dif = Math.max(Math.abs(d[i] - r), Math.abs(d[i + 1] - g), Math.abs(d[i + 2] - b));
-          if (dif < mejor) mejor = dif;
-        }
-        return mejor;
-      };
-
-      // ---- Recorte por desvanecido ------------------------------------------
-      // La versión anterior cortaba en seco: un píxel estaba dentro de la
-      // tolerancia (se volvía 100 % transparente) o estaba fuera (quedaba 100 %
-      // opaco). Con una foto de catálogo real —que casi siempre trae una sombra
-      // suave bajo el producto— el gris se aleja del blanco de a poco, cruza la
-      // tolerancia a mitad de camino y lo que queda es un borde duro: ese era el
-      // halo blanco pegado al producto.
-      //
-      // Se probó resolverlo dejando que el relleno siguiera el degradado
-      // mientras no cruzara un contorno fuerte. MEDIDO SOBRE FOTOS REALES, eso
-      // falla feo: en un producto claro sobre fondo claro (un iPhone blanco
-      // sobre blanco) el interior del producto es TAN liso como la sombra
-      // —contorno mediano 0 en ambos— así que el relleno se colaba adentro y se
-      // comía el cuerpo del teléfono entero, dejando solo la pantalla. Peor que
-      // el halo. Por eso no se hace por contornos.
-      //
-      // Lo que sí funciona sin riesgo: el relleno sigue mandando qué zona se
-      // puede tocar (solo lo conectado al borde, nunca el interior del
-      // producto), pero la transparencia deja de ser un sí/no y pasa a ser una
-      // rampa. Cerca del color de fondo -> transparente; a medida que se
-      // despega -> va ganando opacidad. La sombra se apaga de forma progresiva
-      // en vez de terminar en un recorte con filo.
-      // El relleno principal se mantiene igual que siempre: estricto, solo
-      // colores muy parecidos a los del borde. Es lo único que nunca se comió
-      // un producto en las pruebas, y esa garantía no se negocia.
-      const visitado = new Uint8Array(w * h);
-      const pila: number[] = [];
-      for (let x = 0; x < w; x++) { pila.push(x, 0, x, h - 1); }
-      for (let y = 0; y < h; y++) { pila.push(0, y, w - 1, y); }
-
-      while (pila.length) {
-        const y = pila.pop(), x = pila.pop();
-        if (x < 0 || y < 0 || x >= w || y >= h) continue;
-        const p = y * w + x;
-        if (visitado[p]) continue;
-        const i = p * 4;
-        if (difAlFondo(i) > tolerance) continue;
-        visitado[p] = 1;
-        d[i + 3] = 0;
-        pila.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
-      }
-
-      // ---- Erosión acotada del fleco ----------------------------------------
-      // Lo que quedaba mal era el anillo claro pegado al producto: la parte de
-      // la sombra o del antialias que no llegó a entrar en la tolerancia y se
-      // cortaba con filo.
-      //
-      // El umbral de acá está elegido con números medidos sobre fotos reales de
-      // catálogo, no a ojo: el cuerpo claro de un producto se ubica alrededor de
-      // 51 de distancia al color de fondo, mientras que el fleco vive por debajo
-      // de 40. Por eso se erosiona hasta 40 y ni un punto más: es el margen que
-      // se come el anillo dejando el producto fuera de peligro. Y como el
-      // recorte avanza de a un píxel por pasada con un tope de cuatro, aunque
-      // una foto rara se salga del molde el daño máximo son 4 px de contorno.
-      const TOPE_FLECO = 40;
-      for (let pasada = 0; pasada < 4; pasada++) {
-        const aBorrar: number[] = [];
-        for (let y = 1; y < h - 1; y++) {
-          for (let x = 1; x < w - 1; x++) {
-            const p = y * w + x;
-            if (visitado[p]) continue;
-            if (!visitado[p - 1] && !visitado[p + 1] && !visitado[p - w] && !visitado[p + w]) continue;
-            if (difAlFondo(p * 4) <= TOPE_FLECO) aBorrar.push(p);
-          }
-        }
-        if (!aBorrar.length) break;
-        for (const p of aBorrar) { visitado[p] = 1; d[p * 4 + 3] = 0; }
-      }
-
-      // ---- Suavizado del contorno -------------------------------------------
-      // Baja la opacidad de los píxeles que quedaron rodeados de transparencia
-      // para que el recorte no se vea aserrado.
-      for (let y = 1; y < h - 1; y++) {
-        for (let x = 1; x < w - 1; x++) {
-          const p = y * w + x;
-          if (visitado[p]) continue;
-          const i = p * 4;
-          if (d[i + 3] === 0) continue;
-          let vecinosTransparentes = 0;
-          if (visitado[p - 1]) vecinosTransparentes++;
-          if (visitado[p + 1]) vecinosTransparentes++;
-          if (visitado[p - w]) vecinosTransparentes++;
-          if (visitado[p + w]) vecinosTransparentes++;
-          if (vecinosTransparentes >= 3) d[i + 3] = 90;
-          else if (vecinosTransparentes === 2) d[i + 3] = 160;
-        }
-      }
-
+      // El recorte vive en utils/quitarFondo.ts: fondo exterior, huecos encerrados y contorno sin halo.
+      if (!quitarFondoEnPixeles(imageData.data, w, h, tolerance)) { resolve(dataUrl); return; }
       ctx.putImageData(imageData, 0, 0);
 
       // FALLO CORREGIDO: hasta acá el recorte trabaja a resolución completa (lo
