@@ -7,6 +7,8 @@
 // `whatsapp://` y respaldo. En computadora se abre wa.me en pestaña nueva (WhatsApp Web).
 // =====================================================================
 
+import { telefonoNativo, telefonoNativoDisponible } from '../mobile/telefonoNativo';
+
 /** El número de la tienda en formato internacional sin signos (506 + 8 dígitos). */
 export function numeroWhatsApp(telefono?: string | null): string | null {
   const d = String(telefono || '').replace(/\D/g, '');
@@ -37,6 +39,13 @@ export function abrirWhatsApp(url: string): boolean {
     const numero = u.hostname.toLowerCase() === 'wa.me' ? u.pathname.replace(/\D/g, '') : (u.searchParams.get('phone') || '');
     const texto = u.searchParams.get('text') || '';
     const consulta = `phone=${numero}${texto ? `&text=${encodeURIComponent(texto)}` : ''}`;
+    if (numero && telefonoNativoDisponible()) {
+      // APK: el WebView no sigue `intent://` ni `whatsapp://` (no pasaba nada al tocar). El complemento nativo
+      // (native-android/telefono) lanza WhatsApp con un intent de Android; si falla, se intenta como enlace.
+      void telefonoNativo.whatsapp({ numero, mensaje: texto }).then(r => { if (!r?.ok) void telefonoNativo.enlace({ url }); })
+        .catch(() => { void telefonoNativo.enlace({ url }).catch(() => {}); });
+      return true;
+    }
     if (numero && esAndroid()) {
       // Android: un «intent» con su respaldo adentro. Chrome abre WhatsApp (o WhatsApp Business) y SOLO si no hay
       // ninguno instalado va a wa.me. La primera versión usaba un temporizador que preguntaba si la página había
