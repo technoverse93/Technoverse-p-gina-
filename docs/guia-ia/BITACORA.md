@@ -64,3 +64,24 @@ Quedó pendiente: ver `05-ESTADO-Y-PENDIENTES.md` (lista completa). Lo más urge
 
 Para quien siga: empezá por `/inicio` en OpenCode (o leé `00-LEEME-PRIMERO.md`), después atendé lo que pida el
 dueño; si no pide nada, el siguiente paso recomendado es el punto 1 de arriba.
+
+## 2026-10-29 02:25 — Claude Code (Claude Opus 5.5)
+- Pedido del dueño: «en la app de termux x11 no se ve bien las ventanas de cualquier cosa, no les puedo modificar el
+  tamaño de la ventana».
+- Causa encontrada: los botones IZQ/DER (`/usr/local/bin/ventana`) usaban `_NET_WORKAREA`, que xfwm4 tenía viejo
+  (0,40,1536,867: sin descontar la barra de tareas de 45 px). Las ventanas quedaban 45 px debajo de la barra: el
+  borde inferior (el que se agarra) y las últimas líneas tapados. Además, en Termux:X11 el primer toque sobre un borde
+  solo mueve el puntero: hay que tocar y después arrastrar.
+- Hecho (fuera del repo, con respaldo `*.respaldo-20261029` al lado): nuevo `/usr/local/bin/area-util`; `ventana`
+  usa `area-util` y acepta un id; `ajuste-teclado` con `vigia()` (capa azul al fondo, revive xfwm4, encaja ventanas
+  nuevas) y `Reacomodo` (tras girar o cerrar el teclado, fuerza a xfwm4 a recalcular el área y encaja todas).
+  Guías: §3.3 de la guía del dueño, §7 de `00-LEEME-PRIMERO.md`, estado en `05`.
+- Probado con toques reales (`adb shell input`): esquina ◢ 745×758 → 637×650; borde derecho e inferior tocando y
+  arrastrando → 709×704; ventana pedida de 220×70 caracteres nace dentro del área (0..1536 × 40..862); ventana
+  corrida fuera + abrir/cerrar teclado → vuelve adentro; capa azul subida a mano → al fondo en < 2,5 s; `pkill
+  xfwm4` → revivido en ~2 s con los marcos intactos.
+- Incidente: una prueba con `xdotool mousedown` congeló el servidor X (xfwm4 toma el servidor en `box_resize`). Se
+  resolvió matando xfwm4 y bajando la capa azul; ahora el vigía lo hace solo. Anotado en `00` §7 y §8.
+- Quedó pendiente: nada de esto. Lo de la bitácora anterior sigue igual (6 funciones del servidor, respaldo, SINPE…).
+- Para quien siga: si el dueño reporta otra ventana rara, pedile cuál y cuándo; medí con `xwininfo`, `area-util`
+  y una captura (`adb exec-out screencap -p`).
