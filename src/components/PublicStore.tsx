@@ -6,7 +6,7 @@ import {
   ShoppingBag, Trash2, ArrowRight,
   MapPin, CheckCircle, Smartphone, Wrench, Settings,
   MessageSquare, Sparkles, AlertCircle, FileDown, Heart, ShieldAlert,
-  User as UserIcon, X, LogOut, Fingerprint, Search as SearchIcon
+  User as UserIcon, X, LogOut, Fingerprint, Search as SearchIcon, MessageCircle
 } from 'lucide-react';
 import { ProductCard } from './ProductCard';
 import { CustomSelect } from './CustomSelect';
@@ -44,7 +44,8 @@ import { Cintillo, TarjetasCampana, BannerDivisor, TarjetasBannerGrid, PopupProm
 import PieDePagina from './store/PieDePagina';
 import AvisoCookies from './store/AvisoCookies';
 import { avisarPanel, alCambiarPanel } from '../utils/panelTienda';
-import { miles } from '../utils/dinero';
+import { miles, colones } from '../utils/dinero';
+import { abrirWhatsApp, enlaceWhatsApp } from '../utils/whatsapp';
 
 const DEFAULT_CAABYS = '8399000000000';
 
@@ -214,6 +215,8 @@ export default function PublicStore({
   // Shopping cart state
   const [cart, setCart] = useState<{ product: Product; quantity: number }[]>([]);
   const [isCartOpen, setIsCartOpen] = useState(false);
+  // WhatsApp de la tienda (Configuración → teléfono): para «Consultar por WhatsApp» y el carrito por WhatsApp.
+  const telefonoTienda = getDB().settings?.companyPhone || '';
 
   // FALLO CORREGIDO: imágenes de producto sin `onError` en el buscador, el
   // carrito y el checkout — una imageUrl rota dejaba el ícono partido del
@@ -2445,6 +2448,17 @@ export default function PublicStore({
                       Continuar a Contacto <ArrowRight className="w-4 h-4" />
                     </button>
                   )}
+                  {/* Discreto: una línea de texto, no otro botón. Manda el carrito armado por WhatsApp. */}
+                  {checkoutStep === 0 && cart.length > 0 && telefonoTienda && (
+                    <button
+                      type="button"
+                      onClick={() => abrirWhatsApp(enlaceWhatsApp(telefonoTienda,
+                        `Hola Technoverse, quiero comprar por WhatsApp:\n${cart.map(it => `• ${it.quantity} × ${it.product.name} (${colones(getProductDiscountedPrice(it.product))}) Ref: ${it.product.sku || it.product.id}`).join('\n')}\nTotal: ${colones(cartTotal)}`)!)}
+                      className="w-full mt-2 inline-flex items-center justify-center gap-1.5 text-[12.5px] font-semibold text-[var(--text-secondary)] hover:text-[var(--accent)] underline underline-offset-4 decoration-[var(--border-color)] cursor-pointer"
+                    >
+                      <MessageCircle className="w-3.5 h-3.5 flex-none" aria-hidden="true" /> ¿Preferís comprar por WhatsApp?
+                    </button>
+                  )}
 
                   {checkoutStep === 1 && (
                     <button
@@ -2808,6 +2822,18 @@ export default function PublicStore({
                   >
                     Añadir al carrito
                   </button>
+                  {/* Para quien prefiere comprar conversando: secundario y de contorno, no compite con «Añadir al
+                      carrito». Abre WhatsApp con el producto, el precio y el SKU (para buscarlo en Inventario). */}
+                  {telefonoTienda && (
+                    <button
+                      type="button"
+                      onClick={() => abrirWhatsApp(enlaceWhatsApp(telefonoTienda,
+                        `Hola Technoverse, me interesa: ${selectedProductDetail.name} (${colones(getProductDiscountedPrice(selectedProductDetail))}). Ref: ${selectedProductDetail.sku || selectedProductDetail.id}`)!)}
+                      className="tv-ellipsis w-full inline-flex items-center justify-center gap-2 border border-[var(--border-color)] hover:bg-[var(--bg-surface)] text-[var(--text-primary)] font-semibold text-sm px-3 py-2.5 rounded-full transition cursor-pointer"
+                    >
+                      <MessageCircle className="w-4 h-4 flex-none" aria-hidden="true" /> Consultar por WhatsApp
+                    </button>
+                  )}
                   <button
                     onClick={() => setSelectedProductDetail(null)}
                     className="tv-ellipsis w-full bg-[var(--bg-sunken)] hover:bg-[var(--border-color)] text-[var(--text-primary)] font-semibold text-sm px-3 py-3 rounded-full text-center transition cursor-pointer"

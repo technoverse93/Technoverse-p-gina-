@@ -36,6 +36,7 @@ import React, { useEffect, useMemo, useState } from 'react';
 import type { Banner } from '../../types';
 import { estaVigente, ordenarBanners, esPiezaDisenada } from '../../utils/bannerEstado';
 import { marcarVistaEnSesion, registrarEventoBanner } from '../../utils/bannerMetricas';
+import { alTocarEnlace } from '../../utils/whatsapp';
 
 interface Props {
   banners: Banner[];
@@ -169,7 +170,7 @@ export default function BannerPrincipal({ banners, vista = false }: Props) {
             target={/^https?:\/\//i.test(actual.link) ? '_blank' : undefined}
             rel="noopener noreferrer"
             className="absolute inset-0 block"
-            onClick={vista ? undefined : () => registrarEventoBanner(actual.id, 'clic')}
+            onClick={e => { if (!vista) registrarEventoBanner(actual.id, 'clic'); alTocarEnlace(e, actual.link); }}
           >
             {contenido}
           </a>
