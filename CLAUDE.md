@@ -1,5 +1,12 @@
 # Technoverse Costa Rica — instrucciones permanentes
 
+## Continuidad entre IA (Claude Code ⇄ OpenCode): leer y escribir la bitácora
+
+Al EMPEZAR cualquier sesión: leer la última entrada de `docs/guia-ia/BITACORA.md` y `docs/guia-ia/05-ESTADO-Y-PENDIENTES.md`
+(otra IA, por ejemplo OpenCode, pudo haber trabajado mientras tanto). Al TERMINAR: agregar una entrada al final de la
+bitácora (plantilla adentro) y actualizar el estado. La guía completa está en `docs/guia-ia/` (para IA) y
+`docs/guia-humano/GUIA-COMPLETA.md` (para el dueño). Mantenerlas al día con cada cambio.
+
 ## Flujo de git/despliegue: autorización permanente
 
 El dueño del repositorio autorizó de forma permanente (2026-08-12) que Claude

@@ -29,6 +29,8 @@ Para ver el detalle: `gh pr view <número>` o `git log --oneline` en `/root/proy
 | #294, #295 | WhatsApp al instante (`src/utils/whatsapp.ts`): `intent://` nativo en Android; «Consultar por WhatsApp» en el detalle del producto. |
 | #296 | «¿Preferís comprar por WhatsApp?» en el carrito desplegable. |
 | #299 | **APK**: WhatsApp con el complemento nativo `TelefonoNativo` (el WebView no seguía `intent://`). Publicado por OTA. |
+| #300 | **Guía para IA** (`docs/guia-ia/` 00-03 + herramientas) y `opencode.json` que la carga. |
+| #301 | **Guías completas**: mapa del sistema (04), estado y pendientes (05), `BITACORA.md` compartida, guía del dueño (`docs/guia-humano/`), comandos `/inicio` `/cierre` `/estado` de OpenCode y aviso de continuidad en `CLAUDE.md`. |
 
 ## Panel
 
@@ -60,7 +62,7 @@ Para ver el detalle: `gh pr view <número>` o `git log --oneline` en `/root/proy
 6. **Respaldo automático de la base** (plan gratis sin copias; se perdieron las facturas 1-5): propuesto con GitHub
    Actions + `pg_dump` + Cloudflare R2.
 7. **Facturación electrónica real ante Hacienda** (v4.4): necesita usuario del ATV y la llave `.p12`.
-8. **Notas de crédito** para anular facturas (hoy no se pueden anular).
+8. **Nota de crédito fiscal**: la «Nota de crédito» de Contabilidad devuelve stock y marca la venta como Devuelto, pero no emite comprobante fiscal (ver `05-ESTADO-Y-PENDIENTES.md`).
 9. Dominio propio (correo que no cae en spam y acceso remoto a la tablet).
 10. Doble factor (TOTP) para el personal y 2FA en Cloudflare.
 11. Cédula automática (consulta a Hacienda) también en la compra de la tienda, con límite de uso.

@@ -1,10 +1,42 @@
 {
   "$schema": "https://opencode.ai/config.json",
+  "model": "opencode/deepseek-v4.1-flash-free",
   "instructions": [
     "CLAUDE.md",
     "docs/guia-ia/00-LEEME-PRIMERO.md",
     "docs/guia-ia/01-REGLAS-QUE-NO-SE-ROMPEN.md",
-    "docs/guia-ia/02-COMO-PROBAR-EN-LA-TABLET.md",
-    "docs/guia-ia/03-HISTORIAL-DE-CAMBIOS.md"
-  ]
+    "docs/guia-ia/05-ESTADO-Y-PENDIENTES.md",
+    "docs/guia-ia/04-MAPA-DEL-SISTEMA.md",
+    "docs/guia-ia/02-COMO-PROBAR-EN-LA-TABLET.md"
+  ],
+  "commands": {
+    "inicio": {
+      "description": "Arranque de sesión: baja lo último, lee la bitácora y el estado, y resume dónde quedó el trabajo",
+      "template": "Seguí el protocolo «Al empezar» de docs/guia-ia/00-LEEME-PRIMERO.md: 1) corré `git status`, `git switch main` y `git pull` en /root/proyectos/Technoverse-p-gina-; 2) leé la ÚLTIMA entrada de docs/guia-ia/BITACORA.md y todo docs/guia-ia/05-ESTADO-Y-PENDIENTES.md; 3) corré `git log --oneline -10`; 4) contale al dueño en español, en 3 a 6 líneas, dónde quedó el trabajo, qué cambió desde la última entrada de la bitácora y cuál es el siguiente paso recomendado. No modifiques archivos."
+    },
+    "cierre": {
+      "description": "Cierre de sesión: anota en la bitácora lo hecho y lo pendiente, y lo sube al repo",
+      "template": "Seguí el protocolo «Al terminar» de docs/guia-ia/00-LEEME-PRIMERO.md: agregá AL FINAL de docs/guia-ia/BITACORA.md una entrada con la plantilla (fecha y hora de `date`, agente «OpenCode» y el modelo que estás usando, pedido del dueño, qué se hizo con archivos y número de PR, cómo se probó o «sin probar», qué quedó pendiente, siguiente paso). Solo hechos comprobados, sin contraseñas ni llaves. Si cambió el estado general, actualizá docs/guia-ia/05-ESTADO-Y-PENDIENTES.md y sumá los PR a docs/guia-ia/03-HISTORIAL-DE-CAMBIOS.md. Después creá una rama `opencode/bitacora-AAAAMMDD-HHMM` desde main, commit, push, PR y fusionalo (es documentación: no hace falta build). Contale al dueño en español qué anotaste."
+    },
+    "estado": {
+      "description": "Resumen de pendientes y de las decisiones que le tocan al dueño",
+      "template": "Leé docs/guia-ia/05-ESTADO-Y-PENDIENTES.md y la última entrada de docs/guia-ia/BITACORA.md y contale al dueño en español, en una lista corta y numerada: qué funciona hoy, qué está pendiente por riesgo, y cuáles decisiones le tocan a él (las marcadas con ⚑). No modifiques archivos."
+    }
+  },
+  "permission": {
+    "bash": {
+      "*": "allow",
+      "git push --force*": "deny",
+      "git push -f*": "deny",
+      "git push origin --force*": "deny",
+      "git reset --hard*": "ask",
+      "git clean*": "ask",
+      "rm -rf*": "ask",
+      "*reset_produccion*": "deny",
+      "*reset_datos_prueba*": "deny",
+      "adb reverse*": "deny"
+    },
+    "edit": "allow",
+    "webfetch": "allow"
+  }
 }
