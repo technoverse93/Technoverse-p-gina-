@@ -2,9 +2,9 @@
 // ABRIR WHATSAPP AL INSTANTE (banners, producto, carrito, pie de página)
 // =====================================================================
 // Un enlace https://wa.me/… en el teléfono abre una PESTAÑA nueva, descarga la página de wa.me desde internet y
-// recién entonces salta a la app: 2-3 segundos medidos en la tablet (el dueño: «tarda mucho en abrir»). En un
-// teléfono o tableta se abre la app directo con `whatsapp://send`; si la app no está instalada (la página sigue a la
-// vista pasado un momento), se cae a wa.me. En computadora se abre wa.me en pestaña nueva (WhatsApp Web).
+// recién entonces salta a la app: 2-3 segundos medidos en la tablet (el dueño: «tarda mucho en abrir»). En Android
+// se abre la app directo con un «intent» que trae su propio respaldo (wa.me si no hay WhatsApp); en iPhone, con
+// `whatsapp://` y respaldo. En computadora se abre wa.me en pestaña nueva (WhatsApp Web).
 // =====================================================================
 
 /** El número de la tienda en formato internacional sin signos (506 + 8 dígitos). */
@@ -26,9 +26,8 @@ export function esEnlaceWhatsApp(url?: string | null): boolean {
   return !!url && /^https?:\/\/(wa\.me|api\.whatsapp\.com)\//i.test(url);
 }
 
-function esMovil(): boolean {
-  return typeof navigator !== 'undefined' && /android|iphone|ipad|ipod/i.test(navigator.userAgent || '');
-}
+const esAndroid = () => typeof navigator !== 'undefined' && /android/i.test(navigator.userAgent || '');
+const esIOS = () => typeof navigator !== 'undefined' && /iphone|ipad|ipod/i.test(navigator.userAgent || '');
 
 /** Abre WhatsApp lo más rápido posible. Devuelve false si no es un enlace de WhatsApp (que siga el enlace normal). */
 export function abrirWhatsApp(url: string): boolean {
@@ -37,17 +36,28 @@ export function abrirWhatsApp(url: string): boolean {
     const u = new URL(url);
     const numero = u.hostname.toLowerCase() === 'wa.me' ? u.pathname.replace(/\D/g, '') : (u.searchParams.get('phone') || '');
     const texto = u.searchParams.get('text') || '';
-    if (!esMovil() || !numero) { window.open(url, '_blank', 'noopener'); return true; }
-    const directo = `whatsapp://send?phone=${numero}${texto ? `&text=${encodeURIComponent(texto)}` : ''}`;
-    let salio = false;
-    const alOcultarse = () => { if (document.hidden) salio = true; };
-    document.addEventListener('visibilitychange', alOcultarse);
-    window.location.href = directo;
-    // Sin la app: la página sigue a la vista; se abre wa.me (que ofrece instalarla o usar la web).
-    setTimeout(() => {
-      document.removeEventListener('visibilitychange', alOcultarse);
-      if (!salio && !document.hidden) window.location.href = url;
-    }, 1400);
+    const consulta = `phone=${numero}${texto ? `&text=${encodeURIComponent(texto)}` : ''}`;
+    if (numero && esAndroid()) {
+      // Android: un «intent» con su respaldo adentro. Chrome abre WhatsApp (o WhatsApp Business) y SOLO si no hay
+      // ninguno instalado va a wa.me. La primera versión usaba un temporizador que preguntaba si la página había
+      // quedado oculta; en la tablet Chrome no lo avisa, así que el respaldo se disparaba IGUAL y la pestaña quedaba
+      // en la página de wa.me: al volver, la tienda ya no estaba y el siguiente toque «no funcionaba».
+      window.location.href = `intent://send/?${consulta}#Intent;scheme=whatsapp;S.browser_fallback_url=${encodeURIComponent(url)};end`;
+      return true;
+    }
+    if (numero && esIOS()) {
+      // iPhone: no hay «intent». Se abre la app y, si en 1,5 s la página no perdió el foco ni quedó oculta, no hay
+      // app: se va a wa.me. Cualquiera de las tres señales cuenta como «se abrió».
+      let salio = false;
+      const marcar = () => { salio = true; };
+      window.addEventListener('blur', marcar, { once: true });
+      window.addEventListener('pagehide', marcar, { once: true });
+      document.addEventListener('visibilitychange', marcar, { once: true });
+      window.location.href = `whatsapp://send?${consulta}`;
+      setTimeout(() => { if (!salio && !document.hidden && document.hasFocus()) window.location.href = url; }, 1500);
+      return true;
+    }
+    window.open(url, '_blank', 'noopener');
     return true;
   } catch {
     return false;
