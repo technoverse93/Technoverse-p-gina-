@@ -7,7 +7,7 @@
 // Esta pantalla solo la ve el personal (RLS en la base).
 // =====================================================================
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Plus } from 'lucide-react';
 import { Btn, Card, Empty, Field, PageHead } from '../AdminKit';
 import { CustomSelect } from '../../CustomSelect';
@@ -21,10 +21,13 @@ import { useCrm } from './useCrm';
 import { AvisoMigracion } from './crmPiezas';
 import CrmEmbudo from './CrmEmbudo';
 import CrmFicha from './CrmFicha';
+import { CLAVE_COBRO_PRECARGADO, EVENTO_COBRO_PRECARGADO, type CobroPrecargado } from './CrmWhatsApp';
 import CrmSeguimiento from './CrmSeguimiento';
 import CrmSegmentos from './CrmSegmentos';
 import CrmRespuestas from './CrmRespuestas';
 import CrmMetricas from './CrmMetricas';
+import { getDB } from '../../../utils/storage';
+import { colones } from '../../../utils/dinero';
 
 type Vista = 'embudo' | 'seguimiento' | 'segmentos' | 'respuestas' | 'metricas';
 
@@ -43,7 +46,13 @@ function vistaDe(tab: string): Vista {
 
 function NuevoContacto({ crm, onCerrar, onAbrir }: { crm: ReturnType<typeof useCrm>; onCerrar: () => void; onAbrir: (id: string) => void }) {
   const toast = useToast();
-  const [d, setD] = useState({ nombre: '', email: '', telefono: '', provincia: '', valor: '', etapa: 'nuevo' as EtapaCrm });
+  const [d, setD] = useState({ nombre: '', email: '', telefono: '', provincia: '', valor: '', etapa: 'nuevo' as EtapaCrm, canal: 'manual' as 'manual' | 'whatsapp', ref: '' });
+  // «Ref:» del mensaje de WhatsApp (el SKU que manda el botón de la tienda) → el producto que le interesa.
+  const producto = useMemo(() => {
+    const r = d.ref.trim().toLowerCase();
+    if (!r) return null;
+    return (getDB().products || []).find(p => (p.sku || '').toLowerCase() === r || p.id.toLowerCase() === r) || null;
+  }, [d.ref]);
   const [guardando, setGuardando] = useState(false);
   const duplicado = buscarDuplicado(crm.leads, d.email, d.telefono);
 
@@ -54,7 +63,9 @@ function NuevoContacto({ crm, onCerrar, onAbrir }: { crm: ReturnType<typeof useC
     setGuardando(true);
     const nuevo = await crm.crear({
       nombre: d.nombre, email: d.email, telefono: d.telefono, provincia: d.provincia || null, etapa: d.etapa,
-      valorEstimado: Math.max(0, Number(d.valor.replace(/[^\d.]/g, '')) || 0),
+      valorEstimado: Math.max(0, Number(d.valor.replace(/[^\d.]/g, '')) || 0) || (producto?.price || 0),
+      canal: d.canal,
+      ...(producto ? { origen: { producto: producto.name, ref: producto.sku || producto.id } } : {}),
     });
     setGuardando(false);
     if (nuevo) { onCerrar(); onAbrir(nuevo.id); }
@@ -64,7 +75,13 @@ function NuevoContacto({ crm, onCerrar, onAbrir }: { crm: ReturnType<typeof useC
     <Modal open onClose={onCerrar} size="md" title="Nuevo contacto"
       footer={<><Btn variant="ghost" onClick={onCerrar}>Cancelar</Btn><Btn variant="primary" icon={Plus} onClick={crear} disabled={guardando || !!duplicado}>{guardando ? 'Creando…' : 'Crear contacto'}</Btn></>}>
       <div className="tv-stack">
-        <p className="crm-nada">Los contactos llegan solos desde el chat, los registros, los pedidos y el taller. Usá esto para quien te escribió por otro lado.</p>
+        <p className="crm-nada">Los contactos llegan solos desde el chat, los registros, los pedidos y el taller. Usá esto para quien te escribió por WhatsApp o por otro lado.</p>
+        <Field label="Llegó por"><CustomSelect value={d.canal} onChange={v => setD({ ...d, canal: v as 'manual' | 'whatsapp', etapa: v === 'whatsapp' && d.etapa === 'nuevo' ? 'conversacion' : d.etapa })} options={[{ value: 'manual', label: 'Agregado a mano' }, { value: 'whatsapp', label: 'WhatsApp' }]} /></Field>
+        {d.canal === 'whatsapp' && (
+          <Field label="Ref. del mensaje (opcional)" hint={producto ? `Le interesa: ${producto.name} · ${colones(producto.price || 0)}` : 'El código «Ref:» que trae el mensaje (por ejemplo AUD-AUDISONY-9632).'}>
+            <input className="tv-input" value={d.ref} maxLength={60} onChange={e => setD({ ...d, ref: e.target.value })} placeholder="AUD-…" />
+          </Field>
+        )}
         <Field label="Nombre"><input className="tv-input" value={d.nombre} maxLength={120} autoFocus onChange={e => setD({ ...d, nombre: e.target.value })} /></Field>
         <div className="crm-grid2">
           <Field label="Correo"><input className="tv-input" type="email" value={d.email} maxLength={160} onChange={e => setD({ ...d, email: e.target.value })} /></Field>
@@ -108,6 +125,14 @@ export default function CrmModulo({ tab, currentUser, onAbrirModulo }: { tab: st
 
   const abrir = useCallback((id: string) => setAbierto(id), []);
 
+  // «SINPE recibido» de una venta por chat: Cobros recibe el cliente y el producto (ver FacturacionPanel).
+  const cobrar = useCallback((c: CobroPrecargado) => {
+    try { sessionStorage.setItem(CLAVE_COBRO_PRECARGADO, JSON.stringify(c)); } catch { /* va solo el evento */ }
+    window.dispatchEvent(new CustomEvent(EVENTO_COBRO_PRECARGADO, { detail: c }));
+    setAbierto(null);
+    onAbrirModulo('cobros');
+  }, [onAbrirModulo]);
+
   return (
     <div className="tv-stack crm-raiz" id="view-crm">
       <PageHead
@@ -134,7 +159,7 @@ export default function CrmModulo({ tab, currentUser, onAbrirModulo }: { tab: st
         </>
       )}
 
-      {abierto && <CrmFicha crm={crm} leadId={abierto} esDueno={esGestion(currentUser?.role)} onCerrar={() => setAbierto(null)} onAbrirChat={abrirChat} />}
+      {abierto && <CrmFicha crm={crm} leadId={abierto} esDueno={esGestion(currentUser?.role)} onCerrar={() => setAbierto(null)} onAbrirChat={abrirChat} onCobrar={cobrar} />}
       {nuevo && <NuevoContacto crm={crm} onCerrar={() => setNuevo(false)} onAbrir={abrir} />}
     </div>
   );

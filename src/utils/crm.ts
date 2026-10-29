@@ -72,11 +72,16 @@ export async function buscarLeadPorCorreo(email: string): Promise<LeadCrm | null
 export interface DatosLeadNuevo {
   nombre: string; email?: string | null; telefono?: string | null; etapa?: EtapaCrm; provincia?: string | null;
   etiquetas?: string[]; valorEstimado?: number; responsable?: string | null;
+  /** Por dónde llegó: a mano (por defecto) o WhatsApp. */
+  canal?: 'manual' | 'whatsapp';
+  /** Lo que le interesaba (producto y referencia del mensaje de WhatsApp). */
+  origen?: Record<string, string>;
 }
 
 export async function crearLead(d: DatosLeadNuevo): Promise<LeadCrm> {
   const fila = await escribir(supabase.from('crm_leads').insert({
-    nombre: d.nombre.trim(), email: d.email?.trim() || null, telefono: d.telefono?.trim() || null, canal: 'manual',
+    nombre: d.nombre.trim(), email: d.email?.trim() || null, telefono: d.telefono?.trim() || null, canal: d.canal || 'manual',
+    ...(d.origen ? { origen: d.origen } : {}),
     etapa: d.etapa || 'nuevo', provincia: d.provincia || null, etiquetas: d.etiquetas || [], valor_estimado: d.valorEstimado || 0,
     responsable: d.responsable || null,
   }).select('*').single());

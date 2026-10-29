@@ -7,7 +7,7 @@
 // =====================================================================
 
 import { useEffect, useMemo, useState, type ReactNode } from 'react';
-import { Archive, ArchiveRestore, Bell, Check, ExternalLink, Mail, MessageSquare, Phone, Plus, Trash2, X } from 'lucide-react';
+import { Archive, ArchiveRestore, Bell, Check, ExternalLink, Mail, MessageCircle, MessageSquare, Phone, Plus, ShoppingCart, Trash2, X } from 'lucide-react';
 import { Btn, Chip, Field, colones } from '../AdminKit';
 import { CustomSelect } from '../../CustomSelect';
 import { Modal, useConfirm, useToast } from '../../ui/Overlays';
@@ -22,6 +22,7 @@ import {
 } from '../../../utils/crm';
 import type { Crm } from './useCrm';
 import { Avatar, ICONO_CANAL, ICONO_EVENTO } from './crmPiezas';
+import { ArmarVenta, EscribirWhatsApp, type CobroPrecargado } from './CrmWhatsApp';
 
 const aInputLocal = (d: Date): string => {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -42,9 +43,12 @@ function Seccion({ titulo, derecha, children }: { titulo: string; derecha?: Reac
   );
 }
 
-export default function CrmFicha({ crm, leadId, esDueno, onCerrar, onAbrirChat }: {
+export default function CrmFicha({ crm, leadId, esDueno, onCerrar, onAbrirChat, onCobrar }: {
   crm: Crm; leadId: string; esDueno: boolean; onCerrar: () => void; onAbrirChat: (conversacionId: string) => void;
+  /** «SINPE recibido» de una venta por chat: abre Cobros con el cliente y el producto cargados. */
+  onCobrar: (c: CobroPrecargado) => void;
 }) {
+  const [modalWa, setModalWa] = useState<null | 'escribir' | 'venta'>(null);
   const toast = useToast();
   const confirmar = useConfirm();
   const lead = crm.leads.find(l => l.id === leadId) || null;
@@ -193,6 +197,28 @@ export default function CrmFicha({ crm, leadId, esDueno, onCerrar, onAbrirChat }
             {lead.email && <a className="tv-btn" data-variant="default" href={`mailto:${lead.email}`} title={`Escribir un correo a ${lead.email}`}><Mail className="w-4 h-4 flex-none" aria-hidden="true" /><span className="tv-btn-label">Correo</span></a>}
             {datosLocales.conversacion && <Btn icon={MessageSquare} title="Abrir el chat con esta persona" onClick={() => onAbrirChat(datosLocales.conversacion.id)}>Chat</Btn>}
           </div>
+        )}
+        {/* Vender por WhatsApp: escribirle con una respuesta rápida o armar el pedido (ver CrmWhatsApp.tsx). */}
+        {lead.telefono && (
+          <div className="crm-acciones">
+            <Btn icon={MessageCircle} title="Escribirle por WhatsApp con una respuesta rápida" onClick={() => setModalWa('escribir')}>WhatsApp</Btn>
+            <Btn icon={ShoppingCart} title="Armar un pedido por chat" onClick={() => setModalWa('venta')}>Armar venta</Btn>
+          </div>
+        )}
+        {modalWa === 'escribir' && (
+          <EscribirWhatsApp lead={lead} respuestas={crm.respuestas.filter(r => r.activa !== false)} onCerrar={() => setModalWa(null)}
+            onAnotado={() => { void crm.recargar(); void listarEventos(lead.id).then(setEventos).catch(() => {}); }} />
+        )}
+        {modalWa === 'venta' && (
+          <ArmarVenta lead={lead} onCerrar={() => setModalWa(null)}
+            onPendiente={async (total, resumen) => {
+              await crm.mover(lead.id, 'pago_pendiente');
+              await crm.editar(lead.id, { valorEstimado: total });
+              try { await agregarEvento(lead.id, 'contacto', resumen); } catch { /* el pedido igual quedó */ }
+              void listarEventos(lead.id).then(setEventos).catch(() => {});
+              toast.success('Resumen abierto en WhatsApp. El contacto pasó a «Pendiente de pago».');
+            }}
+            onCobrar={c => { setModalWa(null); onCobrar(c); }} />
         )}
 
         <Seccion titulo="Datos del contacto">
