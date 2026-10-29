@@ -72,7 +72,7 @@ dueño; si no pide nada, el siguiente paso recomendado es el punto 1 de arriba.
   (0,40,1536,867: sin descontar la barra de tareas de 45 px). Las ventanas quedaban 45 px debajo de la barra: el
   borde inferior (el que se agarra) y las últimas líneas tapados. Además, en Termux:X11 el primer toque sobre un borde
   solo mueve el puntero: hay que tocar y después arrastrar.
-- Hecho (fuera del repo, con respaldo `*.respaldo-20261029` al lado): nuevo `/usr/local/bin/area-util`; `ventana`
+- Hecho (PR #302 documenta; los guiones están fuera del repo, con respaldo `*.respaldo-20261029` al lado): nuevo `/usr/local/bin/area-util`; `ventana`
   usa `area-util` y acepta un id; `ajuste-teclado` con `vigia()` (capa azul al fondo, revive xfwm4, encaja ventanas
   nuevas) y `Reacomodo` (tras girar o cerrar el teclado, fuerza a xfwm4 a recalcular el área y encaja todas).
   Guías: §3.3 de la guía del dueño, §7 de `00-LEEME-PRIMERO.md`, estado en `05`.

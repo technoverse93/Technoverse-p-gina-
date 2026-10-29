@@ -31,6 +31,7 @@ Para ver el detalle: `gh pr view <número>` o `git log --oneline` en `/root/proy
 | #299 | **APK**: WhatsApp con el complemento nativo `TelefonoNativo` (el WebView no seguía `intent://`). Publicado por OTA. |
 | #300 | **Guía para IA** (`docs/guia-ia/` 00-03 + herramientas) y `opencode.json` que la carga. |
 | #301 | **Guías completas**: mapa del sistema (04), estado y pendientes (05), `BITACORA.md` compartida, guía del dueño (`docs/guia-humano/`), comandos `/inicio` `/cierre` `/estado` de OpenCode y aviso de continuidad en `CLAUDE.md`. |
+| #302 | **Termux:X11**: documentado el arreglo de las ventanas (área útil real, vigía del escritorio, redimensionar con el dedo). Los guiones viven en `/usr/local/bin` de la tablet. |
 
 ## Panel
 
