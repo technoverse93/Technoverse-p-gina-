@@ -1,5 +1,13 @@
 # Instrucciones para agentes (OpenCode y similares)
 
+## Antes de cualquier cosa
+
+Leé, en este orden: `CLAUDE.md` (reglas permanentes del dueño; manda sobre todo) y la guía completa en
+`docs/guia-ia/` (`00-LEEME-PRIMERO.md`, `01-REGLAS-QUE-NO-SE-ROMPEN.md`, `02-COMO-PROBAR-EN-LA-TABLET.md`,
+`03-HISTORIAL-DE-CAMBIOS.md`). Ahí está cómo se trabaja, qué necesita permiso, cómo se prueba en la tablet real y
+qué quedó pendiente. Al terminar un trabajo, sumá lo hecho a `docs/guia-ia/03-HISTORIAL-DE-CAMBIOS.md` en el mismo PR.
+`opencode.json` ya carga estos archivos como instrucciones en cada sesión de OpenCode.
+
 ## Búsquedas que necesitan datos reales y actuales (precios, stock, enlaces que funcionen)
 
 Pasó (2026-10-22): al pedir una búsqueda tipo "busca audífonos en Amazon", la

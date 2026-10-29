@@ -1,0 +1,15 @@
+HERRAMIENTAS (Node.js 22, sin dependencias: usan el WebSocket que trae Node)
+
+  cdp.mjs       Biblioteca: se conecta a una pestaña por el protocolo de depuración de Chrome.
+                Variables: PUERTO (9333 = Chrome; 9444 = APK) y el id de la pestaña.
+                Manda un movimiento de cursor cada 20 s para que la sesión web no se cierre por inactividad.
+  ev.mjs        node ev.mjs '<expresión JS>' <idPestaña>    → evalúa en la página e imprime el resultado.
+  pos.mjs       PESTANA=<id> node pos.mjs "<JS que devuelve un elemento>"  → «X Y» en pantalla para adb input tap.
+                (Asume Chrome horizontal: barra de 216 px. En la APK la barra es 46 px: ajustá la suma.)
+  asegurar.mjs  PESTANA=<id> TV_CORREO=... TV_CLAVE=... node asegurar.mjs /admin/<módulo>
+                → deja la pestaña en ese módulo con la sesión abierta (entra con correo y contraseña si hace falta).
+
+Antes:  export ANDROID_SERIAL=127.0.0.1:5555
+        adb forward tcp:9333 localabstract:chrome_devtools_remote
+        curl -s localhost:9333/json/list        (para ver los ids)
+NUNCA guardes la contraseña en un archivo. Pasala solo por variable de entorno.
