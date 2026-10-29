@@ -44,6 +44,7 @@ import { esRepuesto, esInsumo } from '../utils/categorias';
 import { isNative } from '../mobile/platform';
 import { guardarComprobanteNativo, descargarComprobanteWeb } from '../mobile/pdfDownload';
 import type { Product, User } from '../types';
+import { CLAVE_COBRO_PRECARGADO, EVENTO_COBRO_PRECARGADO, type CobroPrecargado } from './admin/crm/CrmWhatsApp';
 
 interface Props {
   currentUser: User | null;
@@ -162,6 +163,24 @@ function FacturacionPanel({ currentUser, onDataChanged }: Props) {
   const [modoCobro, setModoCobro] = useState<'venta' | 'reparacion'>('reparacion');
   const [productoVentaId, setProductoVentaId] = useState('');
   const [productoVentaCantidad, setProductoVentaCantidad] = useState(1);
+
+  // Venta por chat armada en el CRM («SINPE recibido», ver crm/CrmWhatsApp.tsx): llega con el cliente y el
+  // producto, y queda cargada en modo «venta» con SINPE. El cobro sigue igual: stock, factura y correo al confirmar.
+  useEffect(() => {
+    const aplicar = (c: CobroPrecargado | null) => {
+      if (!c) return;
+      try { sessionStorage.removeItem(CLAVE_COBRO_PRECARGADO); } catch { /* nada */ }
+      setModoCobro('venta');
+      setNombre(c.nombre || ''); setTelefono(c.telefono || ''); setCorreo(c.correo || '');
+      setTocado({ nombre: !!c.nombre, correo: !!c.correo });
+      setProductoVentaId(c.productoId); setProductoVentaCantidad(Math.max(1, c.cantidad || 1));
+      setMedio('SINPE');
+    };
+    try { const g = sessionStorage.getItem(CLAVE_COBRO_PRECARGADO); if (g) aplicar(JSON.parse(g)); } catch { /* sin almacenamiento */ }
+    const alPedir = (e: Event) => aplicar((e as CustomEvent<CobroPrecargado>).detail);
+    window.addEventListener(EVENTO_COBRO_PRECARGADO, alPedir);
+    return () => window.removeEventListener(EVENTO_COBRO_PRECARGADO, alPedir);
+  }, []);
 
   // ---- Insumos -----------------------------------------------------------
   const [repuestos, setRepuestos] = useState<InsumoConsumido[]>([]);

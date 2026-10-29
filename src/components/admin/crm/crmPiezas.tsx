@@ -15,8 +15,7 @@ export const ICONO_ETAPA: Record<EtapaCrm, LucideIcon> = {
 };
 
 export const ICONO_CANAL: Record<CanalCrm, LucideIcon> = {
-  chat_web: MessageSquare, tienda_form: ClipboardList, registro: UserCheck, pedido: ShoppingBag, taller: Wrench, manual: PenLine,
-};
+  chat_web: MessageSquare, tienda_form: ClipboardList, registro: UserCheck, pedido: ShoppingBag, taller: Wrench, manual: PenLine, whatsapp: MessageCircle };
 
 export const ICONO_EVENTO: Record<TipoEventoCrm, LucideIcon> = {
   creado: UserPlus, etapa: ArrowRightLeft, nota: StickyNote, chat: MessageSquare, pedido: Receipt, taller: Wrench, registro: UserCheck,

@@ -190,3 +190,15 @@
 .crm-resp-x { margin: 6px 0 0; font-size: 12.5px; line-height: 1.5; color: var(--text-secondary); overflow-wrap: anywhere; display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
 .crm-prueba { padding: 10px 12px; border-radius: 12px; background: var(--bg-sunken); }
 .crm-prueba p { margin: 4px 0 0; font-size: 13px; color: var(--text-primary); overflow-wrap: anywhere; }
+
+/* ---- Vender por WhatsApp (crm/CrmWhatsApp.tsx) ---- */
+.crm-wa-resp { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 150px), 1fr)); gap: 6px; }
+.crm-wa-op { display: flex; flex-direction: column; align-items: flex-start; gap: 1px; min-width: 0; padding: 8px 10px; border-radius: 10px; border: 1px solid var(--border-color); background: var(--bg-surface); color: var(--text-primary); text-align: left; font-size: 12.5px; }
+.crm-wa-op b { font-size: 13px; color: var(--accent); max-width: 100%; }
+.crm-wa-op span { color: var(--text-secondary); max-width: 100%; }
+.crm-wa-op:hover { border-color: var(--accent); }
+.crm-wa-fila { display: flex; align-items: center; gap: 8px; min-width: 0; }
+.crm-wa-lista { display: flex; flex-direction: column; gap: 6px; }
+.crm-wa-item { display: flex; align-items: center; gap: 8px; min-width: 0; padding: 6px 8px; border-radius: 10px; background: var(--bg-sunken); font-size: 13px; color: var(--text-primary); }
+.crm-wa-cant { width: 4.5em; flex: none; padding-block: 4px; text-align: center; }
+.crm-wa-total { display: flex; justify-content: space-between; padding: 4px 8px; font-size: 14px; color: var(--text-primary); }

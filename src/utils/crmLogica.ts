@@ -11,7 +11,7 @@
 // =====================================================================
 
 export type EtapaCrm = 'nuevo' | 'conversacion' | 'cotizacion' | 'pago_pendiente' | 'cerrado' | 'postventa';
-export type CanalCrm = 'chat_web' | 'tienda_form' | 'registro' | 'pedido' | 'taller' | 'manual';
+export type CanalCrm = 'chat_web' | 'tienda_form' | 'registro' | 'pedido' | 'taller' | 'manual' | 'whatsapp';
 export type FuenteCrm = 'directo' | 'busqueda' | 'redes' | 'pauta' | 'correo' | 'referido';
 export type TipoEventoCrm = 'creado' | 'etapa' | 'nota' | 'chat' | 'pedido' | 'taller' | 'registro' | 'formulario' | 'recordatorio' | 'contacto' | 'sistema';
 
@@ -30,7 +30,7 @@ export const ETAPAS_ABIERTAS: readonly EtapaCrm[] = ['nuevo', 'conversacion', 'c
 
 export const CANALES: Record<CanalCrm, string> = {
   chat_web: 'Chat de la página', tienda_form: 'Formulario de la tienda', registro: 'Registro en la tienda',
-  pedido: 'Pedido', taller: 'Taller', manual: 'Agregado a mano',
+  pedido: 'Pedido', taller: 'Taller', manual: 'Agregado a mano', whatsapp: 'WhatsApp',
 };
 export const FUENTES: Record<FuenteCrm, string> = {
   directo: 'Tráfico directo', busqueda: 'Buscadores', redes: 'Redes sociales', pauta: 'Pauta pagada', correo: 'Correo', referido: 'Otro sitio',
@@ -248,12 +248,16 @@ export function estadoSeguimiento(l: Pick<LeadCrm, 'proximoContacto'>, ahora: nu
   return new Date(t).toDateString() === new Date(ahora).toDateString() ? 'hoy' : 'proximo';
 }
 
-/** Abierto, sin recordatorio y sin movimiento hace `dias` o más: nadie lo está atendiendo. */
+/**
+ * Abierto, sin recordatorio y sin movimiento hace `dias` o más: nadie lo está atendiendo. Una conversación por
+ * WhatsApp se enfría antes: a las 48 horas sin cerrar ya cuenta como sin atender (pedido del dueño, 2026-10-28).
+ */
 export function estaEstancado(l: LeadCrm, ahora: number, dias = 5): boolean {
+  const umbral = l.canal === 'whatsapp' && l.etapa === 'conversacion' ? Math.min(dias, 2) : dias;
   return !l.archivado
     && ETAPAS_ABIERTAS.includes(l.etapa)
     && estadoSeguimiento(l, ahora) === 'sin_recordatorio'
-    && diasDesde(l.ultimaInteraccion, ahora) >= dias;
+    && diasDesde(l.ultimaInteraccion, ahora) >= umbral;
 }
 
 /** Más urgente primero: vencidos, luego lo que tuvo movimiento más reciente. */
