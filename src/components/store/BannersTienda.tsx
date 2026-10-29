@@ -26,6 +26,7 @@ import { X, ArrowRight } from 'lucide-react';
 import type { Banner } from '../../types';
 import { estaVigente, estiloDe, ordenarBanners, esPiezaDisenada } from '../../utils/bannerEstado';
 import { marcarVistaEnSesion, registrarEventoBanner } from '../../utils/bannerMetricas';
+import { alTocarEnlace } from '../../utils/whatsapp';
 
 export { estaVigente };
 
@@ -83,7 +84,7 @@ function Envoltura({ link, className, style, children, contar }: EnvolturaProps)
         rel="noopener noreferrer"
         className={className}
         style={style}
-        onClick={contar ? () => registrarEventoBanner(contar, 'clic') : undefined}
+        onClick={e => { if (contar) registrarEventoBanner(contar, 'clic'); alTocarEnlace(e, link); }}
       >
         {children}
       </a>

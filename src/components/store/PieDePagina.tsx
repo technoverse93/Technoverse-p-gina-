@@ -30,6 +30,7 @@ import { compartirUbicacion } from '../../utils/ubicaciones';
 import { ubicacionGuardada, hayGeolocalizacion, motivoUltimoFallo, type MotivoUbicacion } from '../../utils/ubicacionCliente';
 import AyudaUbicacion from './AyudaUbicacion';
 import { ofrecerUbicacionAlEspejo } from '../../supervision/visitante';
+import { alTocarEnlace } from '../../utils/whatsapp';
 
 interface Props {
   settings?: AppSettings | null;
@@ -309,6 +310,7 @@ export default function PieDePagina({ settings, onIrASoporte }: Props) {
                   href={`https://wa.me/${wa}`}
                   target="_blank"
                   rel="noopener noreferrer"
+                  onClick={e => alTocarEnlace(e, `https://wa.me/${wa}`)}
                   className={`inline-flex items-center gap-2 ${enlace}`}
                   style={{ color: 'var(--text-secondary)' }}
                 >
