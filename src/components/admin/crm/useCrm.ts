@@ -90,7 +90,8 @@ export function useCrm() {
   const compras = useMemo(() => crm.comprasPorCorreo(pedidos), [pedidos]);
   const metricas = useMemo(() => crm.calcularMetricas(leads, pedidos, ahora), [leads, pedidos, ahora]);
 
-  const fallo = useCallback((e: any) => { toast.error(e?.message || crm.mensajeDeError(e)); }, [toast]);
+  // Primero la traducción: `e.message` es el texto crudo de la base, en inglés («duplicate key…», «violates check…»).
+  const fallo = useCallback((e: any) => { toast.error(crm.mensajeDeError(e)); }, [toast]);
   const reemplazar = useCallback((nuevo: LeadCrm) => setLeads(ls => ls.map(l => (l.id === nuevo.id ? nuevo : l))), []);
 
   // ---- contactos ----
